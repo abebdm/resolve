@@ -45,11 +45,10 @@ as the code that depends on them.
 
 ## 3. Public API
 
-The engine exposes a small, stable surface. This sketch is illustrative; names may be refined in
-M0.
+The engine exposes a small, stable surface (`resolve.engine`):
 
 ```python
-state = new_game(config: GameConfig, decks: list[Deck], seed: int) -> GameState
+state = new_game(config: GameConfig, decks: Sequence[Deck], seed: int) -> GameState
 
 request = pending_decision(state) -> DecisionRequest | None   # None => game over
 view    = view_for(state, player_id) -> PlayerView            # hidden info removed
@@ -69,35 +68,76 @@ while (request := pending_decision(state)) is not None:
 Humans (via a UI), AIs, network peers and scripted test agents are all just `decide`
 implementations.
 
+**Inputs.** A `Deck` holds each card's Oracle data and card definitions, resolved from a decklist
+by `build_deck(decklist, database, registry)`, which refuses unknown or unimplemented cards. Deck
+`i` belongs to player `i`. `seed` is an integer in `[0, 2**64)`.
+
+**Errors and the state** (`resolve.errors`):
+
+- `InvalidAnswer`: the answer was rejected and **nothing changed**. The same decision is still
+  pending.
+- `NotImplementedRule`: the game reached a rule the engine doesn't implement. The state is left as
+  it was at that point and must not be played further (`pending_decision` then raises
+  `EngineError`). There is no rollback, which keeps `submit` cheap for AI search.
+- `EngineError`: an engine bug or API misuse; the state must not be played further.
+- `DeckError`: `new_game` or `build_deck` refused a deck.
+
+**Concession** (104.3a) can happen at any time, not only when a player is asked something, so it
+gets its own entry point, `concede(state, player)`, in M1.
+
 ---
 
 ## 4. Game state
 
-`GameState` is **pure data**. It contains:
+`GameState` (`resolve.state.game`) is **pure data**. It contains:
 
-- `config`: the `GameConfig` (format parameters; see §10)
-- `players`: a list in turn order, each with life, counters, designations (monarch, etc.), and
-  commander-damage tallies
+- `config`: the `GameConfig` (format parameters; see §10), and the game's `seed`
+- `players`: a list in **seating (clockwise) order**, with `players[i].id == i`. Each player has
+  life and their own library, hand and graveyard; counters, designations (monarch, etc.) and
+  commander-damage tallies are added in later milestones. Turn order begins with
+  `starting_player` and proceeds clockwise (103.1).
+- `cards`: `dict[CardId, Card]`, one entry per physical card: its owner, its Oracle data
+  (`CardData`, without rulings) and its card definitions, one per face
 - `objects`: `dict[ObjectId, GameObject]` for every object in every zone
-- `zones`: per-player library, hand, graveyard; shared battlefield, stack, exile, command zone.
-  Ordered zones are lists of ObjectIds.
-- `turn`: active player, phase and step, turn number, per-turn records (lands played, spells
+- zones: per-player library, hand, graveyard (on `Player`); shared `battlefield`, `stack`,
+  `exile`, `command`. Zones are lists of ObjectIds; in every pile the **last element is the top**.
+- `turn` (M1): active player, phase and step, turn number, per-turn records (lands played, spells
   cast, etc.)
 - `tasks`: the task stack (§5)
-- `pending`: the current `DecisionRequest`, if any
+- `pending`: the current `DecisionRequest`, if any; `result`: the `GameResult` once the game is
+  over
 - `continuous_effects`, `replacement_effects` (from resolved spells and abilities; static abilities
-  are derived from objects)
-- `pending_triggers`, `delayed_triggers`
-- `rng`: a `random.Random`, seeded at game creation
-- `next_object_id`, `next_timestamp`
-- `event_log`: the ordered record of everything that happened, with CR citations
+  are derived from objects), added in M5-M6
+- `pending_triggers`, `delayed_triggers`, added in M4
+- `rng`: the engine's own PRNG (`resolve.state.rng.Rng`, §12), seeded at game creation
+- `next_object_id`, `next_timestamp`, `next_request_id`
+- `event_log`: the ordered record of everything that happened, with CR citations (§7)
+
+**Identifiers** (`resolve.state.ids`) are `NewType` ints: `PlayerId` is the seat index;
+`ObjectId`s are allocated from 1 and never reused, and a zone change gives a new one (400.7);
+`CardId` names a physical card and is stable across zones (§8).
+
+**Mutable state, immutable values.** `GameState`, `Player`, `GameObject` and tasks are mutable
+`slots` dataclasses: tasks change the state in place, and AI search clones it with `deepcopy`.
+Values that never change once created derive from `resolve.values.Immutable`: card data and
+definitions, `Card`, `Zone`, `GameConfig`, events, log entries, decision requests, answer spaces
+and answers, player views. They are frozen dataclasses holding only scalars, enums, tuples and
+other `Immutable` values, and `copy`/`deepcopy` return them unchanged, so copies of a state share
+them instead of copying every card's text. Agents only ever receive immutable values.
 
 **Constraints**
 
-- No lambdas, closures, generators, file handles or other non-data values. Card behavior is
-  referenced through the card registry, never stored as a function object in state.
+- No lambdas, closures, generators, file handles, sets or other non-data values.
+- **Card behavior is stored as data.** The registry is consulted once, when decks are built; the
+  state then holds each card's `CardDefinition`s (declarative, immutable data). Behavior code
+  lives in classes that definitions refer to by instance, never as functions. The state is
+  therefore self-contained: `submit` needs no registry, and copies and pickles carry the
+  definitions they were played with.
+- Tasks and events refer to objects and players by ID, never by reference.
 - The entire state must survive `copy.deepcopy` and `pickle` at any moment.
 - All collections that are iterated use deterministic order (lists, or dicts with insertion order).
+- `resolve.state.invariants` checks all of this at run time (`check_pure_data`,
+  `check_immutable`, `check_invariants`); tests and the fuzz harness call it.
 
 ---
 
@@ -107,14 +147,26 @@ The engine is an explicit **task queue** (a stack of pending tasks stored in the
 chosen over blocking callbacks and over Python generators because generators can't be copied or
 pickled, which would make AI search and save/restore impossible.
 
-- A **task** is a small dataclass with `run(state) -> TaskResult`. A result is one of:
-  - `Done`
-  - `Push(tasks)`: replace this task with sub-tasks
-  - `NeedDecision(request)`: the engine pauses
+- A **task** (`resolve.tasks.Task`) is a small dataclass with `run(state) -> TaskResult`. A result
+  is one of:
+  - `Done()`: pop the task.
+  - `Push(tasks)`: pop the task and replace it with `tasks`, which run in order (`tasks[0]`
+    first). A task that must continue after its sub-tasks puts itself last, as in
+    `Push((child, self))`, having recorded its progress in its own fields.
+  - `NeedDecision(player, kind, space, prompt, rules, source)`: the engine pauses. The task stays
+    on top; the engine assigns the request id and stores the `DecisionRequest` in `pending`.
 - Examples: `BeginStep`, `GivePriority`, `CastSpell` (the 601.2 sequence), `ResolveTopOfStack`,
-  `CheckStateBasedActions`, `PutTriggersOnStack`, `DeclareAttackers`, `ApplyEvent`.
-- When a decision is answered, the paused task resumes with the answer.
-- `submit()` runs the loop until a task returns `NeedDecision` or the game ends.
+  `CheckStateBasedActions`, `PutTriggersOnStack`, `DeclareAttackers`, `ApplyEvents`.
+- **Resuming.** `submit()` validates the answer (§6), including the paused task's
+  `check_answer(state, request, answer)`, which must change nothing. Only then does it log the
+  answer, clear `pending` and call the same task's `resume(state, request, answer)`, whose result
+  is handled like `run`'s. The loop then continues until a task returns `NeedDecision` or the game
+  ends.
+- A task keeps **all** of its progress in its fields, never in Python locals across calls, so a
+  state copied or pickled mid-task resumes exactly as the original would. Tasks never touch
+  `state.tasks` themselves; the loop checks this.
+- The loop has a runaway budget (`MAX_TASKS_PER_RUN`) that raises `EngineError`. It catches engine
+  bugs only; game loops are §13.
 
 **Notes**
 
@@ -143,9 +195,28 @@ A `DecisionRequest` contains:
     divisions, subsets with size bounds)
 - enough context for a UI to explain the decision (the source object, the CR reference)
 
+The kinds are `resolve.decisions.DecisionKind`. The answer spaces (`resolve.decisions.spaces`) are
+independent of the kind:
+
+| Space | Answer value | Valid when |
+|---|---|---|
+| `ChooseOne(options)` (enumerated) | `Pick(index)` | `0 <= index < len(options)` |
+| `ChooseSubset(options, minimum, maximum)` | `PickMany(indices)` | strictly increasing indices, count within bounds |
+| `ChooseOrder(options)` | `Order(permutation)` | a permutation of the option indices |
+| `ChooseNumber(minimum, maximum or None)` | `Number(value)` | within bounds |
+| `Distribute(recipients, total, minimum_each)` | `Amounts(amounts)` | one per recipient, each at least the minimum, adding up to the total (601.2d) |
+
+Every outcome has exactly one valid answer (canonical forms), which helps AI search. Options are
+typed (`PlayerOption`, `ObjectOption`, ...) so a UI can tell them apart. A request contains only
+what its deciding player may know; one decision is pending at a time, which matches the
+sequential APNAP choices of 101.4.
+
 **Rules**
 
 - The engine validates every answer and rejects illegal ones. It never trusts the agent.
+  Validation has two stages, neither of which changes anything: the answer must echo the pending
+  request's id and player and lie in its space (`validate_answer`), then the asking task's
+  `check_answer` applies the rules a space can't express.
 - Enumerated options are what the future AI will search over, so prefer enumeration wherever
   practical.
 - **Convenience lives outside the engine.** Mana auto-payment, auto-passing priority and "stops"
@@ -156,8 +227,11 @@ A `DecisionRequest` contains:
 
 ## 7. Events and the effect pipeline
 
-Every atomic change to the game is an **event**. Examples: damage dealt, life changed, zone change,
-counters added or removed, tap or untap, card drawn, player loses.
+Every atomic change to the game is an **event** (`resolve.events.Event`): a frozen value naming
+objects and players by ID and citing its CR rules. Examples: damage dealt, life changed, zone
+change, counters added or removed, tap or untap, card drawn, player loses. Events are applied only
+by the `ApplyEvents` task, which takes a set of simultaneous events through the pipeline below;
+it is a task because ordering replacement effects needs decisions (616.1).
 
 The pipeline for each event (or set of simultaneous events):
 
@@ -166,7 +240,9 @@ The pipeline for each event (or set of simultaneous events):
    the affected object, chooses the order when several apply (616.1). Each effect applies at most
    once per event, with the documented exceptions (for example 903.9b).
 3. **Apply** the modified event to the state.
-4. **Log** it with CR citations.
+4. **Log** it with CR citations. Each `LogEntry` holds an event or an `AnswerRecord` (an answered
+   decision, from which replays are rebuilt), and who may see it (`None` = everyone). Answers are
+   visible only to their player; their public consequences are logged as events.
 5. **Detect triggers.** Check triggered abilities against the event and add matches to
    `pending_triggers`. "Leaves the battlefield" and similar triggers "look back in time" using the
    pre-event state (603.10).
@@ -208,8 +284,14 @@ choose…".
   - a revealed card: all players
   - a face-down permanent: its controller
 - `view_for(state, player)` builds a `PlayerView` that includes only what that player may know.
-  Hidden objects appear as opaque placeholders with stable IDs.
+  Hidden objects in hands appear as opaque placeholders with stable IDs.
+- **Libraries appear only as a count** (later: plus the cards the viewer knows, at known
+  positions). Library objects keep their IDs through shuffles (a shuffle isn't a zone change,
+  400.7), so showing them would reveal where a once-seen card went, and the initial IDs follow
+  decklist order. For the same reason, log entries that would reveal a library object's ID to
+  another player must be redacted; that is designed in M1 together with drawing.
 - The library order is hidden from everyone, except where knowledge was gained (for example by scry).
+- The event log is filtered per viewer by each entry's visibility.
 - Agents (including the AI) only ever see `PlayerView`s. This is required for fair networked play and
   for AI with imperfect information.
 
@@ -217,14 +299,20 @@ choose…".
 
 ## 10. Formats, multiplayer and Commander
 
-**GameConfig parameters:**
+**GameConfig parameters** (`resolve.state.config`):
 
-- player count
-- starting life
-- whether the commander rules apply, and the commander damage threshold
-- mulligan rule
-- deck-construction rules (size, singleton, color identity)
-- the range-of-influence option, used only if ever needed (Commander doesn't use it)
+- starting life (103.4; 40 in Commander, 103.4c)
+- starting hand size (103.5)
+- whether the commander rules apply, and the commander damage threshold (903.10a)
+
+Deliberately **not** parameters:
+
+- the player count: it is the number of decks (100.1)
+- a mulligan rule: the CR has one procedure (103.5), and 103.5c applies to multiplayer games by
+  rule
+- deck-construction rules (size, singleton, color identity): added in M7 together with their
+  enforcement, `validate_deck`; until then `new_game` doesn't check deck legality
+- the range-of-influence option (801): Commander doesn't use it; added only if ever needed
 
 This gives Commander multiplayer, 1v1 Commander and regular 1v1 from one engine.
 
@@ -311,6 +399,11 @@ New primitives are engine code and get careful review.
   snapshot date. One format serves save files, bug reports and (later) the network lockstep
   protocol.
 - Any randomness goes through `state.rng`. Nothing reads the clock. No iteration over sets.
+- `state.rng` is the engine's own PRNG: xoshiro256**, seeded with splitmix64, with rejection
+  sampling for bounded integers and Fisher-Yates shuffles. Python only guarantees that
+  `random.Random.random()` stays the same across versions (`shuffle` and `randrange` may change),
+  and replays, lockstep peers on other Python versions and a later port must reproduce every
+  shuffle. Tests pin its outputs to the reference implementation.
 - Fuzz tests verify that replaying a recorded game reproduces an identical state.
 
 ---

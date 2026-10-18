@@ -25,6 +25,8 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import cast
 
+from resolve.values import Immutable
+
 ORACLE_CARDS_FILE = "oracle-cards.jsonl.gz"
 RULINGS_FILE = "rulings.jsonl.gz"
 SNAPSHOT_FILE = "snapshot.json"
@@ -82,7 +84,7 @@ class AmbiguousCardNameError(CardDataError, KeyError):
 
 
 @dataclass(frozen=True)
-class CardFace:
+class CardFace(Immutable):
     """One face of a card, with its printed characteristics (109.3).
 
     Single-faced cards have exactly one face, named like the card. Multi-faced cards have one entry
@@ -108,7 +110,7 @@ class CardFace:
 
 
 @dataclass(frozen=True)
-class CardData:
+class CardData(Immutable):
     """Oracle data for one card (one Scryfall Oracle object).
 
     ``name`` is the card's English name (201.2); a multi-faced card's name is Scryfall's
@@ -118,7 +120,8 @@ class CardData:
     reports only: card behavior comes from definitions, never from this list.
 
     ``faces`` always has at least one entry, so code can read ``faces[0].oracle_text`` without
-    special-casing single-faced cards.
+    special-casing single-faced cards. Rulings are not part of it: they live in ``CardDatabase``
+    and are used for writing tests, so game states that store ``CardData`` never carry them.
     """
 
     oracle_id: str

@@ -93,6 +93,55 @@ Tests never read `data/` or the network; they build card data from `tests/scryfa
 4. Put the test in `tests/data/`, `tests/registry/` or `tests/tooling/` (or `tests/cards/` for a
    card), with a file name that is unique across all test folders.
 
+### Write an engine test with test-only tasks
+
+Until the scenario builder exists, engine-loop tests drive the loop with small tasks.
+
+1. Build decks with `tests/game_fixtures.py`: `deck(forests, elves, commanders=[...])`,
+   `decks(players)`, or `start(players, seed)` for a new game paused at the 103.1 decision.
+   `choose_starting_player(state, index)` answers it and returns the 103.5 gap.
+2. For loop behavior, use the tasks in `tests/engine_support.py` (`Mark`, `Parent`, `AskTwice`,
+   `EndGame`, ...) or add one there (not in the test file, so states holding it pickle).
+   `running(*tasks)` starts a game with them on the task stack; `markers(state)` lists the
+   `Marker` events they logged; `holding(state)` says they have all finished.
+3. Answer with `submit(state, answer(state, value))`. To show a rejected answer changed nothing,
+   compare with a `copy.deepcopy` taken before.
+4. Check `state_impurities(state) == []` and `invariant_violations(state) == []`
+   (`resolve.state.invariants`) on any new kind of state.
+5. Put the test in `tests/engine/`, `tests/state/`, `tests/decisions/`, `tests/events/` or, for a
+   rule, `tests/rules/test_<section>_<topic>.py`.
+
+### Add an event type
+
+1. In `src/resolve/events/`, write a `@dataclass(frozen=True, kw_only=True)` subclass of `Event`.
+   Its fields are scalars, enums, tuples and IDs only, never `GameObject`s or `Player`s
+   (`tests/state/test_immutability.py` checks every event class).
+2. Implement `apply(state)`, the change itself. A zone change goes through
+   `resolve.state.game.move_object` (400.7, 400.3). Override `visible_to(state)` if some players
+   may not see it in the log (it is judged before the event is applied).
+3. Propose it from a task with `Push((ApplyEvents((event, ...)), ...))`, passing
+   `rules=(...)` with the causing rule first. Never call `apply` directly from engine code.
+4. Test: the change, what it must not change, rejected inputs, and the log entry with its
+   visibility. `tests/tooling/test_rule_citations.py` checks the cited rules exist.
+
+### Add a decision kind or an answer space
+
+1. Add the kind to `DecisionKind` (`src/resolve/decisions/kinds.py`) with its CR rule in a
+   comment, if it isn't there yet.
+2. Use an existing answer space if one fits (`ChooseOne`, `ChooseSubset`, `ChooseOrder`,
+   `ChooseNumber`, `Distribute`). A new space goes in `spaces.py`: a frozen `AnswerSpace` with a
+   `__post_init__` that raises `ValueError` if the space can't be answered, a `validate` that
+   raises `InvalidAnswer`, a canonical answer value (one valid answer per outcome), and tests of
+   valid, invalid, empty and boundary answers in `tests/decisions/test_answer_spaces.py`.
+3. The asking task returns `NeedDecision(...)`, rejects rules-illegal answers in `check_answer`
+   (without changing anything), and continues in `resume`.
+
+### List the rules the engine doesn't implement
+
+Run `uv run python tools/gaps.py`. It lists every `NotImplementedRule` in `src/resolve` by CR
+number, and exits with 1 if any message isn't a literal `"<CR number>: <what>"`. Don't keep a
+hand-written list anywhere.
+
 ### Review a PR's tests independently
 
 Every PR that changes game behavior gets an independent test review (CLAUDE.md, "Testing
@@ -122,7 +171,5 @@ Expected recipes, written when each task is first done:
 - Add a card
 - Add a primitive
 - Add a keyword ability
-- Add an event type
-- Add a decision kind
 - Write a scenario test
 - Fix a rules bug

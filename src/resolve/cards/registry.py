@@ -16,15 +16,17 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
 from resolve.data.cards import CardData
+from resolve.values import Immutable
 
 
 @dataclass(frozen=True)
-class CardDefinition:
+class CardDefinition(Immutable):
     """How one card (or one face of a multi-faced card) behaves.
 
     Only the name exists so far. The fields that describe behavior (abilities, costs, static
-    effects) are added with the engine primitives in later milestones. A definition is pure data
-    and refers to behavior through the registry, never by storing functions (design.md §4).
+    effects) are added with the engine primitives in later milestones. A definition is deeply
+    immutable data (``Immutable``): game states store the definitions of their cards, and copies
+    of a state share them. It never stores functions (design.md §4).
     """
 
     name: str

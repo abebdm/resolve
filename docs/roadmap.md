@@ -149,22 +149,26 @@ cards are not included.
 - [x] Card registry, plus `tools/coverage.py`: report implemented and missing cards per deck.
 - [x] **Coverage audit:** run the coverage tool on both target decks, then update the "Mechanics"
   list above from the actual Oracle text.
-- [ ] Core state types:
+- [x] Core state types:
   - `GameState`, `Player`, `GameObject`, zones
   - `ObjectId` and `CardId`, timestamps
   - `GameConfig`
-- [ ] Task loop with `Done` / `Push` / `NeedDecision`. The public API: `new_game`,
+- [x] Task loop with `Done` / `Push` / `NeedDecision`. The public API: `new_game`,
   `pending_decision`, `view_for`, `submit`.
-- [ ] Decision request and answer types (enumerated and constrained), plus answer validation.
-- [ ] Event type skeleton and event log, with CR citations.
-- [ ] `NotImplementedRule` exception.
+- [x] Decision request and answer types (enumerated and constrained), plus answer validation.
+- [x] Event type skeleton and event log, with CR citations.
+- [x] `NotImplementedRule` exception, and `tools/gaps.py` to list the gaps.
 - [ ] Scenario builder (`tests/scenario.py`).
 - [ ] Agents: a random agent and a scripted test agent.
 - [ ] `tools/play_cli.py`: a minimal text renderer and CLI agent.
-- [ ] Fuzz harness, checking deepcopy/pickle round-trips and replay determinism.
+- [ ] Fuzz harness, checking deepcopy/pickle round-trips and replay determinism. Until M1 every
+  game stops at `NotImplementedRule("103.5: ...")`, which the harness treats as the end of an M0
+  game; any other exception is a failure.
 
 ## M1 — Turn structure (1v1 first, multiplayer-shaped data)
 
+- [ ] Opening hands and mulligans (103.5), including the free first mulligan in multiplayer
+  (103.5c), and the redaction of drawn cards in other players' views and logs (design.md §9).
 - [ ] All phases and steps (500–514), with priority passed in each step where it applies.
 - [ ] Untap, draw (including the first-turn draw skip in two-player games), and cleanup
   (discarding to hand size, removing damage, ending "until end of turn" effects).
@@ -172,7 +176,7 @@ cards are not included.
   between steps.
 - [ ] Basic state-based actions: 0 or less life, drawing from an empty library, lethal damage and
   0 toughness.
-- [ ] Concession at any time (104.3a).
+- [ ] Concession at any time (104.3a), through its own API entry point, `concede` (design.md §3).
 - [ ] Cards: basic lands and a few vanilla creatures.
 
 ## M2 — Spells and the stack
