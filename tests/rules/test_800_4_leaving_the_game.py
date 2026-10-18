@@ -25,11 +25,12 @@ import pytest
 
 from resolve.agents.scripted import Choose, choose
 from resolve.decisions.kinds import DecisionKind
-from resolve.decisions.spaces import PassOption, PlayerOption
+from resolve.decisions.spaces import ChooseOne, PassOption, PlayerOption, PlayLandOption
 from resolve.engine import concede
 from resolve.engine.api import new_game
 from resolve.engine.mulligans import KEEP, MULLIGAN
 from resolve.errors import NotImplementedRule
+from resolve.events.cards import CardDiscarded
 from resolve.events.game import PlayerLeftGame
 from resolve.events.turn import StepBegan, TurnBegan
 from resolve.state.config import GameConfig
@@ -37,8 +38,9 @@ from resolve.state.game import GameState
 from resolve.state.ids import PlayerId
 from resolve.state.mana import ManaType
 from resolve.state.turn import Phase, Step
+from resolve.state.zones import EXILE, Zone
 from tests.game_fixtures import Passer, deck, pass_until, request_of
-from tests.scenario import Scenario, run_script
+from tests.scenario import Scenario, names, run_script
 
 P0, P1, P2, P3 = (PlayerId(p) for p in range(4))
 
@@ -111,10 +113,110 @@ def test_800_4j_the_turn_continues_without_an_active_player() -> None:
             firsts.append((where[2], request.player))
     assert all(player == P1 for _, player in firsts)
     assert {step for step, _ in firsts} >= {Step.UPKEEP, Step.DRAW, None, Step.END}
+    # 305.1: a land is played in a main phase of the player's own turn; this turn is nobody's.
+    for request, _ in agent.requests:
+        assert isinstance(request.space, ChooseOne)
+        assert not any(isinstance(o, PlayLandOption) for o in request.space.options)
     turn = state.turn
     assert turn is not None and turn.active_player == P1
     # Turn 2's draw step drew nothing (no active player); turn 3's hasn't come yet.
     assert [len(state.player(p).hand) for p in (P1, P2)] == [2, 2]
+
+
+def test_514_1_800_4j_nobody_discards_in_a_turn_without_an_active_player() -> None:
+    """Player 0 (active) concedes in their upkeep; player 1 holds nine cards. 514.1 asks only the
+    active player to discard, and there is none (800.4h hands over a rule's *choice*, not the
+    turn-based action), so player 1 still holds nine cards when their turn begins."""
+    scenario = board()
+    scenario.hand(P1, ["Forest"] * 7)
+    scenario.at(Step.UPKEEP, number=2)
+    state = scenario.build()
+    concede(state, P0)
+    agent = Passer()
+    pass_until(state, lambda s: s.turn is not None and s.turn.number == 3, agent)
+    assert all(request.kind is DecisionKind.PRIORITY_ACTION for request, _ in agent.requests)
+    assert not any(isinstance(e.record, CardDiscarded) for e in state.event_log)
+    assert len(state.player(P1).hand) == 9
+
+
+def test_800_4a_the_objects_of_the_other_players_stay() -> None:
+    """Only what the leaving player owns leaves: the others' permanents keep their status and
+    damage, and their other zones are untouched."""
+    scenario = board()
+    forest, bears = scenario.battlefield(P0, ["Forest", "Grizzly Bears"])
+    scenario.tap(forest).damage(bears, 1)
+    (giant,) = scenario.battlefield(P1, ["Hill Giant"])
+    scenario.graveyard(P1, ["Savannah Lions"])
+    scenario.exile(P1, ["Forest"])
+    scenario.battlefield(P2, ["Forest", "Grizzly Bears"])
+    scenario.exile(P2, ["Forest"])
+    scenario.at(Step.UPKEEP, number=2)
+    state = scenario.build()
+    kept = {obj: o for obj, o in state.objects.items() if o.owner != P2}
+    concede(state, P2)
+    assert state.battlefield == [forest, bears, giant]
+    assert state.objects[forest].tapped and state.objects[bears].damage == 1
+    assert state.objects == kept
+    assert names(state, Zone.graveyard(P1)) == ["Savannah Lions"]
+    assert names(state, EXILE) == ["Forest"]
+
+
+def test_800_4a_a_commander_leaves_the_command_zone_with_its_owner() -> None:
+    scenario = Scenario(3, config=GameConfig.commander_game())
+    commanders = {player: scenario.commander(player, "Test Daybreaker") for player in (P0, P1, P2)}
+    for player in scenario.players:
+        scenario.library(player, ["Forest"] * 4)
+    scenario.at(Step.UPKEEP, number=2)
+    state = scenario.build()
+    concede(state, P2)
+    assert state.command == [commanders[P0], commanders[P1]]
+    assert not any(o.owner == P2 for o in state.objects.values())
+    assert state.result is None
+
+
+def test_117_4_a_player_who_passed_leaves_and_the_others_still_must_pass() -> None:
+    """Four players: 0 and 1 passed, 2 holds priority. Player 1 leaves: player 2 is asked again
+    and passes, and player 3, who hasn't passed, receives priority: not everyone still in the
+    game has passed in succession yet (117.4)."""
+    scenario = board(4)
+    scenario.at(Step.UPKEEP, number=2, active=P0, priority=P2, passed=[P0, P1])
+    state = scenario.build()
+    concede(state, P1)
+    assert request_of(state).player == P2
+    run_script(state, pass_(P2))
+    request = request_of(state)
+    assert (request.kind, request.player) == (DecisionKind.PRIORITY_ACTION, P3)
+    turn = state.turn
+    assert turn is not None and turn.step is Step.UPKEEP
+
+
+def test_117_4_the_holder_leaves_after_a_player_who_passed_left() -> None:
+    """Four players: 0 and 1 passed, 2 holds priority. Player 1 leaves, then player 2: two
+    passes are recorded and two players remain, but player 3 hasn't passed, so player 3
+    receives priority (800.4a) instead of the step ending."""
+    scenario = board(4)
+    scenario.at(Step.UPKEEP, number=2, active=P0, priority=P2, passed=[P0, P1])
+    state = scenario.build()
+    concede(state, P1)
+    concede(state, P2)
+    request = request_of(state)
+    assert (request.kind, request.player) == (DecisionKind.PRIORITY_ACTION, P3)
+    turn = state.turn
+    assert turn is not None and turn.step is Step.UPKEEP
+
+
+def test_117_4_a_player_who_hadnt_passed_leaves_and_the_next_pass_ends_the_step() -> None:
+    """Four players: 0 and 1 passed, 2 holds priority. Player 3, who hadn't passed, leaves:
+    player 2's pass is the last one needed, and the step ends (117.4)."""
+    scenario = board(4)
+    scenario.at(Step.UPKEEP, number=2, active=P0, priority=P2, passed=[P0, P1])
+    state = scenario.build()
+    concede(state, P3)
+    assert request_of(state).player == P2
+    run_script(state, pass_(P2))
+    turn = state.turn
+    assert turn is not None and turn.step is Step.DRAW
+    assert request_of(state).player == P0
 
 
 def test_800_4k_players_who_left_take_no_turns() -> None:

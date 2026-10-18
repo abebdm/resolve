@@ -48,3 +48,24 @@ def test_a_replay_past_the_end_of_the_game_diverges() -> None:
     concede(ended, P0)
     with pytest.raises(ReplayDiverged, match="ended before input 1"):
         replay(ended, state.event_log)
+
+
+def test_a_replayed_concession_by_a_player_who_already_left_diverges() -> None:
+    state = new_game(GameConfig.standard(), [deck(5, 0)] * 3, seed=7)
+    request = request_of(state)
+    assert request.player == P0
+    submit(state, DecisionAnswer(request.id, request.player, Pick(0)))
+    concede(state, P2)
+    other = new_game(GameConfig.standard(), [deck(5, 0)] * 3, seed=7)
+    concede(other, P2)
+    with pytest.raises(ReplayDiverged, match="input 2: player 2 has already left the game"):
+        replay(other, state.event_log)
+
+
+def test_a_replayed_concession_after_the_end_of_the_game_diverges() -> None:
+    state = new_game(GameConfig.standard(), [deck(5, 0)] * 2, seed=4)
+    concede(state, P0)
+    ended = new_game(GameConfig.standard(), [deck(5, 0)] * 2, seed=4)
+    concede(ended, P1)
+    with pytest.raises(ReplayDiverged, match="the game ended before input 1"):
+        replay(ended, state.event_log)

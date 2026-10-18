@@ -44,7 +44,7 @@ from resolve.engine.deck import Deck
 from resolve.engine.view import PlayerView
 from resolve.errors import InvalidAnswer
 from resolve.events.base import AnswerRecord
-from resolve.events.game import Conceded
+from resolve.events.game import Conceded, PlayerLost
 from resolve.state.config import GameConfig
 from resolve.state.game import GameObject, GameState
 from resolve.state.ids import PlayerId
@@ -184,7 +184,48 @@ def test_random_agents_finish_land_only_games_with_concessions(seed: int, player
     assert result.gap is None
     state = result.state
     assert state.result is not None
-    assert any(isinstance(e.record, Conceded) for e in state.event_log) or players == 2
+    assert_leaving_is_consistent(state, decks)
+    # Every loss is a concession (104.3a) or a draw from an empty library (704.5b): land-only
+    # decks can't lose any other way.
+    losses = [e.record for e in state.event_log if isinstance(e.record, PlayerLost)]
+    assert losses and all(loss.rules[0] in ("104.3a", "704.5b") for loss in losses)
+    conceded = [e.record.player for e in state.event_log if isinstance(e.record, Conceded)]
+    assert {loss.player for loss in losses if loss.rules[0] == "104.3a"} == set(conceded)
+
+
+def test_random_agents_concede_in_commander_games() -> None:
+    """Commander games, 3 and 4 players, with random concessions: a player who leaves takes
+    their commander out of the command zone (800.4a) and the others' stay. Every game reaches
+    the first turn's priority; casting a commander stops a game at the 601.2 gap."""
+    with_concessions = 0
+    for players in (3, 4):
+        for seed in range(4):
+            decks = [
+                deck(forests=8 + seat, elves=0, commanders=[DAYBREAKER]) for seat in range(players)
+            ]
+            result = fuzz_game(
+                GameConfig.commander_game(), decks, seed, probe_invalid=False, concession_chance=10
+            )
+            state = result.state
+            if result.gap is None:
+                assert state.result is not None
+            else:
+                assert result.gap.split(": ")[0] in fuzz_tool.ALLOWED_GAPS
+            assert state.turn is not None
+            assert_leaving_is_consistent(state, decks)
+            in_game = [p.id for p in state.players if not p.left_game]
+            assert sorted(state.objects[o].owner for o in state.command) == in_game
+            with_concessions += any(isinstance(e.record, Conceded) for e in state.event_log)
+    assert with_concessions >= 4
+
+
+def assert_leaving_is_consistent(state: GameState, decks: Sequence[Deck]) -> None:
+    """800.4a: a player who left owns nothing; every other player still owns each card of
+    their deck and each of their commanders, in some zone."""
+    for player in state.players:
+        owned = sum(1 for o in state.objects.values() if o.owner == player.id)
+        cards = decks[player.id]
+        assert owned == (0 if player.left_game else len(cards.cards) + len(cards.commanders))
 
 
 def test_patient_games_include_decking_and_discards() -> None:
