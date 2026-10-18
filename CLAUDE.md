@@ -35,7 +35,9 @@ milestone is M0 (see the roadmap). Do not start a milestone unless the user asks
    - never iterate over a `set` of game objects (use dicts or sorted IDs);
    - never read the clock;
    - never depend on `id()` or hash ordering.
-7. **Every change ships with tests.** `pytest`, `ruff` and `pyright` must all pass.
+7. **Every change ships with tests, and the tests must be run.** A task is not done until the
+   new tests exist and the full suite, `ruff` and `pyright` all pass. See "Testing requirements"
+   below.
 8. **Unclear rules:** consult the pinned CR. Record the reasoning, with rule numbers, in a comment
    and in the PR description.
 9. **Scope:**
@@ -77,6 +79,69 @@ milestone is M0 (see the roadmap). Do not start a milestone unless the user asks
   3. Write tests derived from the rulings.
   4. Check Forge or XMage behavior for missed corner cases.
 - The target decks are in `decks/`.
+
+## Testing requirements
+
+Tests are how this project proves rules accuracy. Treat them as part of the deliverable, not an
+afterthought.
+
+**Every change includes tests**
+
+- Every new function, task, primitive, keyword, card or tool gets tests in the same PR. Write them
+  alongside the code, or before it.
+- **Bug fixes start with a failing test** that reproduces the bug, then the fix makes it pass.
+
+**Derive expected behavior from the rules, not from the code**
+
+- Expected outcomes come from the pinned CR text and official rulings, never from "what the code
+  currently does".
+- Each rules test cites the CR number it checks, in its name or docstring. For example,
+  `test_704_5a_player_with_zero_life_loses`.
+- When the CR or a ruling is ambiguous, write down the interpretation in the test's docstring.
+
+**Test what must happen and what must not**
+
+- **Illegal actions are rejected:** casting at the wrong time, illegal targets, invalid decision
+  answers.
+- **Effects don't fire when they shouldn't:** a trigger whose condition isn't met, a replacement
+  effect that doesn't apply.
+- **Edge cases:**
+  - zero, empty, and maximum values
+  - objects changing zones mid-resolution (400.7)
+  - simultaneous events
+  - more than two players, wherever multiplayer could matter
+
+**Card tests**
+
+- Every implemented card gets tests in `tests/cards/`, including one for each relevant official
+  ruling.
+
+**Invariants and determinism**
+
+- Engine changes keep the fuzz tests passing:
+  - random-agent games complete
+  - invariants hold
+  - the state round-trips through `deepcopy` and `pickle`
+  - replaying a recorded game reproduces the identical state
+
+**Run everything before finishing**
+
+- Run `uv run pytest`, `uv run ruff check .` and `uv run pyright`, all passing.
+- State the results in the final message and the PR description: number of tests, and pass/fail.
+- Never claim tests pass without having run them.
+
+**Never weaken tests to get green**
+
+- Don't delete, skip, `xfail`, or loosen an existing test to make a change pass.
+- If a test seems wrong, stop and explain why with CR citations, and let the user decide.
+- An unimplemented rule is tested as raising `NotImplementedRule`, not skipped silently.
+
+**Use the shared helpers**
+
+- Set up board states with the scenario builder (`tests/scenario.py`) rather than playing out turns
+  to reach them.
+- Drive choices with the scripted agent.
+- Keep tests deterministic: fixed seeds, no reliance on timing.
 
 ## Commands
 
