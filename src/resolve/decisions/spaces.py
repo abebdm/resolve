@@ -50,7 +50,14 @@ class ObjectOption(Immutable):
     object: ObjectId
 
 
-Option = PlayerOption | ObjectOption
+@dataclass(frozen=True)
+class NamedOption(Immutable):
+    """An option that is neither a player nor an object, named by a fixed word ("keep")."""
+
+    name: str
+
+
+Option = PlayerOption | ObjectOption | NamedOption
 
 # --- Answer values -----------------------------------------------------------------------------
 

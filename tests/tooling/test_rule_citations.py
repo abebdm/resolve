@@ -17,9 +17,12 @@ from pathlib import Path
 
 import pytest
 
+from resolve.agents.driver import play
+from resolve.agents.random_agent import RandomAgent
 from resolve.citations import is_rule_reference
+from resolve.errors import NotImplementedRule
 from resolve.events.base import LogEntry
-from tests.game_fixtures import choose_starting_player, request_of, start
+from tests.game_fixtures import request_of, start
 from tools.gaps import find_gaps
 
 REPO = Path(__file__).resolve().parents[2]
@@ -106,7 +109,7 @@ x = 0x1234  # 999.9z is a bad citation
 
 def test_every_rule_cited_in_the_engine_source_exists_in_the_pinned_cr() -> None:
     cited = engine_citations()
-    assert {"103.1", "103.5", "701.24a"} <= set(cited), "the scan finds the engine's citations"
+    assert {"103.1", "103.5", "121.2c", "701.24a"} <= set(cited), "the scan finds citations"
     malformed = {rule: where for rule, where in cited.items() if not is_rule_reference(rule)}
     assert malformed == {}
     missing = {rule: where for rule, where in cited.items() if rule not in pinned_rules()}
@@ -117,9 +120,14 @@ def test_every_rule_cited_in_the_engine_source_exists_in_the_pinned_cr() -> None
 def test_every_rule_cited_during_a_game_exists_in_the_pinned_cr(players: int) -> None:
     state = start(players)
     cited = set(request_of(state).rules)
-    gap = choose_starting_player(state, 0)
-    cited.add(gap.rule)
+    try:
+        play(state, RandomAgent(players), max_answers=50)  # through the mulligans (103.5)
+    except NotImplementedRule as gap:
+        cited.add(gap.rule)
+    if state.pending is not None:
+        cited.update(state.pending.rules)
     entries: list[LogEntry] = state.event_log
     cited.update(rule for entry in entries for rule in entry.rules)
-    assert len(entries) == 2 + players
+    cited.update(rule for entry in entries if entry.redacted for rule in entry.redacted.rules)
+    assert {"103.5", "121.2c"} <= cited
     assert sorted(cited - pinned_rules()) == []

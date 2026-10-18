@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 import pytest
 
+from resolve.engine.api import view_for
 from resolve.engine.loop import run
 from resolve.errors import EngineError
 from resolve.events.base import LogEntry, append_log
 from resolve.events.game import GameEnded, LibraryShuffled, StartingPlayerChosen
 from resolve.events.pipeline import ApplyEvents, detect_triggers, replacement_stage
 from resolve.state.ids import PlayerId
-from tests.engine_support import Mark, Marker, markers, running
+from tests.engine_support import Counted, Mark, Marker, markers, running
 from tests.game_fixtures import start
+
+P0, P1 = PlayerId(0), PlayerId(1)
 
 
 def test_simultaneous_events_are_applied_and_logged_in_order() -> None:
@@ -39,6 +44,46 @@ def test_log_entries_record_visibility_sorted_and_without_repeats() -> None:
     assert public.visible_to is None
     assert public.is_visible_to(PlayerId(1))
     assert public.rules == ("117.1",)
+
+
+def test_an_event_is_logged_as_applied() -> None:
+    """An event is proposed before its outcome is known; the log records what happened."""
+    state = running(Mark("a"))
+    state.pending = None
+    state.tasks.append(ApplyEvents((Counted(rules=("117.1",)), Counted(rules=("117.1",)))))
+    run(state)
+    assert [entry.record for entry in state.event_log[1:3]] == [
+        Counted(seen=1, rules=("117.1",)),
+        Counted(seen=2, rules=("117.1",)),
+    ]
+
+
+def test_a_hidden_entry_shows_other_players_its_redacted_form() -> None:
+    """design.md §9: one entry; its player sees all of it, the others its redacted form."""
+    state = running(Mark("a"))
+    secret = Marker(label="drew Forest", rules=("121.1",), secret_for=(P1,), public_label="drew")
+    hidden = Marker(label="looked", rules=("121.1",), secret_for=(P1,))
+    state.pending = None
+    state.tasks.append(ApplyEvents((secret, hidden)))
+    run(state)
+    entry, other = state.event_log[1], state.event_log[2]
+    assert entry == LogEntry(1, secret, (P1,), replace(secret, label="drew", public_label=None))
+    assert other == LogEntry(2, hidden, (P1,), None)
+    assert entry.shown_to(P1) == entry
+    assert entry.shown_to(P0) == LogEntry(1, replace(secret, label="drew", public_label=None), None)
+    assert other.shown_to(P0) is None
+    assert [e.index for e in view_for(state, P0).log] == [0, 1]
+    assert view_for(state, P0).log[1].record == Marker(
+        label="drew", rules=("121.1",), secret_for=(P1,)
+    )
+    assert view_for(state, P1).log[1:] == (entry, other)
+
+
+def test_a_public_entry_keeps_no_redacted_form() -> None:
+    state = start(2)
+    marker = Marker(label="x", rules=("117.1",))
+    entry = append_log(state, marker, None, Marker(label="y", rules=("117.1",)))
+    assert entry.redacted is None
 
 
 @pytest.mark.parametrize("rules", [("103",), ("103.1",), ("701.24a",), ("103.3", "701.24a")])

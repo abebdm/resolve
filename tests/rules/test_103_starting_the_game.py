@@ -1,6 +1,8 @@
 """103: starting the game (and 903.6-903.7 for Commander).
 
-M0 implements 103.1 to 103.4. The game then stops at ``NotImplementedRule("103.5: ...")``.
+Opening hands and mulligans (103.5) are in ``test_103_5_mulligans.py``. Tests here that look at
+the libraries right after the 103.3 shuffle use a starting hand size of 0 (``NO_HANDS``), so no
+card is drawn before they look.
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ from resolve.events.game import (
     LibraryShuffled,
     StartingPlayerChosen,
 )
-from resolve.state.config import GameConfig
+from resolve.state.config import CommanderRules, GameConfig
 from resolve.state.game import GameState, turn_order
 from resolve.state.ids import CardId, ObjectId, PlayerId
 from resolve.state.invariants import invariant_violations
@@ -33,6 +35,8 @@ from tests.game_fixtures import (
     request_of,
     start,
 )
+
+NO_HANDS = GameConfig(starting_hand_size=0)
 
 
 @pytest.mark.parametrize("players", [2, 3, 4])
@@ -106,7 +110,7 @@ def test_103_3_no_library_is_shuffled_before_the_starting_player_is_chosen() -> 
 def test_103_3_every_players_library_is_shuffled() -> None:
     orders: dict[int, set[tuple[int, ...]]] = {0: set(), 1: set(), 2: set()}
     for seed in range(20):
-        state = start(3, seed)
+        state = start(3, seed, NO_HANDS)
         initial = [list(player.library) for player in state.players]
         choose_starting_player(state, seed % 3)
         for player in state.players:
@@ -118,7 +122,7 @@ def test_103_3_every_players_library_is_shuffled() -> None:
 def test_103_3_each_library_becomes_a_random_permutation_of_its_deck() -> None:
     orders: set[tuple[int, ...]] = set()
     for seed in range(20):
-        state = start(2, seed)
+        state = start(2, seed, NO_HANDS)
         initial = list(state.players[0].library)
         choose_starting_player(state, 0)
         library = state.players[0].library
@@ -172,10 +176,11 @@ def test_903_3_a_commander_game_with_a_deck_without_commander_is_not_refused_unt
 COMMANDER_NAME = "Test Daybreaker // Test Nightfall"
 
 
-def commander_game(players: int = 3, seed: int = 1) -> GameState:
+def commander_game(players: int = 3, seed: int = 1, *, hand_size: int = 7) -> GameState:
     """A Commander game whose decks are three Forests and Test Daybreaker as commander."""
     commander_decks = [deck(3, 0, commanders=[DAYBREAKER]) for _ in range(players)]
-    return new_game(GameConfig.commander_game(), commander_decks, seed)
+    config = GameConfig(starting_life=40, starting_hand_size=hand_size, commander=CommanderRules())
+    return new_game(config, commander_decks, seed)
 
 
 def name_of(state: GameState, obj_id: ObjectId) -> str:
@@ -242,7 +247,7 @@ def test_903_6_after_the_choice_each_commander_is_put_face_up_into_the_command_z
 
 
 def test_903_6_the_remaining_cards_are_shuffled_and_no_commander_is_left_in_a_library() -> None:
-    state = commander_game()
+    state = commander_game(hand_size=0)
     choose_starting_player(state, 0)
     for player in state.players:
         assert len(player.library) == 3
@@ -269,13 +274,4 @@ def test_613_7m_a_player_with_two_commanders_chooses_their_order_which_is_not_im
     decks_ = [deck(3, 0, commanders=[DAYBREAKER, DAYBREAKER]), deck(3, 0, commanders=[DAYBREAKER])]
     state = new_game(GameConfig.commander_game(), decks_, seed=1)
     gap = choose_starting_player(state, 0)
-    assert gap.rule == "613.7m"
-
-
-def test_103_5_opening_hands_are_not_implemented_yet_and_stop_the_game_loudly() -> None:
-    state = start(2)
-    gap = choose_starting_player(state, 0)
-    assert gap.rule == "103.5"
-    assert all(player.hand == [] for player in state.players)
-    # The libraries were shuffled before the gap was reached.
-    assert len([e for e in state.event_log if isinstance(e.record, LibraryShuffled)]) == 2
+    assert gap is not None and gap.rule == "613.7m"

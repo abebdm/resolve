@@ -8,7 +8,8 @@ simultaneous events, which go through these stages:
    several effects apply, the affected player chooses their order (616.1), which is why the
    pipeline is a task that can stop for a decision.
 2. **Apply** each event to the state, in order.
-3. **Log** each event, with the players who may see it.
+3. **Log** each event as applied, with the players who may see it and, for an event hidden from
+   some players, the redacted form they see instead (design.md §9).
 4. **Detect triggers** (603.2): ``detect_triggers``. No triggered abilities exist yet; M4 fills
    it in, looking back in time where 603.10 requires.
 """
@@ -39,10 +40,12 @@ class ApplyEvents(Task):
     def run(self, state: GameState) -> TaskResult:
         events = replacement_stage(state, self.events)
         visibility = [event.visible_to(state) for event in events]
+        applied: list[Event] = []
         for event, visible_to in zip(events, visibility, strict=True):
-            event.apply(state)
-            append_log(state, event, visible_to)
-        detect_triggers(state, events)
+            record = event.apply(state) or event
+            applied.append(record)
+            append_log(state, record, visible_to, record.redacted())
+        detect_triggers(state, tuple(applied))
         return Done()
 
 

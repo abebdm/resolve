@@ -205,3 +205,14 @@ def test_400_10_an_object_put_from_the_command_zone_into_it_becomes_a_new_object
     assert second.timestamp > first.timestamp
     assert state.command == [second.id]
     assert first.id not in state.objects
+
+
+def test_400_7_an_object_moved_to_the_bottom_of_a_pile_is_a_new_object_at_the_bottom() -> None:
+    """Some moves put a card on the bottom of a library (103.5); the last element is the top."""
+    state = new_game(GameConfig.standard(), [deck(2, 1), deck(2, 1)], seed=1)
+    library = state.players[0].library
+    top = library[-1]
+    moved = move_object(state, top, Zone.library(PlayerId(0)), bottom=True)
+    assert moved.id != top and top not in state.objects
+    assert library[0] == moved.id and len(library) == 3
+    assert invariant_violations(state) == []

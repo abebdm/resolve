@@ -19,6 +19,8 @@ class DecisionKind(Enum):
 
     CHOOSE_STARTING_PLAYER = "choose_starting_player"  # 103.1
     MULLIGAN = "mulligan"  # 103.5
+    PUT_ON_BOTTOM = "put_on_bottom"  # 103.5: which cards go to the bottom of the library
+    ORDER_CARDS = "order_cards"  # 103.5: the order of cards put on the bottom, top first
     PRIORITY_ACTION = "priority_action"  # 117.1
     CHOOSE_MODES = "choose_modes"  # 700.2, 601.2b
     CHOOSE_X = "choose_x"  # 107.3a

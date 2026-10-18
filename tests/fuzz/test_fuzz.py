@@ -1,7 +1,8 @@
 """Random-agent fuzz games (design.md §14), and tests that the harness catches what it should.
 
-Every M0 game stops at ``NotImplementedRule("103.5: ...")``, which the harness treats as the end
-of the game (roadmap M0). The game seeds are fixed, so the suite is deterministic.
+Until the turn structure exists (M1.2), every game stops after the mulligans at
+``NotImplementedRule("103.8: ...")``, which the harness treats as the end of the game. The game
+seeds are fixed, so the suite is deterministic.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ import hashlib
 import io
 import os
 import pickle
+import re
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -55,6 +57,7 @@ from tests.engine_support import (
     EndGame,
     GapOnAnswer,
     HoldsValue,
+    LeaksALibraryCard,
     LossyPickle,
     RejectsEverything,
     Unrepeatable,
@@ -86,10 +89,16 @@ def test_random_agent_games_complete_with_every_check_passing(
 ) -> None:
     config = GameConfig.commander_game() if commander else GameConfig.standard()
     result = fuzz_game(config, decks_for(players, commander, seed), seed)
-    assert result.gap is not None and result.gap.startswith("103.5: ")
-    assert result.answers == 1  # 103.1 is the only decision M0 asks
+    assert result.gap is not None and result.gap.startswith("103.8: ")
+    # 103.1, then at least one mulligan declaration per player (103.5).
+    assert result.answers >= 1 + players
     state = result.state
     assert state.starting_player is not None
+    decks = decks_for(players, commander, seed)
+    for player in state.players:
+        held = len(player.hand) + len(player.library)
+        assert held == len(decks[player.id].cards), "every card is in the hand or library"
+        assert len(player.hand) <= 7
     if commander:
         assert len(state.command) == players  # 103.2c
     else:
@@ -151,7 +160,7 @@ def test_a_disallowed_gap_is_a_failure() -> None:
     with pytest.raises(FuzzFailure, match=r"gap that isn't allowed: 601\.2: a test gap"):
         fuzz(GapOnAnswer("601.2"))
     config = GameConfig.standard()
-    with pytest.raises(FuzzFailure, match=r"isn't allowed: 103\.5"):
+    with pytest.raises(FuzzFailure, match=r"isn't allowed: 103\.8"):
         fuzz_game(config, decks_for(2, False, 0), 0, allowed_gaps=())
 
 
@@ -168,6 +177,22 @@ def test_an_allowed_gap_ends_the_game() -> None:
 def test_an_engine_error_is_a_failure_naming_the_game() -> None:
     with pytest.raises(FuzzFailure, match="broken game: EngineError: crashed"):
         fuzz(CrashOnAnswer())
+
+
+@pytest.mark.parametrize(
+    ("how", "message"),
+    [
+        ("redacted", "shows player 1's view a drawn library card"),
+        ("public", "shows player 1's view a drawn library card"),
+        ("bottom", "shows player 1's view the bottomed cards"),
+    ],
+)
+def test_a_log_entry_that_shows_another_players_library_card_is_a_failure(
+    how: str, message: str
+) -> None:
+    """design.md §9: library object IDs survive shuffles, so no other player may see them."""
+    with pytest.raises(FuzzFailure, match=message):
+        fuzz(LeaksALibraryCard(how), AskTwice(PlayerId(0)))
 
 
 def test_an_impure_state_is_a_failure() -> None:
@@ -505,8 +530,11 @@ def test_the_command_line_runs_games_and_reports_a_benchmark() -> None:
         status = fuzz_tool.main(["--games", "10", "--seed", "100", "--players", "2", "4"])
     text = output.getvalue()
     assert status == 0
-    assert "10 games passed: 10 answers accepted" in text
-    assert "Endings: 103.5 x10" in text
+    found = re.search(r"10 games passed: (\d+) answers accepted, (\d+) rejected\.", text)
+    assert found is not None
+    # The decks are empty, so 103.1 is the only question: a zero-card hand can't mulligan (103.5).
+    assert int(found.group(1)) == 10
+    assert "Endings: 103.8 x10" in text
     assert "games per second" in text
 
 

@@ -3,7 +3,7 @@
 Milestones are worked in order. Each milestone ends with every listed item done, tests passing,
 and `pytest`, `ruff` and `pyright` clean in CI. Tick items off in the same PR that completes them.
 
-**Current milestone: M1 (not started). M0 is complete.**
+**Current milestone: M1 (in progress). M0 is complete.**
 
 ---
 
@@ -167,7 +167,7 @@ cards are not included.
 
 ## M1 — Turn structure (1v1 first, multiplayer-shaped data)
 
-- [ ] Opening hands and mulligans (103.5), including the free first mulligan in multiplayer
+- [x] Opening hands and mulligans (103.5), including the free first mulligan in multiplayer
   (103.5c), and the redaction of drawn cards in other players' views and logs (design.md §9).
 - [ ] All phases and steps (500–514), with priority passed in each step where it applies.
 - [ ] Untap, draw (including the first-turn draw skip in two-player games), and cleanup
@@ -270,7 +270,7 @@ cards are not included.
 - [ ] Myriad (702.116): token copies attacking each other opponent.
 - [ ] The command zone, casting commanders, and commander tax.
 - [ ] Commander damage (903.10a) and the zone-change rules (903.9a/b).
-- [ ] Color identity and deck validation; Commander mulligan rules.
+- [ ] Color identity and deck validation.
 - [ ] The scenario builder refuses commanders `validate_deck` would refuse (903.3, 903.5,
   702.124a), and the tests that use the fixtures' non-legendary commanders are updated.
 - [ ] Designations: the monarch, the city's blessing.

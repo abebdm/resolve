@@ -19,6 +19,61 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-18: Opening hands and mulligans
+- **Decision:** `OpeningHands` follows 103.5 literally. Opening hands are drawn one card at a time,
+  the starting player first, then the others in turn order (121.2c, 101.4e). The starting player
+  declares first, then each other player in turn order (`MULLIGAN`, options `keep` and
+  `mulligan`); declarations are public events (101.4b). Once all have declared, every player who
+  chose to mulligan shuffles their hand into their library (one `HandShuffledIntoLibrary` event
+  each, together), draws a new hand (121.2c order), and then, in APNAP order (101.4), chooses
+  which cards to put on the bottom (`PUT_ON_BOTTOM`) and their order (`ORDER_CARDS`, listed
+  **top to bottom**); the cards then go to the bottom together. A game "begins with more than two
+  players" (100.1b, 103.5c) when it has more than two seats; seats are never removed. "A player
+  can take mulligans until their opening hand would be zero cards, after which they may not take
+  further mulligans" is read literally, by cards: another mulligan is allowed while the player's
+  hand holds at least one card. The mulligan that leaves zero cards is allowed, and the player
+  then keeps without being asked. With seven-card hands that is seven mulligans (eight with
+  103.5c); a short library reaches zero cards sooner, and a player whose library was empty is
+  never asked. A player who must put every card of their hand on the bottom is asked only for
+  the order. Cards put on
+  the bottom stay known to their owner (`known_to`) until the next shuffle. After the mulligans,
+  103.6 has nothing to do (no definition can have such an ability), and the game stops at
+  `NotImplementedRule("103.8: ...")` until the turn structure exists.
+- **Why:** 103.5 puts the bottoming inside "to take a mulligan", so it happens each time, not when
+  keeping. "After which they may not take further mulligans" places the limit after the zero-card
+  hand. The first version counted mulligans against the starting hand size instead; the test
+  review pointed out that the text speaks of the hand's cards, which differs for short libraries. **Questions with a single possible answer are not asked** (a forced keep, which cards go
+  to the bottom when all must); priority is the exception and is always asked, because passing
+  automatically is an agent's convenience (design.md §6). Commander has no mulligan rule of its
+  own (the user approved removing "Commander mulligan rules" from design.md §10 and roadmap M7).
+- **Rules:** 100.1a, 100.1b, 101.4, 101.4b, 101.4e, 103.5, 103.5c, 121.2c, 400.2, 400.7, 701.24a.
+- **Where:** `src/resolve/engine/mulligans.py`, `src/resolve/events/cards.py`,
+  `src/resolve/engine/start.py`, `tests/rules/test_103_5_mulligans.py`.
+
+### 2026-10-18: Drawing, events logged as applied, and redacted log entries
+- **Decision:** `DrawCards(player, count, rules)` makes one `CardDrawn` event per card (121.2,
+  so replacement effects will apply per draw, 121.6b). An event is proposed without its outcome
+  and `Event.apply` may return a copy recording it (the drawn library object, the new hand
+  object); the pipeline logs that applied form. Drawing from an empty library draws nothing,
+  sets `Player.drew_from_empty_library` (cleared by the state-based action check, 704.5b) and
+  adds 121.4 to the event's rules. A `LogEntry` hidden from some players may carry a `redacted`
+  form (`Event.redacted()`), which `view_for` shows to the others with `visible_to=None`
+  (`LogEntry.shown_to`). A draw is fully visible only to the drawer; others see the new hand
+  object's ID but not the library object's. `CardsPutOnBottom` shows others only the count.
+  `HandShuffledIntoLibrary` is public: it names hand objects, whose IDs everyone already sees.
+  `move_object(..., bottom=True)` puts the new object at the bottom of a pile.
+- **Why:** design.md §9 required log redaction to be designed with drawing: library object IDs
+  survive shuffles, so revealing one tells where a card went. One entry per event with two forms
+  was chosen over two separate entries so that each event keeps one index and one trigger
+  check. Hand placeholder IDs are already public in views (design.md §9), so showing the new hand
+  object reveals nothing more. Returning the applied event keeps events immutable values while
+  letting the log say which objects were involved, which the UI and the redaction need.
+- **Rules:** 121.1, 121.2, 121.4, 121.6b, 400.7, 401.2, 402.3, 704.5b; design.md §7, §9.
+- **Where:** `src/resolve/events/base.py`, `src/resolve/events/pipeline.py`,
+  `src/resolve/events/cards.py`, `src/resolve/engine/drawing.py`, `src/resolve/engine/view.py`,
+  `src/resolve/state/game.py`, `tools/fuzz.py` (the view oracle shows redacted forms and fails if
+  a redacted draw or bottoming still names cards).
+
 ### 2026-10-18: Windows first: the CI matrix and the encoding checks
 - **Decision:** CI runs ruff, pyright and pytest on `windows-latest` and `ubuntu-latest` with
   Python 3.12, 3.13 and 3.14 (supersedes the CI part of "Tooling: uv lockfile, pyright from a

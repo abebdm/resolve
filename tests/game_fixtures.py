@@ -75,10 +75,10 @@ def request_of(state: GameState) -> DecisionRequest:
     return request
 
 
-def choose_starting_player(state: GameState, index: int) -> NotImplementedRule:
-    """Answer the 103.1 decision; returns the 103.5 gap that M0 games stop at."""
+def choose_starting_player(state: GameState, index: int) -> NotImplementedRule | None:
+    """Answer the 103.1 decision; returns the rules gap the game stopped at, if any."""
     try:
         submit(state, answer(state, Pick(index)))
     except NotImplementedRule as gap:
         return gap
-    raise AssertionError("expected the game to stop at the 103.5 gap")
+    return None

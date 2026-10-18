@@ -10,12 +10,12 @@ from resolve.decisions.spaces import Number, Pick
 from resolve.engine.api import new_game, pending_decision, submit, view_for
 from resolve.engine.deck import Deck
 from resolve.engine.view import WaitingFor
-from resolve.errors import DeckError, EngineError
+from resolve.errors import DeckError, EngineError, NotImplementedRule
 from resolve.events.base import append_log
 from resolve.state.config import GameConfig
 from resolve.state.ids import PlayerId
 from resolve.state.zones import Zone
-from tests.engine_support import AskTwice, Marker, running
+from tests.engine_support import AskTwice, GapOnAnswer, Marker, running
 from tests.game_fixtures import (
     DAYBREAKER,
     answer,
@@ -129,8 +129,9 @@ def test_view_for_an_unknown_player_is_an_error() -> None:
 
 
 def test_after_a_rules_gap_the_state_is_not_waiting_for_anything() -> None:
-    state = start(2)
-    choose_starting_player(state, 0)
+    state = running(GapOnAnswer("601.2"))
+    with pytest.raises(NotImplementedRule, match=r"^601\.2: "):
+        submit(state, answer(state, Number(0)))
     with pytest.raises(EngineError, match="isn't waiting"):
         pending_decision(state)
     with pytest.raises(EngineError):
@@ -148,8 +149,12 @@ def test_views_during_and_after_the_103_1_choice() -> None:
         assert view.request is None
         assert view.waiting_for == WaitingFor(chooser, DecisionKind.CHOOSE_STARTING_PLAYER)
     choose_starting_player(state, 1)
+    # Then the opening hands are drawn (103.5): 21 draws, the starting player's first.
     public = [type(e.record).__name__ for e in view_for(state, others[0]).log]
-    assert public == ["StartingPlayerChosen"] + ["LibraryShuffled"] * 3
+    assert public == ["StartingPlayerChosen"] + ["LibraryShuffled"] * 3 + ["CardDrawn"] * 21
     own = [type(e.record).__name__ for e in view_for(state, chooser).log]
-    assert own == ["AnswerRecord", "StartingPlayerChosen"] + ["LibraryShuffled"] * 3
+    assert (
+        own
+        == ["AnswerRecord", "StartingPlayerChosen"] + ["LibraryShuffled"] * 3 + ["CardDrawn"] * 21
+    )
     assert all(view_for(state, PlayerId(p)).starting_player == 1 for p in range(3))

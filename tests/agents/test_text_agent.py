@@ -85,8 +85,8 @@ def test_render_view_shows_only_the_visible_recent_log() -> None:
     state = start(2)
     chooser = request_of(state).player
     choose_starting_player(state, 1)
-    own = render_view(view_for(state, chooser))
-    other = render_view(view_for(state, PlayerId(1 - chooser)))
+    own = render_view(view_for(state, chooser), recent_log=100)
+    other = render_view(view_for(state, PlayerId(1 - chooser)), recent_log=100)
     assert "answered choose_starting_player: Pick(index=1)" in own
     assert "answered" not in other  # answers are visible only to their player
     assert "StartingPlayerChosen" in other and "(103.1)" in other
@@ -105,7 +105,7 @@ def test_render_view_reports_the_result() -> None:
 def test_render_log_entry_lists_fields_and_rules() -> None:
     state = start(2)
     choose_starting_player(state, 0)
-    entry = state.event_log[-1]
+    entry = [e for e in state.event_log if type(e.record).__name__ == "LibraryShuffled"][-1]
     assert render_log_entry(entry) == f"[{entry.index}] LibraryShuffled(player=1)  (103.3, 701.24a)"
 
 
