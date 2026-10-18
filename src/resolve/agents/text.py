@@ -34,6 +34,7 @@ from resolve.decisions.spaces import (
     ChooseOrder,
     ChooseSubset,
     Distribute,
+    NamedOption,
     Number,
     ObjectOption,
     Option,
@@ -81,6 +82,8 @@ def describe_option(option: Option, view: PlayerView) -> str:
         case ObjectOption(object=obj):
             known = _objects(view).get(obj)
             return describe_object(known) if known is not None else f"object #{obj}"
+        case NamedOption(name=name):
+            return name
 
 
 def _zone_line(label: str, objects: tuple[ObjectView, ...]) -> str:

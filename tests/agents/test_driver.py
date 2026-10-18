@@ -14,8 +14,7 @@ from resolve.decisions.spaces import Number
 from resolve.engine.view import PlayerView
 from resolve.errors import EngineError, InvalidAnswer, NotImplementedRule
 from resolve.state.ids import PlayerId
-from tests.engine_support import AskTwice, EndGame, holding, markers, running
-from tests.game_fixtures import start
+from tests.engine_support import AskTwice, EndGame, GapOnAnswer, holding, markers, running
 
 P0, P1 = PlayerId(0), PlayerId(1)
 
@@ -94,9 +93,8 @@ def test_a_decision_that_rejects_every_answer_gives_up_after_max_attempts() -> N
 
 
 def test_not_implemented_rules_propagate() -> None:
-    """M0 games stop at 103.5 (roadmap)."""
-    state = start(2)
-    with pytest.raises(NotImplementedRule, match=r"^103\.5: "):
+    state = running(GapOnAnswer("601.2"))
+    with pytest.raises(NotImplementedRule, match=r"^601\.2: "):
         play(state, RandomAgent(1))
 
 

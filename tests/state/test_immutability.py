@@ -24,7 +24,6 @@ from resolve.cards.registry import CardDefinition
 from resolve.data.cards import CardData, CardFace, Ruling, parse_card
 from resolve.decisions.spaces import ChooseOne, ObjectOption, Pick, PlayerOption
 from resolve.engine.api import submit
-from resolve.errors import NotImplementedRule
 from resolve.events.game import LibraryShuffled
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.invariants import check_immutable, mutable_parts
@@ -176,8 +175,7 @@ def test_a_state_and_its_copy_share_card_data_but_not_mutable_parts() -> None:
 
 def test_log_entries_are_shared_between_copies() -> None:
     state = start(2)
-    with pytest.raises(NotImplementedRule):
-        submit(state, answer(state, Pick(0)))
+    submit(state, answer(state, Pick(0)))  # through 103.1 and the opening draws (103.5)
     clone = copy.deepcopy(state)
     assert all(a is b for a, b in zip(clone.event_log, state.event_log, strict=True))
 

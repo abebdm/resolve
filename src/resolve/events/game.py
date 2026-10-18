@@ -79,7 +79,10 @@ class GameEnded(Event):
 
 @dataclass(frozen=True, kw_only=True)
 class MulliganDeclared(Event):
-    """``player`` declared whether they take a mulligan (103.5)."""
+    """``player`` declared whether they take a mulligan (103.5).
+
+    Declarations are public: each player knows the earlier players' choices (101.4b).
+    """
 
     player: PlayerId
     mulligan: bool

@@ -16,8 +16,8 @@ never approximated. Without ``--deck`` every player gets an empty deck, since no
 implemented yet.
 
 Exit status: 0 the game ended; 1 the game couldn't start (bad deck, missing card data);
-2 bad arguments; 3 the game reached a rule the engine doesn't implement yet (every M0 game stops
-at 103.5); 4 a person quit.
+2 bad arguments; 3 the game reached a rule the engine doesn't implement yet (until the turn
+structure exists, every game stops after the mulligans, at 103.8); 4 a person quit.
 """
 
 from __future__ import annotations

@@ -10,7 +10,8 @@ Agents only ever see a ``PlayerView``: a frozen snapshot holding what one player
 - **Public zones** (400.2) show every object.
 - **The pending decision**: everyone sees who is deciding and what kind of decision it is; only
   the deciding player gets the request itself.
-- **The log**: only the entries this player may see.
+- **The log**: the entries this player may see, and the redacted form of those hidden from them
+  that have one (a draw shows the new hand object but not the library object, design.md §9).
 
 Names are the printed card names. Nothing can change a name yet; once the layer system exists
 (M5), views will show characteristics computed through it.
@@ -112,7 +113,9 @@ def view_for(state: GameState, viewer: PlayerId) -> PlayerView:
         starting_player=state.starting_player,
         waiting_for=None if pending is None else WaitingFor(pending.player, pending.kind),
         request=pending if pending is not None and pending.player == viewer else None,
-        log=tuple(entry for entry in state.event_log if entry.is_visible_to(viewer)),
+        log=tuple(
+            shown for entry in state.event_log if (shown := entry.shown_to(viewer)) is not None
+        ),
         result=state.result,
     )
 

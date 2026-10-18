@@ -282,11 +282,12 @@ def test_a_scenario_with_commanders_in_the_library_starts_like_a_game() -> None:
     scenario.commander(P0, "Test Daybreaker", zone=Zone.library(P0))
     scenario.commander(P1, "Test Daybreaker", zone=Zone.library(P1))
     state = scenario.build(StartGame())
-    with pytest.raises(NotImplementedRule, match=r"^103\.5: "):
-        run_script(state, choose(PlayerOption(P1), kind=DecisionKind.CHOOSE_STARTING_PLAYER))
+    run_script(state, choose(PlayerOption(P1), kind=DecisionKind.CHOOSE_STARTING_PLAYER))
     assert state.starting_player == P1
     assert names(state, COMMAND) == ["Test Daybreaker // Test Nightfall"] * 2
-    assert names(state, Zone.library(P0)) == ["Forest", "Forest"]
+    # The two Forests were all of P0's library, so the opening hand draws both (103.5).
+    assert names(state, Zone.hand(P0)) == ["Forest", "Forest"]
+    assert names(state, Zone.library(P0)) == []
 
 
 def test_run_script_uses_every_step() -> None:

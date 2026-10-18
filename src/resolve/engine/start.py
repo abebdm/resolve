@@ -10,7 +10,10 @@
 3. 103.3: each player's library is shuffled, in turn order. The optional extra shuffle or cut by
    opponents is left out: a uniformly random order stays uniformly random.
 4. 103.4: life totals were set by ``initial_state``.
-5. 103.5: opening hands and mulligans, which are not implemented yet (roadmap M1).
+5. 103.5: opening hands and mulligans (``resolve.engine.mulligans.OpeningHands``).
+6. 103.6: actions from opening hands. No card definition can have such an ability yet, so there
+   is nothing to do.
+7. 103.8: the starting player takes their first turn, which is not implemented yet (roadmap M1).
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ from typing import TYPE_CHECKING
 
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import AnswerValue, ChooseOne, Pick, PlayerOption
+from resolve.engine.mulligans import OpeningHands
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.game import (
     CommanderPutIntoCommandZone,
@@ -63,7 +67,7 @@ class StartGame(Task):
         chosen = StartingPlayerChosen(
             chooser=self.chooser, starting_player=option.player, rules=("103.1",)
         )
-        next_steps: tuple[Task, ...] = (ShuffleLibraries(), OpeningHands())
+        next_steps: tuple[Task, ...] = (ShuffleLibraries(), OpeningHands(), FirstTurn())
         if state.config.commander is not None:
             next_steps = (PutCommandersIntoCommandZone(), *next_steps)
         return Push((ApplyEvents((chosen,)), *next_steps))
@@ -107,8 +111,8 @@ class ShuffleLibraries(Task):
 
 
 @dataclass(slots=True)
-class OpeningHands(Task):
-    """103.5: opening hands and mulligans."""
+class FirstTurn(Task):
+    """103.8: the starting player takes their first turn."""
 
     def run(self, state: GameState) -> TaskResult:
-        raise NotImplementedRule("103.5: opening hands and mulligans (roadmap M1)")
+        raise NotImplementedRule("103.8: taking turns (roadmap M1)")

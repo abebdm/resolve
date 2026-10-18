@@ -73,7 +73,9 @@ class GameObject:
 class Player:
     """A player (102.1) and their own zones (400.1). The last element of a pile is its top.
 
-    ``commanders`` are the cards designated as this player's commanders (903.3).
+    - ``commanders``: the cards designated as this player's commanders (903.3).
+    - ``drew_from_empty_library``: the player attempted to draw from an empty library since
+      state-based actions were last checked (121.4, 704.5b).
     """
 
     id: PlayerId
@@ -212,10 +214,12 @@ def create_object(
     owner: PlayerId,
     zone: Zone,
     controller: PlayerId | None = None,
+    bottom: bool = False,
 ) -> GameObject:
-    """Create a new object on top of ``zone``, with a new ID and timestamp (400.7, 613.7d).
+    """Create a new object on top of ``zone`` (or at its bottom), with a new ID and timestamp.
 
-    A per-player zone of another player means the owner's zone of that kind (400.3).
+    400.7, 613.7d. A per-player zone of another player means the owner's zone of that kind
+    (400.3).
     """
     zone = _destination(owner, zone, controller)
     obj = GameObject(
@@ -228,14 +232,22 @@ def create_object(
     )
     state.next_object_id += 1
     state.objects[obj.id] = obj
-    zone_list(state, zone).append(obj.id)
+    if bottom:
+        zone_list(state, zone).insert(0, obj.id)
+    else:
+        zone_list(state, zone).append(obj.id)
     return obj
 
 
 def move_object(
-    state: GameState, obj_id: ObjectId, zone: Zone, *, controller: PlayerId | None = None
+    state: GameState,
+    obj_id: ObjectId,
+    zone: Zone,
+    *,
+    controller: PlayerId | None = None,
+    bottom: bool = False,
 ) -> GameObject:
-    """Move an object to the top of ``zone``; it becomes a new object (400.7).
+    """Move an object to the top (or the bottom) of ``zone``; it becomes a new object (400.7).
 
     The new object has a new ID and timestamp (613.7d) and no memory of the old one: no
     knowledge carries over (an event that moves a card players saw records that itself). An
@@ -248,4 +260,6 @@ def move_object(
     zone = _destination(old.owner, zone, controller)
     zone_list(state, old.zone).remove(obj_id)
     del state.objects[obj_id]
-    return create_object(state, card=old.card, owner=old.owner, zone=zone, controller=controller)
+    return create_object(
+        state, card=old.card, owner=old.owner, zone=zone, controller=controller, bottom=bottom
+    )

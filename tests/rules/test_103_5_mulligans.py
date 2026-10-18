@@ -43,6 +43,7 @@ from resolve.engine.api import new_game, pending_decision, submit, view_for
 from resolve.engine.deck import Deck
 from resolve.engine.mulligans import KEEP, MULLIGAN
 from resolve.errors import InvalidAnswer, NotImplementedRule
+from resolve.events.base import AnswerRecord
 from resolve.events.cards import CardDrawn, CardsPutOnBottom, HandShuffledIntoLibrary
 from resolve.events.game import MulliganDeclared
 from resolve.state.config import GameConfig
@@ -219,7 +220,9 @@ def test_103_5_a_mulligan_shuffles_the_hand_back_and_draws_a_new_hand() -> None:
     old_cards = sorted(card_of(state, obj) for obj in old_hand)
     act(state, mulligan(P0), keep(P1), keep(P2))
     shuffled = events(state, HandShuffledIntoLibrary)
-    assert shuffled == [HandShuffledIntoLibrary(player=P0, cards=tuple(old_hand), rules=shuffled[0].rules)]
+    assert shuffled == [
+        HandShuffledIntoLibrary(player=P0, cards=tuple(old_hand), rules=shuffled[0].rules)
+    ]
     assert shuffled[0].rules[:2] == ("103.5", "701.24a")
     player = state.players[0]
     assert len(player.hand) == 7 and len(player.library) == 13
@@ -250,7 +253,8 @@ def test_103_5_the_first_mulligan_in_a_two_player_game_puts_one_card_on_the_bott
 def test_103_5_a_second_mulligan_puts_two_cards_on_the_bottom_in_the_chosen_order() -> None:
     """The ORDER_CARDS answer lists the cards from top to bottom (docs/decisions.md)."""
     state = mulligan_game(2)
-    act(state, mulligan(P0), keep(P1), bottom(P0, state.players[0].hand[0]))
+    act(state, mulligan(P0), keep(P1))
+    act(state, bottom(P0, state.players[0].hand[0]))
     act(state, mulligan(P0))
     hand = state.players[0].hand
     assert request_of(state).space == ChooseSubset(tuple(ObjectOption(o) for o in hand), 2, 2)
@@ -269,7 +273,8 @@ def test_103_5_a_second_mulligan_puts_two_cards_on_the_bottom_in_the_chosen_orde
 def test_103_5_cards_put_on_the_bottom_stay_known_to_their_owner_only() -> None:
     """400.2: the owner chose them; until a shuffle (701.24a) they know which cards those are."""
     state = mulligan_game(2)
-    act(state, mulligan(P0), keep(P1), bottom(P0, state.players[0].hand[2]))
+    act(state, mulligan(P0), keep(P1))
+    act(state, bottom(P0, state.players[0].hand[2]))
     assert state.objects[state.players[0].library[0]].known_to == (P0,)
     assert all(state.objects[o].known_to == () for o in state.players[0].library[1:])
 
@@ -278,7 +283,7 @@ def test_101_4_bottom_choices_are_made_in_apnap_order_then_done_together() -> No
     state = mulligan_game(3, starting=1)
     act(state, mulligan(P1), mulligan(P2), mulligan(P0))  # first mulligans: free (103.5c)
     act(state, mulligan(P1), mulligan(P2), mulligan(P0))
-    asked = []
+    asked: list[PlayerId] = []
     for _ in range(3):
         request = request_of(state)
         asked.append(request.player)
@@ -287,13 +292,14 @@ def test_101_4_bottom_choices_are_made_in_apnap_order_then_done_together() -> No
         act(state, bottom(request.player, state.players[request.player].hand[0]))
     assert asked == [P1, P2, P0]
     entries = [i for i, e in enumerate(state.event_log) if isinstance(e.record, CardsPutOnBottom)]
-    assert [state.event_log[i].record.player for i in entries] == [P1, P2, P0]  # type: ignore[attr-defined]
+    assert [event.player for event in events(state, CardsPutOnBottom)] == [P1, P2, P0]
     assert entries == list(range(entries[0], entries[0] + 3)), "one simultaneous set of events"
 
 
 def test_103_5_a_player_who_keeps_is_not_asked_again() -> None:
     state = mulligan_game(2)
-    act(state, keep(P0), mulligan(P1), bottom(P1, state.players[1].hand[0]))
+    act(state, keep(P0), mulligan(P1))
+    act(state, bottom(P1, state.players[1].hand[0]))
     request = request_of(state)
     assert request.player == P1 and request.kind is DecisionKind.MULLIGAN
 
@@ -301,7 +307,8 @@ def test_103_5_a_player_who_keeps_is_not_asked_again() -> None:
 def test_103_5_the_process_repeats_until_no_player_mulligans() -> None:
     state = mulligan_game(2)
     act(state, mulligan(P0), mulligan(P1))
-    act(state, bottom(P0, state.players[0].hand[0]), bottom(P1, state.players[1].hand[0]))
+    act(state, bottom(P0, state.players[0].hand[0]))
+    act(state, bottom(P1, state.players[1].hand[0]))
     act(state, mulligan(P0), keep(P1))
     hand = state.players[0].hand
     act(state, bottom(P0, hand[0], hand[1]), order(P0, hand[0], hand[1]))
@@ -320,7 +327,8 @@ def test_103_5_mulligans_are_allowed_until_the_opening_hand_would_be_zero_cards(
     order is still a choice.
     """
     state = mulligan_game(2, config=GameConfig(starting_hand_size=2))
-    act(state, mulligan(P0), keep(P1), bottom(P0, state.players[0].hand[0]))
+    act(state, mulligan(P0), keep(P1))
+    act(state, bottom(P0, state.players[0].hand[0]))
     assert len(state.players[0].hand) == 1
     act(state, mulligan(P0))
     hand = state.players[0].hand
@@ -352,7 +360,8 @@ def test_103_5c_a_multiplayer_game_allows_one_more_mulligan() -> None:
     state = mulligan_game(3, config=GameConfig(starting_hand_size=2))
     act(state, mulligan(P0), keep(P1), keep(P2))
     assert len(state.players[0].hand) == 2
-    act(state, mulligan(P0), bottom(P0, state.players[0].hand[0]))
+    act(state, mulligan(P0))
+    act(state, bottom(P0, state.players[0].hand[0]))
     assert len(state.players[0].hand) == 1
     act(state, mulligan(P0))
     hand = state.players[0].hand
@@ -379,7 +388,8 @@ def test_100_1a_103_5c_a_two_player_commander_game_has_no_free_mulligan() -> Non
 def test_other_players_never_see_drawn_or_bottomed_cards() -> None:
     """design.md §9: drawn cards and library object IDs stay hidden from other players."""
     state = mulligan_game(2)
-    act(state, mulligan(P0), keep(P1), bottom(P0, state.players[0].hand[0]))
+    act(state, mulligan(P0), keep(P1))
+    act(state, bottom(P0, state.players[0].hand[0]))
     library_ids = {
         e.drawn_from for e in events(state, CardDrawn) if e.player == P0 and e.drawn_from
     }
@@ -395,8 +405,9 @@ def test_other_players_never_see_drawn_or_bottomed_cards() -> None:
                 assert record.cards == () and record.count == 1
     own = [e.record for e in view_for(state, P0).log if isinstance(e.record, CardDrawn)]
     assert {e.drawn_from for e in own if e.player == P0} == library_ids, "P0 sees their own"
-    answers = [e for e in state.event_log if type(e.record).__name__ == "AnswerRecord"]
-    assert all(e.visible_to == (e.record.player,) for e in answers)  # type: ignore[attr-defined]
+    for entry in state.event_log:
+        if isinstance(entry.record, AnswerRecord):
+            assert entry.visible_to == (entry.record.player,)
 
 
 # --- Edge cases and validation -------------------------------------------------------------------
@@ -436,7 +447,8 @@ def test_103_5_illegal_answers_are_rejected_and_change_nothing() -> None:
         with pytest.raises(InvalidAnswer):
             submit(state, bad)
         assert state == before
-    act(state, mulligan(P0), keep(P1), bottom(P0, state.players[0].hand[0]))
+    act(state, mulligan(P0), keep(P1))
+    act(state, bottom(P0, state.players[0].hand[0]))
     act(state, mulligan(P0))
     hand = state.players[0].hand
     act(state, bottom(P0, hand[0], hand[1]))
@@ -461,7 +473,8 @@ def test_103_5_the_game_is_a_function_of_seed_and_answers() -> None:
     first, second = mulligan_game(3, seed=4), mulligan_game(3, seed=4)
     for state in (first, second):
         act(state, mulligan(P0), keep(P1), mulligan(P2))  # free mulligans (103.5c)
-        act(state, mulligan(P0), keep(P2), bottom(P0, state.players[0].hand[0]))
+        act(state, mulligan(P0), keep(P2))
+        act(state, bottom(P0, state.players[0].hand[0]))
     assert first == second
     assert [p.hand for p in first.players] == [p.hand for p in second.players]
 

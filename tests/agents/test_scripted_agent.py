@@ -20,7 +20,6 @@ from resolve.decisions.spaces import (
     PlayerOption,
 )
 from resolve.engine.api import new_game, view_for
-from resolve.errors import NotImplementedRule
 from resolve.state.config import GameConfig
 from resolve.state.ids import ObjectId, PlayerId
 from tests.engine_support import AskTwice, markers, running
@@ -116,8 +115,7 @@ def test_choose_drives_the_starting_player_decision() -> None:
     script = ScriptedAgent(
         [choose(PlayerOption(P2), player=chooser, kind=DecisionKind.CHOOSE_STARTING_PLAYER)]
     )
-    with pytest.raises(NotImplementedRule, match=r"^103\.5: "):
-        play(state, script)
+    assert play(state, script, max_answers=1) == 1
     assert state.starting_player == P2
 
 
@@ -140,11 +138,9 @@ def test_from_log_replays_a_game_to_the_same_state() -> None:
 def test_from_log_replays_a_real_game_start() -> None:
     config = GameConfig.standard()
     state = new_game(config, decks(4), seed=9)
-    with pytest.raises(NotImplementedRule):
-        play(state, ScriptedAgent([choose(PlayerOption(PlayerId(3)))]))
+    play(state, ScriptedAgent([choose(PlayerOption(PlayerId(3)))]), max_answers=1)
     again = new_game(config, decks(4), seed=9)
-    with pytest.raises(NotImplementedRule):
-        play(again, ScriptedAgent.from_log(state.event_log))
+    play(again, ScriptedAgent.from_log(state.event_log), max_answers=1)
     assert again == state
 
 
@@ -164,8 +160,7 @@ def test_a_replay_of_another_game_stops_at_the_first_mismatch() -> None:
     seed (and so, here, another chooser, 103.1) fails at once."""
     config = GameConfig.standard()
     original = new_game(config, decks(4), seed=1)
-    with pytest.raises(NotImplementedRule):
-        play(original, ScriptedAgent([choose(PlayerOption(P0))]))
+    play(original, ScriptedAgent([choose(PlayerOption(P0))]), max_answers=1)
     chooser = request_of(new_game(config, decks(4), seed=1)).player
     other_seed = next(
         seed

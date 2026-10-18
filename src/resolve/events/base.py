@@ -4,9 +4,16 @@ An event is one atomic change to the game. It is a frozen value: it names the ob
 involved by ID and cites the CR rules behind it. ``apply`` makes the change; events are applied
 only through the ``ApplyEvents`` task (``resolve.events.pipeline``), never directly.
 
+An event is *proposed* before anything is known about its outcome ("player 1 draws a card") and
+logged *as applied*: ``apply`` may return a copy that records what happened (which library
+object was drawn, and the ID of the new object in the hand, 400.7).
+
 The event log is the ordered record of the game. Each ``LogEntry`` holds either an applied event
 or an ``AnswerRecord`` (an answered decision), plus who may see it: ``None`` means every player.
-Player views (``view_for``) include only the entries their player may see.
+An entry that only some players may see can carry a ``redacted`` form for everyone else (a draw
+shows other players the new hand object but not the library object it came from, design.md
+§9). Player views (``view_for``) include the entries their player may see, and the redacted form
+of the others that have one.
 """
 
 from __future__ import annotations
@@ -39,11 +46,19 @@ class Event(Immutable, ABC):
         check_rules(self.rules)
 
     @abstractmethod
-    def apply(self, state: GameState) -> None:
-        """Make the change to ``state``."""
+    def apply(self, state: GameState) -> Event | None:
+        """Make the change to ``state``.
+
+        Returns the event as applied, when applying it learned something the proposal didn't
+        say (such as a new object's ID); ``None`` means the proposal itself is the record.
+        """
 
     def visible_to(self, state: GameState) -> tuple[PlayerId, ...] | None:
         """Who may see this event in the log, judged before it is applied; ``None``: everyone."""
+        return None
+
+    def redacted(self) -> Event | None:
+        """What players outside ``visible_to`` see of this applied event; ``None``: nothing."""
         return None
 
 
@@ -64,7 +79,10 @@ class AnswerRecord(Immutable):
 
 @dataclass(frozen=True)
 class LogEntry(Immutable):
-    """One entry of the event log. ``index`` is its position in the log, from 0."""
+    """One entry of the event log. ``index`` is its position in the log, from 0.
+
+    ``redacted`` is what players outside ``visible_to`` see instead of ``record``, if anything.
+    """
 
     index: int
     record: Event | AnswerRecord
@@ -80,15 +98,27 @@ class LogEntry(Immutable):
         """Whether ``player`` may see this entry."""
         return self.visible_to is None or player in self.visible_to
 
+    def shown_to(self, player: PlayerId) -> LogEntry | None:
+        """The entry as ``player`` sees it: itself, its redacted form, or nothing."""
+        if self.is_visible_to(player):
+            return self
+        if self.redacted is not None:
+            return LogEntry(self.index, self.redacted, None)
+        return None
+
 
 def append_log(
-    state: GameState, record: Event | AnswerRecord, visible_to: tuple[PlayerId, ...] | None
+    state: GameState,
+    record: Event | AnswerRecord,
+    visible_to: tuple[PlayerId, ...] | None,
+    redacted: Event | None = None,
 ) -> LogEntry:
     """Add an entry to the end of the event log."""
     entry = LogEntry(
         len(state.event_log),
         record,
         None if visible_to is None else tuple(sorted(dict.fromkeys(visible_to))),
+        None if visible_to is None else redacted,
     )
     state.event_log.append(entry)
     return entry

@@ -85,12 +85,12 @@ def test_main_prints_the_report_and_fails_on_unlistable_gaps(
     assert "Gaps that can't be listed: 1" in capsys.readouterr().out
 
 
-def test_the_engine_gaps_are_all_listable_and_include_103_5(
+def test_the_engine_gaps_are_all_listable_and_include_103_8(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert gaps_tool.main([]) == 0
     out = capsys.readouterr().out
-    assert "103.5     opening hands and mulligans" in out
+    assert "103.8     taking turns" in out
     assert "src/resolve/engine/start.py:" in out
 
 

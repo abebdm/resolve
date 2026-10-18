@@ -16,7 +16,8 @@ Each game is played by ``RandomAgent``s. Before every answer the harness checks:
   own helpers: deeply immutable; the request only for the deciding player; every player's life,
   library count (401.2), hand and graveyard objects in order (402.3, 404.2) and the shared zones;
   card names exactly where the viewer may know them (400.2, 402.3); and only the log entries the
-  viewer may see, with answers visible only to their player (design.md §7);
+  viewer may see, with answers visible only to their player (design.md §7), and the redacted
+  form of the others, which never shows another player's library objects (design.md §9);
 - that the state survives ``copy.deepcopy`` and ``pickle`` unchanged;
 - that answers outside the answer space, for another request or from another player are
   rejected and change nothing (design.md §6);
@@ -28,9 +29,10 @@ answers again. At the end, the game is replayed from its config, decks, seed and
 answers and must reproduce the identical state (design.md §12).
 
 A game ends when it is over or when it reaches a ``NotImplementedRule`` for an allowed rule.
-Until M1 every game stops at ``NotImplementedRule("103.5: ...")``, which is the end of an M0
-game (roadmap). Any other exception, a disallowed gap, or a failed check raises ``FuzzFailure``
-naming the seed. The command line prints games per second as a rough benchmark.
+Until the turn structure exists (M1.2) every game stops after the mulligans, at
+``NotImplementedRule("103.8: ...")``. Any other exception, a disallowed gap, or a failed check
+raises ``FuzzFailure`` naming the seed. The command line prints games per second as a rough
+benchmark.
 
 Exit status: 0 every game passed; 1 a game failed, or the decks couldn't be built.
 """
@@ -73,15 +75,17 @@ from resolve.engine.api import new_game, pending_decision, submit, view_for
 from resolve.engine.deck import Deck, build_deck
 from resolve.engine.view import ObjectView
 from resolve.errors import DeckError, InvalidAnswer, NotImplementedRule
-from resolve.events.base import AnswerRecord
+from resolve.events.base import AnswerRecord, LogEntry
+from resolve.events.cards import CardDrawn, CardsPutOnBottom
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.invariants import invariant_violations, mutable_parts, state_impurities
 from resolve.state.zones import ZoneKind
 
-# Gaps that end a fuzz game normally. Until M1 every game stops at 103.5 (roadmap M0).
-ALLOWED_GAPS: tuple[str, ...] = ("103.5",)
+# Gaps that end a fuzz game normally. Until the turn structure exists (M1.2), every game stops
+# after the mulligans, at 103.8.
+ALLOWED_GAPS: tuple[str, ...] = ("103.8",)
 # A game that hasn't ended after this many answers is reported as a failure (a runaway game).
 MAX_ANSWERS = 10_000
 
@@ -178,11 +182,20 @@ def view_problems(state: GameState, viewer: PlayerId) -> list[str]:
     compare(view.command, state.command, "the command zone")
 
     # design.md §7: each entry is shown to the players it names (None: everyone), and an answer
-    # only to the player who gave it.
-    visible = tuple(
-        entry for entry in state.event_log if entry.visible_to is None or viewer in entry.visible_to
-    )
-    if view.log != visible:
+    # only to the player who gave it. Other players see an entry's redacted form, if it has one.
+    visible: list[LogEntry] = []
+    for entry in state.event_log:
+        if entry.visible_to is None or viewer in entry.visible_to:
+            visible.append(entry)
+        elif entry.redacted is not None:
+            visible.append(LogEntry(entry.index, entry.redacted, None))
+            # design.md §9: library object IDs survive shuffles, so no other player sees them.
+            record = entry.redacted
+            if isinstance(record, CardDrawn) and record.drawn_from is not None:
+                problems.append(f"log entry {entry.index} shows {where} a drawn library card")
+            if isinstance(record, CardsPutOnBottom) and record.cards:
+                problems.append(f"log entry {entry.index} shows {where} the bottomed cards")
+    if view.log != tuple(visible):
         problems.append(f"{where} shows the wrong log entries")
     for entry in state.event_log:
         record = entry.record

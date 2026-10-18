@@ -13,8 +13,15 @@ User changes to the plan: type-line parsing must not fail database loading (M1.2
 - Stubs: `NamedOption`, `PUT_ON_BOTTOM`/`ORDER_CARDS`, `events/cards.py`, `MulliganDeclared`,
   `LogEntry.redacted`, `Player.drew_from_empty_library`, `engine/drawing.py`, `engine/mulligans.py`.
 
+- Implemented: `Event.apply` may return the applied event; `Event.redacted()`; pipeline logs
+  `redacted`; views show it (`LogEntry.shown_to`); `move_object(bottom=True)`; `DrawCards`;
+  `OpeningHands` (engine/mulligans.py); `FirstTurn` raises the 103.8 gap.
+- Updated M0 tests that relied on the 103.5 gap (helpers `choose_starting_player` returns
+  `NotImplementedRule | None`; 103.3 library tests use `starting_hand_size=0`); fuzz
+  `ALLOWED_GAPS = ("103.8",)` and oracle shows redacted entries; text agent renders
+  `NamedOption`. Full suite, ruff, pyright green.
+
 ## Next
-- Implement: `Event.apply` returns the applied event; pipeline logs `redacted`; views show the
-  redacted form; `move_object(bottom=True)`; DrawCards; OpeningHands; 103.8 gap.
-- Update M0 tests that relied on the 103.5 gap; fuzz ALLOWED_GAPS; play_cli/text agent.
-- Docs, test-reviewer, PR.
+- Infrastructure tests: LogEntry.redacted/shown_to, pipeline applied form, move_object bottom,
+  fuzz oracle negative test for a leaked draw.
+- Docs (decisions, design §7/§9, howto event recipe, roadmap, CLAUDE status), test-reviewer, PR.
