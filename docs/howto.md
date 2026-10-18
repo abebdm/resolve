@@ -113,9 +113,9 @@ drive decisions with a script.
    `scenario.add(name, owner=..., zone=..., known_to=[...])` for anything else.
 2. To test something during a turn, put the game in it with `at`:
    ```python
-   scenario.at(Step.UPKEEP, active=PlayerId(1), number=3)        # player 1 about to get priority
+   scenario.at(Step.UPKEEP, active=PlayerId(1), number=3)  # player 1 about to get priority
    scenario.at(Phase.PRECOMBAT_MAIN, priority=PlayerId(1), passed=[PlayerId(0)], lands_played=1)
-   scenario.at(Step.DRAW, begin=True)                            # the step from its beginning
+   scenario.at(Step.DRAW, begin=True)  # the step from its beginning
    state = scenario.build()  # state-based actions are checked first (117.5), then the request
    ```
    `at(step)` resumes a step with priority as a player is about to receive it; `begin=True`, and
