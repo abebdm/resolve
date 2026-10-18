@@ -242,9 +242,13 @@ The pipeline for each event (or set of simultaneous events):
    the affected object, chooses the order when several apply (616.1). Each effect applies at most
    once per event, with the documented exceptions (for example 903.9b).
 3. **Apply** the modified event to the state.
-4. **Log** it with CR citations. Each `LogEntry` holds an event or an `AnswerRecord` (an answered
-   decision, from which replays are rebuilt), and who may see it (`None` = everyone). Answers are
-   visible only to their player; their public consequences are logged as events.
+4. **Log** it with CR citations, *as applied*: an event is proposed before its outcome is known
+   ("player 1 draws a card"), and `apply` may return a copy recording what happened (which
+   library object was drawn and the new hand object's ID). Each `LogEntry` holds an event or an
+   `AnswerRecord` (an answered decision, from which replays are rebuilt), who may see it
+   (`None` = everyone) and, for an entry hidden from some players, the `redacted` form they see
+   instead (§9). Answers are visible only to their player; their public consequences are logged
+   as events.
 5. **Detect triggers.** Check triggered abilities against the event and add matches to
    `pending_triggers`. "Leaves the battlefield" and similar triggers "look back in time" using the
    pre-event state (603.10).
@@ -290,8 +294,10 @@ choose…".
 - **Libraries appear only as a count** (later: plus the cards the viewer knows, at known
   positions). Library objects keep their IDs through shuffles (a shuffle isn't a zone change,
   400.7), so showing them would reveal where a once-seen card went, and the initial IDs follow
-  decklist order. For the same reason, log entries that would reveal a library object's ID to
-  another player must be redacted; that is designed in M1 together with drawing.
+  decklist order. For the same reason, a log entry that would reveal a library object's ID to
+  another player carries a redacted form for them (`Event.redacted`, `LogEntry.redacted`): a
+  draw shows other players the new hand object but not the library object it came from, and
+  cards put on the bottom of a library show only how many there were.
 - The library order is hidden from everyone, except where knowledge was gained (for example by scry).
 - The event log is filtered per viewer by each entry's visibility.
 - Agents (including the AI) only ever see `PlayerView`s. This is required for fair networked play and
@@ -336,7 +342,9 @@ This gives Commander multiplayer, 1v1 Commander and regular 1v1 from one engine.
 - the commander's zone-change options:
   - graveyard or exile → a state-based choice (903.9a)
   - hand or library → a replacement effect (903.9b)
-- mulligan rules per the config
+
+Commander has no mulligan rule of its own: 103.5 applies, with 103.5c's free first mulligan in a
+game that begins with more than two players (903.12g is for Brawl only).
 
 ---
 

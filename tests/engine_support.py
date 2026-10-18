@@ -6,7 +6,7 @@ They live in an importable module (not a test file) so that states holding them 
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionRequest
@@ -14,28 +14,49 @@ from resolve.decisions.spaces import AnswerValue, ChooseNumber, Number
 from resolve.engine.loop import run
 from resolve.engine.setup import initial_state
 from resolve.errors import EngineError, InvalidAnswer, NotImplementedRule
-from resolve.events.base import Event
+from resolve.events.base import Event, append_log
+from resolve.events.cards import CardDrawn
 from resolve.events.game import GameEnded
 from resolve.events.pipeline import ApplyEvents
 from resolve.state.config import GameConfig
 from resolve.state.game import GameObject, GameState
-from resolve.state.ids import PlayerId
+from resolve.state.ids import ObjectId, PlayerId
 from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
 from tests.game_fixtures import decks
 
 
 @dataclass(frozen=True, kw_only=True)
 class Marker(Event):
-    """An event that changes nothing; its label shows in the log where it ran."""
+    """An event that changes nothing; its label shows in the log where it ran.
+
+    A marker ``secret_for`` some players shows everyone else ``public_label`` instead, if given
+    (its redacted form), and nothing otherwise.
+    """
 
     label: str
     secret_for: tuple[PlayerId, ...] | None = None
+    public_label: str | None = None
 
     def apply(self, state: GameState) -> None:
         return None
 
     def visible_to(self, state: GameState) -> tuple[PlayerId, ...] | None:
         return self.secret_for
+
+    def redacted(self) -> Event | None:
+        if self.public_label is None:
+            return None
+        return replace(self, label=self.public_label, public_label=None)
+
+
+@dataclass(frozen=True, kw_only=True)
+class Counted(Event):
+    """Proposed without an outcome; applied, it records how long the log was (``seen``)."""
+
+    seen: int | None = None
+
+    def apply(self, state: GameState) -> Event:
+        return replace(self, seen=len(state.event_log))
 
 
 def markers(state: GameState) -> list[str]:
@@ -162,6 +183,17 @@ class Hold(Task):
 def holding(state: GameState) -> bool:
     """Whether the test tasks have all finished and ``Hold`` is waiting."""
     return state.pending is not None and state.pending.prompt == HOLD_PROMPT
+
+
+@dataclass(slots=True)
+class LeaksALibraryCard(Task):
+    """Logs a draw whose redacted form still names the library object (a design.md §9 leak)."""
+
+    def run(self, state: GameState) -> TaskResult:
+        player = state.players[0]
+        drawn = CardDrawn(player=player.id, drawn_from=ObjectId(999), drawn=None, rules=("121.1",))
+        append_log(state, drawn, (player.id,), drawn)
+        return Done()
 
 
 # --- Impure tasks, for the purity checker's negative tests ------------------------------------

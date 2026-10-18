@@ -57,6 +57,7 @@ from tests.engine_support import (
     EndGame,
     GapOnAnswer,
     HoldsValue,
+    LeaksALibraryCard,
     LossyPickle,
     RejectsEverything,
     Unrepeatable,
@@ -176,6 +177,12 @@ def test_an_allowed_gap_ends_the_game() -> None:
 def test_an_engine_error_is_a_failure_naming_the_game() -> None:
     with pytest.raises(FuzzFailure, match="broken game: EngineError: crashed"):
         fuzz(CrashOnAnswer())
+
+
+def test_a_redacted_entry_that_still_shows_a_library_card_is_a_failure() -> None:
+    """design.md §9: library object IDs survive shuffles, so no other player may see them."""
+    with pytest.raises(FuzzFailure, match="shows player 1's view a drawn library card"):
+        fuzz(LeaksALibraryCard(), AskTwice(PlayerId(0)))
 
 
 def test_an_impure_state_is_a_failure() -> None:

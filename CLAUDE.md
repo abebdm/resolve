@@ -19,7 +19,10 @@ the engine's API, so nothing here may depend on them.
 
 ## Current status
 
-**Current milestone: M1 (Turn structure), not started. M0 (Skeleton) is complete.**
+**Current milestone: M1 (Turn structure), in progress. M0 (Skeleton) is complete.**
+
+M1 is split into five PRs (M1.1 to M1.5): opening hands and mulligans; turns, steps and priority;
+lands and mana; creatures and damage; concession and leaving the game.
 
 - **Done (M0):**
   - Data and tooling: `resolve.data` (card data loader and decklist parser), the card registry
@@ -33,16 +36,18 @@ the engine's API, so nothing here may depend on them.
     `submit`, `build_deck`), decision kinds, answer spaces and validation (`resolve.decisions`),
     events, the event pipeline (with stubbed replacement and trigger stages) and the event log
     (`resolve.events`), `NotImplementedRule` (`resolve.errors`), and zone moves (`move_object`,
-    400.7). A game runs 103.1 to 103.4 (choosing the starting player, Commander's 103.2c,
-    shuffling) and stops at `NotImplementedRule("103.5: ...")`.
+    400.7).
   - Agents and test tooling: `resolve.agents` (the `Agent` protocol, the `play` driver,
     `RandomAgent`, `ScriptedAgent` with replays from the log, and the text renderer and
     `TextAgent` in `resolve.agents.text`); the scenario builder `tests/scenario.py`;
-    `tools/play_cli.py`; and the fuzz harness `tools/fuzz.py` with `tests/fuzz/`, which treats the
-    103.5 gap as the end of an M0 game.
-- **Next:** M1 (turn structure), starting with opening hands and mulligans (103.5). The
-  scenario builder gains turn, step and priority, and the fuzz harness's `ALLOWED_GAPS` moves,
-  with it. No card primitives exist yet.
+    `tools/play_cli.py`; and the fuzz harness `tools/fuzz.py` with `tests/fuzz/`.
+- **Done (M1.1):** drawing (`resolve.engine.drawing.DrawCards`, `CardDrawn`, 121), opening hands
+  and mulligans (`resolve.engine.mulligans.OpeningHands`, 103.5 and 103.5c), events logged as
+  applied, and redacted log entries for other players (design.md §7, §9). A game runs 103.1 to
+  103.5 and stops at `NotImplementedRule("103.8: ...")`, which the fuzz harness treats as the end
+  of a game for now.
+- **Next:** M1.2, turns, steps and priority (500-514, 117), with the basic state-based actions
+  704.5a/b, cleanup, type-line parsing and the scenario builder's turn, step and priority.
 
 Do not start a milestone unless the user asks.
 

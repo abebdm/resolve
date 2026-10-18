@@ -126,7 +126,8 @@ For the engine loop itself, drive it with small tasks.
 
 1. Build decks with `tests/game_fixtures.py`: `deck(forests, elves, commanders=[...])`,
    `decks(players)`, or `start(players, seed)` for a new game paused at the 103.1 decision.
-   `choose_starting_player(state, index)` answers it and returns the 103.5 gap.
+   `choose_starting_player(state, index)` answers it and returns the `NotImplementedRule` the
+   game stopped at, or `None` if it is waiting for the next decision (the mulligans, 103.5).
 2. For loop behavior, use the tasks in `tests/engine_support.py` (`Mark`, `Parent`, `AskTwice`,
    `EndGame`, ...) or add one there (not in the test file, so states holding it pickle).
    `running(*tasks)` starts a game with them on the task stack (or use
@@ -149,7 +150,7 @@ For the engine loop itself, drive it with small tasks.
 2. A failure prints `FAILED:` with the seed and a command that reproduces that one game. Reproduce
    it, write a failing test (a scenario test, or a `fuzz_game` call in `tests/fuzz/`), then fix
    the engine.
-3. When a milestone moves where games stop (M1 implements 103.5), update `ALLOWED_GAPS` in
+3. When a milestone moves where games stop (M1.1 moved it from 103.5 to 103.8), update `ALLOWED_GAPS` in
    `tools/fuzz.py`, the fuzz tests' expectations and the roadmap together.
 4. When adding a new check to the harness, add a broken test-only task to
    `tests/engine_support.py` and a test in `tests/fuzz/test_fuzz.py` showing the check catches it.
@@ -159,7 +160,8 @@ For the engine loop itself, drive it with small tasks.
 `uv run python tools/play_cli.py [--players N] [--commander] [--seed S] [--random SEAT ...]
 [--deck PATH ...]`. Every seat not in `--random` is a human at the same terminal, shown only its
 own view. Type option numbers from 0 (`help` at the prompt lists the syntax; `view`, `log` and
-`quit` also work). Without `--deck` the decks are empty. Every M0 game stops at 103.5 (exit
+`quit` also work). Without `--deck` the decks are empty. Until the turn structure exists (M1.2),
+every game stops after the mulligans at 103.8 (exit
 status 3).
 
 ### Check that a change works on Windows
@@ -185,8 +187,12 @@ all six pass. Before pushing:
    Its fields are scalars, enums, tuples and IDs only, never `GameObject`s or `Player`s
    (`tests/state/test_immutability.py` checks every event class).
 2. Implement `apply(state)`, the change itself. A zone change goes through
-   `resolve.state.game.move_object` (400.7, 400.3). Override `visible_to(state)` if some players
-   may not see it in the log (it is judged before the event is applied).
+   `resolve.state.game.move_object` (400.7, 400.3). If applying it learns something the proposal
+   couldn't say (a new object's ID, which card was on top), return a copy recording it
+   (`dataclasses.replace`); otherwise return `None`. Override `visible_to(state)` if some
+   players may not see it in the log (it is judged before the event is applied), and
+   `redacted()` to give the others a form without the hidden part (never a library object's ID,
+   design.md §9).
 3. Propose it from a task with `Push((ApplyEvents((event, ...)), ...))`, passing
    `rules=(...)` with the causing rule first. Never call `apply` directly from engine code.
 4. Test: the change, what it must not change, rejected inputs, and the log entry with its
