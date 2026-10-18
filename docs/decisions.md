@@ -29,17 +29,20 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   which cards to put on the bottom (`PUT_ON_BOTTOM`) and their order (`ORDER_CARDS`, listed
   **top to bottom**); the cards then go to the bottom together. A game "begins with more than two
   players" (100.1b, 103.5c) when it has more than two seats; seats are never removed. "A player
-  can take mulligans until their opening hand would be zero cards" is read as: another mulligan is
-  allowed while the counted mulligans are fewer than the starting hand size, so the mulligan that
-  leaves zero cards is allowed and the player then keeps without being asked. The limit counts
-  mulligans, not cards: a player with an empty or short library may still mulligan. A player
-  who must put every card of their hand on the bottom is asked only for the order. Cards put on
+  can take mulligans until their opening hand would be zero cards, after which they may not take
+  further mulligans" is read literally, by cards: another mulligan is allowed while the player's
+  hand holds at least one card. The mulligan that leaves zero cards is allowed, and the player
+  then keeps without being asked. With seven-card hands that is seven mulligans (eight with
+  103.5c); a short library reaches zero cards sooner, and a player whose library was empty is
+  never asked. A player who must put every card of their hand on the bottom is asked only for
+  the order. Cards put on
   the bottom stay known to their owner (`known_to`) until the next shuffle. After the mulligans,
   103.6 has nothing to do (no definition can have such an ability), and the game stops at
   `NotImplementedRule("103.8: ...")` until the turn structure exists.
 - **Why:** 103.5 puts the bottoming inside "to take a mulligan", so it happens each time, not when
   keeping. "After which they may not take further mulligans" places the limit after the zero-card
-  hand. **Questions with a single possible answer are not asked** (a forced keep, which cards go
+  hand. The first version counted mulligans against the starting hand size instead; the test
+  review pointed out that the text speaks of the hand's cards, which differs for short libraries. **Questions with a single possible answer are not asked** (a forced keep, which cards go
   to the bottom when all must); priority is the exception and is always asked, because passing
   automatically is an agent's convenience (design.md §6). Commander has no mulligan rule of its
   own (the user approved removing "Commander mulligan rules" from design.md §10 and roadmap M7).

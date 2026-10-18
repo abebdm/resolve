@@ -15,7 +15,7 @@ from resolve.engine.loop import run
 from resolve.engine.setup import initial_state
 from resolve.errors import EngineError, InvalidAnswer, NotImplementedRule
 from resolve.events.base import Event, append_log
-from resolve.events.cards import CardDrawn
+from resolve.events.cards import CardDrawn, CardsPutOnBottom
 from resolve.events.game import GameEnded
 from resolve.events.pipeline import ApplyEvents
 from resolve.state.config import GameConfig
@@ -187,12 +187,28 @@ def holding(state: GameState) -> bool:
 
 @dataclass(slots=True)
 class LeaksALibraryCard(Task):
-    """Logs a draw whose redacted form still names the library object (a design.md §9 leak)."""
+    """Logs a draw by player 0 that still names the library object for other players.
+
+    ``how``: ``"redacted"`` (a redacted form that hides nothing), ``"public"`` (the whole draw
+    shown to everyone) or ``"bottom"`` (a bottoming whose redacted form names the cards).
+    Each is a design.md §9 leak the fuzz oracle must catch.
+    """
+
+    how: str = "redacted"
 
     def run(self, state: GameState) -> TaskResult:
-        player = state.players[0]
-        drawn = CardDrawn(player=player.id, drawn_from=ObjectId(999), drawn=None, rules=("121.1",))
-        append_log(state, drawn, (player.id,), drawn)
+        player = state.players[0].id
+        drawn = CardDrawn(player=player, drawn_from=ObjectId(999), drawn=None, rules=("121.1",))
+        bottomed = CardsPutOnBottom(
+            player=player, cards=(ObjectId(999),), count=1, rules=("103.5",)
+        )
+        match self.how:
+            case "redacted":
+                append_log(state, drawn, (player,), drawn)
+            case "public":
+                append_log(state, drawn, None)
+            case _:
+                append_log(state, bottomed, (player,), bottomed)
         return Done()
 
 

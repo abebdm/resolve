@@ -23,30 +23,27 @@ def test_a_game_of_random_agents_runs_to_the_turn_structure_gap() -> None:
     assert status == EXIT_GAP
     assert "No --deck given: every player gets an empty deck." in text
     assert "Stopped: the engine doesn't implement 103.8: taking turns" in text
-    assert "MulliganDeclared" in text
+    assert "empty_library=True" in text  # empty decks: every opening draw fails (121.4)
 
 
 def test_a_human_answers_after_a_rejected_answer() -> None:
     """Without --random every seat is human; a rejected answer is asked again (design.md §6)."""
-    status, text = run_cli(["--commander"], "7\n0\n0\n0\n")  # then both players keep
+    status, text = run_cli(["--commander"], "7\n0\n")
     assert status == EXIT_GAP
     assert "life 40" in text
     assert "The engine rejected that answer: option index must be in 0..1" in text
-    assert "0: keep" in text and "1: mulligan" in text
     assert "Stopped: the engine doesn't implement 103.8" in text
 
 
 def test_hot_seat_prompts_show_the_deciding_players_view_and_no_final_view() -> None:
     """design.md §9: each human sees only their own view, so with several humans at one terminal
-    the game ends without printing anyone's hand. Seed 1 of a 2-player game asks player 1 who
-    starts; player 1 picks player 0, then both keep (103.5)."""
-    status, text = run_cli(["--seed", "1"], "0\n0\n0\n")
+    the game ends without printing anyone's hand. Seed 1 of a 2-player game asks player 1. The
+    decks are empty, so nobody is asked about a mulligan (103.5)."""
+    status, text = run_cli(["--seed", "1"], "0\n")
     assert status == EXIT_GAP
-    assert text.count("=== Player 1's view ===") == 2  # 103.1, then its mulligan decision
-    assert text.count("=== Player 0's view ===") == 1  # its mulligan decision
+    assert text.count("=== Player 1's view ===") == 1
+    assert "=== Player 0's view ===" not in text
     assert text.index("=== Player 1's view ===") < text.index("Player 1: Choose which player")
-    last_view = max(text.rindex("=== Player 1's view ==="), text.rindex("=== Player 0's view ==="))
-    assert last_view < text.rindex("Player 1: Keep this hand"), "no view after the last answer"
 
 
 def test_a_single_human_sees_the_final_view() -> None:

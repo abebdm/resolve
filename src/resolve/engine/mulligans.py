@@ -17,11 +17,13 @@
 In a game that begins with more than two players (100.1b) the first mulligan a player takes
 doesn't count toward the cards they put on the bottom or the mulligans they may take (103.5c).
 
-"A player can take mulligans until their opening hand would be zero cards" (103.5): a player may
-take another mulligan while the mulligans counted so far are fewer than the starting hand size, so
-the mulligan that leaves zero cards is allowed and the player then keeps without being asked
-(docs/decisions.md). A question with a single possible answer isn't asked: putting every card of
-the hand on the bottom asks only for their order.
+"A player can take mulligans until their opening hand would be zero cards, after which they may
+not take further mulligans" (103.5): a player may take another mulligan while their hand holds at
+least one card, so the mulligan that leaves zero cards is allowed and the player then keeps
+without being asked. With seven-card hands that allows seven mulligans (eight with 103.5c); a
+short library reaches zero cards sooner, and an empty one at once (docs/decisions.md). A question
+with a single possible answer isn't asked: putting every card of the hand on the bottom asks only
+for their order.
 """
 
 from __future__ import annotations
@@ -119,8 +121,9 @@ class OpeningHands(Task):
         return tuple(DrawCards(player, size, ("103.5", "121.2c")) for player in players)
 
     def _may_mulligan(self, state: GameState, player: PlayerId) -> bool:
-        counted = counted_mulligans(state, self.taken.get(player, 0))
-        return counted < state.config.starting_hand_size
+        # 103.5: mulligans are allowed "until their opening hand would be zero cards, after
+        # which they may not take further mulligans": a hand of zero cards ends them.
+        return bool(state.player(player).hand)
 
     def _declare(self, state: GameState) -> TaskResult:
         for player in turn_order(state):

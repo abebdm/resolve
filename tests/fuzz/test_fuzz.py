@@ -179,10 +179,20 @@ def test_an_engine_error_is_a_failure_naming_the_game() -> None:
         fuzz(CrashOnAnswer())
 
 
-def test_a_redacted_entry_that_still_shows_a_library_card_is_a_failure() -> None:
+@pytest.mark.parametrize(
+    ("how", "message"),
+    [
+        ("redacted", "shows player 1's view a drawn library card"),
+        ("public", "shows player 1's view a drawn library card"),
+        ("bottom", "shows player 1's view the bottomed cards"),
+    ],
+)
+def test_a_log_entry_that_shows_another_players_library_card_is_a_failure(
+    how: str, message: str
+) -> None:
     """design.md §9: library object IDs survive shuffles, so no other player may see them."""
-    with pytest.raises(FuzzFailure, match="shows player 1's view a drawn library card"):
-        fuzz(LeaksALibraryCard(), AskTwice(PlayerId(0)))
+    with pytest.raises(FuzzFailure, match=message):
+        fuzz(LeaksALibraryCard(how), AskTwice(PlayerId(0)))
 
 
 def test_an_impure_state_is_a_failure() -> None:
@@ -522,8 +532,8 @@ def test_the_command_line_runs_games_and_reports_a_benchmark() -> None:
     assert status == 0
     found = re.search(r"10 games passed: (\d+) answers accepted, (\d+) rejected\.", text)
     assert found is not None
-    # Each game: 103.1 and at least one mulligan declaration per player (103.5).
-    assert int(found.group(1)) >= 5 * (1 + 2) + 5 * (1 + 4)
+    # The decks are empty, so 103.1 is the only question: a zero-card hand can't mulligan (103.5).
+    assert int(found.group(1)) == 10
     assert "Endings: 103.8 x10" in text
     assert "games per second" in text
 

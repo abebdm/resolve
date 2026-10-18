@@ -106,3 +106,11 @@ def test_400_7_knowledge_of_a_library_card_doesnt_follow_it_into_the_hand() -> N
     assert obj.known_to == ()
     assert view_for(state, P1).players[0].hand[0].name is None
     assert view_for(state, P0).players[0].hand[0].name == "Forest"
+
+
+def test_121_2_drawing_zero_cards_draws_and_logs_nothing() -> None:
+    scenario = Scenario(2)
+    scenario.library(P0, ["Forest"])
+    state = scenario.build(DrawCards(P0, 0, ("121.2",)), Hold())
+    assert drawn(state) == []
+    assert state.players[0].hand == [] and len(state.players[0].library) == 1
