@@ -86,8 +86,9 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   The cards are discarded together (one `ApplyEvents` of `CardDiscarded` events, bottom card
   first). Discards are public. 514.2 has nothing to remove until damage exists (M1.4). 514.3a is
   implemented: if state-based actions would be performed in cleanup, the active player receives
-  priority and another cleanup step follows; until M1.4 the only possible state-based actions
-  end two-player games, so it is exercised in M1.4.
+  priority and another cleanup step follows. Until M1.4 the only possible state-based actions
+  end the game (tested: a player at 0 life loses in that cleanup step, after the discard); the
+  path where priority and a second cleanup follow is tested in M1.4.
 - **Rules:** 402.2, 404.3, 514.1-514.3a, 701.9a, 701.9b.
 - **Where:** `resolve.engine.turns.DiscardToHandSize`, `RunStep`.
 

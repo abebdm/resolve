@@ -63,6 +63,16 @@ JOKE = fx.simple_card("Test Joke", "oid-test-joke", type_line="Artifact Contrapt
         ),
         ("Kindred Instant — Elf", TypeLine((), (CardType.KINDRED, CardType.INSTANT), ("Elf",))),
         ("Sorcery", TypeLine((), (CardType.SORCERY,), ())),
+        (
+            "Legendary Planeswalker — Jace",
+            TypeLine((Supertype.LEGENDARY,), (CardType.PLANESWALKER,), ("Jace",)),
+        ),
+        ("Battle — Siege", TypeLine((), (CardType.BATTLE,), ("Siege",))),
+        ("Enchantment — Aura", TypeLine((), (CardType.ENCHANTMENT,), ("Aura",))),
+        (
+            "Basic Snow Land — Forest",
+            TypeLine((Supertype.BASIC, Supertype.SNOW), (CardType.LAND,), ("Forest",)),
+        ),
         # 205.3m: "Time Lord" is one creature type of two words.
         (
             "Legendary Creature — Time Lord Doctor",

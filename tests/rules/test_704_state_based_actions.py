@@ -18,6 +18,7 @@ from __future__ import annotations
 import pytest
 
 from resolve.decisions.kinds import DecisionKind
+from resolve.decisions.request import DecisionAnswer
 from resolve.decisions.spaces import Pick
 from resolve.engine.api import new_game, pending_decision, submit, view_for
 from resolve.errors import NotImplementedRule
@@ -61,8 +62,8 @@ def test_704_5a_a_player_at_1_life_doesnt_lose() -> None:
     assert losses(state) == []
 
 
-def test_704_5a_life_is_checked_each_time_a_player_would_receive_priority() -> None:
-    """117.5: also before the second player's priority, not only the first's."""
+def test_704_5a_life_is_checked_when_a_resumed_round_gives_priority() -> None:
+    """117.5: a scenario resuming with player 1 about to receive priority checks first."""
     scenario = Scenario(2)
     scenario.life(P0, 0)
     scenario.at(Step.UPKEEP, priority=P1, passed=[P0])
@@ -177,3 +178,16 @@ def test_the_views_show_who_lost_and_the_result() -> None:
         view = view_for(state, viewer)
         assert [summary.lost for summary in view.players] == [False, True]
         assert view.result == state.result
+
+
+def test_117_5_state_based_actions_are_checked_again_after_a_pass() -> None:
+    """117.5: each time a player would receive priority, also within a round after a pass."""
+    scenario = Scenario(2)
+    scenario.at(Step.UPKEEP)
+    state = scenario.build()
+    request = request_of(state)
+    assert request.player == P0
+    state.player(P0).life = 0  # as if something had happened while player 0 held priority
+    submit(state, DecisionAnswer(request.id, P0, Pick(0)))  # pass
+    assert state.result is not None and state.result.winners == (P1,)
+    assert pending_decision(state) is None

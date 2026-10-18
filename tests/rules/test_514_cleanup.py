@@ -21,7 +21,7 @@ import pytest
 from resolve.agents.scripted import choose
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer
-from resolve.decisions.spaces import ChooseSubset, ObjectOption, PassOption, PickMany
+from resolve.decisions.spaces import ChooseSubset, ObjectOption, Order, PassOption, PickMany
 from resolve.engine.api import submit, view_for
 from resolve.errors import InvalidAnswer
 from resolve.events.cards import CardDiscarded
@@ -54,17 +54,18 @@ def test_514_1_the_active_player_discards_down_to_seven() -> None:
     assert request.kind is DecisionKind.DISCARD and request.player == P0
     assert request.rules == ("514.1", "402.2")
     assert request.space == ChooseSubset(tuple(ObjectOption(o) for o in hand), 2, 2)
-    # Discard the Test Shock and the Llanowar Elves; the Elves go on top (listed first).
+    # Discard the Test Shock and the Llanowar Elves; the Shock goes on top (listed first),
+    # which is the reverse of their order in the hand (404.3: the owner's order counts).
     run_script(
         state,
         choose(ObjectOption(hand[3]), ObjectOption(hand[1]), kind=DecisionKind.DISCARD),
-        choose(ObjectOption(hand[1]), ObjectOption(hand[3]), kind=DecisionKind.ORDER_CARDS),
+        choose(ObjectOption(hand[3]), ObjectOption(hand[1]), kind=DecisionKind.ORDER_CARDS),
     )
     assert len(state.player(P0).hand) == 7
-    assert names(state, Zone.graveyard(P0)) == ["Test Shock", "Llanowar Elves"]  # top last
+    assert names(state, Zone.graveyard(P0)) == ["Llanowar Elves", "Test Shock"]  # top last
     entries = [e for e in state.event_log if isinstance(e.record, CardDiscarded)]
     discards = [e.record for e in entries if isinstance(e.record, CardDiscarded)]
-    assert [d.card for d in discards] == [hand[3], hand[1]]  # bottom first
+    assert [d.card for d in discards] == [hand[1], hand[3]]  # bottom first
     assert all(e.visible_to is None for e in entries)  # public
     assert all(d.rules == ("514.1", "701.9a") for d in discards)
     assert [d.discarded for d in discards] == state.player(P0).graveyard  # 400.7
@@ -73,7 +74,7 @@ def test_514_1_the_active_player_discards_down_to_seven() -> None:
     assert turn is not None and (turn.number, turn.active_player) == (2, P1)
     for viewer in (P0, P1):  # the graveyard is public (404.2)
         graveyard = view_for(state, viewer).players[0].graveyard
-        assert [obj.name for obj in graveyard] == ["Test Shock", "Llanowar Elves"]
+        assert [obj.name for obj in graveyard] == ["Llanowar Elves", "Test Shock"]
 
 
 def test_514_1_one_card_to_discard_asks_no_order() -> None:
@@ -151,3 +152,72 @@ def test_514_cleanup_begins_after_the_end_step() -> None:
     turn = state.turn
     assert turn is not None and (turn.phase, turn.step) == (Phase.ENDING, Step.CLEANUP)
     assert request_of(state).kind is DecisionKind.DISCARD
+
+
+def test_404_3_the_other_order_puts_the_other_card_on_top() -> None:
+    scenario = cleanup()
+    hand = scenario.hand(P0, NINE)
+    scenario.at(Step.CLEANUP)
+    state = scenario.build()
+    run_script(
+        state,
+        choose(ObjectOption(hand[3]), ObjectOption(hand[1]), kind=DecisionKind.DISCARD),
+        choose(ObjectOption(hand[1]), ObjectOption(hand[3]), kind=DecisionKind.ORDER_CARDS),
+    )
+    assert names(state, Zone.graveyard(P0)) == ["Test Shock", "Llanowar Elves"]  # top last
+
+
+def test_514_cleanup_decisions_reject_invalid_answers() -> None:
+    scenario = cleanup()
+    scenario.hand(P0, NINE)
+    scenario.at(Step.CLEANUP)
+    state = scenario.build()
+    request = request_of(state)
+    before = copy.deepcopy(state)
+    for bad in (
+        DecisionAnswer(request.id, P1, PickMany((0, 1))),  # only the active player discards
+        DecisionAnswer(request.id, P0, PickMany((1, 1))),  # a repeated card
+        DecisionAnswer(request.id, P0, PickMany((0, 9))),  # out of range
+    ):
+        with pytest.raises(InvalidAnswer):
+            submit(state, bad)
+        assert state == before
+    submit(state, DecisionAnswer(request.id, P0, PickMany((0, 1))))
+    order = request_of(state)
+    assert order.kind is DecisionKind.ORDER_CARDS and order.rules == ("404.3",)
+    before = copy.deepcopy(state)
+    for permutation in ((0, 0), (0,), (0, 1, 2)):
+        with pytest.raises(InvalidAnswer):
+            submit(state, DecisionAnswer(order.id, P0, Order(permutation)))
+        assert state == before
+
+
+def test_514_3a_a_state_based_action_in_cleanup_is_performed_in_that_cleanup() -> None:
+    """514.3a: the game checks state-based actions in the cleanup step; player 1 at 0 life
+    loses there (704.5a), not in the next turn."""
+    scenario = cleanup()
+    scenario.life(P1, 0)
+    scenario.at(Step.CLEANUP)
+    state = scenario.build()
+    assert state.result is not None and state.result.winners == (P0,)
+    turn = state.turn
+    assert turn is not None and (turn.number, turn.step) == (1, Step.CLEANUP)
+    assert not any(type(e.record).__name__ == "TurnBegan" for e in state.event_log)
+
+
+def test_514_3a_discarding_comes_before_the_state_based_actions() -> None:
+    scenario = cleanup()
+    hand = scenario.hand(P0, NINE)
+    scenario.life(P1, 0)
+    scenario.at(Step.CLEANUP)
+    state = scenario.build()
+    assert state.result is None
+    assert request_of(state).kind is DecisionKind.DISCARD  # 514.1 first
+    run_script(
+        state,
+        choose(ObjectOption(hand[0]), ObjectOption(hand[2])),
+        choose(ObjectOption(hand[0]), ObjectOption(hand[2])),
+    )
+    assert state.result is not None and state.result.winners == (P0,)
+    turn = state.turn
+    assert turn is not None and turn.step is Step.CLEANUP

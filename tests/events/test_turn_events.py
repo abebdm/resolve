@@ -10,6 +10,7 @@ from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.cards import CardDiscarded
 from resolve.events.game import PlayerLost
 from resolve.events.turn import PriorityPassed, StepBegan, TurnBegan
+from resolve.state.config import GameConfig
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.turn import Phase, Step, TurnState
 from resolve.state.zones import Zone
@@ -126,3 +127,11 @@ def test_709_4_split_card_characteristics_are_a_gap() -> None:
     with pytest.raises(NotImplementedRule) as gap:
         characteristics(state, split)
     assert gap.value.rule == "109.3"
+
+
+def test_109_3_a_commander_in_the_command_zone_has_its_front_face_characteristics() -> None:
+    scenario = Scenario(2, config=GameConfig.commander_game())
+    commander = scenario.commander(P0, "Test Daybreaker")
+    state = scenario.build()
+    chars = characteristics(state, commander)
+    assert chars.name == "Test Daybreaker" and chars.is_a(CardType.CREATURE)

@@ -24,6 +24,7 @@ import pytest
 from resolve.decisions.kinds import DecisionKind
 from resolve.errors import NotImplementedRule
 from resolve.events.turn import StepBegan, TurnBegan
+from resolve.state.config import GameConfig
 from resolve.state.game import GameState
 from resolve.state.ids import PlayerId
 from resolve.state.invariants import invariant_violations, state_impurities
@@ -111,6 +112,13 @@ def test_103_8a_the_starting_player_skips_their_first_draw_in_a_two_player_game(
     assert (Phase.BEGINNING, Step.DRAW) in steps_of_turn(state, 2)
     assert len(state.player(P0).hand) == 8  # 504.1: player 0 drew in turn 2's draw step
     assert steps_of_turn(state, 1) == [s for s in FULL_TURN if s[1] is not Step.DRAW]
+
+
+def test_103_8a_a_two_player_commander_game_also_skips_the_first_draw() -> None:
+    state = started_game(2, starting=0, config=GameConfig.commander_game())
+    pass_until(state, in_turn(1, Phase.PRECOMBAT_MAIN))
+    assert (Phase.BEGINNING, Step.DRAW) not in steps_of_turn(state, 1)
+    assert len(state.player(P0).hand) == 7
 
 
 def test_103_8c_no_player_skips_their_first_draw_in_a_multiplayer_game() -> None:

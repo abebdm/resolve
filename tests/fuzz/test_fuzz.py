@@ -96,9 +96,10 @@ def test_random_agent_games_complete_with_every_check_passing(
         assert state.result is not None
     else:
         assert result.gap.split(": ")[0] in fuzz_tool.ALLOWED_GAPS
-    assert result.answers >= 1  # 103.1
-    assert state.starting_player is not None
     decks = decks_for(players, commander, seed)
+    # 103.1, then at least one mulligan declaration per player with cards to draw (103.5).
+    assert result.answers >= 1 + sum(1 for d in decks if d.cards)
+    assert state.starting_player is not None
     active = None if state.turn is None else state.turn.active_player
     for player in state.players:
         held = len(player.hand) + len(player.library) + len(player.graveyard)
