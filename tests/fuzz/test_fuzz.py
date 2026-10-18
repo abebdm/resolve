@@ -39,6 +39,7 @@ from resolve.decisions.spaces import (
 from resolve.engine import loop as engine_loop
 from resolve.engine import view as engine_view
 from resolve.engine.api import new_game, view_for
+from resolve.engine.concede import concede
 from resolve.engine.deck import Deck
 from resolve.engine.view import PlayerView
 from resolve.errors import InvalidAnswer
@@ -778,3 +779,28 @@ def test_state_problems_finds_a_view_misreporting_damage(monkeypatch: pytest.Mon
         f"player 0's view misreports the damage on object {bears}",
         f"player 1's view misreports the damage on object {bears}",
     ]
+
+
+def test_state_problems_finds_a_view_hiding_that_a_player_left(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scenario = Scenario(3)
+    scenario.at(TurnStep.UPKEEP)
+    state = scenario.build()
+    concede(state, PlayerId(2))
+    assert state_problems(state) == []
+
+    def nobody_left(view: PlayerView) -> PlayerView:
+        players = tuple(dataclasses.replace(p, left_game=False) for p in view.players)
+        return dataclasses.replace(view, players=players)
+
+    leaking(monkeypatch, nobody_left)
+    assert len(state_problems(state)) == 3
+
+
+def test_fuzz_games_with_frequent_concessions_pass_every_check() -> None:
+    """The harness concedes in the state and its copies alike; they must stay equal."""
+    decks = [deck(forests=8, elves=0)] * 3
+    result = fuzz_game(GameConfig.standard(), decks, 3, concession_chance=2, probe_invalid=False)
+    assert any(isinstance(e.record, Conceded) for e in result.state.event_log)
+    assert result.state.result is not None

@@ -6,6 +6,7 @@ import pytest
 
 from resolve.effects.characteristics import characteristics
 from resolve.errors import EngineError, NotImplementedRule
+from resolve.events.game import PlayerLeftGame
 from resolve.events.mana import ManaAdded, ManaPoolEmptied
 from resolve.events.permanents import (
     DamageRemoved,
@@ -177,3 +178,32 @@ def test_208_3_power_and_toughness_of_noncreatures_are_none() -> None:
     star_chars = characteristics(state, star)  # computing is fine; reading the star isn't
     with pytest.raises(NotImplementedRule):
         _ = star_chars.power
+
+
+def test_800_4a_player_left_game_removes_every_object_they_own() -> None:
+    scenario = Scenario(3)
+    scenario.library(P1, ["Forest"])
+    scenario.hand(P1, ["Forest"])
+    scenario.battlefield(P1, ["Grizzly Bears"])
+    (kept,) = scenario.battlefield(P0, ["Forest"])
+    scenario.mana(P1, ManaType.GREEN)
+    state = scenario.build()
+    owned = sorted(o for o, obj in state.objects.items() if obj.owner == P1)
+    applied = PlayerLeftGame(player=P1, rules=("800.4a",)).apply(state)
+    assert isinstance(applied, PlayerLeftGame) and sorted(applied.removed) == owned
+    assert state.player(P1).left_game and state.player(P1).mana_pool == []
+    assert state.battlefield == [kept]
+    with pytest.raises(EngineError, match="already left"):
+        PlayerLeftGame(player=P1, rules=("800.4a",)).apply(state)
+
+
+def test_invariants_catch_a_player_who_left_but_owns_objects_or_is_asked() -> None:
+    scenario = Scenario(3)
+    scenario.hand(P1, ["Forest"])
+    scenario.at(Step.UPKEEP, active=P1)
+    state = scenario.build()
+    state.player(P1).left_game = True
+    problems = invariant_violations(state)
+    assert any("owns objects (800.4a)" in p for p in problems)
+    assert any("is asked a decision" in p for p in problems)
+    assert any("without losing" in p for p in problems)

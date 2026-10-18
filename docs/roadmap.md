@@ -3,7 +3,7 @@
 Milestones are worked in order. Each milestone ends with every listed item done, tests passing,
 and `pytest`, `ruff` and `pyright` clean in CI. Tick items off in the same PR that completes them.
 
-**Current milestone: M1 (in progress). M0 is complete.**
+**Current milestone: M2 (not started). M0 and M1 are complete.**
 
 ---
 
@@ -177,7 +177,9 @@ cards are not included.
   between steps.
 - [x] Basic state-based actions: 0 or less life, drawing from an empty library, lethal damage and
   0 toughness.
-- [ ] Concession at any time (104.3a), through its own API entry point, `concede` (design.md §3).
+- [x] Concession at any time (104.3a), through its own API entry point, `concede` (design.md §3),
+  with leaving the game for what can exist in M1 (800.4a/h/j/k) and replays of answers and
+  concessions. Random agents finish 2- to 4-player land-only games with random concessions.
 - [x] Cards: basic lands and a few vanilla creatures.
 - [x] The scenario builder sets the turn, phase, step and priority holder; the fuzz harness's
   allowed gaps move past 103.5.
@@ -267,7 +269,8 @@ cards are not included.
 
 - [ ] Games with any number of players: APNAP order everywhere; turn order; attacking multiple
   players.
-- [ ] Leaving the game (800.4) and all its consequences.
+- [ ] Leaving the game (800.4) and all its consequences (M1 did 800.4a/h/j/k for cards; still to
+  do: control-changing effects, tokens and stack objects, 800.4b-g, 800.4i, 800.4m).
 - [ ] Myriad (702.116): token copies attacking each other opponent.
 - [ ] The command zone, casting commanders, and commander tax.
 - [ ] Commander damage (903.10a) and the zone-change rules (903.9a/b).

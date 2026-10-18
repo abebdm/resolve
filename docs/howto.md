@@ -148,7 +148,9 @@ For the engine loop itself, drive it with small tasks.
    `Scenario(...).build(*tasks)`); `markers(state)` lists the `Marker` events they logged;
    `holding(state)` says they have all finished.
 3. Answer with `submit(state, answer(state, value))`, or `play(state, agent)` from
-   `resolve.agents`. To show a rejected answer changed nothing, compare with a `copy.deepcopy`
+   `resolve.agents`. `concede(state, player)` (`resolve.engine`) concedes for a player at the
+   paused decision; `resolve.agents.replay.replay(new_state, state.event_log)` replays a game's
+   answers and concessions into a new game. To show a rejected answer changed nothing, compare with a `copy.deepcopy`
    taken before.
 4. Check `state_impurities(state) == []` and `invariant_violations(state) == []`
    (`resolve.state.invariants`) on any new kind of state.
@@ -164,12 +166,14 @@ For the engine loop itself, drive it with small tasks.
 2. A failure prints `FAILED:` with the seed and a command that reproduces that one game. Reproduce
    it, write a failing test (a scenario test, or a `fuzz_game` call in `tests/fuzz/`), then fix
    the engine.
-3. When a milestone changes which gaps games can reach (in M1.3: 601.2 for casting, and 800.4a
-   for multiplayer losses), update `ALLOWED_GAPS` in `tools/fuzz.py`,
+3. Players concede at random (`--concessions N`: 1 in N decisions, default 200; 0 turns it
+   off), and every game is replayed from its answers and concessions at the end.
+4. When a milestone changes which gaps games can reach (after M1: 601.2 for casting), update
+   `ALLOWED_GAPS` in `tools/fuzz.py`,
    the fuzz tests' expectations and the roadmap together. Random agents stop at the first
    offered gap they pick; the fuzz tests' `PatientAgent` (`tests/engine_support.py`) mostly
    passes, so its games reach later turns.
-4. When adding a new check to the harness, add a broken test-only task to
+5. When adding a new check to the harness, add a broken test-only task to
    `tests/engine_support.py` and a test in `tests/fuzz/test_fuzz.py` showing the check catches it.
 
 ### Play a game in the terminal

@@ -19,10 +19,8 @@ the engine's API, so nothing here may depend on them.
 
 ## Current status
 
-**Current milestone: M1 (Turn structure), in progress. M0 (Skeleton) is complete.**
-
-M1 is split into five PRs (M1.1 to M1.5): opening hands and mulligans; turns, steps and priority;
-lands and mana; creatures and damage; concession and leaving the game.
+**Current milestone: M2 (Spells and the stack), not started. M0 (Skeleton) and M1 (Turn
+structure) are complete.**
 
 - **Done (M0):**
   - Data and tooling: `resolve.data` (card data loader and decklist parser), the card registry
@@ -53,7 +51,7 @@ lands and mana; creatures and damage; concession and leaving the game.
   point without layers (`resolve.effects.characteristics`), turn info in views, and the scenario
   builder's `at(...)`. Two-player games with any decks play to a decking loss when every player
   passes. A loss in a game with three or more players that leaves two or more in it stops at
-  `NotImplementedRule("800.4a")` until M1.5.
+  `NotImplementedRule("800.4a")` until M1.5 (since done).
 - **Done (M1.3):** the five basic lands (`resolve.cards.definitions.basic_lands`), playing
   lands (305), the first primitives (`TapSelfCost`, `AddMana`, `ActivatedManaAbility`; 305.6
   intrinsic mana abilities added by `characteristics`), tapped status, the untap step (502.3),
@@ -63,8 +61,12 @@ lands and mana; creatures and damage; concession and leaving the game.
   toughness in `characteristics`, damage marked on permanents, the state-based actions 704.5f
   and 704.5g (with the owner ordering cards that reach a graveyard together, 404.3), and damage
   removal in cleanup (514.2).
-- **Next:** M1.5, concession and leaving the game: `concede` (104.3a), leaving the game (800.4a,
-  h, j, k), multiplayer endings (104.2a, 104.4a), replays with concessions; then M1 is done.
+- **Done (M1.5):** concession (`resolve.engine.concede`, 104.3a), leaving the game
+  (`LeaveGame`, 800.4a, 800.4h, 800.4j, 800.4k), multiplayer endings (104.2a, 104.4a), re-entrant
+  asking tasks, and replays of answers and concessions (`resolve.agents.replay`). The fuzz
+  harness concedes at random and random agents finish 2- to 4-player land-only games.
+- **Next:** M2 (spells and the stack), starting with the casting process (601.2), which is the
+  `NotImplementedRule("601.2")` gap every game with a nonland card can reach.
 
 Do not start a milestone unless the user asks.
 

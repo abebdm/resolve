@@ -61,22 +61,22 @@ class Characteristics(Immutable):
     @property
     def power(self) -> int | None:
         """The power (208.1, 302.4c), or ``None`` if the object has none."""
-        return _number(self.power_text, "power")
+        return _number(self.power_text)
 
     @property
     def toughness(self) -> int | None:
         """The toughness (208.1, 302.4c), or ``None`` if the object has none."""
-        return _number(self.toughness_text, "toughness")
+        return _number(self.toughness_text)
 
 
-def _number(text: str | None, what: str) -> int | None:
+def _number(text: str | None) -> int | None:
     if text is None:
         return None
     try:
         return int(text)
     except ValueError:
         # 208.2: a star (or "1+*") is set by an ability or effect, which can't exist yet.
-        raise NotImplementedRule(f"208.2: a {what} that isn't a fixed number") from None
+        raise NotImplementedRule("208.2: power or toughness that isn't a fixed number") from None
 
 
 def characteristics(state: GameState, obj: ObjectId) -> Characteristics:

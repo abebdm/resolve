@@ -84,8 +84,13 @@ by `build_deck(decklist, database, registry)`, which refuses unknown or unimplem
 - `EngineError`: an engine bug or API misuse; the state must not be played further.
 - `DeckError`: `new_game` or `build_deck` refused a deck.
 
-**Concession** (104.3a) can happen at any time, not only when a player is asked something, so it
-gets its own entry point, `concede(state, player)`, in M1.
+**Concession** (104.3a) can happen at any time, not only by the player being asked something, so
+it has its own entry point, `concede(state, player)`. The engine is always paused at a decision
+(or the game is over), so a concession withdraws the pending request (its id goes stale), logs a
+public `Conceded` record, makes the player lose and leave the game (800.4a), and runs the game
+on: the task that was asking runs again and asks anew with a new id, or passes the decision to
+whoever the rules name now (800.4h, 800.4j). `concede` raises `InvalidAnswer`, changing nothing,
+if the game is over or the player already left.
 
 ---
 
@@ -170,7 +175,11 @@ pickled, which would make AI search and save/restore impossible.
   is handled like `run`'s. The loop then continues until a task returns `NeedDecision` or the game
   ends.
 - A task keeps **all** of its progress in its fields, never in Python locals across calls, so a
-  state copied or pickled mid-task resumes exactly as the original would. Tasks never touch
+  state copied or pickled mid-task resumes exactly as the original would.
+- **Asking again.** A task's `run` must be safe to call again after it returned `NeedDecision`
+  (a concession withdraws the request and runs the loop): it asks the same question again, or,
+  if the player it asked has left the game, asks whoever must decide now. It never re-draws
+  randomness it already drew. Tasks never touch
   `state.tasks` themselves; the loop checks this.
 - The loop has a runaway budget (`MAX_TASKS_PER_RUN`) that raises `EngineError`. It catches engine
   bugs only; game loops are §13.
@@ -339,7 +348,10 @@ This gives Commander multiplayer, 1v1 Commander and regular 1v1 from one engine.
 - APNAP order is used for simultaneous triggers and choices (101.4).
 - **Leaving the game (800.4).** When a player leaves, the objects they own leave, effects giving
   them control of objects end, and the related consequences follow. This is designed in from the
-  start; it is not retrofitted.
+  start; it is not retrofitted. Since M1: `LeaveGame` removes the objects a player owns (800.4a),
+  priority passes on, turns continue without an active player (800.4j), players who left begin
+  no turns (800.4k), and choices pass to the next player (800.4h). Objects whose controller
+  isn't their owner raise `NotImplementedRule("800.4a")` until control-changing effects exist.
 - **Conceding (104.3a)** is possible at any time, not only at priority.
 
 **Commander (903):**
@@ -413,7 +425,9 @@ New primitives are engine code and get careful review.
 
 ## 12. Determinism, replays and saves
 
-- The game is a pure function of (config, decks, seed, ordered list of decision answers).
+- The game is a pure function of (config, decks, seed, ordered list of inputs): the decision
+  answers and the concessions, in the order they happened. Both are in the event log
+  (`AnswerRecord`, `Conceded`); `resolve.agents.replay.replay` applies them to a new game.
 - The **replay / save format** is exactly that, plus the engine version, CR version and card-data
   snapshot date. One format serves save files, bug reports and (later) the network lockstep
   protocol.
