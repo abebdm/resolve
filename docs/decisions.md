@@ -43,14 +43,18 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   state-based action in the cleanup step now gives the active player priority there, and
   another cleanup step follows (514.3a, tested with a 0-toughness creature).
 - **Decision:** the vanilla creatures are Grizzly Bears, Savannah Lions and Hill Giant, whose
-  Oracle text is empty. Their definitions hold only names. They could not be checked against the
-  pinned snapshot in this session (it isn't available in the cloud); their test fixtures follow
-  their Oracle data.
-- **Rules:** 120.6, 208.1, 208.2, 208.3, 208.5, 302.4c, 404.3, 514.2, 514.3a, 701.8a, 701.8b,
-  704.3, 704.5f, 704.5g.
+  Oracle text is empty. Their definitions hold only names. Their test fixtures were checked
+  against the Scryfall snapshot of 2026-10-18: same mana cost, type line, power and toughness,
+  and empty Oracle text.
+- **Decision:** mana pools now empty in APNAP order (101.4, `apnap_order`), not turn order as
+  the M1.3 entry "Lands, mana abilities and mana pools" said (superseded on that point). The
+  pools empty simultaneously either way; APNAP is the order the engine lists simultaneous
+  per-player events in.
+- **Rules:** 101.4, 120.6, 208.1, 208.2, 208.3, 208.5, 302.4c, 404.3, 514.2, 514.3a, 701.8a,
+  701.8b, 704.3, 704.5f, 704.5g.
 - **Where:** `resolve.engine.sba`, `resolve.engine.turns.RemoveDamage`,
   `resolve.events.permanents`, `resolve.effects.characteristics`,
-  `resolve.cards.definitions.vanilla_creatures`.
+  `resolve.cards.definitions.vanilla_creatures`, `resolve.engine.mana`.
 
 ### 2026-10-18: Lands, mana abilities and mana pools
 - **Decision:** playing a land is a `PlayLandOption` at priority (305.1-305.3, 116.2a) and one
@@ -70,8 +74,10 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   is reminder text.
 - **Decision:** mana pools hold `Mana` units (type and source, 106.3), so 106.6 restrictions
   can attach to units later. As each step and main phase ends, every non-empty pool empties
-  (`ManaPoolEmptied`, 500.5, 703.4q), in turn order. A player who passes announces their pool
-  (`PriorityPassed.mana_in_pool`, 117.3d, 106.4b). Pools and tapped status are public in views.
+  (`ManaPoolEmptied`, 500.5, 703.4q), in turn order (**superseded by 2026-10-18 "Creatures,
+  damage and state-based actions 704.5f and 704.5g"**: APNAP order). A player who passes
+  announces their pool (`PriorityPassed.mana_in_pool`, 117.3d, 106.4b). Pools and tapped
+  status are public in views.
 - **Decision:** the untap step untaps every tapped permanent the active player controls as one
   `PermanentsUntapped` event (502.3); with nothing tapped, nothing is logged.
 - **Decision:** `TapSelfCost` on a creature raises `NotImplementedRule("302.6")`: whether a
