@@ -4,11 +4,11 @@ The snapshot lives in ``data/`` (gitignored) and is written by ``tools/fetch_scr
 
 - ``oracle-cards.jsonl.gz``: Scryfall's "Oracle Cards" bulk file, one card object per Oracle ID.
 - ``rulings.jsonl.gz``: Scryfall's "Rulings" bulk file.
-
-Both are kept exactly as Scryfall serves them: gzip-compressed JSON Lines (one JSON object per
-line).
 - ``snapshot.json``: a manifest recording when each file was published and its SHA-256, so a
   changed or partial file is detected instead of silently changing what tests mean.
+
+The two bulk files are kept exactly as Scryfall serves them: gzip-compressed JSON Lines (one JSON
+object per line). The Oracle text in them is the card wording the engine follows (108.1).
 
 This module only describes printed card data (name, cost, types, Oracle text, ...). How a card
 behaves in a game is a card definition in ``resolve.cards``; this data is the input to writing it.
@@ -83,7 +83,18 @@ class AmbiguousCardNameError(CardDataError, KeyError):
 
 @dataclass(frozen=True)
 class CardFace:
-    """One face of a card. Single-faced cards have exactly one face, named like the card."""
+    """One face of a card, with its printed characteristics (109.3).
+
+    Single-faced cards have exactly one face, named like the card. Multi-faced cards have one entry
+    per face in Scryfall's order: the halves of a split card (709), the two halves of a flip card
+    (710), the front and back of a double-faced card (712), the creature and Adventure of an
+    adventurer card (715), and the two parts of a preparation card (722).
+
+    Mana cost and type line are Scryfall's text (``"{1}{G}"``, ``"Creature — Elf Druid"``); colors
+    are single letters (``"W"``, ``"U"``, ``"B"``, ``"R"``, ``"G"``; 105.1). Power, toughness,
+    loyalty and defense are ``None`` when the face has none, and otherwise strings, because values
+    such as ``"*"`` (208.2) are not numbers.
+    """
 
     name: str
     mana_cost: str
@@ -100,9 +111,14 @@ class CardFace:
 class CardData:
     """Oracle data for one card (one Scryfall Oracle object).
 
+    ``name`` is the card's English name (201.2); a multi-faced card's name is Scryfall's
+    ``"Front // Back"``. ``mana_value`` is the card's mana value (202.3) as Scryfall reports it,
+    a float because a few Un-cards have fractional values. ``color_identity`` is the Commander
+    color identity (903.4). ``keywords`` is Scryfall's list of keyword abilities and actions, for
+    reports only: card behavior comes from definitions, never from this list.
+
     ``faces`` always has at least one entry, so code can read ``faces[0].oracle_text`` without
-    special-casing single-faced cards. Power, toughness and the like stay strings because Oracle
-    values such as ``"*"`` and ``"1+*"`` are not numbers.
+    special-casing single-faced cards.
     """
 
     oracle_id: str
@@ -116,16 +132,23 @@ class CardData:
 
     @property
     def is_multi_faced(self) -> bool:
+        """Whether the card has more than one face (709-712, 715, 722)."""
         return len(self.faces) > 1
 
     @property
     def face_names(self) -> tuple[str, ...]:
+        """The name of each face, in order. Card definitions are registered under these names."""
         return tuple(face.name for face in self.faces)
 
 
 @dataclass(frozen=True)
 class Ruling:
-    """An official ruling or Scryfall note attached to an Oracle card."""
+    """A ruling attached to an Oracle card.
+
+    ``source`` is ``"wotc"`` for official rulings and ``"scryfall"`` for Scryfall's own notes.
+    Official rulings rank just below the CR as authority (CLAUDE.md); card tests are derived from
+    them. ``published_at`` is an ISO date (``"2019-01-01"``).
+    """
 
     oracle_id: str
     source: str
@@ -146,9 +169,11 @@ class BulkFileInfo:
 
     @property
     def updated(self) -> datetime:
+        """The file's publication time, in UTC."""
         return datetime.fromisoformat(self.updated_at).astimezone(UTC)
 
     def to_json(self) -> dict[str, object]:
+        """This entry as it is stored in ``snapshot.json``."""
         return {
             "type": self.type,
             "file": self.file,
@@ -180,6 +205,7 @@ class SnapshotInfo:
         return f"Snapshot {oracle_date} (Oracle cards {oracle_date}, rulings {rulings_date})"
 
     def to_json(self) -> dict[str, object]:
+        """The whole manifest as it is stored in ``snapshot.json``."""
         return {
             "format": SNAPSHOT_FORMAT,
             "files": {
@@ -196,6 +222,12 @@ class CardDatabase:
     matched to something close. A multi-faced card can also be found by the name of its front face
     (for example a transforming card by its front face's name), because that is how decklists
     usually name them; the full Scryfall name (``"Front // Back"``) always works too.
+
+    Tokens, emblems and other objects that can't be in a deck (``NON_DECK_LAYOUTS``) are not
+    indexed. A name that still belongs to several cards (Un-set and playtest variants) raises
+    ``AmbiguousCardNameError`` rather than picking one. Names that 201.3 makes interchangeable are
+    not treated as equal; that only matters for deck construction (903.5b) and is left to deck
+    validation.
     """
 
     def __init__(
@@ -253,6 +285,7 @@ class CardDatabase:
             raise UnknownCardError(name) from None
 
     def rulings_for(self, card: CardData) -> tuple[Ruling, ...]:
+        """The card's rulings, oldest first; rulings from the same day keep Scryfall's order."""
         return self._rulings.get(card.oracle_id, ())
 
 
@@ -266,6 +299,7 @@ def default_data_dir() -> Path:
 
 
 def sha256_of(path: Path) -> str:
+    """The hex SHA-256 of a file, read in 1 MiB chunks."""
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         while chunk := handle.read(1 << 20):
@@ -274,6 +308,11 @@ def sha256_of(path: Path) -> str:
 
 
 def load_snapshot_info(data_dir: Path) -> SnapshotInfo:
+    """Read ``snapshot.json`` from ``data_dir`` without loading the bulk files.
+
+    Raises ``CardDataError`` if the manifest is missing (the message says how to fetch it), has an
+    unsupported format, or is malformed.
+    """
     path = data_dir / SNAPSHOT_FILE
     if not path.exists():
         raise CardDataError(
@@ -359,6 +398,13 @@ def parse_rulings(payload: object) -> list[Ruling]:
 
 
 def parse_card(item: object) -> CardData:
+    """Parse one Scryfall card object into ``CardData``.
+
+    A card without ``card_faces`` gets one face built from its own fields. Faces without
+    ``colors`` (split and adventurer cards) take the card's colors. Reversible cards carry their
+    Oracle ID on each face, so it is read from the first face. Raises ``CardDataError`` on missing
+    or mistyped fields.
+    """
     raw = as_json_object(item, "card")
     name = _str(raw, "name")
     raw_faces = raw.get("card_faces")

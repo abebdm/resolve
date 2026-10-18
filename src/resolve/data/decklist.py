@@ -33,6 +33,12 @@ from pathlib import Path
 
 
 class Section(Enum):
+    """A decklist section. The value is the header as written in ``decks/`` files.
+
+    The commander is the card designated in 903.3; the sideboard is the optional card pool of
+    100.4, which is out of scope for card coverage.
+    """
+
     COMMANDER = "Commander"
     MAINBOARD = "Mainboard"
     SIDEBOARD = "Sideboard"
@@ -58,6 +64,8 @@ class DecklistError(ValueError):
 
 @dataclass(frozen=True)
 class DeckEntry:
+    """One card line: how many copies, and the exact card name as written."""
+
     count: int
     name: str
 
@@ -72,6 +80,7 @@ class Decklist:
     name: str | None = None
 
     def section(self, section: Section) -> tuple[DeckEntry, ...]:
+        """The entries of one section."""
         match section:
             case Section.COMMANDER:
                 return self.commander
@@ -91,6 +100,11 @@ class Decklist:
         return tuple(dict.fromkeys(names))
 
     def card_count(self, *, include_sideboard: bool = False) -> int:
+        """Total copies in the commander and mainboard sections (and sideboard, if asked).
+
+        For a Commander deck this is the deck size of 903.5a, which must be 100; the parser
+        reports it but doesn't enforce it.
+        """
         return sum(entry.count for entry in self.entries(include_sideboard=include_sideboard))
 
 

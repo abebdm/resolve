@@ -74,7 +74,11 @@ class FetchError(Exception):
 
 @dataclass(frozen=True)
 class BulkEntry:
-    """One entry of Scryfall's bulk-data index."""
+    """One entry of Scryfall's bulk-data index.
+
+    ``download_uri`` is the entry's ``jsonl_download_uri``: the gzip-compressed JSON Lines file,
+    which is the only format Scryfall's index offers.
+    """
 
     type: str
     updated_at: str
@@ -82,6 +86,7 @@ class BulkEntry:
 
 
 def open_url(url: str) -> AbstractContextManager[BinaryIO]:
+    """Open a URL with the User-Agent and Accept headers Scryfall asks API clients to send."""
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT, "Accept": ACCEPT})
     return urllib.request.urlopen(request, timeout=60)
 
@@ -111,6 +116,7 @@ def select_bulk_entries(index: object) -> dict[str, BulkEntry]:
 
 
 def download(opener: Opener, url: str, destination: Path) -> None:
+    """Stream ``url`` into ``destination`` unchanged (still compressed)."""
     with opener(url) as response, destination.open("wb") as handle:
         shutil.copyfileobj(response, handle, length=1 << 20)
 
@@ -141,6 +147,7 @@ def validate_bulk_file(bulk_type: str, path: Path) -> None:
 
 
 def sha256_and_size(path: Path) -> tuple[str, int]:
+    """The hex SHA-256 and the size in bytes of a file, for the manifest."""
     digest = hashlib.sha256()
     size = 0
     with path.open("rb") as handle:
@@ -275,6 +282,7 @@ def update_rules_readme(text: str, snapshot: SnapshotInfo, today: date) -> str:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Run the command line; returns the exit status (0 on success, 1 on any error)."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0] if __doc__ else None)
     parser.add_argument("--data-dir", type=Path, default=default_data_dir())
     parser.add_argument("--rules-readme", type=Path, default=RULES_README)

@@ -19,10 +19,17 @@ the engine's API, so nothing here may depend on them.
 
 ## Current status
 
-M0 is in progress. The data and tooling part is done: `resolve.data` (card data loader and
-decklist parser), the card registry (`resolve.cards.registry`), `tools/fetch_scryfall.py`,
-`tools/coverage.py` and CI. **The engine core has not been started.** Do not start a milestone
-(or the rest of M0) unless the user asks.
+**Current milestone: M0 (Skeleton), in progress.**
+
+- **Done:** the data and tooling part: `resolve.data` (card data loader and decklist parser), the
+  card registry and deck coverage (`resolve.cards.registry`, `resolve.cards.coverage`),
+  `tools/fetch_scryfall.py`, `tools/coverage.py`, CI, and the coverage audit (the Scryfall
+  snapshot of 2026-10-17 is pinned; no cards are implemented yet).
+- **Next:** the M0 engine core: core state types, the task loop and public API, decision types,
+  the event skeleton, `NotImplementedRule`, the scenario builder, agents, `tools/play_cli.py`
+  and the fuzz harness. **None of it has been started**, so no primitives exist yet.
+
+Do not start a milestone (or the rest of M0) unless the user asks.
 
 ## Non-negotiable rules
 

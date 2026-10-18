@@ -35,6 +35,8 @@ class RegistryError(Exception):
 
 
 class DuplicateDefinitionError(RegistryError):
+    """Two definitions were registered under the same name."""
+
     def __init__(self, name: str) -> None:
         super().__init__(f"card {name!r} is registered more than once")
         self.name = name
@@ -60,6 +62,7 @@ class CardRegistry:
             self.register(definition)
 
     def register(self, definition: CardDefinition) -> None:
+        """Add a definition; raises ``DuplicateDefinitionError`` if its name is taken."""
         if definition.name in self._definitions:
             raise DuplicateDefinitionError(definition.name)
         self._definitions[definition.name] = definition
@@ -71,6 +74,10 @@ class CardRegistry:
         return isinstance(name, str) and name in self._definitions
 
     def get(self, name: str) -> CardDefinition:
+        """The definition registered under exactly this name.
+
+        Raises ``UnimplementedCardError`` (a ``KeyError``) when there is none.
+        """
         try:
             return self._definitions[name]
         except KeyError:
@@ -85,6 +92,7 @@ class CardRegistry:
         return tuple(name for name in card.face_names if name not in self._definitions)
 
     def is_implemented(self, card: CardData) -> bool:
+        """Whether every face of ``card`` has a definition (multi-faced cards: 709-712, 715)."""
         return not self.missing_faces(card)
 
 
