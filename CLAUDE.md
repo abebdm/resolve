@@ -12,6 +12,10 @@ the engine's API, so nothing here may depend on them.
 - `docs/roadmap.md`: milestones, "done" criteria, and which milestone is current.
 - `docs/rules/MagicCompRules-20260925.txt`: the pinned Comprehensive Rules (CR). Look rules up here
   by number; do not rely on memory.
+- `docs/howto.md`: step-by-step recipes for recurring tasks. Follow them.
+- `docs/primitives.md`: the catalog of card-building primitives. Check it before writing a new
+  one.
+- `docs/decisions.md`: the log of smaller decisions made during implementation.
 
 ## Current status
 
@@ -151,6 +155,44 @@ afterthought.
   to reach them.
 - Drive choices with the scripted agent.
 - Keep tests deterministic: fixed seeds, no reliance on timing.
+
+## Documentation requirements
+
+Future sessions start with no memory of this one. The repo's docs are how they get up to speed, so
+keeping them accurate is part of the deliverable, like tests. A task is not done until the docs
+below match the code.
+
+**Every PR updates whichever of these it affects:**
+
+- **"Current status" in this file.** Say which milestone is current, what's done, and what's next.
+  It must never describe the repo as it used to be.
+- **`docs/roadmap.md`:** tick off completed items.
+- **`docs/primitives.md`:** every new or changed primitive, keyword or target filter gets an
+  entry. An entry has:
+  - its name and module
+  - one line on what it does
+  - the CR rules it implements
+  - an example card that uses it
+
+  Before writing a new primitive, search this catalog. Extend or reuse an existing one rather than
+  creating a near-duplicate under a different name.
+- **`docs/howto.md`:** when a recurring task is done for the first time, or its steps change, record
+  the steps. Examples: adding a card, a primitive, a keyword, an event type or a decision kind;
+  writing a scenario test.
+- **`docs/decisions.md`:** add a dated entry for any judgment call that isn't obvious from the code.
+  Examples: an interpretation of an ambiguous rule, a representation choice, a deliberate
+  limitation. Each entry gives the decision, why it was made, and the CR rules involved. Large
+  architectural changes still go in `docs/design.md`, with the user's sign-off.
+- **`docs/design.md`:** whenever an approved design decision changes.
+- **Docstrings:** public classes and functions get docstrings that cite the CR rules they implement.
+
+**Keep docs lean and true**
+
+- Document what a future session needs in order to work correctly. Don't narrate how the work went;
+  that belongs in the PR description.
+- Prefer generating over hand-writing. Anything that can be derived from the code (coverage,
+  the list of `NotImplementedRule` gaps) should come from a tool, not a hand-maintained list.
+- If a doc is wrong, fix it in the same PR. A stale doc is a bug.
 
 ## Commands
 
