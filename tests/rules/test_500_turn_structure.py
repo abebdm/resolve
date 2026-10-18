@@ -229,8 +229,8 @@ def test_full_two_player_game_ends_by_decking() -> None:
     draw (103.8a). Player 1 draws on turns 2, 4, 6 and player 0 on turns 3, 5, 7, emptying both
     libraries. On turn 8 player 1 attempts to draw from an empty library and loses when
     state-based actions are checked, before anyone receives priority in that draw step; player
-    0 wins (104.2a). Each player discarded one card down to seven at the end of each of their
-    three turns with eight cards (514.1).
+    0 wins (104.2a). Player 0 discarded one card down to seven at the end of each of their
+    three turns with eight cards (514.1); player 1's cards left the game with them (800.4a).
     """
     state = started_game(2, decks=[deck(10, 0), deck(10, 0)])
     assert [len(p.library) for p in state.players] == [3, 3]
@@ -240,6 +240,8 @@ def test_full_two_player_game_ends_by_decking() -> None:
     assert turn is not None
     assert (turn.number, turn.active_player, turn.step) == (8, P1, Step.DRAW)
     assert state.player(P1).lost and not state.player(P0).lost
-    assert [len(p.graveyard) for p in state.players] == [3, 3]
-    assert [len(p.library) for p in state.players] == [0, 0]
-    assert [len(p.hand) for p in state.players] == [7, 7]
+    # Player 1 left the game on losing (104.5), taking every object they owned (800.4a).
+    assert state.player(P1).left_game
+    assert not any(obj.owner == P1 for obj in state.objects.values())
+    assert (len(state.player(P0).graveyard), len(state.player(P0).library)) == (3, 0)
+    assert len(state.player(P0).hand) == 7

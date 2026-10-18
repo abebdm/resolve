@@ -27,8 +27,10 @@ Each game is played by ``RandomAgent``s. Before every answer the harness checks:
 and then submits the agent's answer to the state, to a deep copy and to a pickled copy, which
 must all end the same way and in equal states: a state copied mid-task resumes exactly as the
 original (design.md §5). A random answer the asking task rejects must change nothing; the agent
-answers again. At the end, the game is replayed from its config, decks, seed and recorded
-answers and must reproduce the identical state (design.md §12).
+answers again. Now and then a random player concedes instead (104.3a; ``--concessions``), in the
+state and its copies alike. At the end, the game is replayed from its config, decks, seed and
+recorded inputs (answers and concessions) and must reproduce the identical state (design.md
+§12).
 
 A game ends when it is over or when it reaches a ``NotImplementedRule`` for an allowed rule
 (``ALLOWED_GAPS``). Any other exception, a disallowed gap, or a failed check raises
@@ -52,9 +54,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from resolve.agents.base import Agent
-from resolve.agents.driver import MAX_ATTEMPTS, agent_for, play
+from resolve.agents.driver import MAX_ATTEMPTS, agent_for
 from resolve.agents.random_agent import RandomAgent
-from resolve.agents.scripted import ScriptedAgent
+from resolve.agents.replay import ReplayDiverged, replay
 from resolve.cards.registry import default_registry
 from resolve.data.cards import CardDataError, load_card_database
 from resolve.data.decklist import DecklistError, load_decklist
@@ -73,21 +75,24 @@ from resolve.decisions.spaces import (
     PickMany,
 )
 from resolve.engine.api import new_game, pending_decision, submit, view_for
+from resolve.engine.concede import concede
 from resolve.engine.deck import Deck, build_deck
 from resolve.engine.view import ObjectView
 from resolve.errors import DeckError, InvalidAnswer, NotImplementedRule
 from resolve.events.base import AnswerRecord, LogEntry
 from resolve.events.cards import CardDrawn, CardsPutOnBottom
 from resolve.state.config import GameConfig
-from resolve.state.game import GameState
+from resolve.state.game import GameState, players_in_game
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.invariants import invariant_violations, mutable_parts, state_impurities
+from resolve.state.rng import Rng
 from resolve.state.zones import ZoneKind
 
 # Gaps that end a fuzz game normally: casting a spell, which a random agent may choose but the
-# engine can't do yet (until M2), and a game that would continue after a player loses (until
-# M1.5).
-ALLOWED_GAPS: tuple[str, ...] = ("601.2", "800.4a")
+# engine can't do yet (until M2).
+ALLOWED_GAPS: tuple[str, ...] = ("601.2",)
+# By default, before each decision a player concedes with probability 1 in this (104.3a).
+DEFAULT_CONCESSION_CHANCE = 200
 # A game that hasn't ended after this many answers is reported as a failure (a runaway game).
 MAX_ANSWERS = 10_000
 
@@ -118,6 +123,16 @@ Outcome = tuple[str, str]
 def _submit(state: GameState, answer: DecisionAnswer) -> Outcome:
     try:
         submit(state, answer)
+    except InvalidAnswer as error:
+        return ("rejected", str(error))
+    except NotImplementedRule as gap:
+        return ("gap", str(gap))
+    return ("accepted", "")
+
+
+def _concede(state: GameState, player: PlayerId) -> Outcome:
+    try:
+        concede(state, player)
     except InvalidAnswer as error:
         return ("rejected", str(error))
     except NotImplementedRule as gap:
@@ -188,7 +203,7 @@ def view_problems(state: GameState, viewer: PlayerId) -> list[str]:
     for summary, player in zip(view.players, state.players, strict=False):
         if summary.life != player.life:
             problems.append(f"{where} shows player {player.id} at the wrong life total")
-        if summary.lost != player.lost:
+        if summary.lost != player.lost or summary.left_game != player.left_game:
             problems.append(f"{where} misreports whether player {player.id} lost")
         if summary.mana_pool != tuple(player.mana_pool):
             problems.append(f"{where} misreports player {player.id}'s mana pool")
@@ -292,11 +307,16 @@ def fuzz_run(
     max_answers: int = MAX_ANSWERS,
     check_copies: bool = True,
     probe_invalid: bool = True,
+    concession_chance: int = 0,
+    concession_seed: int = 0,
 ) -> FuzzResult:
     """Play the game ``make_state()`` starts with ``agents`` (one per seat), checking it.
 
     ``make_state`` is called again for the replay, and must start the same game each time.
     ``describe`` names the game in failure messages (for example, how to reproduce it).
+    With ``concession_chance`` N > 0, before each decision a player still in the game concedes
+    with probability 1/N (104.3a), drawn from ``Rng.from_seed(concession_seed)``; the state's
+    copies concede too and must end up equal.
     """
 
     def fail(problem: str) -> FuzzFailure:
@@ -317,12 +337,26 @@ def fuzz_run(
         raise fail(f"starting the game reached {error}") from error
 
     answers = rejected = in_a_row = 0
+    concessions = Rng.from_seed(concession_seed)
     try:
         while gap is None:
             check(state, f"after {answers} answers")
             request = pending_decision(state)
             if request is None:
                 break
+            if concession_chance > 0 and concessions.randbelow(concession_chance) == 0:
+                in_game = players_in_game(state)
+                player = in_game[concessions.randbelow(len(in_game))]
+                copies = [copy.deepcopy(state), _pickled(state)] if check_copies else []
+                outcome = _concede(state, player)
+                for name, other in zip(("deep copy", "pickled copy"), copies, strict=False):
+                    if _concede(other, player) != outcome or other != state:
+                        raise fail(f"conceding for player {player} differs in the {name}")
+                if outcome[0] == "gap":
+                    if not allowed(outcome[1]):
+                        raise fail(f"the game reached a gap that isn't allowed: {outcome[1]}")
+                    gap = outcome[1]
+                continue
             if answers >= max_answers:
                 raise fail(f"the game didn't end within {max_answers} answers")
             snapshot = pickle.dumps(state)
@@ -381,17 +415,19 @@ def _check_replay(
     gap: str | None,
     fail: Callable[[str], FuzzFailure],
 ) -> None:
-    """Replaying the recorded answers from the start must reproduce ``state`` (design.md §12)."""
+    """Replaying the recorded inputs from the start (answers and concessions, in order) must
+    reproduce ``state`` (design.md §12)."""
     again = make_state()
-    script = ScriptedAgent.from_log(state.event_log)
     replay_gap: str | None = None
     try:
-        play(again, script)
+        replay(again, state.event_log)
     except NotImplementedRule as error:
         replay_gap = str(error)
+    except ReplayDiverged as error:
+        raise fail(f"the replay ended differently: {error}") from error
     except Exception as error:
         raise fail(f"the replay failed: {type(error).__name__}: {error}") from error
-    if replay_gap != gap or script.remaining:
+    if replay_gap != gap:
         raise fail(f"the replay ended differently: {replay_gap!r} instead of {gap!r}")
     if again != state:
         raise fail("the replay doesn't reproduce the identical state")
@@ -407,6 +443,7 @@ def fuzz_game(
     max_answers: int = MAX_ANSWERS,
     check_copies: bool = True,
     probe_invalid: bool = True,
+    concession_chance: int = 0,
 ) -> FuzzResult:
     """Fuzz one game of ``new_game(config, decks, seed)``; the options are ``fuzz_run``'s.
 
@@ -428,6 +465,8 @@ def fuzz_game(
         max_answers=max_answers,
         check_copies=check_copies,
         probe_invalid=probe_invalid,
+        concession_chance=concession_chance,
+        concession_seed=seed,
     )
 
 
@@ -450,6 +489,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--deck", type=Path, action="append", default=[], help="decklists to cycle (default: empty)"
     )
     parser.add_argument("--data-dir", type=Path, default=None, help="card data snapshot directory")
+    parser.add_argument(
+        "--concessions",
+        type=int,
+        default=DEFAULT_CONCESSION_CHANCE,
+        metavar="N",
+        help="a player concedes before a decision 1 time in N (0: never)",
+    )
     args = parser.parse_args(argv)
     if args.games < 1 or not args.players or min(args.players) < 2:
         parser.error("need at least one game and player counts of at least 2 (100.1)")
@@ -476,7 +522,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         config = configs[(game // len(args.players)) % len(configs)]
         decks = [pool[(seed + seat) % len(pool)] for seat in range(players)]
         try:
-            result = fuzz_game(config, decks, seed)
+            result = fuzz_game(config, decks, seed, concession_chance=args.concessions)
         except FuzzFailure as failure:
             print(f"FAILED: {failure}")
             return 1

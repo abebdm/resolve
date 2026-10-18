@@ -267,7 +267,7 @@ def test_render_view_shows_the_turn_and_who_lost() -> None:
     scenario.life(P1, 0)
     scenario.at(TurnStep.UPKEEP)
     text = render_view(view_for(scenario.build(), P0))
-    assert "Player 1 (lost): life 0" in text
+    assert "Player 1 (lost) (left the game): life 0" in text
     assert "Turn 1, player 0's turn: upkeep step; nobody has priority." in text
 
 

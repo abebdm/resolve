@@ -146,6 +146,8 @@ def render_view(view: PlayerView, *, recent_log: int = RECENT_LOG) -> str:
             marks.append(" (starting player)")
         if summary.lost:
             marks.append(" (lost)")
+        if summary.left_game:
+            marks.append(" (left the game)")
         pool = f", mana {describe_mana(summary.mana_pool)}" if summary.mana_pool else ""
         lines.append(
             f"Player {summary.id}{''.join(marks)}: life {summary.life}, "

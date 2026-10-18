@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from resolve.errors import EngineError
 from resolve.events.base import Event
-from resolve.state.game import GameResult, move_object
+from resolve.state.game import GameResult, move_object, zone_list
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.zones import COMMAND
+from resolve.state.zones import COMMAND, Zone
 
 if TYPE_CHECKING:
     from resolve.state.game import GameState
@@ -108,3 +108,51 @@ class PlayerLost(Event):
             raise EngineError(f"player {self.player} has already lost")
         player.lost = True
         player.drew_from_empty_library = False
+
+
+@dataclass(frozen=True, kw_only=True)
+class Conceded(Event):
+    """``player`` conceded the game (104.3a), through ``resolve.engine.concede``.
+
+    Unlike other events this records an input, like an answer: a replay concedes again where
+    it finds one (design.md §12). The consequences follow as their own events: the player loses
+    (``PlayerLost``) and leaves the game (``PlayerLeftGame``).
+    """
+
+    player: PlayerId
+
+    def apply(self, state: GameState) -> None:
+        state.player(self.player)  # validates the ID
+
+
+@dataclass(frozen=True, kw_only=True)
+class PlayerLeftGame(Event):
+    """``player`` leaves the game (104.5, 800.4a): every object they own leaves the game.
+
+    As applied, ``removed`` names the objects that left from every zone but the library, and
+    ``library_size`` counts the library's: library object IDs survive shuffles, so the public
+    log never shows them (design.md §9). A player who leaves also loses their unspent mana.
+    Objects they control but don't own, and effects giving them control, can't exist yet:
+    ``LeaveGame`` raises ``NotImplementedRule`` before proposing this event if they would.
+    """
+
+    player: PlayerId
+    removed: tuple[ObjectId, ...] = ()
+    library_size: int = 0
+
+    def apply(self, state: GameState) -> Event:
+        player = state.player(self.player)
+        if player.left_game:
+            raise EngineError(f"player {self.player} has already left the game")
+        player.left_game = True
+        player.mana_pool.clear()
+        library_size = len(player.library)
+        removed = tuple(
+            obj
+            for obj, game_object in state.objects.items()
+            if game_object.owner == self.player and game_object.zone != Zone.library(self.player)
+        )
+        for obj in (*removed, *player.library):
+            zone_list(state, state.objects[obj].zone).remove(obj)
+            del state.objects[obj]
+        return replace(self, removed=removed, library_size=library_size)

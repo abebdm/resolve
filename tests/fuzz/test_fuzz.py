@@ -39,10 +39,12 @@ from resolve.decisions.spaces import (
 from resolve.engine import loop as engine_loop
 from resolve.engine import view as engine_view
 from resolve.engine.api import new_game, view_for
+from resolve.engine.concede import concede
 from resolve.engine.deck import Deck
 from resolve.engine.view import PlayerView
 from resolve.errors import InvalidAnswer
 from resolve.events.base import AnswerRecord
+from resolve.events.game import Conceded, PlayerLost
 from resolve.state.config import GameConfig
 from resolve.state.game import GameObject, GameState
 from resolve.state.ids import PlayerId
@@ -78,17 +80,17 @@ SEEDS = range(12)
 def decks_for(players: int, commander: bool, seed: int) -> list[Deck]:
     """Decks of varying sizes, with one commander each in Commander games.
 
-    Most decks hold 7 to 11 cards, so games get past the opening hands into turns and priority
+    Most decks hold 8 to 11 cards, so games get past the opening hands into turns and priority
     (a deck of 6 or fewer would make every player draw from an empty library during 103.5 and
-    lose at the first state-based-action check, 704.5b). Every deck holds an elf, so random
-    agents soon try to cast it and the game stops at the 601.2 gap. Seat 1's deck is empty in
-    one game of four.
+    lose at the first state-based-action check, 704.5b). Every deck holds two elves, so random
+    agents soon try to cast one and the game stops at the 601.2 gap; long games are the patient
+    and land-only tests' job. Seat 1's deck is empty in one game of four.
     """
     commanders = [DAYBREAKER] if commander else []
     return [
         deck(forests=0, elves=0, commanders=commanders)
         if seat == 1 and seed % 4 == 3
-        else deck(forests=6 + (seed + seat) % 4, elves=1 + seat % 2, commanders=commanders)
+        else deck(forests=6 + (seed + seat) % 4, elves=2, commanders=commanders)
         for seat in range(players)
     ]
 
@@ -118,11 +120,15 @@ def test_random_agent_games_complete_with_every_check_passing(
     active = None if state.turn is None else state.turn.active_player
     for player in state.players:
         held = sum(1 for o in state.objects.values() if o.owner == player.id and o.zone != COMMAND)
+        if player.left_game:  # 800.4a: their cards left the game with them
+            assert held == 0 and not any(o.owner == player.id for o in state.objects.values())
+            continue
         assert held == len(decks[player.id].cards), "every card of the deck is still in the game"
         # 514.1: only the active player can be above seven, by the card drawn this turn.
         assert len(player.hand) <= (8 if player.id == active else 7)
     if commander:
-        assert len(state.command) == players  # 103.2c
+        in_game = sum(1 for player in state.players if not player.left_game)
+        assert len(state.command) == in_game  # 103.2c (800.4a for those who left)
     else:
         assert state.command == []
 
@@ -159,6 +165,86 @@ def test_random_agents_finish_two_player_land_only_games(seed: int) -> None:
     state = result.state
     assert state.result is not None and len(state.result.winners) <= 1
     assert state.battlefield, "lands were played"
+
+
+@pytest.mark.parametrize("players", [2, 3, 4])
+@pytest.mark.parametrize("seed", range(2))
+def test_random_agents_finish_land_only_games_with_concessions(seed: int, players: int) -> None:
+    """M1 done: 2 to 4 players, land-only decks, random concessions (104.3a): every game ends,
+    by decking or concessions, and the replay of answers and concessions reproduces it."""
+    decks = [deck(forests=8 + seat, elves=0) for seat in range(players)]
+    result = fuzz_game(
+        GameConfig.standard(),
+        decks,
+        seed,
+        check_copies=seed == 0,
+        probe_invalid=False,
+        concession_chance=15,
+    )
+    assert result.gap is None
+    state = result.state
+    assert state.result is not None
+    assert_leaving_is_consistent(state, decks)
+    # Every loss is a concession (104.3a) or a draw from an empty library (704.5b): land-only
+    # decks can't lose any other way.
+    losses = [e.record for e in state.event_log if isinstance(e.record, PlayerLost)]
+    assert losses and all(loss.rules[0] in ("104.3a", "704.5b") for loss in losses)
+    conceded = [e.record.player for e in state.event_log if isinstance(e.record, Conceded)]
+    assert conceded, "1 decision in 15 has a concession: every one of these games has one"
+    assert {loss.player for loss in losses if loss.rules[0] == "104.3a"} == set(conceded)
+
+
+def test_a_concession_then_a_decking_loss_in_a_fuzz_game() -> None:
+    """Three players, land-only decks, 1 concession in 60 decisions (seed 1): a player concedes
+    (104.3a), the game goes on without them (800.4j, 800.4k), and later another player draws from
+    an empty library and loses (704.5b); the last one wins (104.2a). Checked like every fuzz game,
+    and replayed from its answers and concessions."""
+    decks = [deck(forests=8 + seat, elves=0) for seat in range(3)]
+    result = fuzz_game(
+        GameConfig.standard(), decks, 1, check_copies=False, probe_invalid=False,
+        concession_chance=60,
+    )  # fmt: skip
+    state = result.state
+    assert result.gap is None and state.result is not None
+    losses = [e.record for e in state.event_log if isinstance(e.record, PlayerLost)]
+    assert [loss.rules[0] for loss in losses] == ["104.3a", "704.5b"]
+    assert state.result.winners == tuple(p.id for p in state.players if not p.left_game)
+    assert_leaving_is_consistent(state, decks)
+
+
+def test_random_agents_concede_in_commander_games() -> None:
+    """Commander games, 3 and 4 players, with random concessions: a player who leaves takes
+    their commander out of the command zone (800.4a) and the others' stay. Every game reaches
+    the first turn's priority; casting a commander stops a game at the 601.2 gap."""
+    with_concessions = 0
+    for players in (3, 4):
+        for seed in range(4):
+            decks = [
+                deck(forests=8 + seat, elves=0, commanders=[DAYBREAKER]) for seat in range(players)
+            ]
+            result = fuzz_game(
+                GameConfig.commander_game(), decks, seed, probe_invalid=False, concession_chance=10
+            )
+            state = result.state
+            if result.gap is None:
+                assert state.result is not None
+            else:
+                assert result.gap.split(": ")[0] in fuzz_tool.ALLOWED_GAPS
+            assert state.turn is not None
+            assert_leaving_is_consistent(state, decks)
+            in_game = [p.id for p in state.players if not p.left_game]
+            assert sorted(state.objects[o].owner for o in state.command) == in_game
+            with_concessions += any(isinstance(e.record, Conceded) for e in state.event_log)
+    assert with_concessions >= 4
+
+
+def assert_leaving_is_consistent(state: GameState, decks: Sequence[Deck]) -> None:
+    """800.4a: a player who left owns nothing; every other player still owns each card of
+    their deck and each of their commanders, in some zone."""
+    for player in state.players:
+        owned = sum(1 for o in state.objects.values() if o.owner == player.id)
+        cards = decks[player.id]
+        assert owned == (0 if player.left_game else len(cards.cards) + len(cards.commanders))
 
 
 def test_patient_games_include_decking_and_discards() -> None:
@@ -375,7 +461,7 @@ def test_a_replay_that_asks_someone_else_is_a_failure() -> None:
             AskTwice(PlayerId(next(seeds) % 2)), EndGame(())
         )
 
-    with pytest.raises(FuzzFailure, match="the replay failed: ScriptError: step 1 expects player"):
+    with pytest.raises(FuzzFailure, match="the replay ended differently: input 1 expects player"):
         fuzz_run(make, [RandomAgent(1), RandomAgent(2)], describe="test")
 
 
@@ -767,3 +853,28 @@ def test_state_problems_finds_a_view_misreporting_damage(monkeypatch: pytest.Mon
         f"player 0's view misreports the damage on object {bears}",
         f"player 1's view misreports the damage on object {bears}",
     ]
+
+
+def test_state_problems_finds_a_view_hiding_that_a_player_left(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scenario = Scenario(3)
+    scenario.at(TurnStep.UPKEEP)
+    state = scenario.build()
+    concede(state, PlayerId(2))
+    assert state_problems(state) == []
+
+    def nobody_left(view: PlayerView) -> PlayerView:
+        players = tuple(dataclasses.replace(p, left_game=False) for p in view.players)
+        return dataclasses.replace(view, players=players)
+
+    leaking(monkeypatch, nobody_left)
+    assert len(state_problems(state)) == 3
+
+
+def test_fuzz_games_with_frequent_concessions_pass_every_check() -> None:
+    """The harness concedes in the state and its copies alike; they must stay equal."""
+    decks = [deck(forests=8, elves=0)] * 3
+    result = fuzz_game(GameConfig.standard(), decks, 3, concession_chance=2, probe_invalid=False)
+    assert any(isinstance(e.record, Conceded) for e in result.state.event_log)
+    assert result.state.result is not None

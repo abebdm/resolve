@@ -32,7 +32,7 @@ from resolve.events.game import (
     StartingPlayerChosen,
 )
 from resolve.events.pipeline import ApplyEvents
-from resolve.state.game import turn_order
+from resolve.state.game import next_in_turn_order, players_in_game, turn_order
 from resolve.state.ids import PlayerId
 from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
 
@@ -43,17 +43,23 @@ if TYPE_CHECKING:
 
 @dataclass(slots=True)
 class StartGame(Task):
-    """The start-of-game procedure (103). ``chooser`` is set once it has been picked."""
+    """The start-of-game procedure (103). ``chooser`` is set once it has been picked, so asking
+    again (after a concession) doesn't pick again. Only players still in the game can be chosen.
+    """
 
     chooser: PlayerId | None = None
 
     def run(self, state: GameState) -> TaskResult:
-        # 103.1: determine which player chooses who takes the first turn.
-        self.chooser = PlayerId(state.rng.randbelow(len(state.players)))
+        if self.chooser is None:
+            # 103.1: determine which player chooses who takes the first turn.
+            self.chooser = PlayerId(state.rng.randbelow(len(state.players)))
+        if state.player(self.chooser).left_game:
+            # 800.4h: the next player (in seating order, as turn order isn't set yet) chooses.
+            self.chooser = next_in_turn_order(state, self.chooser)
         return NeedDecision(
             player=self.chooser,
             kind=DecisionKind.CHOOSE_STARTING_PLAYER,
-            space=ChooseOne(tuple(PlayerOption(player.id) for player in state.players)),
+            space=ChooseOne(tuple(PlayerOption(player) for player in players_in_game(state))),
             prompt="Choose which player takes the first turn.",
             rules=("103.1",),
         )

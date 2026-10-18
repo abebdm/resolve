@@ -9,9 +9,9 @@ checks again, until a check performs nothing. The state-based actions implemente
 - 704.5f: a creature with 0 or less toughness is put into its owner's graveyard.
 - 704.5g: a creature with toughness above 0 and lethal damage marked on it is destroyed.
 
-A player who loses leaves the game (104.5). ``EndCheck`` then ends the game if at most one
-player is left: the last player in the game wins (104.2a), and if none is left the game is a
-draw (104.4a). A game that continues after a player leaves (800.4) is not implemented yet.
+A player who loses leaves the game (104.5, ``LeaveGame``, 800.4a). ``EndCheck`` then ends the
+game if at most one player is left: the last player in the game wins (104.2a), and if none is
+left the game is a draw (104.4a). Otherwise the game goes on.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ from resolve.decisions.spaces import AnswerValue, ChooseOrder, ObjectOption, Ord
 from resolve.effects.characteristics import characteristics
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.base import Event
-from resolve.events.game import GameEnded, PlayerLost
+from resolve.events.game import GameEnded, PlayerLeftGame, PlayerLost
 from resolve.events.permanents import PermanentDestroyed, PutIntoGraveyard
 from resolve.events.pipeline import ApplyEvents
 from resolve.state.game import apnap_order, players_in_game
@@ -86,6 +86,9 @@ class CheckStateBasedActions(Task):
     )
 
     def run(self, state: GameState) -> TaskResult:
+        if self.events and not self._still_apply(state):
+            # A player left while an order was asked (800.4a): check again from scratch.
+            self.events = ()
         if not self.events:
             self.events = state_based_actions(state)
             self.orders.clear()
@@ -103,9 +106,10 @@ class CheckStateBasedActions(Task):
         events = self._ordered(state)
         self.events = ()
         self.orders.clear()
-        tasks: list[Task] = [ApplyEvents(events)]
-        if any(isinstance(event, PlayerLost) for event in events):
-            tasks.append(EndCheck())
+        losers = tuple(event.player for event in events if isinstance(event, PlayerLost))
+        tasks: tuple[Task, ...] = (ApplyEvents(events),)
+        if losers:
+            tasks += leave_after_losses(state, losers)
         return Push((*tasks, self))
 
     def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
@@ -116,6 +120,15 @@ class CheckStateBasedActions(Task):
             option.object for option in chosen if isinstance(option, ObjectOption)
         )
         return self.run(state)
+
+    def _still_apply(self, state: GameState) -> bool:
+        for event in self.events:
+            obj = _moved(event)
+            if obj is not None and obj not in state.objects:
+                return False
+            if isinstance(event, PlayerLost) and state.player(event.player).left_game:
+                return False
+        return True
 
     def _to_order(self, state: GameState) -> list[tuple[PlayerId, tuple[ObjectId, ...]]]:
         by_owner: dict[PlayerId, list[ObjectId]] = {}
@@ -144,7 +157,8 @@ class CheckStateBasedActions(Task):
 
 @dataclass(slots=True)
 class EndCheck(Task):
-    """After players lose (104.5): end the game if at most one player is still in it."""
+    """After players leave (104.5): end the game if at most one player is still in it. The last
+    one wins (104.2a); if none is left, the game is a draw (104.4a)."""
 
     def run(self, state: GameState) -> TaskResult:
         remaining = players_in_game(state)
@@ -152,6 +166,40 @@ class EndCheck(Task):
             return Push((ApplyEvents((GameEnded(winners=remaining, rules=("104.2a",)),)),))
         if not remaining:
             return Push((ApplyEvents((GameEnded(winners=(), rules=("104.4a",)),)),))
-        raise NotImplementedRule(
-            "800.4a: a player leaving a game that other players continue (roadmap M1.5)"
-        )
+        return Done()
+
+
+@dataclass(slots=True)
+class LeaveGame(Task):
+    """``player`` leaves the game (104.5, 800.4a).
+
+    Every object they own leaves the game, their mana empties, and if they held priority it
+    passes to the next player in turn order (the priority task does that when it next runs).
+    Objects they control but don't own, which only control-changing effects could make, would
+    be exiled (800.4a); none can exist yet, so they raise ``NotImplementedRule``. So do objects
+    they own that another player controls.
+    """
+
+    player: PlayerId
+
+    def run(self, state: GameState) -> TaskResult:
+        if state.player(self.player).left_game:
+            return Done()
+        for obj in (*state.battlefield, *state.stack):
+            game_object = state.objects[obj]
+            if (game_object.owner == self.player) != (game_object.controller == self.player):
+                raise NotImplementedRule(
+                    "800.4a: a player leaving while control of an object differs from its owner"
+                )
+        turn = state.turn
+        if turn is not None and turn.priority == self.player:
+            turn.priority = None  # 800.4a: priority passes on
+        left = PlayerLeftGame(player=self.player, rules=("800.4a", "104.5"))
+        return Push((ApplyEvents((left,)),))
+
+
+def leave_after_losses(state: GameState, losers: tuple[PlayerId, ...]) -> tuple[Task, ...]:
+    """The tasks for players who just lost: each leaves (104.5), in APNAP order, then the end
+    check (104.2a, 104.4a)."""
+    order = [player for player in apnap_order(state) if player in losers]
+    return (*(LeaveGame(player) for player in order), EndCheck())
