@@ -19,9 +19,9 @@ the engine's API, so nothing here may depend on them.
 
 ## Current status
 
-**Current milestone: M0 (Skeleton), in progress.**
+**Current milestone: M1 (Turn structure), not started. M0 (Skeleton) is complete.**
 
-- **Done:**
+- **Done (M0):**
   - Data and tooling: `resolve.data` (card data loader and decklist parser), the card registry
     and deck coverage (`resolve.cards.registry`, `resolve.cards.coverage`),
     `tools/fetch_scryfall.py`, `tools/coverage.py`, `tools/gaps.py` (lists every
@@ -35,10 +35,16 @@ the engine's API, so nothing here may depend on them.
     (`resolve.events`), `NotImplementedRule` (`resolve.errors`), and zone moves (`move_object`,
     400.7). A game runs 103.1 to 103.4 (choosing the starting player, Commander's 103.2c,
     shuffling) and stops at `NotImplementedRule("103.5: ...")`.
-- **Next:** the rest of M0: the scenario builder (`tests/scenario.py`), agents, `tools/play_cli.py`
-  and the fuzz harness. No card primitives exist yet.
+  - Agents and test tooling: `resolve.agents` (the `Agent` protocol, the `play` driver,
+    `RandomAgent`, `ScriptedAgent` with replays from the log, and the text renderer and
+    `TextAgent` in `resolve.agents.text`); the scenario builder `tests/scenario.py`;
+    `tools/play_cli.py`; and the fuzz harness `tools/fuzz.py` with `tests/fuzz/`, which treats the
+    103.5 gap as the end of an M0 game.
+- **Next:** M1 (turn structure), starting with opening hands and mulligans (103.5). The
+  scenario builder gains turn, step and priority, and the fuzz harness's `ALLOWED_GAPS` moves,
+  with it. No card primitives exist yet.
 
-Do not start a milestone (or the rest of M0) unless the user asks.
+Do not start a milestone unless the user asks.
 
 ## Non-negotiable rules
 
@@ -195,7 +201,8 @@ Pure infrastructure (tooling, data loading, internal plumbing) may write tests a
 
 - Set up board states with the scenario builder (`tests/scenario.py`) rather than playing out turns
   to reach them.
-- Drive choices with the scripted agent.
+- Drive choices with the scripted agent (`run_script` in `tests/scenario.py`, or
+  `resolve.agents.ScriptedAgent`).
 - Keep tests deterministic: fixed seeds, no reliance on timing.
 
 ## Documentation requirements
@@ -273,8 +280,8 @@ that, and a fresh session must be able to resume it.
 - Tests live under `tests/rules/` (named by CR section, for example `test_117_priority.py`),
   `tests/cards/`, `tests/interactions/` and `tests/fuzz/`. Infrastructure has its own folders:
   `tests/data/` (card data and decklists), `tests/registry/`, `tests/tooling/` (the `tools/`
-  scripts), and for the engine core `tests/state/`, `tests/engine/`, `tests/decisions/` and
-  `tests/events/`. Tests never need the real Scryfall snapshot; they use
+  scripts), `tests/agents/`, and for the engine core `tests/state/`, `tests/engine/`,
+  `tests/decisions/` and `tests/events/`. Tests never need the real Scryfall snapshot; they use
   `tests/scryfall_fixtures.py`, plus `tests/game_fixtures.py` (decks and games) and
   `tests/engine_support.py` (test-only tasks and events).
 - When a design decision changes (with the user's OK), update `docs/design.md` in the same PR.

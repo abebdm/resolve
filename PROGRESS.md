@@ -33,16 +33,16 @@ Follow CLAUDE.md fully; run the test-reviewer before the PR. Branch:
   with games/second); broken test tasks in `tests/engine_support.py`; `tests/fuzz/test_fuzz.py`.
   Determinism lint now scans `resolve.agents`.
 
+- Step 5: docs: decisions.md (4 entries), howto.md (scenario test, fuzz, play CLI),
+  CLAUDE.md status (M0 complete), roadmap ticks + an M1 item for the builder's turn/step.
+
 ## In progress
 
-- Step 5: docs (decisions, howto, CLAUDE.md status, roadmap, primitives? no).
+- Step 6: test-reviewer, then address findings, delete PROGRESS.md, open the PR.
 
 ## Decisions not yet in the docs
 
-- Harness lives in `tools/fuzz.py` (tests import it as `tools.fuzz`, like `tools.coverage`).
-- Renderer and CLI agent live in `resolve.agents.text`; `tools/play_cli.py` is a thin main.
-- Replays are a `ScriptedAgent` built from the log's `AnswerRecord`s.
-- CLI and fuzz tool default to empty decks, since no card is implemented (no fake cards in tools).
+- (all recorded in docs/decisions.md)
 
 ## Open questions for the user
 
