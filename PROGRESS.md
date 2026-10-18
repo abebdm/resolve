@@ -40,6 +40,27 @@ Follow CLAUDE.md fully; run the test-reviewer before the PR. Branch:
 
 - Step 6: test-reviewer, then address findings, delete PROGRESS.md, open the PR.
 
+## Test review (round 1): Adequate with gaps. Plan per finding
+
+- W1 non-legendary commander in scenario: DISAGREE (903.3/903.5 deck legality deferred to M7 like
+  new_game; fixtures' Daybreaker isn't legendary either). Document in builder docstring + test.
+- W2 401.3 -> 401.2 in text-agent test docstring. FIX.
+- M1 log leak check in state_problems + negative test. M2 oracle from the rules (hand: owner or
+  known_to; graveyard always named; counts and order of hand/graveyard/public zones). M3 fuzz_run
+  over a 3-player Scenario with hands and known_to. M4 scenario 3-player known_to test.
+- M5 replay divergence negative tests (ScriptError, ended differently) + from_log on another seed.
+- M6 pre-answer pickle round-trip negative test (NaN task) + test that no state dataclass has a
+  compare=False field.
+- M7 run_script with a game that ends before the script (unused); rename misnamed test.
+- M8 failed add leaves state equal. M9 commander in another player's hand refused (test); second
+  commander: DISAGREE (deck legality, M7; StartGame raises the 613.7m gap) but test it.
+- M10 subprocess replay with two PYTHONHASHSEEDs. M11 fuzz CLI formats + seed-based deck rotation
+  so the reproduce command is right. M12 hot-seat prompt shows chooser's view; final view only
+  with one human seat. M13 Choose step enforces player/kind. M14 chi-square uniformity tests.
+- Hollow: probes with wrong id/player must carry a valid value (agent's own); negative test by
+  monkeypatching validate_answer. Controller test: match messages. check_answer test: scripted
+  agent (fuzz_run takes any Agent). play_cli --agent-seed boundary off by one.
+
 ## Decisions not yet in the docs
 
 - (all recorded in docs/decisions.md)
