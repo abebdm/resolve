@@ -22,6 +22,7 @@ from resolve.data.cards import CardData
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.state.config import GameConfig
 from resolve.state.ids import CardId, ObjectId, PlayerId
+from resolve.state.mana import Mana
 from resolve.state.rng import Rng
 from resolve.state.turn import TurnState
 from resolve.state.zones import Zone, ZoneKind
@@ -59,6 +60,8 @@ class GameObject:
     - ``known_to``: players who know its identity although the zone doesn't show it to them
       (400.2), sorted. The owner of a hand always knows its contents (402.3) without being
       listed here.
+    - ``tapped``: its status (110.5). Only permanents have status (110.5d); a new object is
+      untapped (110.5b).
     """
 
     id: ObjectId
@@ -68,6 +71,7 @@ class GameObject:
     zone: Zone
     timestamp: int
     known_to: tuple[PlayerId, ...] = ()
+    tapped: bool = False
 
 
 @dataclass(slots=True)
@@ -78,6 +82,7 @@ class Player:
     - ``drew_from_empty_library``: the player attempted to draw from an empty library since
       state-based actions were last checked (121.4, 704.5b).
     - ``lost``: the player has lost the game (104.3, 704.5a, 704.5b).
+    - ``mana_pool``: unspent mana, one unit per element, in the order it was added (106.4).
     """
 
     id: PlayerId
@@ -88,6 +93,7 @@ class Player:
     graveyard: list[ObjectId] = field(default_factory=list[ObjectId])
     drew_from_empty_library: bool = False
     lost: bool = False
+    mana_pool: list[Mana] = field(default_factory=list[Mana])
 
 
 @dataclass(frozen=True)

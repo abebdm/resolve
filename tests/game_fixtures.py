@@ -1,15 +1,17 @@
 """Decks and games for engine tests, built from ``tests/scryfall_fixtures.py``.
 
-No real card is implemented yet, so these decks use test-only definitions: a ``CardDefinition``
-holds only a name so far. Use these for tests that start a game with ``new_game``; to set up a
-board state directly, use the scenario builder (``tests/scenario.py``), which looks cards up in
-``database()`` and ``registry()`` by default.
+Forests use the real definition (``resolve.cards.definitions.basic_lands``); the other fixture
+cards use test-only definitions without abilities. Use these for tests that start a game with
+``new_game``; to set up a board state directly, use the scenario builder
+(``tests/scenario.py``), which looks cards up in ``scenario_database()`` and
+``scenario_registry()`` by default.
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
+from resolve.cards.definitions import basic_lands
 from resolve.cards.registry import CardDefinition, CardRegistry
 from resolve.data.cards import CardDatabase, parse_card, parse_oracle_cards
 from resolve.decisions.kinds import DecisionKind
@@ -34,7 +36,7 @@ from resolve.state.game import GameState
 from resolve.state.turn import Phase, Step
 from tests import scryfall_fixtures as fx
 
-FOREST = DeckCard(parse_card(fx.FOREST), (CardDefinition("Forest"),))
+FOREST = DeckCard(parse_card(fx.FOREST), (basic_lands.FOREST,))
 ELVES = DeckCard(parse_card(fx.LLANOWAR_ELVES), (CardDefinition("Llanowar Elves"),))
 DAYBREAKER = DeckCard(
     parse_card(fx.TRANSFORM_CARD),
@@ -46,7 +48,7 @@ def registry() -> CardRegistry:
     """A registry implementing the fixture cards used by these decks."""
     return CardRegistry(
         [
-            CardDefinition("Forest"),
+            basic_lands.FOREST,
             CardDefinition("Llanowar Elves"),
             CardDefinition("Test Daybreaker"),
             CardDefinition("Test Nightfall"),
@@ -60,16 +62,20 @@ def database() -> CardDatabase:
 
 
 def scenario_registry() -> CardRegistry:
-    """``registry()`` plus the fixture instant, sorcery and split card: the scenario default."""
-    extra = ("Test Shock", "Test Ponder", "Test Spark", "Test Frost")
+    """``registry()`` plus the other basic lands, the fixture instant, sorcery, split card and
+    nonbasic Forest: the scenario builder's default."""
+    extra = ("Test Shock", "Test Ponder", "Test Spark", "Test Frost", "Test Nonbasic Forest")
+    lands = (basic_lands.PLAINS, basic_lands.ISLAND, basic_lands.SWAMP, basic_lands.MOUNTAIN)
     return CardRegistry(
-        [*(registry().get(n) for n in registry().names()), *map(CardDefinition, extra)]
+        [*(registry().get(n) for n in registry().names()), *lands, *map(CardDefinition, extra)]
     )
 
 
 def scenario_database() -> CardDatabase:
-    """``database()`` plus the fixture instant and sorcery: the scenario builder's default."""
-    return CardDatabase(parse_oracle_cards([*fx.default_cards(), fx.INSTANT_CARD, fx.SORCERY_CARD]))
+    """``database()`` plus the cards of ``scenario_registry()``: the scenario builder's default."""
+    extra = [fx.INSTANT_CARD, fx.SORCERY_CARD, fx.NONBASIC_FOREST]
+    lands = [fx.PLAINS, fx.ISLAND, fx.SWAMP, fx.MOUNTAIN]
+    return CardDatabase(parse_oracle_cards([*fx.default_cards(), *lands, *extra]))
 
 
 def deck(forests: int = 6, elves: int = 4, *, commanders: Sequence[DeckCard] = ()) -> Deck:

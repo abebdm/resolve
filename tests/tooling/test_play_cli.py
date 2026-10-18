@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 from resolve.agents.scripted import ScriptedAgent, choose
-from resolve.decisions.spaces import PlayLandOption
+from resolve.decisions.spaces import CastSpellOption
 from resolve.state.ids import PlayerId
 from resolve.state.turn import Phase
 from tests import scryfall_fixtures as fx
@@ -35,16 +35,16 @@ def test_a_game_of_random_agents_with_empty_decks_ends_in_a_draw() -> None:
 
 
 def test_a_game_that_reaches_a_gap_exits_with_3() -> None:
-    """Choosing an action the engine can't take yet stops the game (305.1 until M1.3)."""
+    """Choosing an action the engine can't take yet stops the game (601.2 until M2)."""
     scenario = Scenario(2)
-    (forest,) = scenario.hand(PlayerId(0), ["Forest"])
+    (elves,) = scenario.hand(PlayerId(0), ["Llanowar Elves"])
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
     output = io.StringIO()
-    agent = ScriptedAgent([choose(PlayLandOption(forest))])
+    agent = ScriptedAgent([choose(CastSpellOption(elves))])
     status = play_game(state, [agent, agent], output, viewer=PlayerId(0))
     assert status == EXIT_GAP
-    assert "Stopped: the engine doesn't implement 305.1: playing a land" in output.getvalue()
+    assert "Stopped: the engine doesn't implement 601.2: casting a spell" in output.getvalue()
     assert "Turn 1, player 0's turn: precombat main phase; player 0 has priority." in (
         output.getvalue()
     )
@@ -117,12 +117,26 @@ def test_bad_arguments_exit_with_2(args: list[str]) -> None:
 def test_decks_with_unimplemented_cards_are_refused(tmp_path: Path) -> None:
     """Decks with unimplemented cards are refused, never approximated (design.md §11)."""
     data = tmp_path / "data"
+    fx.write_snapshot(data, cards=[fx.FOREST, fx.LLANOWAR_ELVES])
+    deck = tmp_path / "deck.txt"
+    deck.write_text("Mainboard\n10 Forest\n1 Llanowar Elves\n", encoding="utf-8")
+    status, text = run_cli(["--deck", str(deck), "--deck", str(deck), "--data-dir", str(data)])
+    assert status == EXIT_CANT_START
+    assert "'Llanowar Elves' is not implemented" in text
+
+
+def test_random_agents_play_a_basic_land_game_to_its_end(tmp_path: Path) -> None:
+    """Forest decks from the snapshot: random agents play lands and tap them (305, 605) until
+    a player draws from an empty library and loses (704.5b)."""
+    data = tmp_path / "data"
     fx.write_snapshot(data, cards=[fx.FOREST])
     deck = tmp_path / "deck.txt"
     deck.write_text("Mainboard\n10 Forest\n", encoding="utf-8")
-    status, text = run_cli(["--deck", str(deck), "--deck", str(deck), "--data-dir", str(data)])
-    assert status == EXIT_CANT_START
-    assert "'Forest' is not implemented" in text
+    args = ["--deck", str(deck), "--deck", str(deck), "--data-dir", str(data)]
+    status, text = run_cli([*args, "--random", "0", "1", "--seed", "3"])
+    assert status == EXIT_OVER
+    assert "Game over: won by player" in text
+    assert "LandPlayed(" in text or "Forest #" in text
 
 
 def test_missing_card_data_is_reported(tmp_path: Path) -> None:

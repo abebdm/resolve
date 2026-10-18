@@ -12,7 +12,8 @@ Expected behavior, from the pinned CR:
   from the command zone. 305.1, 305.2, 305.3, 116.2a: a land may be played in its player's own
   main phase with an empty stack, once per turn; 305.9: a land is never cast.
 - Actions the engine can't take yet are offered and raise ``NotImplementedRule`` when chosen:
-  casting (601.2) and playing a land (305.1, until M1.3). docs/decisions.md.
+  casting (601.2, until M2). docs/decisions.md. Playing lands and mana abilities are tested in
+  test_305_lands.py and test_605_mana_abilities.py.
 """
 
 from __future__ import annotations
@@ -214,26 +215,6 @@ def test_601_2_choosing_to_cast_a_spell_is_a_gap() -> None:
     with pytest.raises(NotImplementedRule) as gap:
         run_script(state, choose(CastSpellOption(elves), player=P0))
     assert gap.value.rule == "601.2"
-
-
-def test_305_1_choosing_to_play_a_land_is_a_gap_until_m1_3() -> None:
-    scenario = Scenario(2)
-    (forest,) = scenario.hand(P0, ["Forest"])
-    scenario.at(Phase.PRECOMBAT_MAIN)
-    state = scenario.build()
-    with pytest.raises(NotImplementedRule) as gap:
-        run_script(state, choose(PlayLandOption(forest), player=P0))
-    assert gap.value.rule == "305.1"
-
-
-def test_305_6_a_land_with_a_basic_land_type_on_the_battlefield_is_a_gap_until_m1_3() -> None:
-    """Its intrinsic mana ability would be a legal action (117.1d), so it can't be left out."""
-    scenario = Scenario(2)
-    scenario.battlefield(P0, ["Forest"])
-    scenario.at(Step.UPKEEP)
-    with pytest.raises(NotImplementedRule) as gap:
-        scenario.build()
-    assert gap.value.rule == "305.6"
 
 
 def test_109_3_a_split_card_in_hand_is_a_gap() -> None:

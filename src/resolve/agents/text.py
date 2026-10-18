@@ -26,6 +26,7 @@ from typing import TextIO
 
 from resolve.decisions.request import DecisionAnswer, DecisionRequest
 from resolve.decisions.spaces import (
+    ActivateAbilityOption,
     Amounts,
     AnswerSpace,
     AnswerValue,
@@ -49,6 +50,7 @@ from resolve.decisions.spaces import (
 from resolve.engine.view import ObjectView, PlayerView
 from resolve.events.base import AnswerRecord, LogEntry
 from resolve.state.ids import ObjectId
+from resolve.state.mana import describe_mana
 
 # How many of the newest log entries ``render_view`` shows.
 RECENT_LOG = 8
@@ -73,8 +75,9 @@ def _objects(view: PlayerView) -> dict[ObjectId, ObjectView]:
 
 
 def describe_object(obj: ObjectView) -> str:
-    """``"Llanowar Elves #12"``, or ``"hidden card #12"`` when its identity is hidden."""
-    return f"{obj.name or 'hidden card'} #{obj.id}"
+    """``"Llanowar Elves #12"``, ``"Forest #3 (tapped)"``, or ``"hidden card #12"`` when its
+    identity is hidden."""
+    return f"{obj.name or 'hidden card'} #{obj.id}" + (" (tapped)" if obj.tapped else "")
 
 
 def describe_option(option: Option, view: PlayerView) -> str:
@@ -92,6 +95,8 @@ def describe_option(option: Option, view: PlayerView) -> str:
             return f"play {_named(view, obj)}"
         case CastSpellOption(object=obj):
             return f"cast {_named(view, obj)}"
+        case ActivateAbilityOption(object=obj, ability=index):
+            return f"activate ability {index} of {_named(view, obj)}"
 
 
 def _named(view: PlayerView, obj: ObjectId) -> str:
@@ -140,9 +145,10 @@ def render_view(view: PlayerView, *, recent_log: int = RECENT_LOG) -> str:
             marks.append(" (starting player)")
         if summary.lost:
             marks.append(" (lost)")
+        pool = f", mana {describe_mana(summary.mana_pool)}" if summary.mana_pool else ""
         lines.append(
             f"Player {summary.id}{''.join(marks)}: life {summary.life}, "
-            f"library {summary.library_size}"
+            f"library {summary.library_size}{pool}"
         )
         lines.append(_zone_line("hand", summary.hand))
         lines.append(_zone_line("graveyard (top last)", summary.graveyard))

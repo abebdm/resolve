@@ -55,6 +55,44 @@ FOREST: dict[str, Any] = {
     "keywords": [],
 }
 
+
+def basic_land(name: str, color: str) -> dict[str, Any]:
+    """A basic land's record, like ``FOREST`` (Scryfall gives the reminder text as Oracle text)."""
+    return {
+        "object": "card",
+        "oracle_id": f"oid-{name.lower()}",
+        "name": name,
+        "layout": "normal",
+        "mana_cost": "",
+        "cmc": 0.0,
+        "type_line": f"Basic Land — {name}",
+        "oracle_text": f"({{T}}: Add {{{color}}}.)",
+        "colors": [],
+        "color_identity": [color],
+        "keywords": [],
+    }
+
+
+PLAINS = basic_land("Plains", "W")
+ISLAND = basic_land("Island", "U")
+SWAMP = basic_land("Swamp", "B")
+MOUNTAIN = basic_land("Mountain", "R")
+
+# An invented nonbasic land with a basic land type and no text (305.6, 305.8).
+NONBASIC_FOREST: dict[str, Any] = {
+    "object": "card",
+    "oracle_id": "oid-test-nonbasic-forest",
+    "name": "Test Nonbasic Forest",
+    "layout": "normal",
+    "mana_cost": "",
+    "cmc": 0.0,
+    "type_line": "Land — Forest",
+    "oracle_text": "",
+    "colors": [],
+    "color_identity": ["G"],
+    "keywords": [],
+}
+
 # A transforming double-faced card: colors live on the faces, not on the card.
 TRANSFORM_CARD: dict[str, Any] = {
     "object": "card",

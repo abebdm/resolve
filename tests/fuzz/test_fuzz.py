@@ -46,6 +46,7 @@ from resolve.events.base import AnswerRecord
 from resolve.state.config import GameConfig
 from resolve.state.game import GameObject, GameState
 from resolve.state.ids import PlayerId
+from resolve.state.mana import ManaType
 from resolve.state.turn import Step as TurnStep
 from resolve.state.zones import Zone
 from resolve.tasks import Task
@@ -125,7 +126,7 @@ def test_patient_random_agents_play_many_turns_with_every_check_passing(
         describe=f"patient game seed {seed}, {players} players",
         # The copy and invalid-answer checks are slow in long games; one game of each size has them.
         check_copies=seed == 0,
-        probe_invalid=seed == 1,
+        probe_invalid=seed == 1 and players == 2,
     )
     state = result.state
     if result.gap is None:
@@ -133,6 +134,17 @@ def test_patient_random_agents_play_many_turns_with_every_check_passing(
     else:
         assert result.gap.split(": ")[0] in fuzz_tool.ALLOWED_GAPS
     assert state.turn is not None
+
+
+@pytest.mark.parametrize("seed", range(3))
+def test_random_agents_finish_two_player_land_only_games(seed: int) -> None:
+    """M1.3: with only lands, random agents play every game to its end (704.5b decking)."""
+    decks = [deck(forests=9, elves=0), deck(forests=10, elves=0)]
+    result = fuzz_game(GameConfig.standard(), decks, seed, check_copies=seed == 0)
+    assert result.gap is None
+    state = result.state
+    assert state.result is not None and len(state.result.winners) <= 1
+    assert state.battlefield, "lands were played"
 
 
 def test_patient_games_include_decking_and_discards() -> None:
@@ -213,7 +225,7 @@ def test_a_disallowed_gap_is_a_failure() -> None:
     with pytest.raises(FuzzFailure, match=r"gap that isn't allowed: 601\.2: a test gap"):
         fuzz(GapOnAnswer("601.2"), allowed_gaps=())
     config = GameConfig.standard()
-    with pytest.raises(FuzzFailure, match=r"isn't allowed: 305\.1"):
+    with pytest.raises(FuzzFailure, match=r"isn't allowed: 601\.2"):
         fuzz_game(config, [deck(10, 2), deck(10, 2)], 2, allowed_gaps=())
 
 
@@ -620,16 +632,33 @@ def test_the_command_line_plays_the_chosen_formats(args: list[str], formats: str
 
 
 def test_the_command_line_refuses_unimplemented_decks(tmp_path: Path) -> None:
-    """Decks are refused, never approximated (design.md §11); no card is implemented yet."""
+    """Decks are refused, never approximated (design.md §11)."""
     data = tmp_path / "data"
-    fx.write_snapshot(data, cards=[fx.FOREST])
+    fx.write_snapshot(data, cards=[fx.FOREST, fx.LLANOWAR_ELVES])
     deck_file = tmp_path / "deck.txt"
-    deck_file.write_text("Mainboard\n10 Forest\n", encoding="utf-8")
+    deck_file.write_text("Mainboard\n10 Forest\n1 Llanowar Elves\n", encoding="utf-8")
     output = io.StringIO()
     with redirect_stdout(output):
         status = fuzz_tool.main(["--deck", str(deck_file), "--data-dir", str(data)])
     assert status == 1
-    assert "'Forest' is not implemented" in output.getvalue()
+    assert "'Llanowar Elves' is not implemented" in output.getvalue()
+
+
+def test_the_command_line_plays_decks_from_the_snapshot(tmp_path: Path) -> None:
+    """Two-player Forest decks: random agents play lands and tap them until a player draws from
+    an empty library (704.5b), so every game ends."""
+    data = tmp_path / "data"
+    fx.write_snapshot(data, cards=[fx.FOREST])
+    deck_file = tmp_path / "deck.txt"
+    deck_file.write_text("Mainboard\n9 Forest\n", encoding="utf-8")
+    output = io.StringIO()
+    with redirect_stdout(output):
+        status = fuzz_tool.main(
+            ["--games", "3", "--players", "2", "--format", "standard", "--deck", str(deck_file),
+             "--data-dir", str(data)]
+        )  # fmt: skip
+    assert status == 0
+    assert "Endings: game over x3" in output.getvalue()
 
 
 def test_the_reproduce_command_names_the_failing_game() -> None:
@@ -682,4 +711,26 @@ def test_state_problems_finds_a_view_misreporting_a_loss(monkeypatch: pytest.Mon
     leaking(monkeypatch, everyone_lost)
     problems = state_problems(state)
     assert "player 0's view misreports whether player 1 lost" in problems
+    assert len(problems) == 4
+
+
+def test_state_problems_finds_a_view_misreporting_tapped_permanents_and_mana(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scenario = Scenario(2)
+    (forest,) = scenario.battlefield(PlayerId(0), ["Forest"])
+    scenario.tap(forest).mana(PlayerId(1), ManaType.GREEN)
+    scenario.at(TurnStep.UPKEEP)
+    state = scenario.build()
+    assert state_problems(state) == []
+
+    def untapped_and_empty(view: PlayerView) -> PlayerView:
+        field = tuple(dataclasses.replace(obj, tapped=False) for obj in view.battlefield)
+        players = tuple(dataclasses.replace(p, mana_pool=()) for p in view.players)
+        return dataclasses.replace(view, battlefield=field, players=players)
+
+    leaking(monkeypatch, untapped_and_empty)
+    problems = state_problems(state)
+    assert f"player 0's view misreports whether object {forest} is tapped" in problems
+    assert "player 1's view misreports player 1's mana pool" in problems
     assert len(problems) == 4

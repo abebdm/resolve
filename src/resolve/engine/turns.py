@@ -6,7 +6,8 @@ player's turn in turn order (103.1). Each segment is a ``RunStep``:
 1. the step (or main phase) begins: ``StepBegan`` (500.4 and 500.6 happen here);
 2. its turn-based actions (703);
 3. a round of priority, in every step but untap and cleanup (117.3a, 502.4, 514.3);
-4. it ends (500.5: effects lasting until its end expire, and unspent mana empties, from M1.3).
+4. it ends: effects lasting until its end would expire (none exist yet), then unspent mana
+   empties from every pool (500.5, 703.4q).
 
 Skipped steps (500.11) don't begin at all:
 
@@ -19,7 +20,7 @@ Skipped steps (500.11) don't begin at all:
 The turn-based actions implemented:
 
 - untap step: 502.1 (phasing) and 502.2 (day and night) can't apply, since nothing has phasing
-  and it is never day or night; 502.3 untaps nothing until permanents can be tapped (M1.3).
+  and it is never day or night; 502.3: the active player untaps all their permanents at once.
 - draw step: the active player draws a card (504.1).
 - beginning of combat: 507.1 has no choice to make. In a two-player game the nonactive player
   is the defending player (506.2); every multiplayer game uses the attack multiple players
@@ -52,11 +53,13 @@ from resolve.decisions.spaces import (
 )
 from resolve.effects.characteristics import characteristics
 from resolve.engine.drawing import DrawCards
+from resolve.engine.mana import EmptyManaPools
 from resolve.engine.mulligans import is_multiplayer
 from resolve.engine.priority import PriorityRound, current_turn
 from resolve.engine.sba import state_based_actions
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.cards import CardDiscarded
+from resolve.events.permanents import PermanentsUntapped
 from resolve.events.pipeline import ApplyEvents
 from resolve.events.turn import StepBegan, TurnBegan
 from resolve.state.game import next_in_turn_order
@@ -158,15 +161,28 @@ class RunStep(Task):
                     return Push((PriorityRound(), self))
                 return self.run(state)
             case StepStage.END:
-                # 500.5: no effect lasts until the end of a step yet, and mana pools arrive
-                # in M1.3.
+                # 500.5: effects lasting until the end of the step would expire (none exist
+                # yet); then unspent mana empties.
+                tasks: list[Task] = [EmptyManaPools()]
                 if self.priority_given:
                     # 514.3a: once the stack is empty and all pass, another cleanup step begins.
-                    return Push((RunStep(self.phase, Step.CLEANUP),))
-                return Done()
+                    tasks.append(RunStep(self.phase, Step.CLEANUP))
+                return Push(tuple(tasks))
 
     def _turn_based_actions(self, state: GameState, active: PlayerId) -> tuple[Task, ...]:
         match self.step:
+            case Step.UNTAP:
+                # 502.3: the active player untaps all their permanents at once (no effect can
+                # keep one from untapping yet).
+                tapped = tuple(
+                    obj
+                    for obj in state.battlefield
+                    if state.objects[obj].controller == active and state.objects[obj].tapped
+                )
+                if not tapped:
+                    return ()
+                untap = PermanentsUntapped(objs=tapped, rules=("502.3", "701.26b"))
+                return (ApplyEvents((untap,)),)
             case Step.DRAW:
                 return (DrawCards(active, 1, ("504.1",)),)
             case Step.DECLARE_ATTACKERS:

@@ -14,9 +14,9 @@ Each game is played by ``RandomAgent``s. Before every answer the harness checks:
 - the state's bookkeeping invariants and that it is pure data (``resolve.state.invariants``);
 - every player's view, against an oracle written out from the rules rather than the engine's
   own helpers: deeply immutable; the request only for the deciding player; the turn (number,
-  active player, phase, step and priority holder, all public); every player's life, whether they
-  lost, library count (401.2), hand and graveyard objects in order (402.3, 404.2) and the shared
-  zones;
+  active player, phase, step and priority holder, all public); every player's life, whether
+  they lost, their mana pool, library count (401.2), hand and graveyard objects in order
+  (402.3, 404.2) and the shared zones, with each permanent's tapped status;
   card names exactly where the viewer may know them (400.2, 402.3); and only the log entries the
   viewer may see, with answers visible only to their player (design.md §7), and the redacted
   form of the others, which never shows another player's library objects (design.md §9);
@@ -84,10 +84,10 @@ from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.invariants import invariant_violations, mutable_parts, state_impurities
 from resolve.state.zones import ZoneKind
 
-# Gaps that end a fuzz game normally: actions a random agent may choose that the engine can't take
-# yet (playing a land until M1.3, casting a spell until M2), and a game that would continue after
-# a player loses (until M1.5).
-ALLOWED_GAPS: tuple[str, ...] = ("305.1", "601.2", "800.4a")
+# Gaps that end a fuzz game normally: casting a spell, which a random agent may choose but the
+# engine can't do yet (until M2), and a game that would continue after a player loses (until
+# M1.5).
+ALLOWED_GAPS: tuple[str, ...] = ("601.2", "800.4a")
 # A game that hasn't ended after this many answers is reported as a failure (a runaway game).
 MAX_ANSWERS = 10_000
 
@@ -178,6 +178,8 @@ def view_problems(state: GameState, viewer: PlayerId) -> list[str]:
         for obj in shown:
             if obj.name != _expected_name(state, obj.id, viewer):
                 problems.append(f"{where} of object {obj.id} is wrong")
+            if obj.tapped != state.objects[obj.id].tapped:  # 110.5: status is public
+                problems.append(f"{where} misreports whether object {obj.id} is tapped")
 
     if [summary.id for summary in view.players] != [player.id for player in state.players]:
         problems.append(f"{where} lists the wrong players")
@@ -186,6 +188,8 @@ def view_problems(state: GameState, viewer: PlayerId) -> list[str]:
             problems.append(f"{where} shows player {player.id} at the wrong life total")
         if summary.lost != player.lost:
             problems.append(f"{where} misreports whether player {player.id} lost")
+        if summary.mana_pool != tuple(player.mana_pool):
+            problems.append(f"{where} misreports player {player.id}'s mana pool")
         if summary.library_size != len(player.library):  # 401.2: only a count
             problems.append(f"{where} miscounts player {player.id}'s library")
         compare(summary.hand, player.hand, f"player {player.id}'s hand")

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from resolve.cards.primitives.abilities import intrinsic_mana_ability
 from resolve.data.types import CardType, Supertype
 from resolve.effects.characteristics import Characteristics, characteristics
 from resolve.errors import EngineError, NotImplementedRule
@@ -102,8 +103,13 @@ def test_109_3_characteristics_of_a_single_faced_card_are_its_printed_ones() -> 
     scenario = Scenario(2)
     forest, elves = scenario.hand(P0, ["Forest", "Llanowar Elves"])
     state = scenario.build()
+    # 305.6: the Forest type gives it "{T}: Add {G}." (its printed text is reminder text).
     assert characteristics(state, forest) == Characteristics(
-        "Forest", (Supertype.BASIC,), (CardType.LAND,), ("Forest",)
+        "Forest",
+        (Supertype.BASIC,),
+        (CardType.LAND,),
+        ("Forest",),
+        (intrinsic_mana_ability("Forest"),),
     )
     elves_chars = characteristics(state, elves)
     assert elves_chars.is_a(CardType.CREATURE) and not elves_chars.is_a(CardType.LAND)

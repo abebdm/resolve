@@ -21,6 +21,7 @@ from resolve.agents.text import (
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionRequest
 from resolve.decisions.spaces import (
+    ActivateAbilityOption,
     Amounts,
     AnswerSpace,
     AnswerValue,
@@ -43,6 +44,7 @@ from resolve.engine.api import view_for
 from resolve.engine.view import PlayerView
 from resolve.state.config import GameConfig
 from resolve.state.ids import ObjectId, PlayerId
+from resolve.state.mana import ManaType
 from resolve.state.turn import Phase
 from resolve.state.turn import Step as TurnStep
 from resolve.state.zones import Zone
@@ -267,3 +269,16 @@ def test_render_view_shows_the_turn_and_who_lost() -> None:
     text = render_view(view_for(scenario.build(), P0))
     assert "Player 1 (lost): life 0" in text
     assert "Turn 1, player 0's turn: upkeep step; nobody has priority." in text
+
+
+def test_render_view_shows_tapped_permanents_mana_and_abilities() -> None:
+    scenario = Scenario(2)
+    (forest,) = scenario.battlefield(P0, ["Forest"])
+    scenario.tap(forest).mana(P0, ManaType.GREEN, ManaType.GREEN)
+    view = view_for(scenario.build(), P1)
+    text = render_view(view)
+    assert f"Forest #{forest} (tapped)" in text
+    assert "library 0, mana {G}{G}" in text
+    assert describe_option(ActivateAbilityOption(forest, 0), view) == (
+        f"activate ability 0 of Forest #{forest} (tapped)"
+    )

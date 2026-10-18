@@ -16,6 +16,7 @@ What a scenario can set:
 - cards in any zone: libraries, hands and graveyards (added on top, listed top first), the
   battlefield and the stack (with a controller), exile and the command zone;
 - which players know a hidden card (``known_to``, 400.2);
+- which permanents are tapped (``tap``, 110.5) and the mana in each pool (``mana``, 106.4);
 - each player's commanders (903.3), in any zone;
 - the starting player (103.1), which fixes turn order; ``None`` means not chosen yet;
 - with ``at(...)``, the turn in progress: its number, the active player, the phase and step, who
@@ -51,6 +52,7 @@ from resolve.state.config import GameConfig
 from resolve.state.game import Card, GameState, create_object, zone_list
 from resolve.state.ids import CardId, ObjectId, PlayerId
 from resolve.state.invariants import check_invariants, check_pure_data
+from resolve.state.mana import Mana, ManaType
 from resolve.state.turn import TURN_SEQUENCE, Phase, Step, TurnState, gives_priority, segment_of
 from resolve.state.zones import BATTLEFIELD, COMMAND, EXILE, STACK, Zone, ZoneKind
 from resolve.tasks import Task
@@ -180,6 +182,21 @@ class Scenario:
         assert card is not None
         state.player(player).commanders += (card,)
         return obj
+
+    def tap(self, *objs: ObjectId) -> Scenario:
+        """Tap these permanents (110.5); only permanents have status (110.5d)."""
+        state = self._open()
+        for obj in objs:
+            if state.object(obj).zone.kind is not ZoneKind.BATTLEFIELD:
+                raise ScenarioError(f"object {obj} isn't a permanent, so it can't be tapped")
+        for obj in objs:
+            state.objects[obj].tapped = True
+        return self
+
+    def mana(self, player: PlayerId, *mana: ManaType) -> Scenario:
+        """Add unspent mana of these types to ``player``'s mana pool (106.4), with no source."""
+        self._open().player(player).mana_pool.extend(Mana(mana_type) for mana_type in mana)
+        return self
 
     def card_of(self, obj: ObjectId) -> CardId:
         """The physical card an object of this scenario represents."""

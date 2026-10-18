@@ -156,6 +156,12 @@ def invariant_violations(state: GameState) -> list[str]:
                 problems.append(f"{where}: owner {obj.owner} differs from its card's owner")
         if list(obj.known_to) != sorted(dict.fromkeys(obj.known_to)):
             problems.append(f"{where}: known_to isn't sorted and unique")
+        if obj.tapped and obj.zone.kind is not ZoneKind.BATTLEFIELD:
+            problems.append(f"{where} is tapped in the {obj.zone}: only permanents (110.5d)")
+    for player in state.players:
+        for unit in player.mana_pool:
+            if unit.source is not None and not 1 <= unit.source < state.next_object_id:
+                problems.append(f"player {player.id}'s mana has an unknown source {unit.source}")
 
     for card_id, card in state.cards.items():
         if card.id != card_id:
