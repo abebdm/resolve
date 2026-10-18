@@ -1,0 +1,216 @@
+"""The game state: players, cards, objects and zones (design.md §4).
+
+``GameState`` is mutable pure data: tasks change it in place, and AI search clones it with
+``copy.deepcopy``. It holds no functions, generators, sets or open files, so a deep copy or a
+pickle round-trip at any moment gives an equal, independent state
+(``resolve.state.invariants.check_pure_data`` checks this).
+
+Values that never change (``Card``, ``CardData``, ``CardDefinition``, ``Zone``, events, requests)
+are ``Immutable``, so copies of a state share them.
+
+Objects are referred to by ``ObjectId`` everywhere outside ``GameState.objects``, never by
+reference: an object that changes zones becomes a new object (400.7).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+from resolve.cards.registry import CardDefinition
+from resolve.data.cards import CardData
+from resolve.errors import EngineError
+from resolve.state.config import GameConfig
+from resolve.state.ids import CardId, ObjectId, PlayerId
+from resolve.state.rng import Rng
+from resolve.state.zones import Zone, ZoneKind
+from resolve.values import Immutable
+
+if TYPE_CHECKING:
+    from resolve.decisions.request import DecisionRequest
+    from resolve.events.base import LogEntry
+    from resolve.tasks import Task
+
+
+@dataclass(frozen=True)
+class Card(Immutable):
+    """One physical card in the game.
+
+    ``owner`` is the player who started the game with it in their deck (108.3). ``data`` is its
+    printed Oracle data and ``definitions`` its behavior, one definition per face in face order.
+    The card's game objects refer to it by ``CardId``.
+    """
+
+    id: CardId
+    owner: PlayerId
+    data: CardData
+    definitions: tuple[CardDefinition, ...]
+
+
+@dataclass(slots=True)
+class GameObject:
+    """An object (109.1) in some zone.
+
+    - ``card``: the physical card it represents, or ``None`` for tokens, copies and abilities
+      (none exist yet).
+    - ``owner``: 108.3. ``controller``: set only on the battlefield and the stack (108.4, 109.4).
+    - ``timestamp``: received when it entered its zone (613.7d).
+    - ``known_to``: players who know its identity although the zone doesn't show it to them
+      (400.2), sorted. The owner of a hand always knows its contents (402.3) without being
+      listed here.
+    """
+
+    id: ObjectId
+    card: CardId | None
+    owner: PlayerId
+    controller: PlayerId | None
+    zone: Zone
+    timestamp: int
+    known_to: tuple[PlayerId, ...] = ()
+
+
+@dataclass(slots=True)
+class Player:
+    """A player (102.1) and their own zones (400.1). The last element of a pile is its top."""
+
+    id: PlayerId
+    life: int
+    library: list[ObjectId] = field(default_factory=list[ObjectId])
+    hand: list[ObjectId] = field(default_factory=list[ObjectId])
+    graveyard: list[ObjectId] = field(default_factory=list[ObjectId])
+
+
+@dataclass(frozen=True)
+class GameResult(Immutable):
+    """How the game ended (104.1). No winners means a draw (104.4a)."""
+
+    winners: tuple[PlayerId, ...]
+
+    @property
+    def is_draw(self) -> bool:
+        """Whether the game was a draw (104.4a)."""
+        return not self.winners
+
+
+@dataclass(slots=True)
+class GameState:
+    """Everything about one game in progress (design.md §4).
+
+    - ``players``: in seating (clockwise) order, with ``players[i].id == i``. Turn order starts
+      with ``starting_player`` and proceeds clockwise (103.1).
+    - ``cards`` and ``objects``: every physical card in the game, and every object in any zone.
+    - ``battlefield``, ``stack``, ``exile``, ``command``: the shared zones. The stack's top is
+      its last element (405.2).
+    - ``tasks``: the task stack; the last element runs next (design.md §5).
+    - ``pending``: the decision the engine is waiting for, if any. ``result``: set when the game
+      is over.
+    - ``event_log``: everything that happened, with CR citations.
+    """
+
+    config: GameConfig
+    seed: int
+    rng: Rng
+    players: list[Player]
+    cards: dict[CardId, Card] = field(default_factory=dict[CardId, Card])
+    objects: dict[ObjectId, GameObject] = field(default_factory=dict[ObjectId, GameObject])
+    battlefield: list[ObjectId] = field(default_factory=list[ObjectId])
+    stack: list[ObjectId] = field(default_factory=list[ObjectId])
+    exile: list[ObjectId] = field(default_factory=list[ObjectId])
+    command: list[ObjectId] = field(default_factory=list[ObjectId])
+    starting_player: PlayerId | None = None
+    tasks: list[Task] = field(default_factory=list["Task"])
+    pending: DecisionRequest | None = None
+    result: GameResult | None = None
+    event_log: list[LogEntry] = field(default_factory=list["LogEntry"])
+    next_object_id: int = 1
+    next_timestamp: int = 1
+    next_request_id: int = 1
+
+    def player(self, player: PlayerId) -> Player:
+        """The player with this ID; ``EngineError`` if there is none."""
+        if not 0 <= player < len(self.players):
+            raise EngineError(f"no player {player!r} in a {len(self.players)}-player game")
+        return self.players[player]
+
+    def object(self, obj: ObjectId) -> GameObject:
+        """The object with this ID; ``EngineError`` if it doesn't exist (any more)."""
+        try:
+            return self.objects[obj]
+        except KeyError:
+            raise EngineError(f"no object {obj!r}") from None
+
+    def card_of(self, obj: GameObject) -> Card:
+        """The physical card an object represents; ``EngineError`` for tokens and abilities."""
+        if obj.card is None:
+            raise EngineError(f"object {obj.id} isn't represented by a card")
+        return self.cards[obj.card]
+
+
+def zone_list(state: GameState, zone: Zone) -> list[ObjectId]:
+    """The list holding the contents of ``zone`` (mutable: callers may change it)."""
+    match zone.kind:
+        case ZoneKind.LIBRARY | ZoneKind.HAND | ZoneKind.GRAVEYARD:
+            assert zone.owner is not None
+            player = state.player(zone.owner)
+            if zone.kind is ZoneKind.LIBRARY:
+                return player.library
+            return player.hand if zone.kind is ZoneKind.HAND else player.graveyard
+        case ZoneKind.BATTLEFIELD:
+            return state.battlefield
+        case ZoneKind.STACK:
+            return state.stack
+        case ZoneKind.EXILE:
+            return state.exile
+        case ZoneKind.COMMAND:
+            return state.command
+
+
+def turn_order(state: GameState) -> tuple[PlayerId, ...]:
+    """All players in turn order, starting with the starting player (103.1).
+
+    Turn order proceeds clockwise, which is seating order. Players who left the game (800.4)
+    can't exist yet, so every player is included.
+    """
+    if state.starting_player is None:
+        raise EngineError("turn order isn't defined before the starting player is chosen (103.1)")
+    first = state.starting_player
+    count = len(state.players)
+    return tuple(PlayerId((first + offset) % count) for offset in range(count))
+
+
+def new_timestamp(state: GameState) -> int:
+    """Allocate the next timestamp (613.7)."""
+    timestamp = state.next_timestamp
+    state.next_timestamp += 1
+    return timestamp
+
+
+def create_object(
+    state: GameState,
+    *,
+    card: CardId | None,
+    owner: PlayerId,
+    zone: Zone,
+    controller: PlayerId | None = None,
+) -> GameObject:
+    """Create a new object on top of ``zone``, with a new ID and timestamp (400.7, 613.7d)."""
+    if zone.kind.is_per_player and zone.owner != owner:
+        # 400.3: an object goes to its owner's library, hand or graveyard.
+        raise EngineError(f"an object owned by player {owner} can't be put into the {zone}")
+    has_controller = zone.kind in (ZoneKind.BATTLEFIELD, ZoneKind.STACK)
+    if has_controller != (controller is not None):
+        raise EngineError(
+            f"objects in the {zone} {'need' if has_controller else 'have no'} controller"
+        )
+    obj = GameObject(
+        id=ObjectId(state.next_object_id),
+        card=card,
+        owner=owner,
+        controller=controller,
+        zone=zone,
+        timestamp=new_timestamp(state),
+    )
+    state.next_object_id += 1
+    state.objects[obj.id] = obj
+    zone_list(state, zone).append(obj.id)
+    return obj
