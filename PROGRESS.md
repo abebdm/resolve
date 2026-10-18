@@ -61,6 +61,10 @@ Follow CLAUDE.md fully; run the test-reviewer before the PR. Branch:
   monkeypatching validate_answer. Controller test: match messages. check_answer test: scripted
   agent (fuzz_run takes any Agent). play_cli --agent-seed boundary off by one.
 
+## Review round 1 status
+
+- All findings addressed (see plan above); docs updated. Next: re-run the reviewer, then PR.
+
 ## Decisions not yet in the docs
 
 - (all recorded in docs/decisions.md)
