@@ -42,7 +42,12 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   passes still count. If every player still in the game has passed in succession, that is all
   players passing (117.4): the step ends (or the stack resolves). Otherwise the next player in
   turn order receives priority. The fuzz harness found the first case (four players: three had
-  passed when the holder conceded).
+  passed when the holder conceded). **Why:** 800.4a's last sentence alone ("priority passes to
+  the next player in turn order") could be read as giving that player priority again even
+  though they passed; but 117.4 ends the step once all players have passed in succession,
+  just as it overrides 117.3d after an ordinary pass, and 800.4j says the same for a
+  departed active player ("or the phase or step ends, whichever is appropriate"). The CR
+  doesn't settle it explicitly; the test-reviewer flagged it for the user's confirmation.
 - **Decision (★3):** a replay is the config, decks, seed and the ordered inputs: answers and
   concessions (`resolve.agents.replay`). The fuzz harness concedes for a random player now and
   then (`--concessions N`, default 1 in 200 decisions), in the state and its copies alike, and
