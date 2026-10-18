@@ -14,8 +14,9 @@ from collections.abc import Callable
 import pytest
 
 from resolve.decisions.spaces import Number
-from resolve.engine.api import submit
+from resolve.engine.api import new_game, submit
 from resolve.errors import EngineError
+from resolve.state.config import GameConfig
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.invariants import (
@@ -34,7 +35,7 @@ from tests.engine_support import (
     holds_object,
     running,
 )
-from tests.game_fixtures import answer, choose_starting_player, start
+from tests.game_fixtures import DAYBREAKER, answer, choose_starting_player, deck, start
 
 
 def paused_states() -> dict[str, GameState]:
@@ -43,10 +44,16 @@ def paused_states() -> dict[str, GameState]:
     submit(mid_task, answer(mid_task, Number(2)))  # AskTwice has received one of two answers
     after_gap = start(3, seed=4)
     choose_starting_player(after_gap, 2)
+    commander_decks = [deck(3, 2, commanders=[DAYBREAKER]) for _ in range(4)]
+    commander_new = new_game(GameConfig.commander_game(), commander_decks, seed=8)
+    commander_after = new_game(GameConfig.commander_game(), commander_decks, seed=8)
+    choose_starting_player(commander_after, 3)
     return {
         "new game": start(3, seed=4),
         "middle of a multi-step task": mid_task,
         "stopped at the 103.5 gap": after_gap,
+        "new Commander game": commander_new,
+        "Commander game after 103.2c, stopped at the 103.5 gap": commander_after,
     }
 
 

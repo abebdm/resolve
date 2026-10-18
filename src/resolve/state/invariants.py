@@ -10,7 +10,7 @@ Tests call these now; the fuzz harness will call them after every decision.
   and events must store IDs, not references.
 - ``mutable_parts``: anything inside a value that would break ``Immutable``'s promise. Deeply
   immutable means scalars, enums, tuples and frozen ``Immutable`` dataclasses only.
-- ``invariant_violations``: zone bookkeeping and counters (400.1, 400.3, 108.4, 109.4, 613.7d).
+- ``invariant_violations``: zone bookkeeping and counters (400.1, 400.3, 109.4, 613.7d).
 
 Each returns a list of problems, each naming where it is (``state.tasks[0].events``); empty means
 fine. The ``check_*`` functions raise ``EngineError`` listing them.

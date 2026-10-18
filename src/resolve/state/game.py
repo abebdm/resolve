@@ -189,16 +189,19 @@ def new_timestamp(state: GameState) -> int:
     return timestamp
 
 
-def _check_destination(owner: PlayerId, zone: Zone, controller: PlayerId | None) -> None:
+def _destination(owner: PlayerId, zone: Zone, controller: PlayerId | None) -> Zone:
+    """The zone an object actually goes to, after checking the move is possible."""
     if zone.kind.is_per_player and zone.owner != owner:
-        # 400.3: an object goes to its owner's library, hand or graveyard.
-        raise EngineError(f"an object owned by player {owner} can't be put into the {zone}")
+        # 400.3: an object that would go to another player's library, hand or graveyard goes to
+        # its owner's instead.
+        zone = Zone(zone.kind, owner)
     if zone.kind is ZoneKind.COMMAND and controller is not None:
         raise NotImplementedRule("109.4c: objects with a controller in the command zone (emblems)")
     has_controller = zone.kind in (ZoneKind.BATTLEFIELD, ZoneKind.STACK)
     if has_controller != (controller is not None):
         needs = "need" if has_controller else "have no"
         raise EngineError(f"objects in the {zone} {needs} controller")
+    return zone
 
 
 def create_object(
@@ -209,8 +212,11 @@ def create_object(
     zone: Zone,
     controller: PlayerId | None = None,
 ) -> GameObject:
-    """Create a new object on top of ``zone``, with a new ID and timestamp (400.7, 613.7d)."""
-    _check_destination(owner, zone, controller)
+    """Create a new object on top of ``zone``, with a new ID and timestamp (400.7, 613.7d).
+
+    A per-player zone of another player means the owner's zone of that kind (400.3).
+    """
+    zone = _destination(owner, zone, controller)
     obj = GameObject(
         id=ObjectId(state.next_object_id),
         card=card,
@@ -231,11 +237,14 @@ def move_object(
     """Move an object to the top of ``zone``; it becomes a new object (400.7).
 
     The new object has a new ID and timestamp (613.7d) and no memory of the old one: no
-    knowledge carries over. The old object is removed from the game state. Nothing is changed if
-    the move isn't allowed. Only events call this.
+    knowledge carries over (an event that moves a card players saw records that itself). An
+    object going to another player's library, hand or graveyard goes to its owner's (400.3); one
+    put from the command zone into it still becomes a new object (400.10). The old object is
+    removed from the game state. Nothing is changed if the move isn't allowed. Only events call
+    this.
     """
     old = state.object(obj_id)
-    _check_destination(old.owner, zone, controller)
+    zone = _destination(old.owner, zone, controller)
     zone_list(state, old.zone).remove(obj_id)
     del state.objects[obj_id]
     return create_object(state, card=old.card, owner=old.owner, zone=zone, controller=controller)

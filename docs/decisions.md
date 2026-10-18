@@ -87,13 +87,26 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   `src/resolve/events/game.py`.
 
 ### 2026-10-18: Moving objects between zones
-- **Decision:** `resolve.state.game.move_object` implements 400.7: the object is removed and a new
-  object with a new ID and timestamp is created on top of the destination, with no knowledge
-  carried over. It checks the destination before changing anything (400.3: owner's per-player
-  zones; a controller exactly on the battlefield and the stack). A controlled object in the
-  command zone (an emblem, 109.4c) raises `NotImplementedRule`. Only events call it. Last-known
-  information and the 400.7 exceptions arrive with the milestones that need them (M1, M4).
-- **Rules:** 400.3, 400.7, 109.4, 109.4c, 613.7d.
+- **Decision:** `resolve.state.game.move_object` implements 400.7:
+  - The object is removed, and a new object with a new ID and timestamp is created on top of the
+    destination.
+  - A move from the command zone into the command zone also makes a new object (400.10).
+  - An object sent to another player's library, hand or graveyard goes to its owner's instead
+    (400.3); `create_object` applies the same redirect.
+  - The destination is checked before anything changes: a controller must be given exactly for
+    the battlefield and the stack (109.4, 110.2).
+  - A controlled object in the command zone (an emblem, 109.4c) raises `NotImplementedRule`.
+  - No knowledge carries over to the new object. An event that moves a card whose identity
+    players saw (a revealed card put back on top of a library, 701.20) records that on the new
+    object itself; that arrives in M1.
+  - Only events call `move_object`. Last-known information and the other 400.7 exceptions arrive
+    with the milestones that need them (M1, M4).
+- **Why:** 400.3 is a redirect, not a prohibition: "put it into your hand" on a card you don't own
+  is legal and sends it to its owner's hand. The test review caught that an earlier version
+  raised `EngineError` instead. Keeping knowledge decisions in the event that knows what players
+  saw keeps the primitive simple and correct by default (400.7: "no memory of ... its previous
+  existence").
+- **Rules:** 109.4, 109.4c, 110.2, 400.3, 400.7, 400.10, 613.7d, 701.20.
 - **Where:** `src/resolve/state/game.py`.
 
 ### 2026-10-18: Identifiers, seating and pile order

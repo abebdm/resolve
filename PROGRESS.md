@@ -50,7 +50,7 @@ and ruff and pyright are clean.
    failed before, since the kinds were already unique.
 6. The hook-placeholder test is kept as is; the PR explains why.
 
-## In progress: second review (verdict Adequate with gaps)
+## Done: second review (verdict Adequate with gaps), all findings addressed
 
 - Wrong: 400.3 is a redirect ("it goes to its owner's corresponding zone"), not an error. Plan:
   `create_object` and `move_object` redirect a per-player zone to the owner's, and the two 400.3
@@ -61,12 +61,16 @@ and ruff and pyright are clean.
   survives the move; command to command is a new object (400.10); commander log entries are
   public; life still set after the procedure; a Commander deck without a commander (deferred to
   M7, documented by a test).
-- Record in decisions.md: events that move a card players saw set `known_to` on the new object
-  themselves (M1), rather than `move_object` carrying it over.
+- Recorded in decisions.md ("Moving objects between zones"), including the policy that events
+  which move a card players saw set `known_to` themselves (M1).
+- Test-first: the two 400.3 redirect tests failed on `EngineError` first. The other new tests
+  passed at once (coverage of behavior that was already right). 479 tests; ruff and pyright
+  clean. No third review round: the code change was the small 400.3 redirect, and the rest was
+  tests.
 
 ## Next
 
-- Re-run the reviewer (the changes to commander placement are substantial). **In progress.**
+- Re-run the reviewer: done (second round above).
 - Move anything lasting from here into the docs, delete PROGRESS.md, open the PR. The PR
   description includes the reviewer's verdict, how each finding was handled, and which parts were
   test-first. None of M0 was strictly test-first: it began before the rule. The review fixes

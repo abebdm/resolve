@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import copy
+
 import pytest
 
 from resolve.engine.api import new_game
@@ -66,10 +68,12 @@ def test_109_4_objects_on_the_battlefield_or_stack_need_a_controller() -> None:
         create_object(state, card=None, owner=PlayerId(0), zone=EXILE, controller=PlayerId(0))
 
 
-def test_400_3_an_object_can_only_be_in_its_owners_library_hand_or_graveyard() -> None:
+def test_400_3_an_object_put_into_another_players_graveyard_goes_to_its_owners() -> None:
     state = start(2)
-    with pytest.raises(EngineError, match="owned by player 0"):
-        create_object(state, card=None, owner=PlayerId(0), zone=Zone.graveyard(PlayerId(1)))
+    obj = create_object(state, card=None, owner=PlayerId(0), zone=Zone.graveyard(PlayerId(1)))
+    assert obj.zone == Zone.graveyard(PlayerId(0))
+    assert state.players[0].graveyard == [obj.id]
+    assert state.players[1].graveyard == []
 
 
 def test_object_and_card_ids_are_unique_and_never_reused() -> None:
@@ -137,9 +141,67 @@ def test_400_7_an_object_that_changes_zones_becomes_a_new_object() -> None:
     assert invariant_violations(state) == []
 
 
-def test_400_3_a_moved_object_goes_to_its_owners_zone_only() -> None:
+def test_400_3_a_moved_object_goes_to_its_owners_hand_library_or_graveyard() -> None:
+    """For example, a card its owner doesn't control put "into your hand" goes to its owner's."""
     state = start(2)
-    with pytest.raises(EngineError, match="owned by player 0"):
-        move_object(state, state.players[0].library[0], Zone.hand(PlayerId(1)))
+    for kind in (Zone.hand, Zone.graveyard, Zone.library):
+        old_id = state.players[0].library[0]
+        new = move_object(state, old_id, kind(PlayerId(1)))
+        assert new.zone == kind(PlayerId(0))
+        assert new.id in zone_list(state, kind(PlayerId(0)))
+        assert new.id not in zone_list(state, kind(PlayerId(1)))
+    assert invariant_violations(state) == []
+
+
+def test_a_move_that_is_not_allowed_changes_nothing() -> None:
+    state = start(2)
+    obj = state.players[0].library[0]
+    before = copy.deepcopy(state)
     with pytest.raises(EngineError, match="no object 999"):
         move_object(state, ObjectId(999), EXILE)
+    with pytest.raises(EngineError, match="need controller"):
+        move_object(state, obj, BATTLEFIELD)
+    with pytest.raises(EngineError, match="have no controller"):
+        move_object(state, obj, EXILE, controller=PlayerId(0))
+    with pytest.raises(NotImplementedRule) as gap:
+        move_object(state, obj, COMMAND, controller=PlayerId(0))
+    assert gap.value.rule == "109.4c"
+    assert state == before
+
+
+def test_400_7_knowledge_of_the_old_object_does_not_carry_over() -> None:
+    """The new object has no memory of the old one. Events that move a card players saw (a
+    revealed card put back on the library, say) record that knowledge themselves (M1)."""
+    state = start(2)
+    old_id = state.players[0].library[0]
+    state.objects[old_id].known_to = (PlayerId(0), PlayerId(1))
+    new = move_object(state, old_id, Zone.hand(PlayerId(0)))
+    assert new.known_to == ()
+
+
+def test_109_4_an_object_leaving_the_stack_loses_its_controller() -> None:
+    state = start(2)
+    spell = create_object(state, card=None, owner=PlayerId(0), zone=STACK, controller=PlayerId(1))
+    exiled = move_object(state, spell.id, EXILE)
+    assert exiled.controller is None
+    assert spell.id not in state.objects
+    assert state.stack == []
+    assert state.exile == [exiled.id]
+
+
+def test_110_2_an_object_put_onto_the_battlefield_gets_the_given_controller() -> None:
+    state = start(2)
+    obj_id = state.players[0].library[0]
+    permanent = move_object(state, obj_id, BATTLEFIELD, controller=PlayerId(1))
+    assert (permanent.owner, permanent.controller) == (0, 1)
+    assert state.battlefield == [permanent.id]
+
+
+def test_400_10_an_object_put_from_the_command_zone_into_it_becomes_a_new_object() -> None:
+    state = start(2)
+    first = create_object(state, card=None, owner=PlayerId(1), zone=COMMAND)
+    second = move_object(state, first.id, COMMAND)
+    assert second.id != first.id
+    assert second.timestamp > first.timestamp
+    assert state.command == [second.id]
+    assert first.id not in state.objects

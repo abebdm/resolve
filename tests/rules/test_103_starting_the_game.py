@@ -15,10 +15,15 @@ from resolve.decisions.spaces import ChooseOne, Number, Pick, PlayerOption
 from resolve.engine.api import new_game, submit, view_for
 from resolve.engine.deck import Deck
 from resolve.errors import InvalidAnswer
-from resolve.events.game import LibraryShuffled, StartingPlayerChosen
+from resolve.events.game import (
+    CommanderPutIntoCommandZone,
+    LibraryShuffled,
+    StartingPlayerChosen,
+)
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState, turn_order
-from resolve.state.ids import ObjectId, PlayerId
+from resolve.state.ids import CardId, ObjectId, PlayerId
+from resolve.state.invariants import invariant_violations
 from tests.game_fixtures import (
     DAYBREAKER,
     answer,
@@ -142,7 +147,7 @@ def test_103_4_each_player_starts_at_20_life() -> None:
 
 
 def test_103_4_starting_life_comes_from_the_config() -> None:
-    """103.4: variants set other starting life totals (for example 30 in Two-Headed Giant)."""
+    """103.4: some variants set other starting life totals (103.4b-e)."""
     state = new_game(GameConfig(starting_life=30), decks(3), seed=1)
     assert [player.life for player in state.players] == [30, 30, 30]
 
@@ -151,6 +156,17 @@ def test_103_4c_in_commander_each_player_starts_at_40_life() -> None:
     commander_decks = [deck(commanders=[DAYBREAKER]) for _ in range(4)]
     state = new_game(GameConfig.commander_game(), commander_decks, seed=1)
     assert [player.life for player in state.players] == [40, 40, 40, 40]
+    choose_starting_player(state, 0)
+    assert [player.life for player in state.players] == [40, 40, 40, 40], "903.7, after 103.1"
+
+
+def test_903_3_a_commander_game_with_a_deck_without_commander_is_not_refused_until_m7() -> None:
+    """903.3 (each deck has a commander) is deck validation, deferred to M7 (decisions.md)."""
+    decks_ = [deck(3, 0, commanders=[DAYBREAKER]), deck(3, 0)]
+    state = new_game(GameConfig.commander_game(), decks_, seed=1)
+    choose_starting_player(state, 1)
+    assert [state.objects[obj].owner for obj in state.command] == [0]
+    assert state.players[1].commanders == ()
 
 
 COMMANDER_NAME = "Test Daybreaker // Test Nightfall"
@@ -191,6 +207,12 @@ def test_903_6_after_the_choice_each_commander_is_put_face_up_into_the_command_z
         for obj in player.library
         if name_of(state, obj) == COMMANDER_NAME
     }
+    library_cards: dict[ObjectId, CardId] = {}
+    for obj in library_ids:
+        card = state.objects[obj].card
+        assert card is not None
+        library_cards[obj] = card
+    library_ids_by_owner = {owner: obj for obj, owner in library_ids.items()}
     choose_starting_player(state, 1)
     assert [state.objects[obj].owner for obj in state.command] == [1, 2, 0]
     for obj_id in state.command:
@@ -204,6 +226,19 @@ def test_903_6_after_the_choice_each_commander_is_put_face_up_into_the_command_z
     for old_id in library_ids:
         assert old_id not in state.objects
         assert old_id not in state.command
+    # 903.3: it is still the same physical card, and still that player's commander.
+    for obj_id in state.command:
+        obj = state.objects[obj_id]
+        assert obj.card is not None
+        assert obj.card == library_cards[library_ids_by_owner[obj.owner]]
+        assert state.players[obj.owner].commanders == (obj.card,)
+        assert state.cards[obj.card].owner == obj.owner
+    # 903.6: the commanders are face up, so every player sees them enter in the log.
+    for viewer in range(3):
+        log = view_for(state, PlayerId(viewer)).log
+        moved = [e.record for e in log if isinstance(e.record, CommanderPutIntoCommandZone)]
+        assert [event.player for event in moved] == [1, 2, 0]
+    assert invariant_violations(state) == []
 
 
 def test_903_6_the_remaining_cards_are_shuffled_and_no_commander_is_left_in_a_library() -> None:
