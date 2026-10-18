@@ -89,3 +89,22 @@ class MulliganDeclared(Event):
 
     def apply(self, state: GameState) -> None:
         return None
+
+
+@dataclass(frozen=True, kw_only=True)
+class PlayerLost(Event):
+    """``player`` lost the game (104.3), and so leaves it (104.5).
+
+    ``rules`` names how: a state-based action (704.5a, 704.5b) or a concession (104.3a). The
+    loss also clears the player's record of drawing from an empty library (704.5b looks only
+    at draws since the last check).
+    """
+
+    player: PlayerId
+
+    def apply(self, state: GameState) -> None:
+        player = state.player(self.player)
+        if player.lost:
+            raise EngineError(f"player {self.player} has already lost")
+        player.lost = True
+        player.drew_from_empty_library = False

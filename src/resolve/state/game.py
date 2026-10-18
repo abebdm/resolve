@@ -23,6 +23,7 @@ from resolve.errors import EngineError, NotImplementedRule
 from resolve.state.config import GameConfig
 from resolve.state.ids import CardId, ObjectId, PlayerId
 from resolve.state.rng import Rng
+from resolve.state.turn import TurnState
 from resolve.state.zones import Zone, ZoneKind
 from resolve.values import Immutable
 
@@ -76,6 +77,7 @@ class Player:
     - ``commanders``: the cards designated as this player's commanders (903.3).
     - ``drew_from_empty_library``: the player attempted to draw from an empty library since
       state-based actions were last checked (121.4, 704.5b).
+    - ``lost``: the player has lost the game (104.3, 704.5a, 704.5b).
     """
 
     id: PlayerId
@@ -85,6 +87,7 @@ class Player:
     hand: list[ObjectId] = field(default_factory=list[ObjectId])
     graveyard: list[ObjectId] = field(default_factory=list[ObjectId])
     drew_from_empty_library: bool = False
+    lost: bool = False
 
 
 @dataclass(frozen=True)
@@ -108,6 +111,7 @@ class GameState:
     - ``cards`` and ``objects``: every physical card in the game, and every object in any zone.
     - ``battlefield``, ``stack``, ``exile``, ``command``: the shared zones. The stack's top is
       its last element (405.2).
+    - ``turn``: the turn in progress (500), or ``None`` before the first turn begins (103.8).
     - ``tasks``: the task stack; the last element runs next (design.md §5).
     - ``pending``: the decision the engine is waiting for, if any. ``result``: set when the game
       is over.
@@ -125,6 +129,7 @@ class GameState:
     exile: list[ObjectId] = field(default_factory=list[ObjectId])
     command: list[ObjectId] = field(default_factory=list[ObjectId])
     starting_player: PlayerId | None = None
+    turn: TurnState | None = None
     tasks: list[Task] = field(default_factory=list["Task"])
     pending: DecisionRequest | None = None
     result: GameResult | None = None
@@ -183,6 +188,27 @@ def turn_order(state: GameState) -> tuple[PlayerId, ...]:
     first = state.starting_player
     count = len(state.players)
     return tuple(PlayerId((first + offset) % count) for offset in range(count))
+
+
+def players_in_game(state: GameState) -> tuple[PlayerId, ...]:
+    """The players still in the game, in turn order (104.5, 800.4).
+
+    A player who lost the game has left it (104.5).
+    """
+    return tuple(player for player in turn_order(state) if not state.player(player).lost)
+
+
+def next_in_turn_order(state: GameState, player: PlayerId) -> PlayerId:
+    """The player after ``player`` in turn order (clockwise, 103.1), among those still in the game.
+
+    ``player`` itself may have left the game; ``EngineError`` if nobody else is still in it.
+    """
+    count = len(state.players)
+    for offset in range(1, count + 1):
+        candidate = PlayerId((player + offset) % count)
+        if candidate != player and not state.player(candidate).lost:
+            return candidate
+    raise EngineError(f"no player after player {player} is still in the game")
 
 
 def new_timestamp(state: GameState) -> int:

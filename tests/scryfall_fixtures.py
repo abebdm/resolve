@@ -121,6 +121,36 @@ SPLIT_CARD: dict[str, Any] = {
 }
 
 
+# Invented one-mana spells, for the timing rules of instants and sorceries (117.1a).
+INSTANT_CARD: dict[str, Any] = {
+    "object": "card",
+    "oracle_id": "oid-test-shock",
+    "name": "Test Shock",
+    "layout": "normal",
+    "mana_cost": "{R}",
+    "cmc": 1.0,
+    "type_line": "Instant",
+    "oracle_text": "Test Shock deals 2 damage to any target.",
+    "colors": ["R"],
+    "color_identity": ["R"],
+    "keywords": [],
+}
+
+SORCERY_CARD: dict[str, Any] = {
+    "object": "card",
+    "oracle_id": "oid-test-ponder",
+    "name": "Test Ponder",
+    "layout": "normal",
+    "mana_cost": "{U}",
+    "cmc": 1.0,
+    "type_line": "Sorcery",
+    "oracle_text": "Draw a card.",
+    "colors": ["U"],
+    "color_identity": ["U"],
+    "keywords": [],
+}
+
+
 def token(oracle_id: str, name: str = "Soldier") -> dict[str, Any]:
     """A token object (layout ``token``), which the name index must ignore."""
     return {

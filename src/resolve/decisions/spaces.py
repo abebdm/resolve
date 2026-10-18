@@ -57,7 +57,26 @@ class NamedOption(Immutable):
     name: str
 
 
-Option = PlayerOption | ObjectOption | NamedOption
+@dataclass(frozen=True)
+class PassOption(Immutable):
+    """Pass priority (117.3d)."""
+
+
+@dataclass(frozen=True)
+class PlayLandOption(Immutable):
+    """Play the land card ``object`` (305.1, a special action: 116.2a)."""
+
+    object: ObjectId
+
+
+@dataclass(frozen=True)
+class CastSpellOption(Immutable):
+    """Cast the card ``object`` as a spell (117.1a, 601.2)."""
+
+    object: ObjectId
+
+
+Option = PlayerOption | ObjectOption | NamedOption | PassOption | PlayLandOption | CastSpellOption
 
 # --- Answer values -----------------------------------------------------------------------------
 

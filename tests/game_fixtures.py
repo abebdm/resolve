@@ -8,17 +8,30 @@ board state directly, use the scenario builder (``tests/scenario.py``), which lo
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 
 from resolve.cards.registry import CardDefinition, CardRegistry
 from resolve.data.cards import CardDatabase, parse_card, parse_oracle_cards
+from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer, DecisionRequest
-from resolve.decisions.spaces import AnswerValue, Pick
-from resolve.engine.api import new_game, pending_decision, submit
+from resolve.decisions.spaces import (
+    AnswerValue,
+    ChooseOne,
+    ChooseOrder,
+    ChooseSubset,
+    Order,
+    PassOption,
+    Pick,
+    PickMany,
+)
+from resolve.engine.api import new_game, pending_decision, submit, view_for
 from resolve.engine.deck import Deck, DeckCard
+from resolve.engine.mulligans import KEEP
+from resolve.engine.view import PlayerView
 from resolve.errors import NotImplementedRule
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState
+from resolve.state.turn import Phase, Step
 from tests import scryfall_fixtures as fx
 
 FOREST = DeckCard(parse_card(fx.FOREST), (CardDefinition("Forest"),))
@@ -44,6 +57,19 @@ def registry() -> CardRegistry:
 def database() -> CardDatabase:
     """The default fixture cards."""
     return CardDatabase(parse_oracle_cards(fx.default_cards()))
+
+
+def scenario_registry() -> CardRegistry:
+    """``registry()`` plus the fixture instant, sorcery and split card: the scenario default."""
+    extra = ("Test Shock", "Test Ponder", "Test Spark", "Test Frost")
+    return CardRegistry(
+        [*(registry().get(n) for n in registry().names()), *map(CardDefinition, extra)]
+    )
+
+
+def scenario_database() -> CardDatabase:
+    """``database()`` plus the fixture instant and sorcery: the scenario builder's default."""
+    return CardDatabase(parse_oracle_cards([*fx.default_cards(), fx.INSTANT_CARD, fx.SORCERY_CARD]))
 
 
 def deck(forests: int = 6, elves: int = 4, *, commanders: Sequence[DeckCard] = ()) -> Deck:
@@ -73,6 +99,72 @@ def request_of(state: GameState) -> DecisionRequest:
     request = pending_decision(state)
     assert request is not None
     return request
+
+
+class Passer:
+    """An agent that keeps every hand and passes every priority (for turn-structure tests).
+
+    It discards the first cards of its hand when it must (514.1) and keeps any order offered.
+    ``requests`` records every request it answered, with the turn's number, phase and step at
+    that moment.
+    """
+
+    def __init__(self) -> None:
+        self.requests: list[tuple[DecisionRequest, tuple[int, Phase, Step | None] | None]] = []
+
+    def decide(self, view: PlayerView, request: DecisionRequest) -> DecisionAnswer:
+        turn = view.turn
+        self.requests.append(
+            (request, None if turn is None else (turn.number, turn.phase, turn.step))
+        )
+        space = request.space
+        match request.kind, space:
+            case DecisionKind.PRIORITY_ACTION, ChooseOne(options=options):
+                value: AnswerValue = Pick(options.index(PassOption()))
+            case DecisionKind.MULLIGAN, ChooseOne(options=options):
+                value = Pick(options.index(KEEP))
+            case DecisionKind.DISCARD, ChooseSubset(minimum=minimum):
+                value = PickMany(tuple(range(minimum)))
+            case DecisionKind.ORDER_CARDS, ChooseOrder(options=options):
+                value = Order(tuple(range(len(options))))
+            case _:
+                raise AssertionError(f"Passer can't answer {request.kind}: {request.prompt}")
+        return DecisionAnswer(request.id, request.player, value)
+
+
+def pass_until(
+    state: GameState,
+    done: Callable[[GameState], bool],
+    agent: Passer | None = None,
+    limit: int = 2000,
+) -> Passer:
+    """Answer with a ``Passer`` until ``done(state)`` or the game is over; returns the agent."""
+    agent = Passer() if agent is None else agent
+    for _ in range(limit):
+        if done(state) or state.result is not None:
+            return agent
+        request = request_of(state)
+        submit(state, agent.decide(view_for(state, request.player), request))
+    raise AssertionError(f"not done after {limit} answers")
+
+
+def started_game(
+    players: int = 2,
+    *,
+    starting: int = 0,
+    forests: int = 10,
+    elves: int = 10,
+    seed: int = 1,
+    config: GameConfig | None = None,
+    decks: Sequence[Deck] | None = None,
+) -> GameState:
+    """A new game whose players all kept their opening hands: at the first turn's first decision."""
+    if decks is None:
+        decks = [deck(forests, elves) for _ in range(players)]
+    state = new_game(config or GameConfig.standard(), decks, seed)
+    submit(state, answer(state, Pick(starting)))
+    pass_until(state, lambda s: s.turn is not None)
+    return state
 
 
 def choose_starting_player(state: GameState, index: int) -> NotImplementedRule | None:

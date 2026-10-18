@@ -9,7 +9,7 @@ state = scenario.build(SomeTask())  # runs the engine to its first decision
 run_script(state, choose(PlayerOption(PlayerId(2))))
 ```
 
-What a scenario can set, in M0:
+What a scenario can set:
 
 - the number of players, the ``GameConfig`` and the seed of the game's RNG;
 - each player's life total (any integer: 0 and negative totals are states the game can reach);
@@ -17,14 +17,19 @@ What a scenario can set, in M0:
   battlefield and the stack (with a controller), exile and the command zone;
 - which players know a hidden card (``known_to``, 400.2);
 - each player's commanders (903.3), in any zone;
-- the starting player (103.1), which fixes turn order; ``None`` means not chosen yet.
+- the starting player (103.1), which fixes turn order; ``None`` means not chosen yet;
+- with ``at(...)``, the turn in progress: its number, the active player, the phase and step, who
+  receives priority next and who has already passed in succession (117.4), and the lands played
+  this turn (305.2). ``build()`` then resumes the turn there.
 
-Turn, step, phase and the priority holder don't exist in the engine yet; the builder gains them
-with the turn structure in M1 (roadmap). Until then a scenario runs whatever tasks the test puts
-on the task stack (``build(*tasks)``).
+``build(*tasks)`` runs the given tasks (``tasks[0]`` first); with ``at(...)`` the turn resumes
+after them. ``at(step)`` for a step with priority resumes as a player is about to receive
+priority (117.5's state-based actions first); ``at(step, begin=True)``, and any step without
+priority (untap, cleanup), starts the step from its beginning, turn-based actions included.
 
 Cards are named by their exact card name and looked up in a ``CardDatabase`` and a
-``CardRegistry``: by default the fixture cards of ``tests/game_fixtures.py``. Objects are created
+``CardRegistry``: by default the fixture cards of ``tests/game_fixtures.py``
+(``scenario_database()`` and ``scenario_registry()``). Objects are created
 in the order the calls are made, so their IDs and timestamps (613.7d) follow that order. Every
 built state is checked with ``check_invariants`` and ``check_pure_data``.
 """
@@ -39,11 +44,14 @@ from resolve.cards.registry import CardRegistry
 from resolve.data.cards import CardDatabase
 from resolve.engine.deck import Deck, DeckCard
 from resolve.engine.loop import run
+from resolve.engine.priority import PriorityRound
 from resolve.engine.setup import initial_state
+from resolve.engine.turns import RunStep, StepStage, TakeTurn
 from resolve.state.config import GameConfig
 from resolve.state.game import Card, GameState, create_object, zone_list
 from resolve.state.ids import CardId, ObjectId, PlayerId
 from resolve.state.invariants import check_invariants, check_pure_data
+from resolve.state.turn import TURN_SEQUENCE, Phase, Step, TurnState, gives_priority, segment_of
 from resolve.state.zones import BATTLEFIELD, COMMAND, EXILE, STACK, Zone, ZoneKind
 from resolve.tasks import Task
 from tests import game_fixtures
@@ -67,9 +75,10 @@ class Scenario:
         registry: CardRegistry | None = None,
     ) -> None:
         self._state = initial_state(config or GameConfig.standard(), [Deck(())] * players, seed)
-        self._database = game_fixtures.database() if database is None else database
-        self._registry = game_fixtures.registry() if registry is None else registry
+        self._database = game_fixtures.scenario_database() if database is None else database
+        self._registry = game_fixtures.scenario_registry() if registry is None else registry
         self._built = False
+        self._resume: tuple[Task, ...] = ()
         if starting_player is not None:
             self._state.player(PlayerId(starting_player))  # validates the seat
             self._state.starting_player = PlayerId(starting_player)
@@ -172,17 +181,73 @@ class Scenario:
         state.player(player).commanders += (card,)
         return obj
 
-    def build(self, *tasks: Task) -> GameState:
-        """The finished state, checked; with ``tasks`` (``tasks[0]`` first), run to a pause.
+    def card_of(self, obj: ObjectId) -> CardId:
+        """The physical card an object of this scenario represents."""
+        card = self._state.object(obj).card
+        if card is None:
+            raise ScenarioError(f"object {obj} isn't a card")
+        return card
 
-        Without tasks nothing runs and nothing is pending. With tasks the engine runs them until
-        one needs a decision or the game ends; exceptions such as ``NotImplementedRule``
-        propagate. A scenario builds one state only.
+    def at(
+        self,
+        where: Phase | Step,
+        *,
+        active: PlayerId | None = None,
+        number: int = 1,
+        priority: PlayerId | None = None,
+        passed: Sequence[PlayerId] = (),
+        lands_played: int = 0,
+        begin: bool = False,
+    ) -> Scenario:
+        """Put the game in turn ``number`` of ``active``, at ``where`` (a step or a main phase).
+
+        ``active`` defaults to the starting player. ``priority`` (default: the active player)
+        receives priority next, after ``passed`` have passed in succession (117.4). With
+        ``begin`` (always, for untap and cleanup) the step starts from its beginning instead.
+        """
+        state = self._open()
+        if state.starting_player is None:
+            raise ScenarioError("a turn needs a starting player (103.1)")
+        active = state.starting_player if active is None else active
+        for player in (active, *passed, *(() if priority is None else (priority,))):
+            state.player(player)
+        if number < 1:
+            raise ScenarioError(f"turns are numbered from 1, not {number}")
+        phase, step = segment = segment_of(where)
+        start = begin or not gives_priority(step)
+        if start and (passed or priority is not None):
+            raise ScenarioError("a step that starts from its beginning has no priority yet")
+        state.turn = TurnState(
+            number=number,
+            active_player=active,
+            phase=phase,
+            step=step,
+            passed=list(passed),
+            lands_played=lands_played,
+        )
+        rest = TakeTurn(active, position=TURN_SEQUENCE.index(segment) + 1, started=True)
+        if start:
+            self._resume = (RunStep(phase, step), rest)
+        else:
+            self._resume = (
+                PriorityRound(next_player=priority),
+                RunStep(phase, step, stage=StepStage.END),
+                rest,
+            )
+        return self
+
+    def build(self, *tasks: Task) -> GameState:
+        """The finished state, checked; with tasks or a turn (``at``), run to a pause.
+
+        Without either nothing runs and nothing is pending. Otherwise the engine runs ``tasks``
+        (``tasks[0]`` first) and then the turn until a task needs a decision or the game ends;
+        exceptions such as ``NotImplementedRule`` propagate. A scenario builds one state only.
         """
         state = self._open()
         self._built = True
         check_invariants(state)
         check_pure_data(state)
+        tasks = (*tasks, *self._resume)
         if tasks:
             state.tasks = list(reversed(tasks))
             run(state)

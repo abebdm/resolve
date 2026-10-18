@@ -5,7 +5,7 @@ shape of answer is allowed. The two are independent: for example, ordering trigg
 cards put on the bottom of a library both use ``ChooseOrder``.
 
 This enum is the vocabulary listed in design.md §6. A kind only becomes something the engine asks
-once the task that asks it exists; in M0 that is ``CHOOSE_STARTING_PLAYER`` alone.
+once the task that asks it exists.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ class DecisionKind(Enum):
     PUT_ON_BOTTOM = "put_on_bottom"  # 103.5: which cards go to the bottom of the library
     ORDER_CARDS = "order_cards"  # 103.5: the order of cards put on the bottom, top first
     PRIORITY_ACTION = "priority_action"  # 117.1
+    DISCARD = "discard"  # 514.1, 701.9b: which cards to discard
     CHOOSE_MODES = "choose_modes"  # 700.2, 601.2b
     CHOOSE_X = "choose_x"  # 107.3a
     CHOOSE_TARGETS = "choose_targets"  # 601.2c
