@@ -47,12 +47,12 @@ lands and mana; creatures and damage; concession and leaving the game.
 - **Done (M1.2):** turns, phases and steps (`resolve.state.turn`, `resolve.engine.turns`:
   `TakeTurn`, `RunStep`, 500-514, the 103.8a draw skip, 508.8), priority
   (`resolve.engine.priority.PriorityRound`, 117; casting is offered and raises
-  `NotImplementedRule("601.2")` when chosen), the state-based actions 704.5a and 704.5b and
-  the end of two-player games (`resolve.engine.sba`, 104.2a, 104.4a), discarding to hand size
-  in cleanup (514.1) and 514.3a, type-line parsing (`resolve.data.types`, 205), the characteristics entry
-  point without layers (`resolve.effects.characteristics`), turn info in views, and the scenario
-  builder's `at(...)`. Two-player games with any decks play to a decking loss when every player
-  passes. A loss in a game with three or more players that leaves two or more in it stops at
+  `NotImplementedRule("601.2")` when chosen), the state-based actions 704.5a and 704.5b and the end
+  of two-player games (`resolve.engine.sba`, 104.2a, 104.4a), discarding to hand size in cleanup
+  (514.1) and 514.3a, type-line parsing (`resolve.data.types`, 205), the characteristics entry point
+  without layers (`resolve.effects.characteristics`), turn info in views, and the scenario builder's
+  `at(...)`. Two-player games with any decks play to a decking loss when every player passes. A loss
+  in a game with three or more players that leaves two or more in it stops at
   `NotImplementedRule("800.4a")` until M1.5.
 - **Done (M1.3):** the five basic lands (`resolve.cards.definitions.basic_lands`), playing
   lands (305), the first primitives (`TapSelfCost`, `AddMana`, `ActivatedManaAbility`; 305.6
