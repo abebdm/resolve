@@ -26,10 +26,12 @@ Follow CLAUDE.md fully; run the test-reviewer before the PR. Branch:
   `tests/agents/`.
 - Step 2: `tests/scenario.py` (`Scenario`, `names`, `run_script`), tests in
   `tests/engine/test_scenario_builder.py`.
+- Step 3: `resolve.agents.text` (renderer, `parse_answer`, `TextAgent`), `tools/play_cli.py`;
+  tests in `tests/agents/test_text_agent.py`, `tests/tooling/test_play_cli.py`.
 
 ## In progress
 
-- Step 3: text renderer + TextAgent + tools/play_cli.py.
+- Step 4: fuzz harness (tools/fuzz.py, tests/fuzz/).
 
 ## Decisions not yet in the docs
 
