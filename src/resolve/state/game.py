@@ -82,6 +82,7 @@ class Player:
     library: list[ObjectId] = field(default_factory=list[ObjectId])
     hand: list[ObjectId] = field(default_factory=list[ObjectId])
     graveyard: list[ObjectId] = field(default_factory=list[ObjectId])
+    drew_from_empty_library: bool = False
 
 
 @dataclass(frozen=True)

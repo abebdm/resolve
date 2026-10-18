@@ -69,6 +69,7 @@ class LogEntry(Immutable):
     index: int
     record: Event | AnswerRecord
     visible_to: tuple[PlayerId, ...] | None
+    redacted: Event | None = None
 
     @property
     def rules(self) -> tuple[str, ...]:

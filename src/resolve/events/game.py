@@ -75,3 +75,14 @@ class GameEnded(Event):
         for winner in self.winners:
             state.player(winner)  # validates the ID
         state.result = GameResult(tuple(sorted(dict.fromkeys(self.winners))))
+
+
+@dataclass(frozen=True, kw_only=True)
+class MulliganDeclared(Event):
+    """``player`` declared whether they take a mulligan (103.5)."""
+
+    player: PlayerId
+    mulligan: bool
+
+    def apply(self, state: GameState) -> None:
+        return None
