@@ -20,11 +20,12 @@ import gzip
 import hashlib
 import json
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import cast
 
+from resolve.data.types import TypeLine, TypeLineError, parse_type_line, try_parse_type_line
 from resolve.values import Immutable
 
 ORACLE_CARDS_FILE = "oracle-cards.jsonl.gz"
@@ -107,6 +108,23 @@ class CardFace(Immutable):
     toughness: str | None = None
     loyalty: str | None = None
     defense: str | None = None
+    types: TypeLine | None = field(init=False)
+
+    def __post_init__(self) -> None:
+        # Derived from ``type_line``; ``None`` when it doesn't follow 205 (an Un-set joke type).
+        # Such a card loads, but can't be played (DeckCard, coverage).
+        object.__setattr__(self, "types", try_parse_type_line(self.type_line))
+
+    @property
+    def type_line_problem(self) -> str | None:
+        """Why the type line can't be read, or ``None`` if it can."""
+        if self.types is not None:
+            return None
+        try:
+            parse_type_line(self.type_line)
+        except TypeLineError as error:
+            return str(error)
+        return None
 
 
 @dataclass(frozen=True)
@@ -137,6 +155,15 @@ class CardData(Immutable):
     def is_multi_faced(self) -> bool:
         """Whether the card has more than one face (709-712, 715, 722)."""
         return len(self.faces) > 1
+
+    @property
+    def type_line_problems(self) -> tuple[str, ...]:
+        """Why each face whose type line can't be read can't be (205); empty if all can."""
+        return tuple(
+            f"{face.name}: {problem}"
+            for face in self.faces
+            if (problem := face.type_line_problem) is not None
+        )
 
     @property
     def face_names(self) -> tuple[str, ...]:
