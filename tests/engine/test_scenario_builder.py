@@ -19,6 +19,8 @@ from resolve.state.config import GameConfig
 from resolve.state.game import turn_order
 from resolve.state.ids import PlayerId
 from resolve.state.invariants import invariant_violations, state_impurities
+from resolve.state.turn import Phase
+from resolve.state.turn import Step as TurnStep
 from resolve.state.zones import BATTLEFIELD, COMMAND, EXILE, STACK, Zone
 from tests.engine_support import AskTwice, EndGame, markers
 from tests.scenario import Scenario, ScenarioError, names, run_script
@@ -320,3 +322,76 @@ def test_built_states_survive_copy_and_pickle() -> None:
     state = scenario.build(AskTwice(P2))
     assert copy.deepcopy(state) == state
     assert pickle.loads(pickle.dumps(state)) == state
+
+
+# --- The turn (at) -------------------------------------------------------------------------------
+
+
+def test_at_resumes_a_step_as_a_player_is_about_to_receive_priority() -> None:
+    scenario = Scenario(3)
+    scenario.at(TurnStep.END_OF_COMBAT, active=P1, number=6, priority=P0, passed=[P1, P2])
+    state = scenario.build()
+    turn = state.turn
+    assert turn is not None
+    assert (turn.number, turn.active_player, turn.phase, turn.step) == (
+        6,
+        P1,
+        Phase.COMBAT,
+        TurnStep.END_OF_COMBAT,
+    )
+    assert turn.priority == P0 and turn.passed == [P1, P2]
+    request = pending_decision(state)
+    assert request is not None and request.player == P0
+    assert request.kind is DecisionKind.PRIORITY_ACTION
+    assert state.event_log == []  # resuming logs nothing: the step had already begun
+    assert invariant_violations(state) == []
+
+
+def test_at_a_main_phase_and_the_default_active_player() -> None:
+    scenario = Scenario(2, starting_player=1)
+    scenario.at(Phase.POSTCOMBAT_MAIN, lands_played=1)
+    state = scenario.build()
+    turn = state.turn
+    assert turn is not None
+    assert (turn.active_player, turn.phase, turn.step, turn.lands_played) == (
+        P1,
+        Phase.POSTCOMBAT_MAIN,
+        None,
+        1,
+    )
+
+
+def test_at_with_begin_starts_the_step_from_its_beginning() -> None:
+    scenario = Scenario(2)
+    scenario.library(P0, ["Forest"])
+    scenario.at(TurnStep.DRAW, number=2, begin=True)
+    state = scenario.build()
+    assert len(state.player(P0).hand) == 1  # 504.1: the turn-based action happened
+    first = state.event_log[0].record
+    assert type(first).__name__ == "StepBegan"
+
+
+def test_at_refuses_what_a_turn_cant_be() -> None:
+    with pytest.raises(ScenarioError, match="starting player"):
+        Scenario(2, starting_player=None).at(TurnStep.UPKEEP)
+    with pytest.raises(ScenarioError, match="numbered from 1"):
+        Scenario(2).at(TurnStep.UPKEEP, number=0)
+    with pytest.raises(ScenarioError, match="no priority yet"):
+        Scenario(2).at(TurnStep.UPKEEP, begin=True, priority=P1)
+    with pytest.raises(ScenarioError, match="no priority yet"):
+        Scenario(2).at(TurnStep.CLEANUP, passed=[P0])
+    with pytest.raises(ValueError, match="has steps"):
+        Scenario(2).at(Phase.ENDING)
+    with pytest.raises(EngineError, match="no player 4"):
+        Scenario(2).at(TurnStep.UPKEEP, priority=PlayerId(4))
+
+
+def test_tasks_given_to_build_run_before_the_turn_resumes() -> None:
+    scenario = Scenario(2)
+    scenario.at(TurnStep.UPKEEP)
+    state = scenario.build(AskTwice(P1))
+    request = pending_decision(state)
+    assert request is not None and request.kind is DecisionKind.CHOOSE_X
+    run_script(state, Step(Number(2)), Step(Number(4)))
+    request = pending_decision(state)
+    assert request is not None and request.kind is DecisionKind.PRIORITY_ACTION

@@ -103,8 +103,11 @@ gets its own entry point, `concede(state, player)`, in M1.
 - `objects`: `dict[ObjectId, GameObject]` for every object in every zone
 - zones: per-player library, hand, graveyard (on `Player`); shared `battlefield`, `stack`,
   `exile`, `command`. Zones are lists of ObjectIds; in every pile the **last element is the top**.
-- `turn` (M1): active player, phase and step, turn number, per-turn records (lands played, spells
-  cast, etc.)
+- `turn`: the turn in progress (`resolve.state.turn.TurnState`), or `None` before the first
+  turn: its number, the active player, the phase and step (a main phase has no step, 505.2),
+  the priority holder and the players who have passed in succession since the last action
+  (117.4), and per-turn records (lands played; later spells cast, etc.). The turn's phases and
+  steps are one sequence, `TURN_SEQUENCE` (500.1), that `TakeTurn` walks.
 - `tasks`: the task stack (§5)
 - `pending`: the current `DecisionRequest`, if any; `result`: the `GameResult` once the game is
   over
@@ -157,8 +160,9 @@ pickled, which would make AI search and save/restore impossible.
     `Push((child, self))`, having recorded its progress in its own fields.
   - `NeedDecision(player, kind, space, prompt, rules, source)`: the engine pauses. The task stays
     on top; the engine assigns the request id and stores the `DecisionRequest` in `pending`.
-- Examples: `BeginStep`, `GivePriority`, `CastSpell` (the 601.2 sequence), `ResolveTopOfStack`,
-  `CheckStateBasedActions`, `PutTriggersOnStack`, `DeclareAttackers`, `ApplyEvents`.
+- Examples: `TakeTurn`, `RunStep`, `PriorityRound`, `CheckStateBasedActions`, `ApplyEvents`;
+  later `CastSpell` (the 601.2 sequence), `ResolveTopOfStack`, `PutTriggersOnStack`,
+  `DeclareAttackers`.
 - **Resuming.** `submit()` validates the answer (§6), including the paused task's
   `check_answer(state, request, answer)`, which must change nothing. Only then does it log the
   answer, clear `pending` and call the same task's `resume(state, request, answer)`, whose result
@@ -209,7 +213,10 @@ independent of the kind:
 | `Distribute(recipients, total, minimum_each)` | `Amounts(amounts)` | one per recipient, each at least the minimum, adding up to the total (601.2d) |
 
 Every outcome has exactly one valid answer (canonical forms), which helps AI search. Options are
-typed (`PlayerOption`, `ObjectOption`, ...) so a UI can tell them apart. A request contains only
+typed (`PlayerOption`, `ObjectOption`, `NamedOption`, and the priority actions `PassOption`,
+`PlayLandOption`, `CastSpellOption`) so a UI can tell them apart. A priority request lists every
+legal action, including ones the engine can't take yet, which raise `NotImplementedRule` when
+chosen. A request contains only
 what its deciding player may know; one decision is pending at a time, which matches the
 sequential APNAP choices of 101.4.
 
@@ -277,8 +284,9 @@ choose…".
   3. orders effects within a layer by timestamp (613.7) and by the dependency system (613.8)
 - Counters, status (tapped, flipped, face-down, phased) and attachments live on the object.
   Their effects on characteristics are applied in the appropriate layer.
-- Results are cached and the cache is invalidated on any state change. Correctness comes first;
-  the cache is an optimization only.
+- Results may be cached, with the cache invalidated on any state change. Correctness comes
+  first: the cache is an optimization only, added when the benchmark asks for it. There is none
+  yet (`resolve.effects.characteristics`, docs/decisions.md).
 
 ---
 

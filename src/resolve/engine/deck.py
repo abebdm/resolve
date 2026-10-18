@@ -25,7 +25,8 @@ class DeckCard(Immutable):
     """One physical card for a deck: its Oracle data and one definition per face, in face order.
 
     Building one with definitions that don't match the faces raises ``DeckError``, so a deck can't
-    contain an unimplemented card even when it is built by hand.
+    contain an unimplemented card even when it is built by hand. Nor can it contain a card whose
+    type line the engine can't read (205; an Un-set joke type).
     """
 
     data: CardData
@@ -37,6 +38,12 @@ class DeckCard(Immutable):
             raise DeckError(
                 f"{self.data.name!r} needs definitions for {list(self.data.face_names)}, "
                 f"got {list(names)}"
+            )
+        problems = self.data.type_line_problems
+        if problems:
+            raise DeckError(
+                f"{self.data.name!r} can't be played: its type line doesn't follow 205 "
+                f"({'; '.join(problems)})"
             )
 
     @classmethod
@@ -65,6 +72,7 @@ def build_deck(decklist: Decklist, database: CardDatabase, registry: CardRegistr
         f"{card.name!r} is not implemented (missing: {', '.join(card.missing_faces)})"
         for card in coverage.missing
     ]
+    problems += [f"{card.name!r} can't be played: {card.problem}" for card in coverage.unreadable]
     if problems:
         deck = decklist.name or "deck"
         raise DeckError(f"{deck} can't be played:\n" + "\n".join(f"- {p}" for p in problems))

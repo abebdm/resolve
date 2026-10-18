@@ -10,7 +10,8 @@ Tests call these, and the fuzz harness (``tools/fuzz.py``) calls them before eve
   and events must store IDs, not references.
 - ``mutable_parts``: anything inside a value that would break ``Immutable``'s promise. Deeply
   immutable means scalars, enums, tuples and frozen ``Immutable`` dataclasses only.
-- ``invariant_violations``: zone bookkeeping and counters (400.1, 400.3, 109.4, 613.7d).
+- ``invariant_violations``: zone bookkeeping and counters (400.1, 400.3, 109.4, 613.7d), and the
+  turn and priority bookkeeping (500.1, 117.3, 117.4).
 
 Each returns a list of problems, each naming where it is (``state.tasks[0].events``); empty means
 fine. The ``check_*`` functions raise ``EngineError`` listing them.
@@ -21,9 +22,11 @@ from __future__ import annotations
 import dataclasses
 from enum import Enum
 
+from resolve.decisions.kinds import DecisionKind
 from resolve.errors import EngineError
 from resolve.state.game import GameObject, GameState, Player, zone_list
 from resolve.state.rng import Rng
+from resolve.state.turn import TURN_SEQUENCE, Step, gives_priority
 from resolve.state.zones import Zone, ZoneKind
 from resolve.values import Immutable
 
@@ -158,6 +161,8 @@ def invariant_violations(state: GameState) -> list[str]:
         if card.id != card_id:
             problems.append(f"card {card_id} is stored under the wrong key (its id is {card.id})")
 
+    problems += _turn_violations(state)
+
     if state.pending is not None and not state.tasks:
         problems.append("a decision is pending but the task stack is empty")
     if state.pending is not None and state.result is not None:
@@ -169,6 +174,46 @@ def invariant_violations(state: GameState) -> list[str]:
             problems.append(f"state.event_log[{index}] has index {entry.index}")
     if not isinstance(state.rng, Rng):  # pyright: ignore[reportUnnecessaryIsInstance]
         problems.append("state.rng isn't an Rng")
+    return problems
+
+
+def _turn_violations(state: GameState) -> list[str]:
+    """The turn's bookkeeping (500.1, 117): a real segment, real players, consistent priority."""
+    problems: list[str] = []
+    turn = state.turn
+    pending = state.pending
+    if turn is None:
+        if pending is not None and pending.kind is DecisionKind.PRIORITY_ACTION:
+            problems.append("priority is asked outside a turn")
+        return problems
+    count = len(state.players)
+    if turn.number < 1:
+        problems.append(f"turn number {turn.number} isn't positive")
+    if state.starting_player is None:
+        problems.append("a turn is in progress but no starting player was chosen (103.1)")
+    if not 0 <= turn.active_player < count:
+        problems.append(f"the active player {turn.active_player} isn't a player")
+    if turn.segment not in TURN_SEQUENCE:
+        problems.append(f"{turn.segment} isn't a step of a turn (500.1)")
+    if turn.priority is not None:
+        if not 0 <= turn.priority < count:
+            problems.append(f"the priority holder {turn.priority} isn't a player")
+        elif state.player(turn.priority).lost:
+            problems.append(f"player {turn.priority} holds priority but has left the game")
+    if any(not 0 <= p < count for p in turn.passed) or len(set(turn.passed)) != len(turn.passed):
+        problems.append(f"the players who passed {turn.passed} aren't distinct players")
+    if turn.priority is not None and turn.priority in turn.passed:
+        problems.append(f"player {turn.priority} holds priority but already passed (117.4)")
+    if turn.lands_played < 0:
+        problems.append("lands played this turn is negative")
+    if pending is not None and pending.kind is DecisionKind.PRIORITY_ACTION:
+        if turn.priority != pending.player:
+            problems.append(
+                f"player {pending.player} is asked for a priority action, but "
+                f"{turn.priority} holds priority"
+            )
+        if not gives_priority(turn.step) and turn.step is not Step.CLEANUP:
+            problems.append(f"priority is asked in the {turn.step} step (502.4)")
     return problems
 
 

@@ -29,6 +29,7 @@ from resolve.decisions.spaces import (
     Amounts,
     AnswerSpace,
     AnswerValue,
+    CastSpellOption,
     ChooseNumber,
     ChooseOne,
     ChooseOrder,
@@ -39,9 +40,11 @@ from resolve.decisions.spaces import (
     ObjectOption,
     Option,
     Order,
+    PassOption,
     Pick,
     PickMany,
     PlayerOption,
+    PlayLandOption,
 )
 from resolve.engine.view import ObjectView, PlayerView
 from resolve.events.base import AnswerRecord, LogEntry
@@ -80,10 +83,32 @@ def describe_option(option: Option, view: PlayerView) -> str:
         case PlayerOption(player=player):
             return f"player {player}" + (" (you)" if player == view.viewer else "")
         case ObjectOption(object=obj):
-            known = _objects(view).get(obj)
-            return describe_object(known) if known is not None else f"object #{obj}"
+            return _named(view, obj)
         case NamedOption(name=name):
             return name
+        case PassOption():
+            return "pass priority"
+        case PlayLandOption(object=obj):
+            return f"play {_named(view, obj)}"
+        case CastSpellOption(object=obj):
+            return f"cast {_named(view, obj)}"
+
+
+def _named(view: PlayerView, obj: ObjectId) -> str:
+    known = _objects(view).get(obj)
+    return describe_object(known) if known is not None else f"object #{obj}"
+
+
+def describe_turn(view: PlayerView) -> str | None:
+    """``"Turn 3, player 1's turn: draw step; player 0 has priority."``, or ``None``."""
+    turn = view.turn
+    if turn is None:
+        return None
+    where = f"{turn.step.value} step" if turn.step is not None else f"{turn.phase.value} phase"
+    holder = (
+        "nobody has priority" if turn.priority is None else (f"player {turn.priority} has priority")
+    )
+    return f"Turn {turn.number}, player {turn.active_player}'s turn: {where}; {holder}."
 
 
 def _zone_line(label: str, objects: tuple[ObjectView, ...]) -> str:
@@ -113,6 +138,8 @@ def render_view(view: PlayerView, *, recent_log: int = RECENT_LOG) -> str:
         marks = [" (you)" if summary.id == view.viewer else ""]
         if summary.id == view.starting_player:
             marks.append(" (starting player)")
+        if summary.lost:
+            marks.append(" (lost)")
         lines.append(
             f"Player {summary.id}{''.join(marks)}: life {summary.life}, "
             f"library {summary.library_size}"
@@ -123,6 +150,9 @@ def render_view(view: PlayerView, *, recent_log: int = RECENT_LOG) -> str:
     lines.append(_zone_line("Stack (top last)", view.stack))
     lines.append(_zone_line("Exile", view.exile))
     lines.append(_zone_line("Command zone", view.command))
+    turn = describe_turn(view)
+    if turn is not None:
+        lines.append(turn)
     if view.result is not None:
         if view.result.is_draw:
             lines.append("Game over: a draw.")

@@ -22,6 +22,8 @@ class CoverageStatus(Enum):
     # The name doesn't identify exactly one card in the card data snapshot (a typo, a card newer
     # than the snapshot, or an ambiguous name).
     UNKNOWN = "unknown"
+    # The card's type line doesn't follow 205 (an Un-set joke type), so it can't be played.
+    UNREADABLE = "unreadable"
 
 
 @dataclass(frozen=True)
@@ -30,7 +32,8 @@ class CardCoverage:
 
     ``count`` adds up the copies across the sections that were checked, and ``sections`` lists
     them. ``card`` is the matched card data (``None`` when the name is unknown), ``missing_faces``
-    names the faces that still need a definition, and ``problem`` explains an unknown name.
+    names the faces that still need a definition, and ``problem`` explains an unknown name or an
+    unreadable type line.
     """
 
     name: str
@@ -67,6 +70,11 @@ class DeckCoverage:
     def unknown(self) -> tuple[CardCoverage, ...]:
         """Names that don't identify exactly one card in the card data."""
         return self.with_status(CoverageStatus.UNKNOWN)
+
+    @property
+    def unreadable(self) -> tuple[CardCoverage, ...]:
+        """Cards whose type line the engine can't read (205), so they can't be played."""
+        return self.with_status(CoverageStatus.UNREADABLE)
 
     @property
     def is_fully_implemented(self) -> bool:
@@ -108,6 +116,15 @@ def deck_coverage(
             )
             continue
         missing_faces = registry.missing_faces(card)
-        status = CoverageStatus.MISSING if missing_faces else CoverageStatus.IMPLEMENTED
-        cards.append(CardCoverage(name, count, found_in, status, card, missing_faces))
+        if card.type_line_problems:
+            problems = "; ".join(card.type_line_problems)
+            status, reason = (
+                CoverageStatus.UNREADABLE,
+                f"its type line doesn't follow 205 ({problems})",
+            )
+        elif missing_faces:
+            status, reason = CoverageStatus.MISSING, None
+        else:
+            status, reason = CoverageStatus.IMPLEMENTED, None
+        cards.append(CardCoverage(name, count, found_in, status, card, missing_faces, reason))
     return DeckCoverage(decklist.name, tuple(cards))

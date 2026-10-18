@@ -111,3 +111,24 @@ class CardsPutOnBottom(Event):
 
     def redacted(self) -> Event | None:
         return replace(self, cards=())
+
+
+@dataclass(frozen=True, kw_only=True)
+class CardDiscarded(Event):
+    """``player`` discards ``card`` from their hand: it goes to their graveyard (701.9a).
+
+    It becomes a new object in the graveyard (400.7), recorded as applied (``discarded``).
+    Discarding is public: the card is revealed as it goes to a public zone (400.2, 404.2).
+    """
+
+    player: PlayerId
+    card: ObjectId
+    discarded: ObjectId | None = None
+
+    def apply(self, state: GameState) -> Event:
+        if self.discarded is not None:
+            raise EngineError("a discard is proposed without its outcome")
+        if self.card not in state.player(self.player).hand:
+            raise EngineError(f"object {self.card} isn't in player {self.player}'s hand")
+        new = move_object(state, self.card, Zone.graveyard(self.player))
+        return replace(self, discarded=new.id)

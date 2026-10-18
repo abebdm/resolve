@@ -9,8 +9,7 @@ while (request := pending_decision(state)) is not None:
 
 After ``InvalidAnswer`` the same decision is still pending. After ``NotImplementedRule`` or
 ``EngineError`` the state must not be played further; ``pending_decision`` then raises
-``EngineError``. Until the turn structure exists (roadmap M1), every game reaches
-``NotImplementedRule("103.8: ...")`` once the mulligans are over.
+``EngineError``.
 """
 
 from __future__ import annotations

@@ -107,17 +107,30 @@ drive decisions with a script.
    scenario.commander(PlayerId(1), "Test Daybreaker")  # in the command zone by default
    state = scenario.build(SomeTask())  # runs to the first decision; build() alone runs nothing
    ```
-   Cards are named exactly and come from `tests/game_fixtures.py`'s `database()` and
-   `registry()` unless you pass your own. Piles (library, graveyard, stack) are listed top first.
-   Use `scenario.add(name, owner=..., zone=..., known_to=[...])` for anything else. Until M1
-   there is no turn, step or priority to set; push the task you are testing.
-2. Answer with a script: `run_script(state, choose(PlayerOption(PlayerId(2)), kind=...), Step(Number(3)))`.
+   Cards are named exactly and come from `tests/game_fixtures.py`'s `scenario_database()` and
+   `scenario_registry()` (the fixture cards plus an instant, a sorcery and a split card) unless
+   you pass your own. Piles (library, graveyard, stack) are listed top first. Use
+   `scenario.add(name, owner=..., zone=..., known_to=[...])` for anything else.
+2. To test something during a turn, put the game in it with `at`:
+   ```python
+   scenario.at(Step.UPKEEP, active=PlayerId(1), number=3)  # player 1 about to get priority
+   scenario.at(Phase.PRECOMBAT_MAIN, priority=PlayerId(1), passed=[PlayerId(0)], lands_played=1)
+   scenario.at(Step.DRAW, begin=True)  # the step from its beginning
+   state = scenario.build()  # state-based actions are checked first (117.5), then the request
+   ```
+   `at(step)` resumes a step with priority as a player is about to receive it; `begin=True`, and
+   any untap or cleanup step, runs the step from its beginning with its turn-based actions.
+   The turn then continues normally into later turns. `build(*tasks)` still runs tasks first.
+   To play from the start of a real game instead, `tests/game_fixtures.py` has
+   `started_game(...)` (everyone kept; at the first upkeep), `Passer` (keeps, passes, discards
+   the first cards) and `pass_until(state, condition)`.
+3. Answer with a script: `run_script(state, choose(PlayerOption(PlayerId(2)), kind=...), Step(Number(3)))`.
    Prefer `choose(...)` (names the options) over `Step(Pick(i))`, and give `player=` and `kind=`
    when the test is about who is asked what. The script must be used up exactly.
-3. Check the result: zones with `names(state, zone)`, objects through `state.objects`, the log
+4. Check the result: zones with `names(state, zone)`, objects through `state.objects`, the log
    through `state.event_log`. Expect `NotImplementedRule` with `pytest.raises` where the game
    reaches a gap.
-4. Put the test in `tests/rules/test_<section>_<topic>.py` (or `tests/cards/`,
+5. Put the test in `tests/rules/test_<section>_<topic>.py` (or `tests/cards/`,
    `tests/interactions/`), named and documented with the CR rule it checks.
 
 ### Write an engine test with test-only tasks
@@ -127,7 +140,8 @@ For the engine loop itself, drive it with small tasks.
 1. Build decks with `tests/game_fixtures.py`: `deck(forests, elves, commanders=[...])`,
    `decks(players)`, or `start(players, seed)` for a new game paused at the 103.1 decision.
    `choose_starting_player(state, index)` answers it and returns the `NotImplementedRule` the
-   game stopped at, or `None` if it is waiting for the next decision (the mulligans, 103.5).
+   game stopped at, or `None` if it is waiting for the next decision (the mulligans, 103.5,
+   or the first turn).
 2. For loop behavior, use the tasks in `tests/engine_support.py` (`Mark`, `Parent`, `AskTwice`,
    `EndGame`, ...) or add one there (not in the test file, so states holding it pickle).
    `running(*tasks)` starts a game with them on the task stack (or use
@@ -150,8 +164,11 @@ For the engine loop itself, drive it with small tasks.
 2. A failure prints `FAILED:` with the seed and a command that reproduces that one game. Reproduce
    it, write a failing test (a scenario test, or a `fuzz_game` call in `tests/fuzz/`), then fix
    the engine.
-3. When a milestone moves where games stop (M1.1 moved it from 103.5 to 103.8), update `ALLOWED_GAPS` in
-   `tools/fuzz.py`, the fuzz tests' expectations and the roadmap together.
+3. When a milestone changes which gaps games can reach (M1.2 made them actions not taken yet:
+   305.1, 601.2, and 800.4a for multiplayer losses), update `ALLOWED_GAPS` in `tools/fuzz.py`,
+   the fuzz tests' expectations and the roadmap together. Random agents stop at the first
+   offered gap they pick; the fuzz tests' `PatientAgent` (`tests/engine_support.py`) mostly
+   passes, so its games reach later turns.
 4. When adding a new check to the harness, add a broken test-only task to
    `tests/engine_support.py` and a test in `tests/fuzz/test_fuzz.py` showing the check catches it.
 
@@ -160,9 +177,9 @@ For the engine loop itself, drive it with small tasks.
 `uv run python tools/play_cli.py [--players N] [--commander] [--seed S] [--random SEAT ...]
 [--deck PATH ...]`. Every seat not in `--random` is a human at the same terminal, shown only its
 own view. Type option numbers from 0 (`help` at the prompt lists the syntax; `view`, `log` and
-`quit` also work). Without `--deck` the decks are empty. Until the turn structure exists (M1.2),
-every game stops after the mulligans at 103.8 (exit
-status 3).
+`quit` also work). Without `--deck` the decks are empty, so every player loses at the first
+upkeep for having drawn from an empty library and the game is a draw. A game that reaches a
+rule the engine doesn't implement exits with status 3.
 
 ### Check that a change works on Windows
 

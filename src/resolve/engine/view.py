@@ -8,6 +8,8 @@ Agents only ever see a ``PlayerView``: a frozen snapshot holding what one player
 - **Hands** show the owner their cards (402.3). Other players see stable placeholder IDs with no
   name, and may count them.
 - **Public zones** (400.2) show every object.
+- **The turn**: its number, the active player, the phase and step, and who holds priority are
+  public (``TurnView``), as is whether each player has lost.
 - **The pending decision**: everyone sees who is deciding and what kind of decision it is; only
   the deciding player gets the request itself.
 - **The log**: the entries this player may see, and the redacted form of those hidden from them
@@ -27,6 +29,7 @@ from resolve.errors import NotImplementedRule
 from resolve.events.base import LogEntry
 from resolve.state.game import GameObject, GameResult, GameState
 from resolve.state.ids import ObjectId, PlayerId
+from resolve.state.turn import Phase, Step
 from resolve.state.zones import ZoneKind
 from resolve.values import Immutable
 
@@ -47,9 +50,22 @@ class PlayerSummary(Immutable):
 
     id: PlayerId
     life: int
+    lost: bool
     library_size: int
     hand: tuple[ObjectView, ...]
     graveyard: tuple[ObjectView, ...]  # last = top
+
+
+@dataclass(frozen=True)
+class TurnView(Immutable):
+    """The turn in progress, which every player can see (500, 117): ``step`` is ``None`` in a
+    main phase, and ``priority`` is ``None`` when nobody holds priority."""
+
+    number: int
+    active_player: PlayerId
+    phase: Phase
+    step: Step | None
+    priority: PlayerId | None
 
 
 @dataclass(frozen=True)
@@ -71,6 +87,7 @@ class PlayerView(Immutable):
     exile: tuple[ObjectView, ...]
     command: tuple[ObjectView, ...]
     starting_player: PlayerId | None
+    turn: TurnView | None
     waiting_for: WaitingFor | None
     request: DecisionRequest | None  # only when ``viewer`` is the one deciding
     log: tuple[LogEntry, ...]
@@ -100,6 +117,7 @@ def view_for(state: GameState, viewer: PlayerId) -> PlayerView:
             PlayerSummary(
                 id=player.id,
                 life=player.life,
+                lost=player.lost,
                 library_size=len(player.library),
                 hand=show(player.hand),
                 graveyard=show(player.graveyard),
@@ -111,6 +129,7 @@ def view_for(state: GameState, viewer: PlayerId) -> PlayerView:
         exile=show(state.exile),
         command=show(state.command),
         starting_player=state.starting_player,
+        turn=_turn_view(state),
         waiting_for=None if pending is None else WaitingFor(pending.player, pending.kind),
         request=pending if pending is not None and pending.player == viewer else None,
         log=tuple(
@@ -118,6 +137,13 @@ def view_for(state: GameState, viewer: PlayerId) -> PlayerView:
         ),
         result=state.result,
     )
+
+
+def _turn_view(state: GameState) -> TurnView | None:
+    turn = state.turn
+    if turn is None:
+        return None
+    return TurnView(turn.number, turn.active_player, turn.phase, turn.step, turn.priority)
 
 
 def _object_view(state: GameState, obj: GameObject, viewer: PlayerId) -> ObjectView:

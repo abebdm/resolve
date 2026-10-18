@@ -19,6 +19,112 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-18: Turns, steps and priority
+- **Decision:** `TakeTurn` runs `TURN_SEQUENCE` (`resolve.state.turn`): every step, with a main
+  phase as a segment whose step is `None` (505.2). Each segment is a `RunStep`: `StepBegan`
+  (logged; "at the beginning of" triggers will match it, 500.6), turn-based actions, a
+  `PriorityRound` except in untap and cleanup (117.3a, 502.4, 514.3), then the end of the step.
+  Skipped steps don't begin at all (500.11): the starting player's first draw step in a game
+  with exactly two seats (103.8a; a game that began with more players never skips, 103.8c,
+  even after players leave), and declare blockers and combat damage whenever no attackers were
+  declared (508.8), which is always until M3 because declaring attackers raises
+  `NotImplementedRule("508.1")` whenever the active player controls a creature. The turn after
+  cleanup belongs to the next player in turn order still in the game.
+- **Decision:** the priority holder (`TurnState.priority`) and the players who passed in
+  succession (`TurnState.passed`) are procedural pointers kept by `PriorityRound`, not events.
+  `PriorityPassed` is logged as the record of each pass but changes nothing. They live in the
+  state, not in the task, so views, invariants and the scenario builder can read and set them.
+- **Decision:** each time a player would receive priority, `CheckStateBasedActions` runs first
+  (117.5, 704.3), also before the next player after a pass. The step ends when every player
+  still in the game has passed in succession with an empty stack; with an object on the stack
+  the game stops at `NotImplementedRule("608.1")` (M2).
+- **Decision:** legal actions the engine can't take yet are offered and raise
+  `NotImplementedRule` when chosen (plan ★7): playing a land (305.1) until M1.3 and casting a
+  spell (601.2) until M2. Hiding them would silently shrink the set of legal actions an AI
+  searches. A player who controls a land with a basic land type would have its intrinsic mana
+  ability (305.6, 117.1d) as an option, so building that player's options raises
+  `NotImplementedRule("305.6")` until M1.3. Options are listed pass first, then hand cards in
+  hand order, then commanders in the command zone (903.8).
+- **Decision:** cast timing (117.1a): an instant whenever the player has priority; any other
+  spell type of 205.2a that is cast (artifact, battle, creature, enchantment, planeswalker,
+  sorcery; kindred through its other type, 308.1) only in the player's own main phase with an
+  empty stack. A land is never cast (305.9). Flash can't exist yet (no definition has
+  abilities). Whether the spell's cost could be paid is part of 601.2 and isn't checked.
+- **Decision:** every multiplayer game uses the attack multiple players option (plan ★6), so the
+  beginning of combat has no 507.1 choice: all the active player's opponents are defending
+  players (802.2). It is Commander's default multiplayer setup (903.2), and a Free-for-All game
+  must use one of the attack options (806.2b). It is a deliberate non-parameter, like the
+  mulligan rule.
+- **Why:** a step is a value (phase and step) rather than a task per step so that later extra
+  steps and phases (500.7-500.10) can be inserted into one sequence; the scenario builder can
+  then resume a turn at any segment.
+- **Rules:** 103.8, 500-514, 117.1-117.5, 802.2, 806.2b, 903.2, 903.8.
+- **Where:** `resolve.state.turn`, `resolve.engine.turns`, `resolve.engine.priority`,
+  `resolve.events.turn`.
+
+### 2026-10-18: State-based actions 704.5a and 704.5b, and losing
+- **Decision:** `state_based_actions(state)` checks every condition before anything happens,
+  and `CheckStateBasedActions` applies all the results as one `ApplyEvents` (704.3), repeating
+  until a check finds nothing. A loss is `PlayerLost`, which sets `Player.lost` and clears the
+  player's empty-draw record. `drew_from_empty_library` is cleared only by the loss: a player
+  with the flag set always loses at the next check, so "since the last time state-based actions
+  were checked" (704.5b) needs no separate clearing. A player who lost has left the game
+  (104.5): `players_in_game` and `next_in_turn_order` skip them.
+- **Decision:** after a loss `EndCheck` ends the game when at most one player is left: that
+  player wins (104.2a), and if none is left the game is a draw (104.4a). A loss that leaves two
+  or more players in the game raises `NotImplementedRule("800.4a")` until M1.5 implements
+  leaving the game. Because the check runs after the whole simultaneous event, two players of
+  three losing together leaves one winner, not a gap.
+- **Rules:** 104.2a, 104.4a, 104.5, 117.5, 121.4, 704.3, 704.5a, 704.5b, 800.4a.
+- **Where:** `resolve.engine.sba`, `resolve.events.game.PlayerLost`.
+
+### 2026-10-18: Cleanup: discarding to hand size
+- **Decision:** 514.1 asks the active player `DISCARD` (a `ChooseSubset` of exactly the excess)
+  when their hand holds more than seven cards. The maximum hand size is seven (402.2) whatever
+  the starting hand size. When two or more cards are discarded, their owner then orders them in
+  the graveyard (404.3) with `ORDER_CARDS`, listed top to bottom; a single card asks no order.
+  The cards are discarded together (one `ApplyEvents` of `CardDiscarded` events, bottom card
+  first). Discards are public. 514.2 has nothing to remove until damage exists (M1.4). 514.3a is
+  implemented: if state-based actions would be performed in cleanup, the active player receives
+  priority and another cleanup step follows. Until M1.4 the only possible state-based actions
+  end the game (tested: a player at 0 life loses in that cleanup step, after the discard); the
+  path where priority and a second cleanup follow is tested in M1.4.
+- **Rules:** 402.2, 404.3, 514.1-514.3a, 701.9a, 701.9b.
+- **Where:** `resolve.engine.turns.DiscardToHandSize`, `RunStep`.
+
+### 2026-10-18: Characteristics without layers, and type lines
+- **Decision:** `resolve.effects.characteristics.characteristics(state, obj)` is the one place
+  the engine reads an object's name and types. It starts from the printed face and applies no
+  continuous effects (none can exist until M5). It isn't cached: design.md §8 allows a cache,
+  but invalidation bugs would be correctness bugs and nothing is slow yet. Transforming and
+  modal double-faced cards use their front face (712.8a, 712.8c, 712.8d); any other multi-faced
+  layout raises `NotImplementedRule("109.3")` when its characteristics are needed (split 709.4,
+  flip 710.1, adventurer 715.4, meld 712.4 all have their own rules).
+- **Decision:** type lines are parsed when card data is built (`CardFace.types`). An unreadable
+  type line (Un-set joke types) doesn't stop the database from loading (binding change 1): the
+  face's `types` is `None`, `CardData.type_line_problems` explains why, and the card is refused
+  where it would be used: `DeckCard` (so `build_deck`, `new_game` and the scenario builder) and
+  the coverage report (`UNREADABLE`, listed in its own section; the tool exits with 1).
+  "Time Lord" is the only two-word creature type (205.3m); a plane's subtype is the whole phrase
+  after the dash (205.3b). Supertypes must come before card types (205.4a).
+- **Rules:** 109.3, 205, 709.4, 712.8.
+- **Where:** `resolve.effects.characteristics`, `resolve.data.types`, `resolve.data.cards`,
+  `resolve.cards.coverage`, `tools/coverage.py`.
+
+### 2026-10-18: Tests for long random games
+- **Decision:** the fuzz tests add `PatientAgent` (`tests/engine_support.py`): a random agent
+  that passes priority 31 times in 32, so random games reach later turns (draws, discards,
+  decking) instead of stopping at the first offered gap. Only some long games run the copy and
+  invalid-answer checks, which are slow on long logs. The broad fuzz test
+  (`test_random_agent_games_complete_with_every_check_passing`) uses decks of 7 to 11 cards,
+  each with an elf, and one empty deck in some games: with 6 or fewer cards every player drew
+  from an empty library during 103.5 and every game ended at the first state-based-action
+  check, before any priority. When every deck has 8 or more cards it asserts that priority
+  was asked, and it counts every object a player owns, in every zone. `ALLOWED_GAPS` is
+  305.1, 601.2 and 800.4a.
+- **Rules:** none.
+- **Where:** `tests/fuzz/test_fuzz.py`, `tools/fuzz.py`.
+
 ### 2026-10-18: Opening hands and mulligans
 - **Decision:** `OpeningHands` follows 103.5 literally. Opening hands are drawn one card at a time,
   the starting player first, then the others in turn order (121.2c, 101.4e). The starting player
@@ -55,7 +161,9 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   so replacement effects will apply per draw, 121.6b). An event is proposed without its outcome
   and `Event.apply` may return a copy recording it (the drawn library object, the new hand
   object); the pipeline logs that applied form. Drawing from an empty library draws nothing,
-  sets `Player.drew_from_empty_library` (cleared by the state-based action check, 704.5b) and
+  sets `Player.drew_from_empty_library` (cleared by the state-based action check, 704.5b;
+  **superseded by 2026-10-18 "State-based actions 704.5a and 704.5b, and losing"**: only the
+  loss clears it) and
   adds 121.4 to the event's rules. A `LogEntry` hidden from some players may carry a `redacted`
   form (`Event.redacted()`), which `view_for` shows to the others with `visible_to=None`
   (`LogEntry.shown_to`). A draw is fully visible only to the drawer; others see the new hand

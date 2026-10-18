@@ -1,7 +1,7 @@
 """Random-agent fuzz games (design.md §14), and tests that the harness catches what it should.
 
-Until the turn structure exists (M1.2), every game stops after the mulligans at
-``NotImplementedRule("103.8: ...")``, which the harness treats as the end of the game. The game
+A game ends when it is over or at one of the harness's allowed gaps (``ALLOWED_GAPS``: actions
+the engine can't take yet, and a game that would continue after a player leaves). The game
 seeds are fixed, so the suite is deterministic.
 """
 
@@ -46,7 +46,8 @@ from resolve.events.base import AnswerRecord
 from resolve.state.config import GameConfig
 from resolve.state.game import GameObject, GameState
 from resolve.state.ids import PlayerId
-from resolve.state.zones import Zone
+from resolve.state.turn import Step as TurnStep
+from resolve.state.zones import COMMAND, Zone
 from resolve.tasks import Task
 from tests import scryfall_fixtures as fx
 from tests.engine_support import (
@@ -59,6 +60,7 @@ from tests.engine_support import (
     HoldsValue,
     LeaksALibraryCard,
     LossyPickle,
+    PatientAgent,
     RejectsEverything,
     Unrepeatable,
     running,
@@ -73,10 +75,19 @@ SEEDS = range(12)
 
 
 def decks_for(players: int, commander: bool, seed: int) -> list[Deck]:
-    """Decks of varying sizes (including empty), with one commander each in Commander games."""
+    """Decks of varying sizes, with one commander each in Commander games.
+
+    Most decks hold 7 to 11 cards, so games get past the opening hands into turns and priority
+    (a deck of 6 or fewer would make every player draw from an empty library during 103.5 and
+    lose at the first state-based-action check, 704.5b). Every deck holds an elf, so random
+    agents soon try to cast it and the game stops at the 601.2 gap. Seat 1's deck is empty in
+    one game of four.
+    """
     commanders = [DAYBREAKER] if commander else []
     return [
-        deck(forests=(seed + seat) % 5, elves=seat % 3, commanders=commanders)
+        deck(forests=0, elves=0, commanders=commanders)
+        if seat == 1 and seed % 4 == 3
+        else deck(forests=6 + (seed + seat) % 4, elves=1 + seat % 2, commanders=commanders)
         for seat in range(players)
     ]
 
@@ -89,20 +100,74 @@ def test_random_agent_games_complete_with_every_check_passing(
 ) -> None:
     config = GameConfig.commander_game() if commander else GameConfig.standard()
     result = fuzz_game(config, decks_for(players, commander, seed), seed)
-    assert result.gap is not None and result.gap.startswith("103.8: ")
-    # 103.1, then at least one mulligan declaration per player (103.5).
-    assert result.answers >= 1 + players
     state = result.state
-    assert state.starting_player is not None
+    if result.gap is None:
+        assert state.result is not None
+    else:
+        assert result.gap.split(": ")[0] in fuzz_tool.ALLOWED_GAPS
     decks = decks_for(players, commander, seed)
+    # 103.1, then at least one mulligan declaration per player with cards to draw (103.5).
+    assert result.answers >= 1 + sum(1 for d in decks if d.cards)
+    assert state.starting_player is not None
+    if all(len(d.cards) >= 8 for d in decks):
+        # Nobody can draw from an empty library before their first priority (103.8, 504.1), so
+        # the game reached a priority decision (117.3a).
+        asked = [e.record.kind for e in state.event_log if isinstance(e.record, AnswerRecord)]
+        assert DecisionKind.PRIORITY_ACTION in asked, "the game reached priority"
+    active = None if state.turn is None else state.turn.active_player
     for player in state.players:
-        held = len(player.hand) + len(player.library)
-        assert held == len(decks[player.id].cards), "every card is in the hand or library"
-        assert len(player.hand) <= 7
+        held = sum(1 for o in state.objects.values() if o.owner == player.id and o.zone != COMMAND)
+        assert held == len(decks[player.id].cards), "every card of the deck is still in the game"
+        # 514.1: only the active player can be above seven, by the card drawn this turn.
+        assert len(player.hand) <= (8 if player.id == active else 7)
     if commander:
         assert len(state.command) == players  # 103.2c
     else:
         assert state.command == []
+
+
+@pytest.mark.parametrize("players", [2, 3, 4])
+@pytest.mark.parametrize("seed", range(2))
+def test_patient_random_agents_play_many_turns_with_every_check_passing(
+    seed: int, players: int
+) -> None:
+    """Agents that usually pass reach later turns: draws, discards, decking (704.5b)."""
+    decks = [deck(forests=6 + seat, elves=2) for seat in range(players)]
+    result = fuzz_run(
+        lambda: new_game(GameConfig.standard(), decks, seed),
+        [PatientAgent(seed * 10 + seat) for seat in range(players)],
+        describe=f"patient game seed {seed}, {players} players",
+        # The copy and invalid-answer checks are slow in long games; one game of each size has them.
+        check_copies=seed == 0,
+        probe_invalid=seed == 1,
+    )
+    state = result.state
+    if result.gap is None:
+        assert state.result is not None
+    else:
+        assert result.gap.split(": ")[0] in fuzz_tool.ALLOWED_GAPS
+    assert state.turn is not None
+
+
+def test_patient_games_include_decking_and_discards() -> None:
+    """Across these seeds some game ends by decking (704.5b) and some player discards (514.1)."""
+    endings: list[str] = []
+    discarded = False
+    for seed in range(4):
+        decks = [deck(forests=8, elves=0), deck(forests=9, elves=0)]
+        result = fuzz_run(
+            lambda decks=decks, seed=seed: new_game(GameConfig.standard(), decks, seed),
+            [PatientAgent(seed), PatientAgent(seed + 100)],
+            describe=f"patient seed {seed}",
+            check_copies=False,
+            probe_invalid=False,
+        )
+        endings.append(result.gap or "over")
+        discarded = discarded or any(p.graveyard for p in result.state.players)
+        if result.gap is None:
+            assert result.state.result is not None
+    assert "over" in endings
+    assert discarded
 
 
 def test_fuzz_games_are_reproducible_from_their_seed() -> None:
@@ -138,6 +203,7 @@ def fuzz(
     agents: Sequence[Agent] | None = None,
     check_copies: bool = True,
     max_answers: int = 50,
+    allowed_gaps: Sequence[str] = fuzz_tool.ALLOWED_GAPS,
 ) -> None:
     """Fuzz a ``running(*tasks)`` game, with ``beneath`` at the bottom of the task stack."""
 
@@ -150,6 +216,7 @@ def fuzz(
     fuzz_run(
         make,
         agents or [RandomAgent(1), RandomAgent(2)],
+        allowed_gaps=allowed_gaps,
         describe="broken game",
         check_copies=check_copies,
         max_answers=max_answers,
@@ -158,10 +225,10 @@ def fuzz(
 
 def test_a_disallowed_gap_is_a_failure() -> None:
     with pytest.raises(FuzzFailure, match=r"gap that isn't allowed: 601\.2: a test gap"):
-        fuzz(GapOnAnswer("601.2"))
+        fuzz(GapOnAnswer("601.2"), allowed_gaps=())
     config = GameConfig.standard()
-    with pytest.raises(FuzzFailure, match=r"isn't allowed: 103\.8"):
-        fuzz_game(config, decks_for(2, False, 0), 0, allowed_gaps=())
+    with pytest.raises(FuzzFailure, match=r"isn't allowed: 305\.1"):
+        fuzz_game(config, [deck(10, 2), deck(10, 2)], 2, allowed_gaps=())
 
 
 def test_an_allowed_gap_ends_the_game() -> None:
@@ -532,9 +599,11 @@ def test_the_command_line_runs_games_and_reports_a_benchmark() -> None:
     assert status == 0
     found = re.search(r"10 games passed: (\d+) answers accepted, (\d+) rejected\.", text)
     assert found is not None
-    # The decks are empty, so 103.1 is the only question: a zero-card hand can't mulligan (103.5).
+    # The decks are empty, so 103.1 is the only question: a zero-card hand can't mulligan (103.5),
+    # and every player, having drawn from an empty library, loses before the first priority
+    # (704.5b): every game is a draw (104.4a).
     assert int(found.group(1)) == 10
-    assert "Endings: 103.8 x10" in text
+    assert "Endings: game over x10" in text
     assert "games per second" in text
 
 
@@ -579,5 +648,52 @@ def test_the_command_line_refuses_unimplemented_decks(tmp_path: Path) -> None:
 
 def test_the_reproduce_command_names_the_failing_game() -> None:
     with pytest.raises(FuzzFailure) as failure:
-        fuzz_game(GameConfig.commander_game(), decks_for(3, True, 8), 8, allowed_gaps=())
+        decks = [deck(10, 2, commanders=[DAYBREAKER]) for _ in range(3)]
+        fuzz_game(GameConfig.commander_game(), decks, 8, allowed_gaps=())
     assert "--games 1 --seed 8 --players 3 --commander" in str(failure.value)
+
+
+def turn_board() -> GameState:
+    """Two players in turn 2's upkeep, player 1 active and about to act."""
+    scenario = Scenario(2)
+    scenario.at(TurnStep.UPKEEP, active=PlayerId(1), number=2)
+    return scenario.build()
+
+
+def test_state_problems_finds_a_view_misreporting_the_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = turn_board()
+    assert state_problems(state) == []
+
+    def wrong_step(view: PlayerView) -> PlayerView:
+        assert view.turn is not None
+        return dataclasses.replace(view, turn=dataclasses.replace(view.turn, step=TurnStep.DRAW))
+
+    leaking(monkeypatch, wrong_step)
+    problems = state_problems(state)
+    assert len(problems) == 2 and all("shows the turn as" in p for p in problems)
+
+
+def test_state_problems_finds_a_view_hiding_the_priority_holder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = turn_board()
+    leaking(
+        monkeypatch,
+        lambda view: dataclasses.replace(
+            view, turn=dataclasses.replace(view.turn, priority=None) if view.turn else None
+        ),
+    )
+    assert len(state_problems(state)) == 2
+
+
+def test_state_problems_finds_a_view_misreporting_a_loss(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = turn_board()
+
+    def everyone_lost(view: PlayerView) -> PlayerView:
+        players = tuple(dataclasses.replace(summary, lost=True) for summary in view.players)
+        return dataclasses.replace(view, players=players)
+
+    leaking(monkeypatch, everyone_lost)
+    problems = state_problems(state)
+    assert "player 0's view misreports whether player 1 lost" in problems
+    assert len(problems) == 4

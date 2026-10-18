@@ -253,10 +253,12 @@ def test_903_6_the_remaining_cards_are_shuffled_and_no_commander_is_left_in_a_li
         assert len(player.library) == 3
         assert all(name_of(state, obj) == "Forest" for obj in player.library)
     kinds = [type(entry.record).__name__ for entry in state.event_log[1:]]
-    assert (
-        kinds
-        == ["StartingPlayerChosen"] + ["CommanderPutIntoCommandZone"] * 3 + ["LibraryShuffled"] * 3
-    ), "103.2c comes after 103.1 and before the 103.3 shuffle"
+    # With no opening hands to draw, the first turn follows the shuffles (103.8).
+    assert kinds[: kinds.index("TurnBegan") + 1] == ["StartingPlayerChosen"] + [
+        "CommanderPutIntoCommandZone"
+    ] * 3 + ["LibraryShuffled"] * 3 + ["TurnBegan"], (
+        "103.2c comes after 103.1 and before the 103.3 shuffle"
+    )
 
 
 def test_613_7m_commanders_entering_together_get_timestamps_in_apnap_order() -> None:

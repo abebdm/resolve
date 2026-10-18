@@ -13,7 +13,7 @@
 5. 103.5: opening hands and mulligans (``resolve.engine.mulligans.OpeningHands``).
 6. 103.6: actions from opening hands. No card definition can have such an ability yet, so there
    is nothing to do.
-7. 103.8: the starting player takes their first turn, which is not implemented yet (roadmap M1).
+7. 103.8: the starting player takes their first turn (``resolve.engine.turns``).
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from typing import TYPE_CHECKING
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import AnswerValue, ChooseOne, Pick, PlayerOption
 from resolve.engine.mulligans import OpeningHands
+from resolve.engine.turns import FirstTurn
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.game import (
     CommanderPutIntoCommandZone,
@@ -108,11 +109,3 @@ class ShuffleLibraries(Task):
             for player in turn_order(state)
         )
         return Push((ApplyEvents(shuffles),))
-
-
-@dataclass(slots=True)
-class FirstTurn(Task):
-    """103.8: the starting player takes their first turn."""
-
-    def run(self, state: GameState) -> TaskResult:
-        raise NotImplementedRule("103.8: taking turns (roadmap M1)")

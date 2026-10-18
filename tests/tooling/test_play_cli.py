@@ -7,8 +7,13 @@ from pathlib import Path
 
 import pytest
 
+from resolve.agents.scripted import ScriptedAgent, choose
+from resolve.decisions.spaces import PlayLandOption
+from resolve.state.ids import PlayerId
+from resolve.state.turn import Phase
 from tests import scryfall_fixtures as fx
-from tools.play_cli import EXIT_CANT_START, EXIT_GAP, EXIT_OVER, EXIT_QUIT, main
+from tests.scenario import Scenario
+from tools.play_cli import EXIT_CANT_START, EXIT_GAP, EXIT_OVER, EXIT_QUIT, main, play_game
 
 
 def run_cli(args: list[str], typed: str = "") -> tuple[int, str]:
@@ -17,22 +22,41 @@ def run_cli(args: list[str], typed: str = "") -> tuple[int, str]:
     return status, output.getvalue()
 
 
-def test_a_game_of_random_agents_runs_to_the_turn_structure_gap() -> None:
-    """Until the turn structure exists (M1.2), every game stops after the mulligans, at 103.8."""
+def test_a_game_of_random_agents_with_empty_decks_ends_in_a_draw() -> None:
+    """Every opening draw from an empty deck fails (121.4), so every player loses when
+    state-based actions are first checked, in the first upkeep (704.5b): a draw (104.4a)."""
     status, text = run_cli(["--players", "3", "--random", "0", "1", "2", "--seed", "4"])
-    assert status == EXIT_GAP
+    assert status == EXIT_OVER
     assert "No --deck given: every player gets an empty deck." in text
-    assert "Stopped: the engine doesn't implement 103.8: taking turns" in text
-    assert "empty_library=True" in text  # empty decks: every opening draw fails (121.4)
+    assert "empty_library=True" in text
+    assert "PlayerLost(player=2)  (704.5b, 121.4, 704.3)" in text
+    assert "Game over: a draw." in text
+    assert "Turn 1, player " in text and "upkeep step; nobody has priority." in text
+
+
+def test_a_game_that_reaches_a_gap_exits_with_3() -> None:
+    """Choosing an action the engine can't take yet stops the game (305.1 until M1.3)."""
+    scenario = Scenario(2)
+    (forest,) = scenario.hand(PlayerId(0), ["Forest"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    output = io.StringIO()
+    agent = ScriptedAgent([choose(PlayLandOption(forest))])
+    status = play_game(state, [agent, agent], output, viewer=PlayerId(0))
+    assert status == EXIT_GAP
+    assert "Stopped: the engine doesn't implement 305.1: playing a land" in output.getvalue()
+    assert "Turn 1, player 0's turn: precombat main phase; player 0 has priority." in (
+        output.getvalue()
+    )
 
 
 def test_a_human_answers_after_a_rejected_answer() -> None:
     """Without --random every seat is human; a rejected answer is asked again (design.md §6)."""
     status, text = run_cli(["--commander"], "7\n0\n")
-    assert status == EXIT_GAP
+    assert status == EXIT_OVER
     assert "life 40" in text
     assert "The engine rejected that answer: option index must be in 0..1" in text
-    assert "Stopped: the engine doesn't implement 103.8" in text
+    assert "Game over: a draw." in text
 
 
 def test_hot_seat_prompts_show_the_deciding_players_view_and_no_final_view() -> None:
@@ -40,7 +64,8 @@ def test_hot_seat_prompts_show_the_deciding_players_view_and_no_final_view() -> 
     the game ends without printing anyone's hand. Seed 1 of a 2-player game asks player 1. The
     decks are empty, so nobody is asked about a mulligan (103.5)."""
     status, text = run_cli(["--seed", "1"], "0\n")
-    assert status == EXIT_GAP
+    assert status == EXIT_OVER
+    assert text.rstrip().endswith("Game over: a draw.")
     assert text.count("=== Player 1's view ===") == 1
     assert "=== Player 0's view ===" not in text
     assert text.index("=== Player 1's view ===") < text.index("Player 1: Choose which player")
@@ -48,16 +73,16 @@ def test_hot_seat_prompts_show_the_deciding_players_view_and_no_final_view() -> 
 
 def test_a_single_human_sees_the_final_view() -> None:
     status, text = run_cli(["--players", "3", "--random", "1", "2", "--seed", "2"], "0\n0\n0\n")
-    assert status == EXIT_GAP
-    final = text.split("Stopped:")[0]
-    assert final.rstrip().endswith(")") and "=== Player 0's view ===" in final
+    assert status == EXIT_OVER
+    final = text[text.rindex("=== Player 0's view ===") :]
+    assert "Game over: a draw." in final
     assert "=== Player 1's view ===" not in text and "=== Player 2's view ===" not in text
 
 
 def test_the_largest_agent_seed_is_accepted() -> None:
     """Seat i plays with seed agent_seed + i, which must stay below 2**64."""
     status, _ = run_cli(["--random", "0", "1", "--agent-seed", str(2**64 - 2)])
-    assert status == EXIT_GAP
+    assert status == EXIT_OVER
     with pytest.raises(SystemExit):
         run_cli(["--random", "0", "1", "--agent-seed", str(2**64 - 1)])
 
