@@ -126,7 +126,7 @@ def test_patient_random_agents_play_many_turns_with_every_check_passing(
         describe=f"patient game seed {seed}, {players} players",
         # The copy and invalid-answer checks are slow in long games; one game of each size has them.
         check_copies=seed == 0,
-        probe_invalid=seed == 1 and players == 2,
+        probe_invalid=seed == 1,
     )
     state = result.state
     if result.gap is None:

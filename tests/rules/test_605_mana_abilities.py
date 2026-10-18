@@ -180,6 +180,7 @@ def test_106_4b_117_3d_passing_announces_unspent_mana() -> None:
     assert first.mana_in_pool == (Mana(G, forest), Mana(G, other))
     assert "106.4b" in first.rules
     assert second.mana_in_pool == ()
+    assert "106.4b" not in second.rules  # nothing to announce
 
 
 def test_502_3_the_active_player_untaps_their_permanents_only() -> None:
@@ -195,6 +196,45 @@ def test_502_3_the_active_player_untaps_their_permanents_only() -> None:
     (untapped,) = events(state, PermanentsUntapped)  # one event: all at once
     assert untapped.objs == tuple(mine[:2])
     assert untapped.rules[0] == "502.3"
+
+
+def test_502_3_untapping_goes_by_controller_not_owner() -> None:
+    scenario = Scenario(2)
+    (borrowed,) = scenario.battlefield(P1, ["Forest"], owner=P0)  # controlled by the AP
+    (lent,) = scenario.battlefield(P0, ["Forest"], owner=P1)  # owned by the AP
+    scenario.tap(borrowed, lent)
+    scenario.library(P1, ["Forest"])
+    scenario.at(Step.UNTAP, active=P1, number=2)
+    state = scenario.build()
+    assert not state.objects[borrowed].tapped
+    assert state.objects[lent].tapped
+
+
+def test_mana_events_are_public() -> None:
+    scenario = Scenario(2)
+    (forest,) = scenario.battlefield(P0, ["Forest"])
+    scenario.library(P0, ["Forest"])
+    scenario.at(Step.UPKEEP, number=3)
+    state = scenario.build()
+    run_script(state, tap(forest, P0), pass_(P0), pass_(P1))
+    kinds = (PermanentTapped, ManaAdded, PriorityPassed, ManaPoolEmptied)
+    entries = [e for e in state.event_log if isinstance(e.record, kinds)]
+    assert {type(e.record) for e in entries} == set(kinds)
+    assert all(e.visible_to is None for e in entries)
+
+
+def test_500_5_mana_empties_at_the_end_of_steps_without_priority() -> None:
+    scenario = Scenario(2)
+    scenario.mana(P0, G)
+    for player in scenario.players:
+        scenario.library(player, ["Forest"])
+    scenario.at(Step.CLEANUP)
+    state = scenario.build()
+    assert state.player(P0).mana_pool == []
+    (emptied,) = events(state, ManaPoolEmptied)
+    assert emptied.player == P0
+    turn = state.turn
+    assert turn is not None and (turn.number, turn.step) == (2, Step.UPKEEP)
 
 
 def test_502_3_nothing_tapped_logs_no_untap() -> None:
@@ -220,8 +260,8 @@ def test_302_6_a_creatures_tap_ability_is_a_gap() -> None:
     assert gap.value.rule == "302.6"
 
 
-def test_activating_an_ability_that_cant_be_activated_is_rejected() -> None:
-    """The option list is the space: a tapped land's ability isn't offered (118.3)."""
+def test_an_answer_naming_no_offered_option_is_rejected() -> None:
+    """With only Pass offered (the land is tapped, 118.3), index 1 is out of the space."""
     scenario = Scenario(2)
     (forest,) = scenario.battlefield(P0, ["Forest"])
     scenario.tap(forest)

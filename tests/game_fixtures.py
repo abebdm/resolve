@@ -64,7 +64,15 @@ def database() -> CardDatabase:
 def scenario_registry() -> CardRegistry:
     """``registry()`` plus the other basic lands, the fixture instant, sorcery, split card and
     nonbasic Forest: the scenario builder's default."""
-    extra = ("Test Shock", "Test Ponder", "Test Spark", "Test Frost", "Test Nonbasic Forest")
+    extra = (
+        "Test Shock",
+        "Test Ponder",
+        "Test Spark",
+        "Test Frost",
+        "Test Nonbasic Forest",
+        "Test Land Creature",
+        "Test Dual",
+    )
     lands = (basic_lands.PLAINS, basic_lands.ISLAND, basic_lands.SWAMP, basic_lands.MOUNTAIN)
     return CardRegistry(
         [*(registry().get(n) for n in registry().names()), *lands, *map(CardDefinition, extra)]
@@ -73,7 +81,7 @@ def scenario_registry() -> CardRegistry:
 
 def scenario_database() -> CardDatabase:
     """``database()`` plus the cards of ``scenario_registry()``: the scenario builder's default."""
-    extra = [fx.INSTANT_CARD, fx.SORCERY_CARD, fx.NONBASIC_FOREST]
+    extra = [fx.INSTANT_CARD, fx.SORCERY_CARD, fx.NONBASIC_FOREST, fx.LAND_CREATURE, fx.DUAL_LAND]
     lands = [fx.PLAINS, fx.ISLAND, fx.SWAMP, fx.MOUNTAIN]
     return CardDatabase(parse_oracle_cards([*fx.default_cards(), *lands, *extra]))
 

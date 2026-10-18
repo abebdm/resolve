@@ -32,6 +32,7 @@ from resolve.decisions.spaces import (
     PlayLandOption,
 )
 from resolve.effects.characteristics import characteristics
+from resolve.errors import NotImplementedRule
 from resolve.events.permanents import LandPlayed
 from resolve.state.game import GameState
 from resolve.state.ids import PlayerId
@@ -66,6 +67,7 @@ def test_305_1_the_active_player_plays_a_land_in_their_main_phase() -> None:
     (played,) = state.battlefield
     obj = state.objects[played]
     assert played != forest and obj.card == forest_card  # 400.7
+    assert forest not in state.objects  # the hand object is gone
     assert obj.controller == P0 and not obj.tapped  # 305.1, 110.5b
     assert state.player(P0).hand == [] and state.stack == []
     turn = state.turn
@@ -76,7 +78,7 @@ def test_305_1_the_active_player_plays_a_land_in_their_main_phase() -> None:
     assert request.player == P0 and request.kind is DecisionKind.PRIORITY_ACTION
     assert turn.passed == []
     (entry,) = [e for e in state.event_log if isinstance(e.record, LandPlayed)]
-    assert entry.visible_to is None
+    assert entry.visible_to is None  # public
     assert entry.record.rules[:2] == ("305.1", "116.2a")
     run_script(state, pass_(P0))
     assert (turn.phase, turn.step) == (Phase.PRECOMBAT_MAIN, None)  # player 1 must pass again
@@ -212,3 +214,55 @@ def test_305_1_a_played_land_can_tap_for_mana_at_once() -> None:
     assert ActivateAbilityOption(played, 0) in options(state)
     assert names(state, BATTLEFIELD) == ["Forest"]
     assert names(state, Zone.hand(P0)) == []
+
+
+def test_305_1_a_land_may_be_played_in_the_postcombat_main_phase() -> None:
+    scenario = Scenario(2)
+    (forest,) = scenario.hand(P0, ["Forest"])
+    scenario.at(Phase.POSTCOMBAT_MAIN)
+    state = scenario.build()
+    assert options(state) == (PassOption(), PlayLandOption(forest))
+    run_script(state, choose(PlayLandOption(forest)))
+    assert names(state, BATTLEFIELD) == ["Forest"]
+    assert state.turn is not None and state.turn.lands_played == 1
+
+
+def test_305_9_a_land_that_is_also_a_creature_is_played_never_cast() -> None:
+    scenario = Scenario(2)
+    (card,) = scenario.hand(P0, ["Test Land Creature"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    assert options(state) == (PassOption(), PlayLandOption(card))
+    scenario = Scenario(2)
+    scenario.hand(P0, ["Test Land Creature"])
+    scenario.at(Step.UPKEEP)
+    assert options(scenario.build()) == (PassOption(),)
+
+
+def test_302_6_a_land_creatures_mana_ability_is_a_gap() -> None:
+    """On the battlefield its {T} ability is a creature's (302.6), which isn't tracked yet."""
+    scenario = Scenario(2)
+    scenario.battlefield(P0, ["Test Land Creature"])
+    scenario.at(Step.UPKEEP)
+    with pytest.raises(NotImplementedRule) as gap:
+        scenario.build()
+    assert gap.value.rule == "302.6"
+
+
+def test_305_6_two_basic_land_types_give_one_ability_each_in_type_line_order() -> None:
+    scenario = Scenario(2)
+    (dual,) = scenario.battlefield(P0, ["Test Dual"])
+    scenario.at(Step.UPKEEP)
+    state = scenario.build()
+    assert [a.text for a in characteristics(state, dual).abilities] == [
+        "{T}: Add {G}.",
+        "{T}: Add {U}.",
+    ]
+    assert options(state) == (
+        PassOption(),
+        ActivateAbilityOption(dual, 0),
+        ActivateAbilityOption(dual, 1),
+    )
+    run_script(state, choose(ActivateAbilityOption(dual, 1)))
+    assert state.player(P0).mana_pool == [Mana(ManaType.BLUE, dual)]
+    assert options(state) == (PassOption(),)  # 118.3: both share the one {T}

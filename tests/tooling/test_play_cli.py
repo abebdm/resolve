@@ -136,7 +136,8 @@ def test_random_agents_play_a_basic_land_game_to_its_end(tmp_path: Path) -> None
     status, text = run_cli([*args, "--random", "0", "1", "--seed", "3"])
     assert status == EXIT_OVER
     assert "Game over: won by player" in text
-    assert "LandPlayed(" in text or "Forest #" in text
+    battlefield = text[text.rindex("Battlefield:") :].splitlines()[0]
+    assert "Forest #" in battlefield, "lands were played"
 
 
 def test_missing_card_data_is_reported(tmp_path: Path) -> None:
