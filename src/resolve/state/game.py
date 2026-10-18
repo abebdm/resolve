@@ -85,6 +85,8 @@ class Player:
     - ``drew_from_empty_library``: the player attempted to draw from an empty library since
       state-based actions were last checked (121.4, 704.5b).
     - ``lost``: the player has lost the game (104.3, 704.5a, 704.5b).
+    - ``left_game``: the player has left the game (104.5, 800.4): after losing, or after a draw
+      for them. A player who left owns no objects any more (800.4a).
     - ``mana_pool``: unspent mana, one unit per element, in the order it was added (106.4).
     """
 
@@ -96,6 +98,7 @@ class Player:
     graveyard: list[ObjectId] = field(default_factory=list[ObjectId])
     drew_from_empty_library: bool = False
     lost: bool = False
+    left_game: bool = False
     mana_pool: list[Mana] = field(default_factory=list[Mana])
 
 
@@ -200,11 +203,12 @@ def turn_order(state: GameState) -> tuple[PlayerId, ...]:
 
 
 def players_in_game(state: GameState) -> tuple[PlayerId, ...]:
-    """The players still in the game, in turn order (104.5, 800.4).
-
-    A player who lost the game has left it (104.5).
-    """
-    return tuple(player for player in turn_order(state) if not state.player(player).lost)
+    """The players still in the game, in turn order (104.5, 800.4); in seating order before the
+    starting player is chosen (103.1)."""
+    seats = (
+        tuple(p.id for p in state.players) if state.starting_player is None else turn_order(state)
+    )
+    return tuple(player for player in seats if not state.player(player).left_game)
 
 
 def apnap_order(state: GameState) -> tuple[PlayerId, ...]:
@@ -213,9 +217,10 @@ def apnap_order(state: GameState) -> tuple[PlayerId, ...]:
     """
     in_game = players_in_game(state)
     active = state.starting_player if state.turn is None else state.turn.active_player
+    if active is None:
+        return in_game  # before 103.1: seating order
     if active not in in_game:
         # 800.4j: a turn can continue after its active player left; start from the next player.
-        assert active is not None
         if not in_game:
             return ()
         active = next_in_turn_order(state, active)
@@ -231,7 +236,7 @@ def next_in_turn_order(state: GameState, player: PlayerId) -> PlayerId:
     count = len(state.players)
     for offset in range(1, count + 1):
         candidate = PlayerId((player + offset) % count)
-        if candidate != player and not state.player(candidate).lost:
+        if candidate != player and not state.player(candidate).left_game:
             return candidate
     raise EngineError(f"no player after player {player} is still in the game")
 

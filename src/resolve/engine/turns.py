@@ -95,6 +95,9 @@ class TakeTurn(Task):
     started: bool = False
 
     def run(self, state: GameState) -> TaskResult:
+        if not self.started and state.player(self.player).left_game:
+            # 800.4k: a player who left the game doesn't begin a turn.
+            return Push((TakeTurn(next_in_turn_order(state, self.player)),))
         if not self.started:
             self.started = True
             number = 1 if state.turn is None else state.turn.number + 1
@@ -185,6 +188,8 @@ class RunStep(Task):
                 untap = PermanentsUntapped(objs=tapped, rules=("502.3", "701.26b"))
                 return (ApplyEvents((untap,)),)
             case Step.DRAW:
+                if state.player(active).left_game:
+                    return ()  # 800.4j: the turn goes on without an active player to draw
                 return (DrawCards(active, 1, ("504.1",)),)
             case Step.DECLARE_ATTACKERS:
                 for obj in state.battlefield:
@@ -242,6 +247,10 @@ class DiscardToHandSize(Task):
     chosen: tuple[ObjectId, ...] = ()
 
     def run(self, state: GameState) -> TaskResult:
+        if state.player(self.player).left_game:
+            return Done()  # 800.4j: no active player to discard
+        if len(self.chosen) > 1:
+            return self._ask_order()  # asked again after a concession
         hand = state.player(self.player).hand
         excess = len(hand) - MAXIMUM_HAND_SIZE
         if excess <= 0:
@@ -259,18 +268,21 @@ class DiscardToHandSize(Task):
             case ChooseSubset(), PickMany():
                 self.chosen = tuple(_object(o) for o in request.space.chosen(answer))
                 if len(self.chosen) > 1:
-                    return NeedDecision(
-                        player=self.player,
-                        kind=DecisionKind.ORDER_CARDS,
-                        space=ChooseOrder(tuple(ObjectOption(obj) for obj in self.chosen)),
-                        prompt="Order the discarded cards in your graveyard, from top to bottom.",
-                        rules=("404.3",),
-                    )
+                    return self._ask_order()
                 return self._discard(self.chosen)
             case ChooseOrder(), Order():
                 return self._discard(tuple(_object(o) for o in request.space.chosen(answer)))
             case _:
                 raise EngineError(f"DiscardToHandSize can't resume with {answer!r}")
+
+    def _ask_order(self) -> TaskResult:
+        return NeedDecision(
+            player=self.player,
+            kind=DecisionKind.ORDER_CARDS,
+            space=ChooseOrder(tuple(ObjectOption(obj) for obj in self.chosen)),
+            prompt="Order the discarded cards in your graveyard, from top to bottom.",
+            rules=("404.3",),
+        )
 
     def _discard(self, top_to_bottom: tuple[ObjectId, ...]) -> TaskResult:
         # The cards go into the graveyard bottom first, so the first listed ends up on top.

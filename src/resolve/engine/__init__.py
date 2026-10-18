@@ -4,6 +4,7 @@ Public API, turn structure, priority, casting, resolution and combat (design.md 
 """
 
 from resolve.engine.api import new_game, pending_decision, submit, view_for
+from resolve.engine.concede import concede
 from resolve.engine.deck import Deck, DeckCard, build_deck
 from resolve.engine.view import PlayerView
 
@@ -12,6 +13,7 @@ __all__ = [
     "DeckCard",
     "PlayerView",
     "build_deck",
+    "concede",
     "new_game",
     "pending_decision",
     "submit",

@@ -19,6 +19,58 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-18: Conceding and leaving the game
+- **Decision (plan ★1):** M1 implements leaving the game for everything that can exist in M1:
+  `LeaveGame` (`PlayerLeftGame`) removes every object the player owns from every zone and
+  empties their mana pool (800.4a); if they held priority, the priority task gives it to the
+  next player in turn order (800.4a); a turn whose active player left continues without one
+  (800.4j: no draw, no discard, priority starts with the next player); a player who left begins
+  no turns (800.4k); a choice a rule asks of a player who left goes to the next player in turn
+  order (800.4h; before 103.1 in seating order). Objects whose controller differs from their
+  owner (only control-changing effects could make them, and none exist; the scenario builder
+  can) raise `NotImplementedRule("800.4a")`. M7 keeps the rest of 800.4.
+- **Decision:** `Player.lost` and `Player.left_game` are separate: a loss (704.5, 104.3a) is
+  followed by leaving (104.5). The game ends once at most one player is left (104.2a, 104.4a);
+  the losers leave first, so their objects are gone from the final state. Losers of one check
+  leave one at a time in APNAP order, then the end check runs once.
+- **Decision (★2):** `concede(state, player)` withdraws the pending request, logs `Conceded`,
+  applies `PlayerLost` (104.3a) and the leaving, and runs the loop. Every asking task's `run`
+  is re-entrant: `StartGame` keeps its chooser instead of drawing again; `OpeningHands`,
+  `DiscardToHandSize` and `CheckStateBasedActions` ask again or skip players who left (an SBA
+  check whose objects or players vanished is computed again); `PriorityRound` asks again.
+- **Decision (interpretation):** when the player who would receive priority has left, earlier
+  passes still count. If every player still in the game has passed in succession, that is all
+  players passing (117.4): the step ends (or the stack resolves). Otherwise the next player in
+  turn order receives priority. The fuzz harness found the first case (four players: three had
+  passed when the holder conceded). **Why:** 800.4a's last sentence alone ("priority passes to
+  the next player in turn order") could be read as giving that player priority again even
+  though they passed; but 117.4 ends the step once all players have passed in succession,
+  just as it overrides 117.3d after an ordinary pass, and 800.4j says the same for a
+  departed active player ("or the phase or step ends, whichever is appropriate"). The CR
+  doesn't settle it explicitly; the user confirmed this reading (2026-10-18).
+- **Decision (★3):** a replay is the config, decks, seed and the ordered inputs: answers and
+  concessions (`resolve.agents.replay`). The fuzz harness concedes for a random player now and
+  then (`--concessions N`, default 1 in 200 decisions), in the state and its copies alike, and
+  replays the inputs at the end. A replay whose game asks another question, ends sooner, or
+  has the conceding player already out raises `ReplayDiverged`.
+- **Decision:** `PlayerLeftGame` is public and names the objects that left from every zone
+  but the library; it only counts the library's (`library_size`). Library object IDs are
+  never shown to other players (design.md §9), and redacting a public event would have hidden
+  the rest for no gain; the leaving player doesn't need the IDs either.
+- **Decision:** a concession during another player's decision keeps the answers already
+  given where the question is unchanged: the cards chosen for a discard or for the bottom of
+  a library are kept and only their order is asked again; an owner's order of dying
+  creatures stands unless the check changes (it is computed again, and its orders asked
+  again, when a player who left owned some of its creatures). A concession draws no
+  randomness: the 103.1 chooser isn't determined again.
+- **Decision:** a game that began with more than two players stays multiplayer after players
+  leave (100.1b, 103.5c, 103.8c): `is_multiplayer` counts seats.
+- **Rules:** 100.1b, 103.5c, 103.8c, 104.2a, 104.3a, 104.4a, 104.5, 117.4, 800.4a, 800.4h,
+  800.4j, 800.4k.
+- **Where:** `resolve.engine.concede`, `resolve.engine.sba`, `resolve.engine.priority`,
+  `resolve.engine.start`, `resolve.engine.mulligans`, `resolve.engine.turns`,
+  `resolve.agents.replay`, `tools/fuzz.py`.
+
 ### 2026-10-18: Creatures, damage and state-based actions 704.5f and 704.5g
 - **Decision:** damage is a number marked on the permanent (`GameObject.damage`, 120.6); only
   permanents have any, and a new object has none (400.7). Nothing deals damage yet (combat is
@@ -186,16 +238,17 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   `resolve.cards.coverage`, `tools/coverage.py`.
 
 ### 2026-10-18: Tests for long random games
-- **Decision:** the fuzz tests add `PatientAgent` (`tests/engine_support.py`): a random agent
-  that passes priority 31 times in 32, so random games reach later turns (draws, discards,
-  decking) instead of stopping at the first offered gap. Only some long games run the copy and
-  invalid-answer checks, which are slow on long logs. The broad fuzz test
-  (`test_random_agent_games_complete_with_every_check_passing`) uses decks of 7 to 11 cards,
-  each with an elf, and one empty deck in some games: with 6 or fewer cards every player drew
-  from an empty library during 103.5 and every game ended at the first state-based-action
-  check, before any priority. When every deck has 8 or more cards it asserts that priority
-  was asked, and it counts every object a player owns, in every zone. `ALLOWED_GAPS` was
-  305.1, 601.2 and 800.4a in M1.2; M1.3 removed 305.1.
+- **Decision:** the fuzz tests add `PatientAgent` (`tests/engine_support.py`): a random agent that
+  passes priority 31 times in 32, so random games reach later turns (draws, discards, decking)
+  instead of stopping at the first offered gap. Only some long games run the copy and invalid-answer
+  checks, which are slow on long logs. The broad fuzz test
+  (`test_random_agent_games_complete_with_every_check_passing`) uses decks of 8 to 11 cards, each
+  with two elves (one in M1.2 to M1.4; two since M1.5, whose multiplayer games go on after a player
+  leaves, to keep it fast), and one empty deck in some games: with 6 or fewer cards every player
+  drew from an empty library during 103.5 and every game ended at the first state-based-action
+  check, before any priority. When every deck has 8 or more cards it asserts that priority was
+  asked, and it counts every object a player owns, in every zone. `ALLOWED_GAPS` was 305.1, 601.2
+  and 800.4a in M1.2; M1.3 removed 305.1 and M1.5 removed 800.4a.
 - **Rules:** none.
 - **Where:** `tests/fuzz/test_fuzz.py`, `tools/fuzz.py`.
 

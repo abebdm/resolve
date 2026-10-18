@@ -9,8 +9,8 @@ Agents only ever see a ``PlayerView``: a frozen snapshot holding what one player
   name, and may count them.
 - **Public zones** (400.2) show every object.
 - **The turn**: its number, the active player, the phase and step, and who holds priority are
-  public (``TurnView``), as is whether each player has lost, each mana pool (announced when its
-  player passes, 106.4b) and which permanents are tapped.
+  public (``TurnView``), as is whether each player has lost or left the game, each mana pool
+  (announced when its player passes, 106.4b) and which permanents are tapped.
 - **The pending decision**: everyone sees who is deciding and what kind of decision it is; only
   the deciding player gets the request itself.
 - **The log**: the entries this player may see, and the redacted form of those hidden from them
@@ -59,6 +59,7 @@ class PlayerSummary(Immutable):
     id: PlayerId
     life: int
     lost: bool
+    left_game: bool
     mana_pool: tuple[Mana, ...]
     library_size: int
     hand: tuple[ObjectView, ...]
@@ -127,6 +128,7 @@ def view_for(state: GameState, viewer: PlayerId) -> PlayerView:
                 id=player.id,
                 life=player.life,
                 lost=player.lost,
+                left_game=player.left_game,
                 mana_pool=tuple(player.mana_pool),
                 library_size=len(player.library),
                 hand=show(player.hand),

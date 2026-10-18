@@ -75,16 +75,16 @@ def test_a_turn_state_survives_copy_and_pickle() -> None:
     assert pickle.loads(pickle.dumps(turn)) == turn
 
 
-def test_players_in_game_and_next_in_turn_order_skip_players_who_lost() -> None:
+def test_players_in_game_and_next_in_turn_order_skip_players_who_left() -> None:
     state = Scenario(4, starting_player=2).build()
     assert players_in_game(state) == (P2, P3, P0, P1)
     assert next_in_turn_order(state, P3) == P0
-    state.player(P0).lost = True
+    state.player(P0).left_game = True
     assert players_in_game(state) == (P2, P3, P1)
     assert next_in_turn_order(state, P3) == P1
     assert next_in_turn_order(state, P0) == P1  # from a player who left, too
     for player in (P1, P2, P3):
-        state.player(player).lost = True
+        state.player(player).left_game = True
     with pytest.raises(EngineError, match="still in the game"):
         next_in_turn_order(state, P0)
 
@@ -126,7 +126,7 @@ def test_turn_invariants_catch_bad_bookkeeping(field: str, value: object, proble
 
 def test_a_priority_holder_who_left_the_game_is_caught() -> None:
     state = at_upkeep()
-    state.player(P1).lost = True
+    state.player(P1).left_game = True
     assert any("has left the game" in p for p in invariant_violations(state))
 
 
@@ -166,7 +166,7 @@ def test_101_4_apnap_order_starts_with_the_active_player() -> None:
     assert apnap_order(state) == (P1, P2, P3, P0)  # 101.4e: before the first turn
     state.turn = TurnState(3, P3)
     assert apnap_order(state) == (P3, P0, P1, P2)
-    state.player(P0).lost = True
+    state.player(P0).left_game = True
     assert apnap_order(state) == (P3, P1, P2)
-    state.player(P3).lost = True  # 800.4j: the turn goes on without its active player
+    state.player(P3).left_game = True  # 800.4j: the turn goes on without its active player
     assert apnap_order(state) == (P1, P2)

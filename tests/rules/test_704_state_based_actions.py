@@ -156,7 +156,8 @@ def test_117_5_704_3_state_based_actions_are_performed_as_one_event() -> None:
     state = scenario.build()
     assert state.result is not None and state.result.winners == (P0,)
     kinds = [type(e.record).__name__ for e in state.event_log]
-    assert kinds == ["PlayerLost", "PlayerLost", "GameEnded"]  # adjacent: one check
+    # Adjacent: one check; then each loser leaves (104.5) and the game ends.
+    assert kinds == ["PlayerLost", "PlayerLost", "PlayerLeftGame", "PlayerLeftGame", "GameEnded"]
     assert [lost.player for lost in losses(state)] == [P1, P2]  # APNAP order of the record
 
 
@@ -167,15 +168,6 @@ def test_104_4a_everyone_losing_together_in_multiplayer_is_a_draw() -> None:
     scenario.at(Step.UPKEEP)
     state = scenario.build()
     assert state.result is not None and state.result.is_draw
-
-
-def test_800_4a_a_loss_that_leaves_two_players_in_the_game_is_a_gap_until_m1_5() -> None:
-    scenario = Scenario(3)
-    scenario.life(P2, 0)
-    scenario.at(Step.UPKEEP)
-    with pytest.raises(NotImplementedRule) as gap:
-        scenario.build()
-    assert gap.value.rule == "800.4a"
 
 
 def test_the_views_show_who_lost_and_the_result() -> None:
@@ -275,7 +267,7 @@ def test_704_3_creatures_and_players_are_handled_in_the_same_event() -> None:
     scenario.at(Step.UPKEEP)
     state = scenario.build()
     kinds = [type(e.record).__name__ for e in state.event_log]
-    assert kinds == ["PutIntoGraveyard", "PlayerLost", "GameEnded"]
+    assert kinds == ["PutIntoGraveyard", "PlayerLost", "PlayerLeftGame", "GameEnded"]
     assert state.result is not None and state.result.winners == (P0,)
 
 
