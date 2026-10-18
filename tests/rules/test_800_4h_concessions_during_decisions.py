@@ -110,6 +110,27 @@ def test_404_3_800_4a_an_owner_of_dying_creatures_concedes_while_ordering_them()
     assert state.result is None
 
 
+def test_404_3_800_4a_an_owner_who_already_ordered_concedes_while_another_orders() -> None:
+    """Player 0 orders their dying creatures, then concedes while player 1 orders theirs:
+    player 0's creatures leave the game with them (800.4a), the check is computed again, and
+    player 1 is asked again with a new id; player 1's final answer is the order that counts."""
+    scenario, _, (lions, p1_giant) = dying_creatures()
+    state = scenario.build()
+    bears, giant = state.battlefield[:2]
+    run_script(state, order(P0, bears, giant))
+    asked = request_of(state)
+    assert asked.player == P1
+    concede(state, P0)
+    again = request_of(state)
+    assert (again.kind, again.player) == (DecisionKind.ORDER_CARDS, P1)
+    assert again.id != asked.id
+    run_script(state, order(P1, lions, p1_giant))  # the Lions on top
+    assert names(state, Zone.graveyard(P1)) == ["Hill Giant", "Savannah Lions"]
+    assert names(state, Zone.graveyard(P2)) == ["Grizzly Bears"]
+    assert not any(o.owner == P0 for o in state.objects.values())
+    assert state.battlefield == []
+
+
 # --- 514.1 and 404.3: discarding in cleanup ---------------------------------------------------
 
 
@@ -159,6 +180,26 @@ def test_404_3_another_player_conceding_while_discards_are_ordered() -> None:
     assert len(state.player(P0).hand) == 7
     turn = state.turn
     assert turn is not None and (turn.number, turn.active_player) == (2, P1)
+
+
+def test_514_1_800_4a_the_active_player_concedes_while_ordering_their_discards() -> None:
+    """Player 0 has chosen two cards to discard and concedes while ordering them: nothing is
+    discarded, everything player 0 owned leaves the game, and player 1's turn begins with
+    player 1's hand untouched."""
+    scenario, hand = cleanup()
+    state = scenario.build()
+    run_script(
+        state,
+        choose(ObjectOption(hand[3]), ObjectOption(hand[1]), kind=DecisionKind.DISCARD),
+    )
+    assert request_of(state).kind is DecisionKind.ORDER_CARDS
+    p1_hand = list(state.player(P1).hand)
+    concede(state, P0)
+    assert records(state, CardDiscarded) == []
+    assert not any(o.owner == P0 for o in state.objects.values())
+    turn = state.turn
+    assert turn is not None and (turn.number, turn.active_player) == (2, P1)
+    assert state.player(P1).hand == p1_hand
 
 
 # --- 103.5: putting cards on the bottom after a mulligan --------------------------------------

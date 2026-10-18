@@ -208,6 +208,20 @@ def test_117_4_the_holder_leaves_after_a_player_who_passed_left() -> None:
     assert turn is not None and turn.step is Step.UPKEEP
 
 
+def test_800_4a_priority_passes_over_a_player_who_left_earlier() -> None:
+    """Four players; player 2 left earlier. Player 1 holds priority (player 0 passed) and
+    concedes: priority goes to the next player in turn order who is still in the game, player
+    3 (800.4a), not player 2."""
+    scenario = board(4)
+    scenario.at(Step.UPKEEP, number=2, active=P0, priority=P1, passed=[P0])
+    state = scenario.build()
+    concede(state, P2)
+    assert request_of(state).player == P1
+    concede(state, P1)
+    request = request_of(state)
+    assert (request.kind, request.player) == (DecisionKind.PRIORITY_ACTION, P3)
+
+
 def test_117_4_a_player_who_hadnt_passed_leaves_and_the_next_pass_ends_the_step() -> None:
     """Four players: 0 and 1 passed, 2 holds priority. Player 3, who hadn't passed, leaves:
     player 2's pass is the last one needed, and the step ends (117.4)."""

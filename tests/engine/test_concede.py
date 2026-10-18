@@ -185,7 +185,9 @@ def test_concede_asks_a_pending_discard_again_with_a_new_id() -> None:
 
 def test_an_answer_from_a_player_who_left_is_rejected() -> None:
     """Player 0 left; an answer in their name to the pending request (with its current id) is
-    refused and changes nothing (design.md §6: only the asked player answers)."""
+    refused and changes nothing. It is refused because only the asked player may answer
+    (design.md §6), and a player who left is never asked (800.4h; the invariants check it), so
+    no separate check for players who left is needed."""
     state = at_upkeep(3).build()
     concede(state, P0)
     request = request_of(state)

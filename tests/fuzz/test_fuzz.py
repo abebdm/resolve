@@ -190,7 +190,26 @@ def test_random_agents_finish_land_only_games_with_concessions(seed: int, player
     losses = [e.record for e in state.event_log if isinstance(e.record, PlayerLost)]
     assert losses and all(loss.rules[0] in ("104.3a", "704.5b") for loss in losses)
     conceded = [e.record.player for e in state.event_log if isinstance(e.record, Conceded)]
+    assert conceded, "1 decision in 15 has a concession: every one of these games has one"
     assert {loss.player for loss in losses if loss.rules[0] == "104.3a"} == set(conceded)
+
+
+def test_a_concession_then_a_decking_loss_in_a_fuzz_game() -> None:
+    """Three players, land-only decks, 1 concession in 60 decisions (seed 1): a player concedes
+    (104.3a), the game goes on without them (800.4j, 800.4k), and later another player draws from
+    an empty library and loses (704.5b); the last one wins (104.2a). Checked like every fuzz game,
+    and replayed from its answers and concessions."""
+    decks = [deck(forests=8 + seat, elves=0) for seat in range(3)]
+    result = fuzz_game(
+        GameConfig.standard(), decks, 1, check_copies=False, probe_invalid=False,
+        concession_chance=60,
+    )  # fmt: skip
+    state = result.state
+    assert result.gap is None and state.result is not None
+    losses = [e.record for e in state.event_log if isinstance(e.record, PlayerLost)]
+    assert [loss.rules[0] for loss in losses] == ["104.3a", "704.5b"]
+    assert state.result.winners == tuple(p.id for p in state.players if not p.left_game)
+    assert_leaving_is_consistent(state, decks)
 
 
 def test_random_agents_concede_in_commander_games() -> None:
