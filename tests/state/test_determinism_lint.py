@@ -32,12 +32,15 @@ def banned_uses(source: str) -> list[str]:
             for alias in node.names:
                 if alias.name.split(".")[0] in BANNED_MODULES:
                     found.append(f"line {node.lineno}: import {alias.name}")
-        elif isinstance(node, ast.ImportFrom) and node.module is not None:
-            if node.module.split(".")[0] in BANNED_MODULES:
+        elif isinstance(node, ast.ImportFrom):
+            if (node.module or "").split(".")[0] in BANNED_MODULES:
                 found.append(f"line {node.lineno}: from {node.module} import ...")
-        elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
-            if node.func.id in BANNED_CALLS:
-                found.append(f"line {node.lineno}: {node.func.id}()")
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in BANNED_CALLS
+        ):
+            found.append(f"line {node.lineno}: {node.func.id}()")
     return found
 
 

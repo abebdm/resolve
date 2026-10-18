@@ -40,7 +40,7 @@ def test_invalid_answers_are_rejected(answer: DecisionAnswer, message: str) -> N
 
 def test_an_answer_must_be_a_decision_answer() -> None:
     with pytest.raises(InvalidAnswer, match="DecisionAnswer"):
-        validate_answer(REQUEST, Number(1))  # type: ignore[arg-type]
+        validate_answer(REQUEST, Number(1))  # pyright: ignore[reportArgumentType] (deliberately the wrong type)
 
 
 @pytest.mark.parametrize("rules", [(), ("ten",), ("103.1", "1.1")])

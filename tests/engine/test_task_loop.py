@@ -67,7 +67,9 @@ def test_check_answer_rejection_leaves_the_state_unchanged() -> None:
         submit(state, answer(state, Number(3)))
     assert state == before
     submit(state, answer(state, Number(2)))  # the same decision can still be answered
-    assert len(state.tasks[-1].received) == 1  # type: ignore[attr-defined]
+    task = state.tasks[-1]
+    assert isinstance(task, AskTwice)
+    assert task.received == (2,)
 
 
 def test_space_rejection_leaves_the_state_unchanged() -> None:

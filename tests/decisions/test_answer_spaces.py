@@ -54,7 +54,7 @@ def test_choose_one_rejects_other_answer_types_and_non_integers() -> None:
     assert not accepts(space, Number(0))
     assert not accepts(space, PickMany((0,)))
     assert not accepts(space, Pick(True))  # a bool isn't an index
-    assert not accepts(space, Pick("0"))  # type: ignore[arg-type]
+    assert not accepts(space, Pick("0"))  # pyright: ignore[reportArgumentType] (deliberately the wrong type)
 
 
 def test_choose_one_needs_options() -> None:
@@ -80,7 +80,7 @@ def test_choose_subset_answers_are_canonical_sorted_and_unique() -> None:
     assert not accepts(space, PickMany((1, 1)))
     assert not accepts(space, PickMany((0, 3)))
     assert not accepts(space, PickMany((-1, 0)))
-    assert not accepts(space, PickMany([0, 1]))  # type: ignore[arg-type]
+    assert not accepts(space, PickMany([0, 1]))  # pyright: ignore[reportArgumentType] (deliberately the wrong type)
     assert not accepts(space, Pick(0))
 
 
@@ -126,7 +126,7 @@ def test_choose_number_within_bounds() -> None:
     space = ChooseNumber(0, 5)
     assert [accepts(space, Number(n)) for n in (-1, 0, 5, 6)] == [False, True, True, False]
     assert not accepts(space, Number(True))
-    assert not accepts(space, Number(2.0))  # type: ignore[arg-type]
+    assert not accepts(space, Number(2.0))  # pyright: ignore[reportArgumentType] (deliberately the wrong type)
     assert not accepts(space, Pick(2))
 
 

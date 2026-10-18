@@ -30,7 +30,9 @@ def test_simultaneous_events_are_applied_and_logged_in_order() -> None:
 
 def test_log_entries_record_visibility_sorted_and_without_repeats() -> None:
     state = start(2)
-    entry = append_log(state, Marker(label="x", rules=("117.1",)), (PlayerId(1), PlayerId(0), PlayerId(1)))
+    entry = append_log(
+        state, Marker(label="x", rules=("117.1",)), (PlayerId(1), PlayerId(0), PlayerId(1))
+    )
     assert entry.visible_to == (0, 1)
     assert entry.is_visible_to(PlayerId(0))
     public = append_log(state, Marker(label="y", rules=("117.1",)), None)

@@ -9,10 +9,10 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from resolve.decisions.kinds import DecisionKind
-from resolve.engine.loop import run
-from resolve.engine.setup import initial_state
 from resolve.decisions.request import DecisionRequest
 from resolve.decisions.spaces import AnswerValue, ChooseNumber, Number
+from resolve.engine.loop import run
+from resolve.engine.setup import initial_state
 from resolve.errors import InvalidAnswer
 from resolve.events.base import Event
 from resolve.events.game import GameEnded

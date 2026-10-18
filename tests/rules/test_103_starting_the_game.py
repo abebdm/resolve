@@ -25,7 +25,6 @@ from tests.game_fixtures import (
     answer,
     choose_starting_player,
     deck,
-    decks,
     request_of,
     start,
 )
@@ -87,9 +86,9 @@ def test_103_1_illegal_answers_are_rejected() -> None:
 def test_103_3_each_library_is_shuffled_in_turn_order_from_the_starting_player() -> None:
     state = start(3, seed=11)
     choose_starting_player(state, 1)
-    shuffles = [entry.record for entry in state.event_log if entry.rules == ("103.3", "701.24a")]
-    assert all(isinstance(event, LibraryShuffled) for event in shuffles)
-    assert [event.player for event in shuffles] == [1, 2, 0]  # type: ignore[union-attr]
+    shuffles = [e.record for e in state.event_log if isinstance(e.record, LibraryShuffled)]
+    assert [event.player for event in shuffles] == [1, 2, 0]
+    assert all(event.rules == ("103.3", "701.24a") for event in shuffles)
 
 
 def test_103_3_each_library_becomes_a_random_permutation_of_its_deck() -> None:
@@ -138,7 +137,8 @@ def test_903_6_commanders_start_face_up_in_the_command_zone_not_the_library() ->
         assert obj.owner == owner
         assert obj.zone.kind is ZoneKind.COMMAND
         assert obj.zone.kind.is_public  # face up: everyone sees it (400.2)
-        assert state.cards[obj.card].data.name.startswith("Test Daybreaker")  # type: ignore[index]
+        assert obj.card is not None
+        assert state.cards[obj.card].data.name == "Test Daybreaker // Test Nightfall"
     assert all(len(player.library) == 3 for player in state.players)
 
 

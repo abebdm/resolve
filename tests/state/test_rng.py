@@ -18,7 +18,8 @@ from resolve.state.rng import Rng, splitmix64
 
 
 def test_splitmix64_matches_the_reference_sequence() -> None:
-    state, outputs = 0, []
+    state = 0
+    outputs: list[int] = []
     for _ in range(4):
         state, value = splitmix64(state)
         outputs.append(value)
@@ -86,10 +87,10 @@ def test_shuffling_zero_or_one_item_draws_nothing() -> None:
 
 
 def test_copies_continue_the_same_sequence_independently() -> None:
-    rng = Rng.from_seed(8)
-    rng.next_u64()
-    expected = Rng(rng.state).next_u64()
+    rng = Rng.from_seed(42)
+    assert rng.next_u64() == 0x15780B2E0C2EC716
     for clone in (copy.deepcopy(rng), pickle.loads(pickle.dumps(rng))):
         assert clone == rng
-        assert clone.next_u64() == expected
+        assert clone.next_u64() == 0x6104D9866D113A7E  # seed 42's second reference output
         assert clone != rng, "advancing the copy leaves the original alone"
+    assert rng.next_u64() == 0x6104D9866D113A7E

@@ -15,6 +15,7 @@ import pytest
 
 from resolve.decisions.spaces import Number
 from resolve.engine.api import submit
+from resolve.errors import EngineError
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.invariants import (
@@ -24,7 +25,6 @@ from resolve.state.invariants import (
     state_impurities,
 )
 from resolve.state.zones import EXILE, Zone
-from resolve.errors import EngineError
 from tests.engine_support import (
     AskTwice,
     HoldsValue,
@@ -70,7 +70,11 @@ def test_states_survive_deepcopy_and_pickle(name: str) -> None:
     assert pickle.loads(pickle.dumps(copy.deepcopy(state))) == state
 
 
-@pytest.mark.parametrize("clone", [copy.deepcopy, lambda s: pickle.loads(pickle.dumps(s))])
+def pickled(state: GameState) -> GameState:
+    return pickle.loads(pickle.dumps(state))
+
+
+@pytest.mark.parametrize("clone", [copy.deepcopy, pickled])
 def test_a_copy_paused_mid_task_resumes_exactly_like_the_original(
     clone: Callable[[GameState], GameState],
 ) -> None:
@@ -159,7 +163,7 @@ def test_objects_and_players_held_by_reference_are_reported() -> None:
 def test_attributes_outside_the_dataclass_fields_are_reported() -> None:
     state = start(2)
     task = LooseTask()
-    task.callback = a_function()  # type: ignore[attr-defined]
+    task.callback = a_function()  # pyright: ignore[reportAttributeAccessIssue]
     state.tasks.append(task)
     problems = state_impurities(state)
     assert any("attributes outside the dataclass fields: ['callback']" in p for p in problems)
@@ -171,7 +175,10 @@ def test_attributes_outside_the_dataclass_fields_are_reported() -> None:
 def test_an_object_in_two_zones_is_reported() -> None:
     state = start(2)
     state.exile.append(state.players[0].library[0])
-    assert any("is listed in the library of player 0 and the exile" in p for p in invariant_violations(state))
+    assert any(
+        "is listed in the library of player 0 and the exile" in p
+        for p in invariant_violations(state)
+    )
 
 
 def test_an_object_listed_in_no_zone_or_the_wrong_zone_is_reported() -> None:

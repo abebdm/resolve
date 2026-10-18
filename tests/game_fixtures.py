@@ -50,9 +50,9 @@ def deck(forests: int = 6, elves: int = 4, *, commanders: Sequence[DeckCard] = (
     return Deck((FOREST,) * forests + (ELVES,) * elves, tuple(commanders))
 
 
-def decks(players: int, **kwargs: int) -> list[Deck]:
-    """One ``deck(**kwargs)`` per player."""
-    return [deck(**kwargs) for _ in range(players)]
+def decks(players: int, forests: int = 6, elves: int = 4) -> list[Deck]:
+    """One ``deck(forests, elves)`` per player."""
+    return [deck(forests, elves) for _ in range(players)]
 
 
 def start(players: int = 2, seed: int = 1, config: GameConfig | None = None) -> GameState:

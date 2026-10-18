@@ -19,6 +19,144 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-18: Every CR citation in the engine must exist in the pinned rules
+- **Decision:** `tests/tooling/test_rule_citations.py` collects every CR number the engine cites
+  and checks it against the section, rule and subrule numbers parsed from
+  `docs/rules/MagicCompRules-20260925.txt`. It collects them statically (string constants passed
+  as `rules=`, every `NotImplementedRule` message via `tools/gaps.py`, and every dotted number such
+  as `613.7m` anywhere in the source text of `src/resolve`, comments and docstrings included) and
+  at run time (the rules of every log entry and request of a played game). Citations have one
+  format, checked when events and requests are built (`resolve.citations`): `"103"`, `"103.1"` or
+  `"701.24a"`, one rule per string.
+- **Why:** the user asked for it. Citations are how readers check the engine against the CR; a
+  mistyped or renumbered rule would otherwise go unnoticed until someone looked it up. Bare
+  three-digit section numbers in prose aren't scanned (too many false positives such as "100
+  cards"), but structured citations may be sections.
+- **Rules:** CLAUDE.md rules 2 and 3.
+- **Where:** `src/resolve/citations.py`, `tests/tooling/test_rule_citations.py`.
+
+### 2026-10-18: Immutable values are shared between copies of a state
+- **Decision:** value types derive from `resolve.values.Immutable`, whose `__copy__` and
+  `__deepcopy__` return the object itself: `CardData`, `CardFace`, `CardDefinition`, `Card`,
+  `Zone`, `GameConfig`, events, log entries, requests, answer spaces, options, answers, decks and
+  player views. Each must be a frozen dataclass whose fields hold only scalars, enums, tuples and
+  other `Immutable` values. `tests/state/test_immutability.py` checks every subclass from its type
+  hints (so field annotations must be resolvable at run time, not imported only under
+  `TYPE_CHECKING`), and `resolve.state.invariants.mutable_parts` checks actual values. `CardData`
+  holds no rulings: they stay in `CardDatabase`, for writing tests.
+- **Why:** the user asked for it. Under design.md decision A the state holds every card's data and
+  definitions; copying them on every clone would make AI search pay for Oracle text that never
+  changes. Sharing is only safe for deeply immutable values, hence the test. Frozen dataclasses
+  don't check types at run time, so the value check also exists (a list passed where a tuple is
+  annotated would otherwise be shared and mutable).
+- **Where:** `src/resolve/values.py`, `src/resolve/data/cards.py`, `src/resolve/cards/registry.py`,
+  `src/resolve/state/invariants.py`.
+
+### 2026-10-18: Starting the game in M0
+- **Decision:** `initial_state` creates every card's object directly in its starting zone: library
+  cards in deck order, commanders face up in the command zone (103.2c, 903.6), and sets life from
+  the config (103.4). `CardId`s and timestamps are assigned in seat order, commanders first, then
+  deck order. `StartGame` picks the player who chooses the starting player uniformly with the
+  game's RNG, asks them (`CHOOSE_STARTING_PLAYER`, every player an option, themselves included),
+  then shuffles each library in turn order from the starting player (103.3), then stops at
+  `NotImplementedRule("103.5: ...")`. The opponents' optional extra shuffle or cut (103.3) is left
+  out. Matches aren't modeled: `new_game` is one game, so 103.1's "loser of the previous game
+  chooses" belongs to whoever runs a match.
+- **Why:** 103.1 leaves the method of picking the chooser to the players; a uniform random pick is
+  such a method and keeps the game a function of its seed. A uniformly random library stays
+  uniformly random after any further shuffle or cut, so offering it would add a decision with no
+  effect. The setup timestamps aren't ordered by 613.7m: there is no active player before the
+  first turn, and nothing can observe the relative timestamps of cards in a library or the
+  command zone before they next change zone and get a new one.
+- **Rules:** 103.1-103.5, 613.7d, 613.7m, 701.24a, 903.6, 903.7.
+- **Where:** `src/resolve/engine/setup.py`, `src/resolve/engine/start.py`.
+
+### 2026-10-18: Identifiers, seating and pile order
+- **Decision:** `PlayerId`, `ObjectId` and `CardId` are `NewType` ints. `PlayerId` is the seat
+  index and `players` is in seating order (deck `i` is player `i`); turn order is computed from
+  `starting_player` (`turn_order`). `ObjectId`s and `CardId`s start at 1 and are never reused. In
+  every pile (library, graveyard, stack) the last list element is the top; hand, battlefield,
+  exile and command lists keep arrival order. Objects without a controller have
+  `controller=None`; 108.4a's "use the owner" is for whoever asks.
+- **Why:** ints pickle, compare and hash cheaply and deterministically; `NewType` keeps them
+  apart for pyright. Seat indices stay valid when players leave (800.4). One orientation for all
+  piles avoids a class of top/bottom bugs.
+- **Rules:** 103.1, 108.4, 109.4, 400.5, 400.7, 404.1, 405.2.
+- **Where:** `src/resolve/state/ids.py`, `src/resolve/state/game.py`, `src/resolve/state/zones.py`.
+
+### 2026-10-18: Answer validation and canonical answers
+- **Decision:** an answer is checked in two stages, neither of which changes the state: the
+  request's id and player and its answer space (`validate_answer`), then the asking task's
+  `check_answer`. Each outcome has exactly one valid answer: subsets are strictly increasing
+  indices, orders are permutations, distributions are one amount per recipient. Booleans are not
+  accepted as integers. A space that can't be answered (no options, impossible bounds) raises
+  `ValueError` when built, as an engine bug. `DecisionKind` lists the vocabulary of design.md §6;
+  only `CHOOSE_STARTING_PLAYER` is asked in M0.
+- **Why:** rejecting before changing anything lets an agent (or a network peer) retry, and makes
+  "the state is unchanged" testable by comparing with a copy. Canonical answers mean equal
+  answers have equal meaning, which AI search and replays rely on.
+- **Rules:** 101.4, 601.2d, 107.3a.
+- **Where:** `src/resolve/decisions/`, `src/resolve/engine/loop.py`.
+
+### 2026-10-18: The engine loop, errors and the state after an error
+- **Decision:** the task base class lives in `resolve.tasks` (top level), not `resolve.engine`,
+  because events use it and `resolve.engine` imports the events. The loop raises `EngineError` if
+  a task changes `state.tasks` itself, if the stack empties during a game, or after
+  `MAX_TASKS_PER_RUN` (one million) tasks without a decision. `submit` isn't transactional: after
+  `NotImplementedRule` or `EngineError` the state stays as it was when the error was raised, isn't
+  waiting for anything, and must not be played on (`pending_decision` raises `EngineError`).
+- **Why:** a rollback would mean copying the state on every `submit`, which AI search can't
+  afford. The runaway budget only catches engine bugs; mandatory game loops are 104.4b (M7).
+- **Where:** `src/resolve/tasks.py`, `src/resolve/engine/loop.py`, `src/resolve/errors.py`.
+
+### 2026-10-18: The event log records answers and who may see each entry
+- **Decision:** a `LogEntry` holds an event or an `AnswerRecord`, its index and its visibility
+  (`None` for everyone, or sorted player IDs). Answers are visible only to the player who gave
+  them; whatever they make public is logged as events. An event's visibility is judged before it
+  is applied. Views include the entries their player may see. Views show printed card names until
+  the layer system exists (M5); an object without a card in a view raises
+  `NotImplementedRule("111.1: ...")`, since tokens don't exist yet.
+- **Why:** replays are rebuilt from the answers (design.md §12), and some answers are secret
+  (cards put on the bottom after a mulligan, 103.5). How zone-change entries are redacted for
+  other players is decided in M1, when cards are drawn.
+- **Rules:** 101.4, 103.5, 111.1.
+- **Where:** `src/resolve/events/base.py`, `src/resolve/engine/view.py`.
+
+### 2026-10-18: Deck construction isn't checked until M7
+- **Decision:** `new_game` checks only that there are at least two decks (100.1), that every card
+  has a definition for each face (`DeckCard`), and that commanders are given only with the
+  Commander rules. Deck size, singleton, color identity and "has a commander" (100.2a, 903.3,
+  903.5) are left to `validate_deck` in M7.
+- **Why:** deck legality is a pre-game check, not a game rule, and the decision to move the
+  deck-construction settings out of `GameConfig` until they're enforced was approved with
+  design.md §10. Tests and the scenario builder need small, illegal decks anyway.
+- **Rules:** 100.1, 100.2a, 903.3, 903.5.
+- **Where:** `src/resolve/engine/deck.py`, `src/resolve/engine/setup.py`.
+
+### 2026-10-18: Purity, determinism and gap tooling
+- **Decision:** `resolve.state.invariants.state_impurities` accepts scalars, enums, lists, tuples,
+  dicts with int/str/enum keys and any dataclass instance whose fields are pure (and that has no
+  attributes besides its fields, so test-only tasks qualify); it also rejects a `GameObject` or
+  `Player` held outside `state.objects`/`state.players`. `tests/state/test_determinism_lint.py`
+  scans the engine packages for imports of `time`, `datetime`, `random`, `uuid`, `secrets`, `os`
+  and `threading` and calls to `id()` and `hash()`. `tools/gaps.py` lists every
+  `NotImplementedRule` by AST and fails on any whose message isn't a literal starting with a CR
+  number.
+- **Why:** CLAUDE.md rules 1, 5 and 6, enforced by tools rather than by review. Set iteration
+  can't be found by a scan, so sets are kept out of the state instead.
+- **Where:** `src/resolve/state/invariants.py`, `tests/state/`, `tools/gaps.py`.
+
+### 2026-10-18: Engine test layout and helpers
+- **Decision:** engine infrastructure tests live in `tests/state/`, `tests/engine/`,
+  `tests/decisions/` and `tests/events/`; rules tests in `tests/rules/` as before.
+  `tests/game_fixtures.py` builds decks from the Scryfall fixtures with test-only definitions and
+  starts games. `tests/engine_support.py` holds test-only tasks and a `Marker` event, in an
+  importable module so that states holding them can be pickled; `running(*tasks)` starts a game
+  with those tasks above a `Hold` task that keeps the game waiting once they finish.
+- **Why:** the scenario builder (later in M0) will replace most of the fixtures, but the loop
+  needs tasks that exercise every result type before any real turn structure exists.
+- **Where:** `tests/`.
+
 ### 2026-10-18: Test layout and Scryfall fixtures
 - **Decision:** Infrastructure tests live in `tests/data/` (card data, decklists),
   `tests/registry/` (registry, deck coverage) and `tests/tooling/` (the `tools/` scripts). No test

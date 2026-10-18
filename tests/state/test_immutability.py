@@ -29,7 +29,7 @@ from resolve.events.game import LibraryShuffled
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.invariants import check_immutable, mutable_parts
 from resolve.values import Immutable
-from tests import engine_support  # noqa: F401 (its Marker event is checked too)
+from tests import engine_support
 from tests import scryfall_fixtures as fx
 from tests.game_fixtures import DAYBREAKER, answer, start
 
@@ -62,23 +62,28 @@ def type_problems(tp: Any) -> list[str]:
         return []
     origin = get_origin(tp)
     if origin is tuple or origin in (Union, types.UnionType):
-        return [problem for arg in get_args(tp) if arg is not Ellipsis for problem in type_problems(arg)]
+        return [
+            problem for arg in get_args(tp) if arg is not Ellipsis for problem in type_problems(arg)
+        ]
     return [f"{tp!r} isn't a scalar, enum, tuple or Immutable type"]
 
 
 def class_problems(cls: type) -> list[str]:
     """Why a class isn't a deeply immutable frozen dataclass."""
-    if not dataclasses.is_dataclass(cls) or not cls.__dataclass_params__.frozen:  # type: ignore[attr-defined]
-        return [f"{cls.__name__} isn't a frozen dataclass"]
+    name = cls.__name__
+    params = getattr(cls, "__dataclass_params__", None)
+    if params is None or not params.frozen:
+        return [f"{name} isn't a frozen dataclass"]
     hints = get_type_hints(cls)
     return [
-        f"{cls.__name__}.{field.name}: {problem}"
+        f"{name}.{field.name}: {problem}"
         for field in dataclasses.fields(cls)
         for problem in type_problems(hints[field.name])
     ]
 
 
 def test_the_expected_value_types_are_immutable() -> None:
+    assert engine_support.Marker in IMMUTABLE_TYPES, "event types defined in tests are checked too"
     names = {cls.__qualname__ for cls in IMMUTABLE_TYPES}
     expected = {
         "Card", "CardData", "CardFace", "CardDefinition", "Event", "LibraryShuffled",
@@ -97,8 +102,9 @@ def test_every_immutable_type_is_a_deeply_immutable_frozen_dataclass(cls: type) 
 
 @pytest.mark.parametrize("cls", IMMUTABLE_TYPES, ids=lambda cls: cls.__qualname__)
 def test_no_immutable_type_overrides_copying(cls: type) -> None:
-    assert cls.__deepcopy__ is Immutable.__deepcopy__  # type: ignore[attr-defined]
-    assert cls.__copy__ is Immutable.__copy__  # type: ignore[attr-defined]
+    assert issubclass(cls, Immutable)
+    assert cls.__deepcopy__ is Immutable.__deepcopy__
+    assert cls.__copy__ is Immutable.__copy__
 
 
 def test_the_type_check_catches_mutable_fields() -> None:
@@ -144,9 +150,10 @@ def test_copies_of_immutable_values_are_the_values_themselves() -> None:
 
 def test_the_runtime_check_catches_mutable_contents() -> None:
     """Frozen dataclasses don't check field types, so a list could be passed in at run time."""
-    bad_space = ChooseOne([ObjectOption(ObjectId(1))])  # type: ignore[arg-type]
+    bad_space = ChooseOne([ObjectOption(ObjectId(1))])  # pyright: ignore[reportArgumentType]
     assert mutable_parts(bad_space) == ["value.options: list isn't immutable"]
-    assert mutable_parts(Pick({1}), "pick") == ["pick.index: set isn't immutable"]  # type: ignore[arg-type]
+    bad_pick = Pick({1})  # pyright: ignore[reportArgumentType]
+    assert mutable_parts(bad_pick, "pick") == ["pick.index: set isn't immutable"]
     assert mutable_parts((1, [2])) == ["value[1]: list isn't immutable"]
     assert mutable_parts(start(2)) != []
 
@@ -161,7 +168,7 @@ def test_a_state_and_its_copy_share_card_data_but_not_mutable_parts() -> None:
     assert clone.config is state.config
     assert clone.players[0] is not state.players[0]
     assert clone.players[0].library is not state.players[0].library
-    assert clone.objects[1] is not state.objects[1]
+    assert clone.objects[ObjectId(1)] is not state.objects[ObjectId(1)]
     assert clone.tasks[0] is not state.tasks[0]
     assert clone.rng is not state.rng
     assert clone == state

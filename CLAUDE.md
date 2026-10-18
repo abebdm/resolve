@@ -21,13 +21,21 @@ the engine's API, so nothing here may depend on them.
 
 **Current milestone: M0 (Skeleton), in progress.**
 
-- **Done:** the data and tooling part: `resolve.data` (card data loader and decklist parser), the
-  card registry and deck coverage (`resolve.cards.registry`, `resolve.cards.coverage`),
-  `tools/fetch_scryfall.py`, `tools/coverage.py`, CI, and the coverage audit (the Scryfall
-  snapshot of 2026-10-17 is pinned; no cards are implemented yet).
-- **Next:** the M0 engine core: core state types, the task loop and public API, decision types,
-  the event skeleton, `NotImplementedRule`, the scenario builder, agents, `tools/play_cli.py`
-  and the fuzz harness. **None of it has been started**, so no primitives exist yet.
+- **Done:**
+  - Data and tooling: `resolve.data` (card data loader and decklist parser), the card registry
+    and deck coverage (`resolve.cards.registry`, `resolve.cards.coverage`),
+    `tools/fetch_scryfall.py`, `tools/coverage.py`, `tools/gaps.py` (lists every
+    `NotImplementedRule`), CI, and the coverage audit (the Scryfall snapshot of 2026-10-17 is
+    pinned; no cards are implemented yet).
+  - The engine core: state types (`resolve.state`: `GameState`, `Player`, `GameObject`, zones,
+    IDs, `GameConfig`, the engine's own PRNG, invariant and purity checks), the task loop and
+    public API (`resolve.tasks`, `resolve.engine`: `new_game`, `pending_decision`, `view_for`,
+    `submit`, `build_deck`), decision kinds, answer spaces and validation (`resolve.decisions`),
+    events, the event pipeline (with stubbed replacement and trigger stages) and the event log
+    (`resolve.events`), and `NotImplementedRule` (`resolve.errors`). A game runs 103.1 to 103.4
+    (choosing the starting player, shuffling) and stops at `NotImplementedRule("103.5: ...")`.
+- **Next:** the rest of M0: the scenario builder (`tests/scenario.py`), agents, `tools/play_cli.py`
+  and the fuzz harness. No card primitives exist yet.
 
 Do not start a milestone (or the rest of M0) unless the user asks.
 
@@ -242,7 +250,10 @@ uv run pyright             # type check
 - Work in small, milestone-scoped branches and PRs. Tick items off in `docs/roadmap.md` as they land.
 - Tests live under `tests/rules/` (named by CR section, for example `test_117_priority.py`),
   `tests/cards/`, `tests/interactions/` and `tests/fuzz/`. Infrastructure has its own folders:
-  `tests/data/` (card data and decklists), `tests/registry/` and `tests/tooling/` (the `tools/`
-  scripts). Tests never need the real Scryfall snapshot; they use `tests/scryfall_fixtures.py`.
+  `tests/data/` (card data and decklists), `tests/registry/`, `tests/tooling/` (the `tools/`
+  scripts), and for the engine core `tests/state/`, `tests/engine/`, `tests/decisions/` and
+  `tests/events/`. Tests never need the real Scryfall snapshot; they use
+  `tests/scryfall_fixtures.py`, plus `tests/game_fixtures.py` (decks and games) and
+  `tests/engine_support.py` (test-only tasks and events).
 - When a design decision changes (with the user's OK), update `docs/design.md` in the same PR.
 - Prefer clear, boring code over clever code. This engine will be read far more than written.

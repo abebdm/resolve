@@ -22,12 +22,10 @@ def test_103_4c_and_903_10a_the_commander_game_has_40_life_and_a_21_damage_thres
     assert config.commander == CommanderRules(damage_threshold=21)
 
 
-@pytest.mark.parametrize(
-    "kwargs", [{"starting_life": 0}, {"starting_life": -5}, {"starting_hand_size": -1}]
-)
-def test_impossible_configs_are_refused(kwargs: dict[str, int]) -> None:
+@pytest.mark.parametrize(("life", "hand"), [(0, 7), (-5, 7), (20, -1)])
+def test_impossible_configs_are_refused(life: int, hand: int) -> None:
     with pytest.raises(ValueError, match="starting"):
-        GameConfig(**kwargs)
+        GameConfig(starting_life=life, starting_hand_size=hand)
 
 
 def test_a_zero_card_starting_hand_and_a_one_damage_threshold_are_allowed() -> None:
@@ -43,7 +41,7 @@ def test_104_4a_a_result_without_winners_is_a_draw() -> None:
 
 
 def test_turn_order_is_undefined_before_the_starting_player_is_chosen() -> None:
-    with pytest.raises(EngineError, match="103.1"):
+    with pytest.raises(EngineError, match=r"\(103\.1\)"):
         turn_order(start(2))
 
 

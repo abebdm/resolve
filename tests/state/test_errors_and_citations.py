@@ -52,4 +52,4 @@ def test_check_rules_needs_a_non_empty_tuple_of_references() -> None:
     check_rules(("103.1",))
     for bad in ((), ["103.1"], ("103.1", 5)):
         with pytest.raises(ValueError, match="CR citation"):
-            check_rules(bad)  # type: ignore[arg-type]
+            check_rules(bad)  # pyright: ignore[reportArgumentType] (deliberately the wrong type)
