@@ -50,6 +50,20 @@ and ruff and pyright are clean.
    failed before, since the kinds were already unique.
 6. The hook-placeholder test is kept as is; the PR explains why.
 
+## In progress: second review (verdict Adequate with gaps)
+
+- Wrong: 400.3 is a redirect ("it goes to its owner's corresponding zone"), not an error. Plan:
+  `create_object` and `move_object` redirect a per-player zone to the owner's, and the two 400.3
+  tests assert the redirect. Fix the Two-Headed Giant docstring (103.4a/810.4: shared team life).
+- Missing (tests first): a failed move leaves the state unchanged; 109.4c through `move_object`;
+  `known_to` set before a move is dropped; controller dropped off the stack and required onto the
+  battlefield; a Commander game in the purity/invariant states; the 903.3 designation (`CardId`)
+  survives the move; command to command is a new object (400.10); commander log entries are
+  public; life still set after the procedure; a Commander deck without a commander (deferred to
+  M7, documented by a test).
+- Record in decisions.md: events that move a card players saw set `known_to` on the new object
+  themselves (M1), rather than `move_object` carrying it over.
+
 ## Next
 
 - Re-run the reviewer (the changes to commander placement are substantial). **In progress.**
