@@ -19,6 +19,106 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-18: The fuzz harness
+- **Decision:** the harness is `tools/fuzz.py` (`fuzz_run`, `fuzz_game`, `state_problems`,
+  `invalid_answers`), tested and used by `tests/fuzz/test_fuzz.py` (imported as `tools.fuzz`,
+  like `tools.coverage`). Before every answer it checks invariants, purity, and every player's
+  view against an oracle written out from the rules, not from the engine's `is_known_to`:
+  immutable; the request only in the decider's view; life, library counts (401.2), the objects
+  of every hand, graveyard and shared zone in order (402.3, 404.2); card names exactly where
+  the viewer may know them (400.2, 402.3, 404.2, 406.3); and exactly the log entries visible to
+  the viewer, with answers visible only to their player. It checks that `deepcopy` and `pickle`
+  give equal states, and that answers for another request or from another player (carrying the
+  agent's own, valid value, so only the id or player is wrong), of the wrong type or outside
+  the space are rejected without changing anything. It then submits the random answer to the state, a deep
+  copy and a pickled copy, which must end the same way and in equal states. A rejected random
+  answer must change nothing, and the agent answers again; 100 rejections in a row
+  (`MAX_ATTEMPTS`) or 10,000 accepted answers (`MAX_ANSWERS`) are failures. At the end the game
+  is replayed from its start with `ScriptedAgent.from_log` and must reproduce the identical
+  state. `NotImplementedRule` ends a game only for a rule in `allowed_gaps` (default `("103.5",)`,
+  the end of an M0 game); any other exception is a `FuzzFailure` naming the seed and a command
+  that reproduces it. Seat `i` is played by `RandomAgent(seed + i)`. The command line cycles
+  player counts 2-6 and both formats, gives seat `i` of game seed `s` deck
+  `(s + i) % len(decks)` so a failure reproduces from its seed alone, and prints games per
+  second; the number isn't stored anywhere yet. Every check relies on `==` between states, so
+  `tests/state/test_state_equality.py` forbids `compare=False` fields, `eq=False`
+  dataclasses and hand-written `__eq__` methods in the engine; and a test replays a game in two processes with different
+  `PYTHONHASHSEED`s and requires byte-identical pickles (CLAUDE.md rule 6).
+- **Why:** design.md §14 and the roadmap. The harness lives in `tools/` because rule 4 keeps
+  agent-using code out of the engine and tools can't import `tests/`. Submitting to copies at
+  every decision tests the strongest form of design.md §5 (a state copied mid-task resumes
+  exactly as the original) at little cost. Each check has a negative test built from a broken
+  test-only task (`tests/engine_support.py`), so a check that silently stops working is noticed.
+  The CLI defaults to empty decks because no card is implemented and tools never invent cards.
+  Widen `ALLOWED_GAPS` deliberately as milestones change where games stop.
+- **Rules:** 400.2, 401.2, 402.3, 404.2, 406.3; design.md §5, §6, §7, §9, §12.
+- **Where:** `tools/fuzz.py`, `tests/fuzz/test_fuzz.py`, `tests/engine_support.py`.
+
+### 2026-10-18: The text interface and `tools/play_cli.py`
+- **Decision:** the renderer (`render_view`, `render_request`, `render_log_entry`), the answer
+  parser (`parse_answer`) and the CLI agent (`TextAgent`) are in `resolve.agents.text`;
+  `tools/play_cli.py` only parses arguments, builds decks and runs `play`. Options are numbered
+  from 0, matching `Pick` indices. The parser checks only the shape of what was typed (out-of-range
+  numbers go to the engine, which rejects them, and the driver asks again). Each human seat
+  sees its own view, so hot-seat play doesn't leak hands; for the same reason the final view is
+  printed only when a single seat is human (player 0's when every seat is random), and hot-seat
+  games end with just the result. Without `--deck` every player gets an
+  empty deck; with `--deck`, decks come from the snapshot and must be fully implemented. Exit
+  statuses: 0 game over, 1 couldn't start, 2 bad arguments, 3 stopped at a `NotImplementedRule`,
+  4 quit.
+- **Why:** the renderer is useful outside the CLI (debugging, failure messages), and keeping it
+  in the agents package keeps it on the agent side of rule 4. Zero-based numbering keeps the CLI
+  and the log saying the same thing. Empty decks are the only decks that need no card
+  implementation, and decks are never approximated.
+- **Where:** `src/resolve/agents/text.py`, `tools/play_cli.py`.
+
+### 2026-10-18: The scenario builder in M0
+- **Decision:** `tests/scenario.py`'s `Scenario` starts from `initial_state` with empty decks and
+  creates objects immediately, so every call returns real `ObjectId`s and IDs and timestamps
+  follow call order. It sets player count, config, seed, starting player (default 0; `None` for
+  "not chosen yet"), life (any integer), cards in every zone, `known_to` and commanders (in any
+  zone, only with the Commander rules). Piles (library, graveyard, stack) are listed **top
+  first**, and a later call puts its cards on top. A card in another player's library, hand or
+  graveyard is refused rather than redirected (400.3); a controller is required exactly on the
+  battlefield and the stack. A failed `add` leaves the scenario unchanged. `build(*tasks)` checks
+  invariants and purity and runs the given tasks to their first decision. Turn, step, phase and
+  priority holder are added with the turn structure in M1. Like `new_game`, the builder doesn't
+  check whether a card may be a commander (legendary, partner for a second one: 903.3, 903.5,
+  702.124a); that is deck validation in M7. The test review suggested refusing such commanders;
+  it was kept consistent with `new_game` instead, and a second commander reaches the existing
+  613.7m gap when the game starts. `run_script(state, *steps)` plays a
+  script and requires every step to be used; `names(state, zone)` lists a zone's card names.
+- **Why:** design.md §14. Building through the engine's own `create_object` keeps scenario
+  states identical in shape to played ones. Top-first lists read like "the top card is X".
+  Refusing an impossible placement catches test mistakes that a redirect would hide. The builder
+  can't set what the engine doesn't model yet.
+- **Rules:** 103.1, 108.4, 110.2, 119, 400.2, 400.3, 401.2, 405.2, 613.7d, 702.124a, 903.3,
+  903.5.
+- **Where:** `tests/scenario.py`, `tests/engine/test_scenario_builder.py`.
+
+### 2026-10-18: Agents, the driver and replays
+- **Decision:** `resolve.agents` holds the `Agent` protocol (`decide(view, request) ->
+  DecisionAnswer`), the driver `play(state, agents, max_answers=None, on_invalid=None)`,
+  `RandomAgent` and `ScriptedAgent`. `play` takes one agent for every player or one per seat.
+  A rejected answer raises `InvalidAnswer` unless `on_invalid` is given; then the same agent is
+  asked again, up to 100 times per decision. `RandomAgent` uses its own `Rng` (the engine's
+  generator) and is uniform over each space's answers: over options, over subset sizes and then
+  subsets of that size, over permutations, over numbers, and over divisions (stars and bars). An
+  unbounded `ChooseNumber` is capped at `minimum + 20` (`unbounded_span`). A script is a list of
+  `Step(value)` or `Choose(options)` (resolved against the space, so a test needn't know option
+  indices), each optionally naming the expected player and kind; a mismatch or running out raises
+  `ScriptError`. A replay is `ScriptedAgent.from_log(state.event_log)`: the recorded answers with
+  their players and kinds, played from the same config, decks and seed. The save-file format with
+  engine, CR and data versions (design.md §12) is not built yet. The determinism lint scans
+  `resolve.agents`.
+- **Why:** design.md §3 already defines the driver loop and the `decide` interface. Uniform
+  answers explore every kind of answer, including the extremes. Replaying through the same
+  agent interface means a replay checks itself: a step whose player or kind no longer matches
+  stops the replay at the first divergence. Rejected answers aren't logged, so replays contain
+  only accepted ones.
+- **Rules:** 101.4; design.md §3, §6, §12.
+- **Where:** `src/resolve/agents/`, `tests/agents/`, `tests/state/test_determinism_lint.py`.
+
 ### 2026-10-18: Every CR citation in the engine must exist in the pinned rules
 - **Decision:** `tests/tooling/test_rule_citations.py` collects every CR number the engine cites
   and checks it against the section, rule and subrule numbers parsed from

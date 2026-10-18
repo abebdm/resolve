@@ -93,23 +93,74 @@ Tests never read `data/` or the network; they build card data from `tests/scryfa
 4. Put the test in `tests/data/`, `tests/registry/` or `tests/tooling/` (or `tests/cards/` for a
    card), with a file name that is unique across all test folders.
 
+### Write a scenario test
+
+Set up the board with the scenario builder (`tests/scenario.py`) instead of playing turns, and
+drive decisions with a script.
+
+1. Build the state:
+   ```python
+   scenario = Scenario(players=3, config=GameConfig.commander_game(), seed=1, starting_player=0)
+   scenario.life(PlayerId(1), 3)
+   elves = scenario.battlefield(PlayerId(0), ["Llanowar Elves"])[0]
+   top, second = scenario.library(PlayerId(2), ["Forest", "Llanowar Elves"])  # top first
+   scenario.commander(PlayerId(1), "Test Daybreaker")  # in the command zone by default
+   state = scenario.build(SomeTask())  # runs to the first decision; build() alone runs nothing
+   ```
+   Cards are named exactly and come from `tests/game_fixtures.py`'s `database()` and
+   `registry()` unless you pass your own. Piles (library, graveyard, stack) are listed top first.
+   Use `scenario.add(name, owner=..., zone=..., known_to=[...])` for anything else. Until M1
+   there is no turn, step or priority to set; push the task you are testing.
+2. Answer with a script: `run_script(state, choose(PlayerOption(PlayerId(2)), kind=...), Step(Number(3)))`.
+   Prefer `choose(...)` (names the options) over `Step(Pick(i))`, and give `player=` and `kind=`
+   when the test is about who is asked what. The script must be used up exactly.
+3. Check the result: zones with `names(state, zone)`, objects through `state.objects`, the log
+   through `state.event_log`. Expect `NotImplementedRule` with `pytest.raises` where the game
+   reaches a gap.
+4. Put the test in `tests/rules/test_<section>_<topic>.py` (or `tests/cards/`,
+   `tests/interactions/`), named and documented with the CR rule it checks.
+
 ### Write an engine test with test-only tasks
 
-Until the scenario builder exists, engine-loop tests drive the loop with small tasks.
+For the engine loop itself, drive it with small tasks.
 
 1. Build decks with `tests/game_fixtures.py`: `deck(forests, elves, commanders=[...])`,
    `decks(players)`, or `start(players, seed)` for a new game paused at the 103.1 decision.
    `choose_starting_player(state, index)` answers it and returns the 103.5 gap.
 2. For loop behavior, use the tasks in `tests/engine_support.py` (`Mark`, `Parent`, `AskTwice`,
    `EndGame`, ...) or add one there (not in the test file, so states holding it pickle).
-   `running(*tasks)` starts a game with them on the task stack; `markers(state)` lists the
-   `Marker` events they logged; `holding(state)` says they have all finished.
-3. Answer with `submit(state, answer(state, value))`. To show a rejected answer changed nothing,
-   compare with a `copy.deepcopy` taken before.
+   `running(*tasks)` starts a game with them on the task stack (or use
+   `Scenario(...).build(*tasks)`); `markers(state)` lists the `Marker` events they logged;
+   `holding(state)` says they have all finished.
+3. Answer with `submit(state, answer(state, value))`, or `play(state, agent)` from
+   `resolve.agents`. To show a rejected answer changed nothing, compare with a `copy.deepcopy`
+   taken before.
 4. Check `state_impurities(state) == []` and `invariant_violations(state) == []`
    (`resolve.state.invariants`) on any new kind of state.
-5. Put the test in `tests/engine/`, `tests/state/`, `tests/decisions/`, `tests/events/` or, for a
-   rule, `tests/rules/test_<section>_<topic>.py`.
+5. Put the test in `tests/engine/`, `tests/state/`, `tests/decisions/`, `tests/events/`,
+   `tests/agents/` or, for a rule, `tests/rules/test_<section>_<topic>.py`.
+
+### Run the fuzz harness
+
+1. `uv run python tools/fuzz.py` plays 200 random-agent games (2 to 6 players, standard and
+   Commander) with every check on and prints the endings and games per second. Use
+   `--games N --seed S` for more, `--players 4`, `--format commander`, or `--deck` files (cycled
+   among the seats; they need the snapshot and implemented cards).
+2. A failure prints `FAILED:` with the seed and a command that reproduces that one game. Reproduce
+   it, write a failing test (a scenario test, or a `fuzz_game` call in `tests/fuzz/`), then fix
+   the engine.
+3. When a milestone moves where games stop (M1 implements 103.5), update `ALLOWED_GAPS` in
+   `tools/fuzz.py`, the fuzz tests' expectations and the roadmap together.
+4. When adding a new check to the harness, add a broken test-only task to
+   `tests/engine_support.py` and a test in `tests/fuzz/test_fuzz.py` showing the check catches it.
+
+### Play a game in the terminal
+
+`uv run python tools/play_cli.py [--players N] [--commander] [--seed S] [--random SEAT ...]
+[--deck PATH ...]`. Every seat not in `--random` is a human at the same terminal, shown only its
+own view. Type option numbers from 0 (`help` at the prompt lists the syntax; `view`, `log` and
+`quit` also work). Without `--deck` the decks are empty. Every M0 game stops at 103.5 (exit
+status 3).
 
 ### Add an event type
 
@@ -171,5 +222,4 @@ Expected recipes, written when each task is first done:
 - Add a card
 - Add a primitive
 - Add a keyword ability
-- Write a scenario test
 - Fix a rules bug

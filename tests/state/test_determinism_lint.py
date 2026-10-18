@@ -14,7 +14,8 @@ import pytest
 
 ENGINE = Path(__file__).resolve().parents[2] / "src" / "resolve"
 # The data package reads files and dates snapshots; it isn't part of a game's computation.
-PACKAGES = ("state", "engine", "events", "decisions", "effects")
+# Agents are scanned too: a fuzz game must be reproducible from its seeds.
+PACKAGES = ("state", "engine", "events", "decisions", "effects", "agents")
 MODULES = ("tasks.py", "values.py", "errors.py", "citations.py")
 SCANNED = sorted(path for package in PACKAGES for path in (ENGINE / package).rglob("*.py")) + [
     ENGINE / name for name in MODULES
@@ -47,6 +48,7 @@ def banned_uses(source: str) -> list[str]:
 def test_the_scan_covers_the_engine() -> None:
     names = {path.name for path in SCANNED}
     assert {"game.py", "rng.py", "loop.py", "pipeline.py", "spaces.py", "tasks.py"} <= names
+    assert {"random_agent.py", "scripted.py", "driver.py", "text.py"} <= names
 
 
 @pytest.mark.parametrize("path", SCANNED, ids=lambda path: str(path.relative_to(ENGINE)))

@@ -1,8 +1,9 @@
 """Decks and games for engine tests, built from ``tests/scryfall_fixtures.py``.
 
 No real card is implemented yet, so these decks use test-only definitions: a ``CardDefinition``
-holds only a name so far. The scenario builder (``tests/scenario.py``, later in M0) will replace
-most of this.
+holds only a name so far. Use these for tests that start a game with ``new_game``; to set up a
+board state directly, use the scenario builder (``tests/scenario.py``), which looks cards up in
+``database()`` and ``registry()`` by default.
 """
 
 from __future__ import annotations

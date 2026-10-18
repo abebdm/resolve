@@ -1,6 +1,6 @@
 """Checks that a game state is well-formed (design.md §4, §14).
 
-Tests call these now; the fuzz harness will call them after every decision.
+Tests call these, and the fuzz harness (``tools/fuzz.py``) calls them before every decision.
 
 - ``state_impurities``: anything in the state that isn't pure data. Pure data means ``None``,
   ``bool``, ``int``, ``float``, ``str``, enums, lists, tuples, dicts with ``int``/``str``/enum

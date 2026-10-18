@@ -3,7 +3,7 @@
 Milestones are worked in order. Each milestone ends with every listed item done, tests passing,
 and `pytest`, `ruff` and `pyright` clean in CI. Tick items off in the same PR that completes them.
 
-**Current milestone: M0 (in progress).**
+**Current milestone: M1 (not started). M0 is complete.**
 
 ---
 
@@ -158,10 +158,10 @@ cards are not included.
 - [x] Decision request and answer types (enumerated and constrained), plus answer validation.
 - [x] Event type skeleton and event log, with CR citations.
 - [x] `NotImplementedRule` exception, and `tools/gaps.py` to list the gaps.
-- [ ] Scenario builder (`tests/scenario.py`).
-- [ ] Agents: a random agent and a scripted test agent.
-- [ ] `tools/play_cli.py`: a minimal text renderer and CLI agent.
-- [ ] Fuzz harness, checking deepcopy/pickle round-trips and replay determinism. Until M1 every
+- [x] Scenario builder (`tests/scenario.py`).
+- [x] Agents: a random agent and a scripted test agent.
+- [x] `tools/play_cli.py`: a minimal text renderer and CLI agent.
+- [x] Fuzz harness, checking deepcopy/pickle round-trips and replay determinism. Until M1 every
   game stops at `NotImplementedRule("103.5: ...")`, which the harness treats as the end of an M0
   game; any other exception is a failure.
 
@@ -178,6 +178,8 @@ cards are not included.
   0 toughness.
 - [ ] Concession at any time (104.3a), through its own API entry point, `concede` (design.md §3).
 - [ ] Cards: basic lands and a few vanilla creatures.
+- [ ] The scenario builder sets the turn, phase, step and priority holder; the fuzz harness's
+  allowed gaps move past 103.5.
 
 ## M2 — Spells and the stack
 
@@ -269,6 +271,8 @@ cards are not included.
 - [ ] The command zone, casting commanders, and commander tax.
 - [ ] Commander damage (903.10a) and the zone-change rules (903.9a/b).
 - [ ] Color identity and deck validation; Commander mulligan rules.
+- [ ] The scenario builder refuses commanders `validate_deck` would refuse (903.3, 903.5,
+  702.124a), and the tests that use the fixtures' non-legendary commanders are updated.
 - [ ] Designations: the monarch, the city's blessing.
 - [ ] Loop guard (104.4b).
 
