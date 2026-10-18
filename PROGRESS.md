@@ -22,11 +22,14 @@ Follow CLAUDE.md fully; run the test-reviewer before the PR. Branch:
 
 ## Done
 
-- (nothing yet)
+- Step 1: agents (`src/resolve/agents/{base,driver,random_agent,scripted}.py`), tests in
+  `tests/agents/`.
+- Step 2: `tests/scenario.py` (`Scenario`, `names`, `run_script`), tests in
+  `tests/engine/test_scenario_builder.py`.
 
 ## In progress
 
-- Step 1.
+- Step 3: text renderer + TextAgent + tools/play_cli.py.
 
 ## Decisions not yet in the docs
 
