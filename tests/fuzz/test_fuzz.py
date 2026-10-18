@@ -121,7 +121,7 @@ def test_random_agent_games_complete_with_every_check_passing(
     for player in state.players:
         held = sum(1 for o in state.objects.values() if o.owner == player.id and o.zone != COMMAND)
         if player.left_game:  # 800.4a: their cards left the game with them
-            assert not any(o.owner == player.id for o in state.objects.values())
+            assert held == 0 and not any(o.owner == player.id for o in state.objects.values())
             continue
         assert held == len(decks[player.id].cards), "every card of the deck is still in the game"
         # 514.1: only the active player can be above seven, by the card drawn this turn.
