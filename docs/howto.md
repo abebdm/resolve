@@ -164,8 +164,8 @@ For the engine loop itself, drive it with small tasks.
 2. A failure prints `FAILED:` with the seed and a command that reproduces that one game. Reproduce
    it, write a failing test (a scenario test, or a `fuzz_game` call in `tests/fuzz/`), then fix
    the engine.
-3. When a milestone changes which gaps games can reach (M1.2 made them actions not taken yet:
-   305.1, 601.2, and 800.4a for multiplayer losses), update `ALLOWED_GAPS` in `tools/fuzz.py`,
+3. When a milestone changes which gaps games can reach (in M1.3: 601.2 for casting, and 800.4a
+   for multiplayer losses), update `ALLOWED_GAPS` in `tools/fuzz.py`,
    the fuzz tests' expectations and the roadmap together. Random agents stop at the first
    offered gap they pick; the fuzz tests' `PatientAgent` (`tests/engine_support.py`) mostly
    passes, so its games reach later turns.
@@ -253,13 +253,41 @@ files.
 3. Paste the report into the PR as a comment. Ask the implementing session to address it, or
    address it in this session.
 
+### Add a card
+
+1. Read the card's Oracle text and rulings in the snapshot (`uv run python tools/coverage.py
+   --oracle` shows the Oracle text of missing cards).
+2. Write the definition in a module of `src/resolve/cards/definitions/` (one module per card
+   or card group, such as `basic_lands.py`): a `CardDefinition(name, abilities=(...))` per face,
+   built from the primitives in `docs/primitives.md`, and added to the module's `DEFINITIONS`.
+   Leave out what rules give the card by themselves (a basic land type's mana ability, 305.6).
+3. Add a Scryfall-format record to `tests/scryfall_fixtures.py` if tests need the card, and to
+   `scenario_database()` / `scenario_registry()` in `tests/game_fixtures.py` for scenarios.
+4. Write `tests/cards/test_<card or group>.py`: the computed characteristics, each ability in
+   play, the timing it may be cast or played with, and one test per relevant official ruling.
+5. Check that `default_registry()` finds it (a test like
+   `test_all_five_are_registered_without_printed_abilities`), and that tests which used the
+   card as an example of an *unimplemented* card now use another one.
+
+### Add a primitive
+
+1. Search `docs/primitives.md` first; extend an existing primitive rather than adding a
+   near-duplicate.
+2. Write it in `src/resolve/cards/primitives/` (`abilities.py`, `costs.py`, `effects.py`, ...):
+   a frozen `Immutable` dataclass holding only data, whose methods produce events (never
+   change the state directly). Base classes that definitions name go in `base.py`, which imports
+   nothing from the engine, so `CardDefinition` can refer to them without import cycles.
+3. Raise `NotImplementedRule` for the parts of its rules that aren't supported yet (as
+   `TapSelfCost` does for creatures, 302.6).
+4. Test it on its own (`tests/cards/test_mana_primitives.py` is an example): what it allows,
+   what it refuses, the events it produces, and its `text`.
+5. Add its entry to `docs/primitives.md` (name and module, one line, the rules, an example).
+
 ---
 
 ## Still to write
 
 Expected recipes, written when each task is first done:
 
-- Add a card
-- Add a primitive
 - Add a keyword ability
 - Fix a rules bug

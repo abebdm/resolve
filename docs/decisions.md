@@ -19,6 +19,41 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-18: Lands, mana abilities and mana pools
+- **Decision:** playing a land is a `PlayLandOption` at priority (305.1-305.3, 116.2a) and one
+  `LandPlayed` event: the land becomes a new, untapped permanent under its player's control
+  (400.7, 110.5b) and `TurnState.lands_played` counts it (305.2a). The limit is one land per
+  turn; no effect can add land plays yet.
+- **Decision:** mana abilities are activated at priority with `ActivateAbilityOption(object,
+  ability)`, where `ability` indexes the object's *computed* abilities (`characteristics`), so
+  intrinsic abilities (305.6) are activatable like printed ones. Activation pays the costs as
+  one `ApplyEvents`, then applies the effect as another (602.2b, 601.2h, 605.3b); nothing goes
+  on the stack. Like a land play, it is an action: the same player receives priority again and
+  `passed` starts over (117.3c, 117.4). Mana abilities during casting or payment (605.3a's other
+  cases) come with casting in M2.
+- **Decision:** a basic land type's mana ability isn't in any definition: `characteristics` adds
+  "{T}: Add [mana symbol]" for each basic land type of a land, after its printed abilities, in
+  type-line order (305.6). Basic land definitions therefore have no abilities: their Oracle text
+  is reminder text.
+- **Decision:** mana pools hold `Mana` units (type and source, 106.3), so 106.6 restrictions
+  can attach to units later. As each step and main phase ends, every non-empty pool empties
+  (`ManaPoolEmptied`, 500.5, 703.4q), in turn order. A player who passes announces their pool
+  (`PriorityPassed.mana_in_pool`, 117.3d, 106.4b). Pools and tapped status are public in views.
+- **Decision:** the untap step untaps every tapped permanent the active player controls as one
+  `PermanentsUntapped` event (502.3); with nothing tapped, nothing is logged.
+- **Decision:** `TapSelfCost` on a creature raises `NotImplementedRule("302.6")`: whether a
+  creature has been controlled since its controller's most recent turn began isn't tracked
+  yet. No M1 card has such an ability.
+- **Decision:** primitives' base classes live in `resolve.cards.primitives.base`, which imports
+  nothing from the engine, so `CardDefinition` (imported by `resolve.state.game`) can name
+  `Ability` without an import cycle. `TapSelfCost` imports `characteristics` inside its method
+  for the same reason.
+- **Rules:** 106.3, 106.4, 106.4b, 107.5, 110.5b, 110.5d, 116.2a, 117.3c, 117.4, 118.3, 302.6,
+  305.1-305.3, 305.6, 305.8, 500.5, 502.3, 602.2, 605.3a, 605.3b, 701.26, 703.4q.
+- **Where:** `resolve.cards.primitives`, `resolve.cards.definitions.basic_lands`,
+  `resolve.engine.priority`, `resolve.engine.mana`, `resolve.events.permanents`,
+  `resolve.events.mana`, `resolve.state.mana`.
+
 ### 2026-10-18: Turns, steps and priority
 - **Decision:** `TakeTurn` runs `TURN_SEQUENCE` (`resolve.state.turn`): every step, with a main
   phase as a segment whose step is `None` (505.2). Each segment is a `RunStep`: `StepBegan`
@@ -39,8 +74,8 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   still in the game has passed in succession with an empty stack; with an object on the stack
   the game stops at `NotImplementedRule("608.1")` (M2).
 - **Decision:** legal actions the engine can't take yet are offered and raise
-  `NotImplementedRule` when chosen (plan ★7): playing a land (305.1) until M1.3 and casting a
-  spell (601.2) until M2. Hiding them would silently shrink the set of legal actions an AI
+  `NotImplementedRule` when chosen (plan ★7): playing a land (305.1) until M1.3 (now done) and
+  casting a spell (601.2) until M2. Hiding them would silently shrink the set of legal actions an AI
   searches. A player who controls a land with a basic land type would have its intrinsic mana
   ability (305.6, 117.1d) as an option, so building that player's options raises
   `NotImplementedRule("305.6")` until M1.3. Options are listed pass first, then hand cards in
@@ -115,7 +150,7 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 - **Decision:** the fuzz tests add `PatientAgent` (`tests/engine_support.py`): a random agent
   that passes priority 31 times in 32, so random games reach later turns (draws, discards,
   decking) instead of stopping at the first offered gap. Only some long games run the copy and
-  invalid-answer checks, which are slow on long logs. `ALLOWED_GAPS` is 305.1, 601.2 and 800.4a.
+  invalid-answer checks, which are slow on long logs. `ALLOWED_GAPS` was 305.1, 601.2 and 800.4a in M1.2; M1.3 removed 305.1.
 - **Rules:** none.
 - **Where:** `tests/fuzz/test_fuzz.py`, `tools/fuzz.py`.
 

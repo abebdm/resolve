@@ -29,7 +29,7 @@ lands and mana; creatures and damage; concession and leaving the game.
     and deck coverage (`resolve.cards.registry`, `resolve.cards.coverage`),
     `tools/fetch_scryfall.py`, `tools/coverage.py`, `tools/gaps.py` (lists every
     `NotImplementedRule`), CI, and the coverage audit (the Scryfall snapshot of 2026-10-17 is
-    pinned; no cards are implemented yet).
+    pinned).
   - The engine core: state types (`resolve.state`: `GameState`, `Player`, `GameObject`, zones,
     IDs, `GameConfig`, the engine's own PRNG, invariant and purity checks), the task loop and
     public API (`resolve.tasks`, `resolve.engine`: `new_game`, `pending_decision`, `view_for`,
@@ -54,8 +54,14 @@ lands and mana; creatures and damage; concession and leaving the game.
   builder's `at(...)`. Two-player games with any decks play to a decking loss when every player
   passes. A loss in a game with three or more players that leaves two or more in it stops at
   `NotImplementedRule("800.4a")` until M1.5.
-- **Next:** M1.3, lands and mana: basic lands, playing lands (305), the intrinsic mana
-  abilities (305.6) and the first primitives, tapping and untapping, mana pools emptying.
+- **Done (M1.3):** the five basic lands (`resolve.cards.definitions.basic_lands`), playing
+  lands (305), the first primitives (`TapSelfCost`, `AddMana`, `ActivatedManaAbility`; 305.6
+  intrinsic mana abilities added by `characteristics`), tapped status, the untap step (502.3),
+  mana pools emptying as steps end (500.5), and mana abilities at priority (605.3a). Random
+  agents finish two-player land-only games.
+- **Next:** M1.4, creatures and damage: a few vanilla creatures, damage marked on permanents,
+  704.5f and 704.5g, damage removal in cleanup (514.2) and 514.3a with a real state-based
+  action.
 
 Do not start a milestone unless the user asks.
 

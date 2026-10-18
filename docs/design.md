@@ -95,7 +95,8 @@ gets its own entry point, `concede(state, player)`, in M1.
 
 - `config`: the `GameConfig` (format parameters; see §10), and the game's `seed`
 - `players`: a list in **seating (clockwise) order**, with `players[i].id == i`. Each player has
-  life and their own library, hand and graveyard; counters, designations (monarch, etc.) and
+  life, a mana pool (a list of `Mana` units, each with its type and source, 106.4) and their
+  own library, hand and graveyard; counters, designations (monarch, etc.) and
   commander-damage tallies are added in later milestones. Turn order begins with
   `starting_player` and proceeds clockwise (103.1).
 - `cards`: `dict[CardId, Card]`, one entry per physical card: its owner, its Oracle data
