@@ -6,11 +6,17 @@ Usage::
     uv run python tools/fuzz.py --games 1000 --seed 5000
     uv run python tools/fuzz.py --deck a.txt --deck b.txt  # decks from the snapshot, cycled
 
+With ``--deck``, game seed ``s`` gives seat ``i`` deck ``(s + i) % len(decks)``, so a failing
+game is reproduced by its seed alone.
+
 Each game is played by ``RandomAgent``s. Before every answer the harness checks:
 
 - the state's bookkeeping invariants and that it is pure data (``resolve.state.invariants``);
-- every player's view: deeply immutable, holding the request only for the deciding player, and
-  naming no card its viewer may not know (400.2, 401.3, 402.3);
+- every player's view, against an oracle written out from the rules rather than the engine's
+  own helpers: deeply immutable; the request only for the deciding player; every player's life,
+  library count (401.2), hand and graveyard objects in order (402.3, 404.2) and the shared zones;
+  card names exactly where the viewer may know them (400.2, 402.3); and only the log entries the
+  viewer may see, with answers visible only to their player (design.md §7);
 - that the state survives ``copy.deepcopy`` and ``pickle`` unchanged;
 - that answers outside the answer space, for another request or from another player are
   rejected and change nothing (design.md §6);
@@ -41,6 +47,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from resolve.agents.base import Agent
 from resolve.agents.driver import MAX_ATTEMPTS, agent_for, play
 from resolve.agents.random_agent import RandomAgent
 from resolve.agents.scripted import ScriptedAgent
@@ -63,12 +70,14 @@ from resolve.decisions.spaces import (
 )
 from resolve.engine.api import new_game, pending_decision, submit, view_for
 from resolve.engine.deck import Deck, build_deck
-from resolve.engine.view import is_known_to
+from resolve.engine.view import ObjectView
 from resolve.errors import DeckError, InvalidAnswer, NotImplementedRule
+from resolve.events.base import AnswerRecord
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState
-from resolve.state.ids import PlayerId
+from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.invariants import invariant_violations, mutable_parts, state_impurities
+from resolve.state.zones import ZoneKind
 
 # Gaps that end a fuzz game normally. Until M1 every game stops at 103.5 (roadmap M0).
 ALLOWED_GAPS: tuple[str, ...] = ("103.5",)
@@ -114,44 +123,102 @@ def _pickled(state: GameState) -> GameState:
     return restored
 
 
-def state_problems(state: GameState) -> list[str]:
-    """Everything wrong with ``state`` and the views built from it."""
-    problems = invariant_violations(state) + state_impurities(state)
+def _expected_name(state: GameState, obj_id: ObjectId, viewer: PlayerId) -> str | None:
+    """The name ``viewer`` should see for an object, worked out from the rules.
+
+    Written out here rather than calling the engine's ``is_known_to``, so the check is
+    independent of the code it checks: public zones show every card (400.2, 404.2, 406.3);
+    a hand shows its cards to its owner (402.3) and to players who know them (400.2).
+    """
+    obj = state.objects[obj_id]
+    name = state.card_of(obj).data.name
+    if obj.zone.kind is ZoneKind.HAND:
+        return name if viewer == obj.owner or viewer in obj.known_to else None
+    return name
+
+
+def view_problems(state: GameState, viewer: PlayerId) -> list[str]:
+    """Everything ``view_for(state, viewer)`` shows wrongly (design.md §9)."""
+    view = view_for(state, viewer)
+    where = f"player {viewer}'s view"
+    problems = mutable_parts(view, f"view_for({viewer})")
     request = state.pending
-    for player in state.players:
-        view = view_for(state, player.id)
-        problems += mutable_parts(view, f"view_for({player.id})")
-        expected = request if request is not None and request.player == player.id else None
-        if view.request != expected:
-            problems.append(f"player {player.id}'s view holds the wrong request")
-        if any(
-            summary.library_size != len(state.player(summary.id).library)
-            for summary in view.players
-        ):
-            problems.append(f"player {player.id}'s view miscounts a library")
-        for summary in view.players:
-            for shown in summary.hand + summary.graveyard:
-                obj = state.objects[shown.id]
-                if (shown.name is not None) != is_known_to(obj, player.id):
-                    problems.append(f"player {player.id}'s view of object {shown.id} is wrong")
+    expected_request = request if request is not None and request.player == viewer else None
+    if view.request != expected_request:
+        problems.append(f"{where} holds the wrong request")
+    expected_waiting = None if request is None else (request.player, request.kind)
+    waiting = None if view.waiting_for is None else (view.waiting_for.player, view.waiting_for.kind)
+    if waiting != expected_waiting:
+        problems.append(f"{where} says it is waiting for {waiting}, not {expected_waiting}")
+    if view.result != state.result or view.starting_player != state.starting_player:
+        problems.append(f"{where} misreports the result or the starting player")
+
+    def compare(shown: tuple[ObjectView, ...], actual: list[ObjectId], zone: str) -> None:
+        # Hands may be counted (402.3) and public piles keep their order (404.2, 405.2).
+        if [obj.id for obj in shown] != actual:
+            problems.append(f"{where} shows the wrong objects in {zone}")
+            return
+        for obj in shown:
+            if obj.name != _expected_name(state, obj.id, viewer):
+                problems.append(f"{where} of object {obj.id} is wrong")
+
+    if [summary.id for summary in view.players] != [player.id for player in state.players]:
+        problems.append(f"{where} lists the wrong players")
+    for summary, player in zip(view.players, state.players, strict=False):
+        if summary.life != player.life:
+            problems.append(f"{where} shows player {player.id} at the wrong life total")
+        if summary.library_size != len(player.library):  # 401.2: only a count
+            problems.append(f"{where} miscounts player {player.id}'s library")
+        compare(summary.hand, player.hand, f"player {player.id}'s hand")
+        compare(summary.graveyard, player.graveyard, f"player {player.id}'s graveyard")
+    compare(view.battlefield, state.battlefield, "the battlefield")
+    compare(view.stack, state.stack, "the stack")
+    compare(view.exile, state.exile, "exile")
+    compare(view.command, state.command, "the command zone")
+
+    # design.md §7: each entry is shown to the players it names (None: everyone), and an answer
+    # only to the player who gave it.
+    visible = tuple(
+        entry for entry in state.event_log if entry.visible_to is None or viewer in entry.visible_to
+    )
+    if view.log != visible:
+        problems.append(f"{where} shows the wrong log entries")
+    for entry in state.event_log:
+        record = entry.record
+        if isinstance(record, AnswerRecord) and entry.visible_to != (record.player,):
+            problems.append(f"log entry {entry.index} shows an answer to other players")
     return problems
 
 
-def invalid_answers(request: DecisionRequest, players: int) -> list[DecisionAnswer]:
-    """Answers that must be rejected: another request, another player, outside the space."""
+def state_problems(state: GameState) -> list[str]:
+    """Everything wrong with ``state`` and the views built from it."""
+    problems = invariant_violations(state) + state_impurities(state)
+    for player in state.players:
+        problems += view_problems(state, player.id)
+    return problems
+
+
+def invalid_answers(
+    request: DecisionRequest, players: int, valid: AnswerValue
+) -> list[DecisionAnswer]:
+    """Answers that must be rejected: another request, another player, outside the space.
+
+    ``valid`` is a value inside the request's space (the agent's own answer), so the answers for
+    another request or from another player are rejected only for that reason.
+    """
 
     def answer(value: AnswerValue) -> DecisionAnswer:
         return DecisionAnswer(request.id, request.player, value)
 
-    some_value: AnswerValue = Number(0) if not isinstance(request.space, ChooseNumber) else Pick(0)
+    wrong_type: AnswerValue = Pick(0) if isinstance(request.space, ChooseNumber) else Number(0)
     wrong: list[DecisionAnswer] = [
-        DecisionAnswer(request.id + 1, request.player, some_value),
-        DecisionAnswer(request.id - 1, request.player, some_value),
-        answer(some_value),  # a value of the wrong type for the space
+        DecisionAnswer(request.id + 1, request.player, valid),
+        DecisionAnswer(request.id - 1, request.player, valid),
+        answer(wrong_type),
     ]
     if players > 1:
         other = PlayerId((request.player + 1) % players)
-        wrong.append(DecisionAnswer(request.id, other, some_value))
+        wrong.append(DecisionAnswer(request.id, other, valid))
     match request.space:
         case ChooseOne(options=options):
             wrong += [answer(Pick(len(options))), answer(Pick(-1)), answer(Pick(True))]
@@ -181,7 +248,7 @@ def invalid_answers(request: DecisionRequest, players: int) -> list[DecisionAnsw
 
 def fuzz_run(
     make_state: Callable[[], GameState],
-    agents: Sequence[RandomAgent],
+    agents: Sequence[Agent],
     *,
     describe: str,
     allowed_gaps: Sequence[str] = ALLOWED_GAPS,
@@ -227,15 +294,15 @@ def fuzz_run(
                     raise fail(f"a deep copy differs from the state after {answers} answers")
                 if _pickled(state) != state:
                     raise fail(f"a pickled copy differs from the state after {answers} answers")
+            agent = agent_for(agents, request.player)
+            answer = agent.decide(view_for(state, request.player), request)
             if probe_invalid:
-                for bad in invalid_answers(request, len(state.players)):
+                for bad in invalid_answers(request, len(state.players), answer.value):
                     outcome = _submit(state, bad)
                     if outcome[0] != "rejected":
                         raise fail(f"the invalid answer {bad} was {outcome[0]}")
                     if state != pickle.loads(snapshot):
                         raise fail(f"the rejected answer {bad} changed the state")
-            agent = agent_for(agents, request.player)
-            answer = agent.decide(view_for(state, request.player), request)
             copies = [copy.deepcopy(state), _pickled(state)] if check_copies else []
             outcome = _submit(state, answer)
             for name, other in zip(("deep copy", "pickled copy"), copies, strict=False):
@@ -363,13 +430,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 1
 
     endings: Counter[str] = Counter()
+    formats: Counter[str] = Counter()
     answers = rejected = 0
     started = time.perf_counter()
     for game in range(args.games):
-        seed = args.seed + game
+        seed: int = args.seed + game
         players: int = args.players[game % len(args.players)]
         config = configs[(game // len(args.players)) % len(configs)]
-        decks = [pool[(game + seat) % len(pool)] for seat in range(players)]
+        decks = [pool[(seed + seat) % len(pool)] for seat in range(players)]
         try:
             result = fuzz_game(config, decks, seed)
         except FuzzFailure as failure:
@@ -378,9 +446,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         answers += result.answers
         rejected += result.rejected
         endings[result.gap.split(": ", 1)[0] if result.gap else "game over"] += 1
+        formats["commander" if config.commander is not None else "standard"] += 1
     elapsed = time.perf_counter() - started
     print(f"{args.games} games passed: {answers} answers accepted, {rejected} rejected.")
     print("Endings: " + ", ".join(f"{name} x{count}" for name, count in sorted(endings.items())))
+    print("Formats: " + ", ".join(f"{name} x{count}" for name, count in sorted(formats.items())))
     print(f"{args.games / elapsed:.1f} games per second (with every check on).")
     return 0
 
