@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -13,6 +16,8 @@ from resolve.data.decklist import parse_decklist
 from tests import scryfall_fixtures as fx
 from tools import coverage as coverage_tool
 from tools.coverage import describe_card, format_report, run
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 DECK = """\
 Commander
@@ -143,3 +148,38 @@ def test_main_defaults_to_the_target_decks(
     assert "== byrke_counters ==" in out
     assert "== gishath_dinosaurs ==" in out
     assert load_card_database(tmp_path).snapshot is not None
+
+
+def test_redirected_report_with_oracle_text_is_written_as_utf8(tmp_path: Path) -> None:
+    """Windows encodes redirected output as cp1252, which has no "\u2212" (U+2212), the minus
+    sign of planeswalker abilities. ``PYTHONIOENCODING=cp1252`` recreates that; the whole report
+    must still be written, as UTF-8."""
+    walker = fx.simple_card(
+        "Test Walker",
+        "oid-test-walker",
+        type_line="Legendary Planeswalker \u2014 Test",
+        oracle_text="+1: Draw a card.\n\u22123: Exile target creature.",
+        loyalty="4",
+    )
+    fx.write_snapshot(tmp_path / "data", cards=[fx.FOREST, walker])
+    deck = write_deck(tmp_path, "Mainboard\n1 Test Walker\n9 Forest\n")
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(REPO_ROOT / "tools" / "coverage.py"),
+            "--oracle",
+            "--data-dir",
+            str(tmp_path / "data"),
+            str(deck),
+        ],
+        cwd=REPO_ROOT,
+        env=dict(os.environ, PYTHONIOENCODING="cp1252"),
+        capture_output=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr.decode("utf-8", "replace")
+    report = completed.stdout.decode("utf-8")
+    assert (
+        "Legendary Planeswalker \u2014 Test\n+1: Draw a card.\n\u22123: Exile target creature.\n"
+        in (report.replace("\r\n", "\n"))
+    )

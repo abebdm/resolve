@@ -26,6 +26,7 @@ validation, not to this parser.
 
 from __future__ import annotations
 
+import codecs
 import re
 from dataclasses import dataclass
 from enum import Enum
@@ -159,5 +160,19 @@ def parse_decklist(text: str, *, name: str | None = None) -> Decklist:
 
 
 def load_decklist(path: Path) -> Decklist:
-    """Read and parse a decklist file; the deck is named after the file's stem."""
-    return parse_decklist(path.read_text(encoding="utf-8"), name=path.stem)
+    """Read and parse a decklist file; the deck is named after the file's stem.
+
+    The file is UTF-8, with or without a byte order mark, or UTF-16 with a byte order mark: what
+    Windows editors and PowerShell save. Any other encoding is refused rather than guessed.
+    """
+    raw = path.read_bytes()
+    utf16 = raw.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE))
+    try:
+        # "utf-8-sig" drops a UTF-8 byte order mark if there is one; "utf-16" reads the mark.
+        text = raw.decode("utf-16" if utf16 else "utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise DecklistError(
+            f"{path.name} is not UTF-8 text (byte {error.start}); save it as UTF-8",
+            source=path.stem,
+        ) from error
+    return parse_decklist(text, name=path.stem)

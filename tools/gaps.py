@@ -77,7 +77,9 @@ def _is_gap_call(node: ast.Call) -> bool:
 
 def scan_file(path: Path) -> tuple[list[Gap], list[UnlistableGap]]:
     """The gaps raised in one Python file."""
-    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    # Parsing the bytes decodes them as Python does: UTF-8 with or without a byte order mark
+    # (which some Windows editors write), or the file's coding declaration (PEP 263).
+    tree = ast.parse(path.read_bytes(), filename=str(path))
     gaps: list[Gap] = []
     unlistable: list[UnlistableGap] = []
     for node in ast.walk(tree):

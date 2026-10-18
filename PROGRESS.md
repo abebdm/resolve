@@ -26,7 +26,10 @@ class of problem, update the PR description. https://github.com/abebdm/resolve/p
 - [x] fixture encodings in tests (explicit utf-8)
 - [x] portability lint test (tests/tooling/test_portability_lint.py) (text I/O without encoding, shell subprocess) over src/tools/tests
 - [x] CI: PYTHONWARNDEFAULTENCODING=1 + filterwarnings error::EncodingWarning
-- [ ] tools: UTF-8 stdout; newline="\n" for written files; tests
-- [ ] load_decklist: BOM / UTF-16 / undecodable -> DecklistError; tests first
+- [ ] tools: UTF-8 stdout; newline="\n" for written files. Tests written and pushed BEFORE the fix
+      (commit 'Tests: ...'), so Windows CI shows the LF test failing; cp1252 tests fail locally.
+      Next: implement the fix in the five tools' __main__ blocks and fetch_scryfall writes.
+- [x] load_decklist: BOM / UTF-16 / undecodable -> DecklistError (tests confirmed failing first)
+- [x] gaps.py parses source bytes (BOM, PEP 263); test confirmed failing first
 - [ ] docs: decisions.md, CLAUDE.md platform section, howto
 - [ ] push, CI green on all 6 combos, PR description, delete PROGRESS.md
