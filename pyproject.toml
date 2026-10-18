@@ -33,6 +33,10 @@ testpaths = ["tests"]
 pythonpath = ["."]
 addopts = ["--strict-markers", "--strict-config"]
 xfail_strict = true
+# CLAUDE.md, Platform: a file opened without an encoding uses the locale's code page (cp1252 on
+# Windows). CI sets PYTHONWARNDEFAULTENCODING=1 so Python warns about it (PEP 597); this makes
+# the warning fail the test. Set the variable locally to run the same check.
+filterwarnings = ["error::EncodingWarning"]
 
 [tool.ruff]
 line-length = 100

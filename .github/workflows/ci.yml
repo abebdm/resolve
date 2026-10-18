@@ -26,6 +26,10 @@ jobs:
     name: pytest, ruff, pyright (${{ matrix.os }}, Python ${{ matrix.python-version }})
     # Windows is the primary platform (CLAUDE.md, "Platform"); Linux keeps the code portable.
     runs-on: ${{ matrix.os }}
+    env:
+      # Warn whenever a file is opened without an encoding (PEP 597); pyproject.toml makes the
+      # warning an error, so code that would read or write cp1252 on Windows fails everywhere.
+      PYTHONWARNDEFAULTENCODING: "1"
     strategy:
       fail-fast: false
       matrix:

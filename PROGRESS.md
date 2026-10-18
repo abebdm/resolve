@@ -23,9 +23,9 @@ class of problem, update the PR description. https://github.com/abebdm/resolve/p
 
 ## Plan / status
 
-- [ ] fixture encodings in tests (explicit utf-8)
-- [ ] portability lint test (text I/O without encoding, shell subprocess) over src/tools/tests
-- [ ] CI: PYTHONWARNDEFAULTENCODING=1 + filterwarnings error::EncodingWarning
+- [x] fixture encodings in tests (explicit utf-8)
+- [x] portability lint test (tests/tooling/test_portability_lint.py) (text I/O without encoding, shell subprocess) over src/tools/tests
+- [x] CI: PYTHONWARNDEFAULTENCODING=1 + filterwarnings error::EncodingWarning
 - [ ] tools: UTF-8 stdout; newline="\n" for written files; tests
 - [ ] load_decklist: BOM / UTF-16 / undecodable -> DecklistError; tests first
 - [ ] docs: decisions.md, CLAUDE.md platform section, howto

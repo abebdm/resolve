@@ -108,9 +108,9 @@ def prepend_sys_path(monkeypatch: pytest.MonkeyPatch, path: Path) -> None:
 def make_package(root: Path, name: str, modules: dict[str, str]) -> None:
     package = root / name
     package.mkdir()
-    (package / "__init__.py").write_text("")
+    (package / "__init__.py").write_text("", encoding="utf-8")
     for module, source in modules.items():
-        (package / f"{module}.py").write_text(textwrap.dedent(source))
+        (package / f"{module}.py").write_text(textwrap.dedent(source), encoding="utf-8")
 
 
 def test_collects_definitions_in_sorted_module_order(
