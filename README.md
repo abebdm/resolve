@@ -9,6 +9,9 @@ be built later on top of its API.
 
 - Architecture: [`docs/design.md`](docs/design.md)
 - Milestones: [`docs/roadmap.md`](docs/roadmap.md)
+- How-to recipes: [`docs/howto.md`](docs/howto.md)
+- Primitives catalog: [`docs/primitives.md`](docs/primitives.md)
+- Decision log: [`docs/decisions.md`](docs/decisions.md)
 - Pinned rules: [`docs/rules/`](docs/rules/)
 - Target decks: [`decks/`](decks/)
 - Guide for Claude Code: [`CLAUDE.md`](CLAUDE.md)
