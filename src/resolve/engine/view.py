@@ -9,7 +9,8 @@ Agents only ever see a ``PlayerView``: a frozen snapshot holding what one player
   name, and may count them.
 - **Public zones** (400.2) show every object.
 - **The turn**: its number, the active player, the phase and step, and who holds priority are
-  public (``TurnView``), as is whether each player has lost.
+  public (``TurnView``), as is whether each player has lost, each mana pool (announced when its
+  player passes, 106.4b) and which permanents are tapped.
 - **The pending decision**: everyone sees who is deciding and what kind of decision it is; only
   the deciding player gets the request itself.
 - **The log**: the entries this player may see, and the redacted form of those hidden from them
@@ -29,6 +30,7 @@ from resolve.errors import NotImplementedRule
 from resolve.events.base import LogEntry
 from resolve.state.game import GameObject, GameResult, GameState
 from resolve.state.ids import ObjectId, PlayerId
+from resolve.state.mana import Mana
 from resolve.state.turn import Phase, Step
 from resolve.state.zones import ZoneKind
 from resolve.values import Immutable
@@ -36,12 +38,17 @@ from resolve.values import Immutable
 
 @dataclass(frozen=True)
 class ObjectView(Immutable):
-    """An object as one player sees it; ``name`` is ``None`` when its identity is hidden."""
+    """An object as one player sees it; ``name`` is ``None`` when its identity is hidden.
+
+    ``tapped`` is a permanent's status (110.5), which everyone sees; ``False`` off the
+    battlefield.
+    """
 
     id: ObjectId
     name: str | None
     owner: PlayerId
     controller: PlayerId | None
+    tapped: bool = False
 
 
 @dataclass(frozen=True)
@@ -51,6 +58,7 @@ class PlayerSummary(Immutable):
     id: PlayerId
     life: int
     lost: bool
+    mana_pool: tuple[Mana, ...]
     library_size: int
     hand: tuple[ObjectView, ...]
     graveyard: tuple[ObjectView, ...]  # last = top
@@ -118,6 +126,7 @@ def view_for(state: GameState, viewer: PlayerId) -> PlayerView:
                 id=player.id,
                 life=player.life,
                 lost=player.lost,
+                mana_pool=tuple(player.mana_pool),
                 library_size=len(player.library),
                 hand=show(player.hand),
                 graveyard=show(player.graveyard),
@@ -152,4 +161,4 @@ def _object_view(state: GameState, obj: GameObject, viewer: PlayerId) -> ObjectV
         if obj.card is None:
             raise NotImplementedRule("111.1: viewing objects not represented by a card")
         name = state.cards[obj.card].data.name
-    return ObjectView(obj.id, name, obj.owner, obj.controller)
+    return ObjectView(obj.id, name, obj.owner, obj.controller, obj.tapped)

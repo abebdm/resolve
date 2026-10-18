@@ -95,7 +95,8 @@ gets its own entry point, `concede(state, player)`, in M1.
 
 - `config`: the `GameConfig` (format parameters; see §10), and the game's `seed`
 - `players`: a list in **seating (clockwise) order**, with `players[i].id == i`. Each player has
-  life and their own library, hand and graveyard; counters, designations (monarch, etc.) and
+  life, a mana pool (a list of `Mana` units, each with its type and source, 106.4) and their
+  own library, hand and graveyard; counters, designations (monarch, etc.) and
   commander-damage tallies are added in later milestones. Turn order begins with
   `starting_player` and proceeds clockwise (103.1).
 - `cards`: `dict[CardId, Card]`, one entry per physical card: its owner, its Oracle data
@@ -214,7 +215,7 @@ independent of the kind:
 
 Every outcome has exactly one valid answer (canonical forms), which helps AI search. Options are
 typed (`PlayerOption`, `ObjectOption`, `NamedOption`, and the priority actions `PassOption`,
-`PlayLandOption`, `CastSpellOption`) so a UI can tell them apart. A priority request lists every
+`PlayLandOption`, `ActivateAbilityOption`, `CastSpellOption`) so a UI can tell them apart. A priority request lists every
 legal action, including ones the engine can't take yet, which raise `NotImplementedRule` when
 chosen. A request contains only
 what its deciding player may know; one decision is pending at a time, which matches the

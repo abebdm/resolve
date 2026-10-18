@@ -161,8 +161,8 @@ def test_redirected_report_with_oracle_text_is_written_as_utf8(tmp_path: Path) -
         oracle_text="+1: Draw a card.\n\u22123: Exile target creature.",
         loyalty="4",
     )
-    fx.write_snapshot(tmp_path / "data", cards=[fx.FOREST, walker])
-    deck = write_deck(tmp_path, "Mainboard\n1 Test Walker\n9 Forest\n")
+    fx.write_snapshot(tmp_path / "data", cards=[fx.LLANOWAR_ELVES, walker])
+    deck = write_deck(tmp_path, "Mainboard\n1 Test Walker\n9 Llanowar Elves\n")
     completed = subprocess.run(
         [
             sys.executable,
@@ -188,9 +188,10 @@ def test_redirected_report_with_oracle_text_is_written_as_utf8(tmp_path: Path) -
         "      Loyalty 4\n"
     ) in report
     assert report.endswith(
-        "  9 Forest  [Mainboard]\n"
-        "      Forest\n"
-        "      Basic Land \u2014 Forest\n"
-        "      ({T}: Add {G}.)\n"
+        "  9 Llanowar Elves  [Mainboard]\n"
+        "      Llanowar Elves {G}\n"
+        "      Creature \u2014 Elf Druid\n"
+        "      {T}: Add {G}.\n"
+        "      1/1\n"
         "\n"
     )

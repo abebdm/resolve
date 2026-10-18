@@ -76,7 +76,24 @@ class CastSpellOption(Immutable):
     object: ObjectId
 
 
-Option = PlayerOption | ObjectOption | NamedOption | PassOption | PlayLandOption | CastSpellOption
+@dataclass(frozen=True)
+class ActivateAbilityOption(Immutable):
+    """Activate ability number ``ability`` (from 0, in the order of the object's computed
+    abilities) of ``object`` (117.1b, 602; mana abilities 605.3a)."""
+
+    object: ObjectId
+    ability: int
+
+
+Option = (
+    PlayerOption
+    | ObjectOption
+    | NamedOption
+    | PassOption
+    | PlayLandOption
+    | CastSpellOption
+    | ActivateAbilityOption
+)
 
 # --- Answer values -----------------------------------------------------------------------------
 

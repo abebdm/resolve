@@ -15,6 +15,7 @@ import pkgutil
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+from resolve.cards.primitives.base import Ability
 from resolve.data.cards import CardData
 from resolve.values import Immutable
 
@@ -23,13 +24,18 @@ from resolve.values import Immutable
 class CardDefinition(Immutable):
     """How one card (or one face of a multi-faced card) behaves.
 
-    Only the name exists so far. The fields that describe behavior (abilities, costs, static
-    effects) are added with the engine primitives in later milestones. A definition is deeply
-    immutable data (``Immutable``): game states store the definitions of their cards, and copies
-    of a state share them. It never stores functions (design.md §4).
+    - ``name``: the exact Oracle name of the card or face.
+    - ``abilities``: its printed abilities (113), built from primitives
+      (``resolve.cards.primitives``), in printed order. Abilities a rule gives an object, such
+      as a basic land type's mana ability (305.6), aren't listed: ``characteristics`` adds them.
+
+    More fields (costs, static effects, ...) arrive with later primitives. A definition is
+    deeply immutable data (``Immutable``): game states store the definitions of their cards,
+    and copies of a state share them. It never stores functions (design.md §4).
     """
 
     name: str
+    abilities: tuple[Ability, ...] = ()
 
 
 class RegistryError(Exception):

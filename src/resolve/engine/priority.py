@@ -10,15 +10,16 @@ Each time a player would receive priority, state-based actions are performed fir
 (none can exist until M4).
 
 The options are listed in a fixed order: pass first, then each card in the player's hand in
-hand order (play it as a land, or cast it), then commanders in the command zone. Actions the
-engine can't perform yet are still offered, so the set of legal actions is never silently
-smaller than the rules allow; choosing one raises ``NotImplementedRule`` (docs/decisions.md):
+hand order (play it as a land, or cast it), then commanders in the command zone, then the mana
+abilities of the permanents the player controls, in battlefield order and ability order.
 
-- playing a land (305.1) until M1.3;
-- casting a spell (601.2) until M2.
+- Playing a land (305.1) is a special action (116.2a): the land goes onto the battlefield.
+- Activating a mana ability (605.3a) pays its cost and adds its mana at once (605.3b).
+- After either, the same player receives priority again (117.3c), and the passes before it no
+  longer count toward ending the step (117.4).
 
-A player who controls a land with a basic land type has its intrinsic mana ability (305.6),
-which arrives in M1.3; until then building that player's options raises ``NotImplementedRule``.
+Casting a spell is offered too, so the set of legal actions is never silently smaller than the
+rules allow; choosing it raises ``NotImplementedRule("601.2")`` until M2 (docs/decisions.md).
 """
 
 from __future__ import annotations
@@ -27,9 +28,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from resolve.cards.primitives.abilities import ActivatedManaAbility
 from resolve.data.types import CardType
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import (
+    ActivateAbilityOption,
     AnswerValue,
     CastSpellOption,
     ChooseOne,
@@ -39,8 +42,10 @@ from resolve.decisions.spaces import (
     PlayLandOption,
 )
 from resolve.effects.characteristics import characteristics
+from resolve.engine.mana import ActivateManaAbility
 from resolve.engine.sba import CheckStateBasedActions
 from resolve.errors import EngineError, NotImplementedRule
+from resolve.events.permanents import LandPlayed
 from resolve.events.pipeline import ApplyEvents
 from resolve.events.turn import PriorityPassed
 from resolve.state.game import next_in_turn_order, players_in_game
@@ -52,8 +57,6 @@ if TYPE_CHECKING:
     from resolve.decisions.request import DecisionRequest
     from resolve.state.game import GameState
 
-# 305.6: the basic land types, each giving a land the intrinsic ability to add its mana.
-BASIC_LAND_TYPES = ("Plains", "Island", "Swamp", "Mountain", "Forest")
 # Card types of spells (301.1, 302.1, 303.1, 304.1, 306.1, 307.1, 310.1; 308.1 for kindreds).
 SPELL_TYPES = (
     CardType.ARTIFACT,
@@ -97,14 +100,14 @@ def priority_options(state: GameState, player: PlayerId) -> tuple[Option, ...]:
             if CardType.LAND not in types and _may_cast(types, sorcery_timing):
                 options.append(CastSpellOption(obj))
     for obj in state.battlefield:
-        permanent = state.objects[obj]
-        if permanent.controller != player:
+        if state.objects[obj].controller != player:
             continue
-        chars = characteristics(state, obj)
-        if chars.is_a(CardType.LAND) and any(t in BASIC_LAND_TYPES for t in chars.subtypes):
-            raise NotImplementedRule(
-                "305.6: the mana abilities of lands with basic land types (roadmap M1.3)"
-            )
+        for index, ability in enumerate(characteristics(state, obj).abilities):
+            # 605.3a: a mana ability whenever the player has priority; 602.2, 118.3.
+            if isinstance(ability, ActivatedManaAbility) and ability.can_activate(
+                state, obj, player
+            ):
+                options.append(ActivateAbilityOption(obj, index))
     return tuple(options)
 
 
@@ -158,12 +161,25 @@ class PriorityRound(Task):
         match request.space.chosen(answer):
             case PassOption():
                 return self._pass(state, turn, player)
-            case PlayLandOption():
-                raise NotImplementedRule("305.1: playing a land (roadmap M1.3)")
+            case PlayLandOption(object=card):
+                played = LandPlayed(player=player, card=card, rules=("305.1", "116.2a"))
+                return self._acted(turn, player, ApplyEvents((played,)))
+            case ActivateAbilityOption(object=source, ability=index):
+                activation = ActivateManaAbility(player, source, index)
+                return self._acted(turn, player, activation)
             case CastSpellOption():
                 raise NotImplementedRule("601.2: casting a spell (roadmap M2)")
             case option:
                 raise EngineError(f"unexpected priority option {option!r}")
+
+    def _acted(self, turn: TurnState, player: PlayerId, action: Task) -> TaskResult:
+        # 117.3c: the player who acted receives priority again; 117.4: passing in succession
+        # starts over.
+        turn.priority = None
+        turn.passed.clear()
+        self.next_player = player
+        self.stage = Stage.CHECK
+        return Push((action, self))
 
     def _pass(self, state: GameState, turn: TurnState, player: PlayerId) -> TaskResult:
         # 117.3d: the player passes; then the next player in turn order receives priority.
@@ -173,7 +189,10 @@ class PriorityRound(Task):
             raise NotImplementedRule("608.1: resolving the top object of the stack (roadmap M2)")
         turn.priority = None
         turn.passed.append(player)
-        passed = ApplyEvents((PriorityPassed(player=player, rules=("117.3d",)),))
+        pool = tuple(state.player(player).mana_pool)
+        # 106.4b: a player passing with mana in their pool announces it.
+        rules = ("117.3d", "106.4b") if pool else ("117.3d",)
+        passed = ApplyEvents((PriorityPassed(player=player, mana_in_pool=pool, rules=rules),))
         if everyone:
             # 117.4, 500.2: all players passed in succession with the stack empty: the step or
             # phase ends.

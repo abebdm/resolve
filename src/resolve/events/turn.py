@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from resolve.errors import EngineError
 from resolve.events.base import Event
 from resolve.state.ids import PlayerId
+from resolve.state.mana import Mana
 from resolve.state.turn import Phase, Step, TurnState
 
 if TYPE_CHECKING:
@@ -59,10 +60,12 @@ class PriorityPassed(Event):
     """``player`` passed priority, taking no action (117.3d).
 
     The record of the pass; the priority task then gives priority to the next player or ends
-    the step (117.4). Announcing unspent mana (117.3d) arrives with mana pools (M1.3).
+    the step (117.4). ``mana_in_pool`` is the unspent mana the player announces (117.3d,
+    106.4b).
     """
 
     player: PlayerId
+    mana_in_pool: tuple[Mana, ...] = ()
 
     def apply(self, state: GameState) -> None:
         state.player(self.player)  # validates the ID

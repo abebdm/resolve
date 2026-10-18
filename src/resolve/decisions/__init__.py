@@ -3,6 +3,7 @@
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer, DecisionRequest, validate_answer
 from resolve.decisions.spaces import (
+    ActivateAbilityOption,
     Amounts,
     AnswerSpace,
     AnswerValue,
@@ -25,6 +26,7 @@ from resolve.decisions.spaces import (
 )
 
 __all__ = [
+    "ActivateAbilityOption",
     "Amounts",
     "AnswerSpace",
     "AnswerValue",
