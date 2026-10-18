@@ -48,7 +48,7 @@ from resolve.state.game import GameObject, GameState
 from resolve.state.ids import PlayerId
 from resolve.state.mana import ManaType
 from resolve.state.turn import Step as TurnStep
-from resolve.state.zones import Zone
+from resolve.state.zones import COMMAND, Zone
 from resolve.tasks import Task
 from tests import scryfall_fixtures as fx
 from tests.engine_support import (
@@ -76,10 +76,19 @@ SEEDS = range(12)
 
 
 def decks_for(players: int, commander: bool, seed: int) -> list[Deck]:
-    """Decks of varying sizes (including empty), with one commander each in Commander games."""
+    """Decks of varying sizes, with one commander each in Commander games.
+
+    Most decks hold 7 to 11 cards, so games get past the opening hands into turns and priority
+    (a deck of 6 or fewer would make every player draw from an empty library during 103.5 and
+    lose at the first state-based-action check, 704.5b). Every deck holds an elf, so random
+    agents soon try to cast it and the game stops at the 601.2 gap. Seat 1's deck is empty in
+    one game of four.
+    """
     commanders = [DAYBREAKER] if commander else []
     return [
-        deck(forests=(seed + seat) % 5, elves=seat % 3, commanders=commanders)
+        deck(forests=0, elves=0, commanders=commanders)
+        if seat == 1 and seed % 4 == 3
+        else deck(forests=6 + (seed + seat) % 4, elves=1 + seat % 2, commanders=commanders)
         for seat in range(players)
     ]
 
@@ -101,10 +110,15 @@ def test_random_agent_games_complete_with_every_check_passing(
     # 103.1, then at least one mulligan declaration per player with cards to draw (103.5).
     assert result.answers >= 1 + sum(1 for d in decks if d.cards)
     assert state.starting_player is not None
+    if all(len(d.cards) >= 8 for d in decks):
+        # Nobody can draw from an empty library before their first priority (103.8, 504.1), so
+        # the game reached a priority decision (117.3a).
+        asked = [e.record.kind for e in state.event_log if isinstance(e.record, AnswerRecord)]
+        assert DecisionKind.PRIORITY_ACTION in asked, "the game reached priority"
     active = None if state.turn is None else state.turn.active_player
     for player in state.players:
-        held = len(player.hand) + len(player.library) + len(player.graveyard)
-        assert held == len(decks[player.id].cards), "every card is in a hand, library or graveyard"
+        held = sum(1 for o in state.objects.values() if o.owner == player.id and o.zone != COMMAND)
+        assert held == len(decks[player.id].cards), "every card of the deck is still in the game"
         # 514.1: only the active player can be above seven, by the card drawn this turn.
         assert len(player.hand) <= (8 if player.id == active else 7)
     if commander:
