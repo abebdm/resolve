@@ -32,8 +32,8 @@ from tools.fetch_scryfall import (
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-ORACLE_URI = "https://data.scryfall.io/oracle-cards/oracle-cards-20261018090211.json"
-RULINGS_URI = "https://data.scryfall.io/rulings/rulings-20261018090034.json"
+ORACLE_URI = "https://data.scryfall.io/oracle-cards/oracle-cards-20261018090211.jsonl.gz"
+RULINGS_URI = "https://data.scryfall.io/rulings/rulings-20261018090034.jsonl.gz"
 
 
 def bulk_index(**overrides: Any) -> dict[str, Any]:
@@ -42,19 +42,19 @@ def bulk_index(**overrides: Any) -> dict[str, Any]:
             "object": "bulk_data",
             "type": "oracle_cards",
             "updated_at": fx.ORACLE_UPDATED_AT,
-            "download_uri": ORACLE_URI,
+            "jsonl_download_uri": ORACLE_URI,
         },
         {
             "object": "bulk_data",
             "type": "unique_artwork",
             "updated_at": fx.ORACLE_UPDATED_AT,
-            "download_uri": "https://data.scryfall.io/unique-artwork.json",
+            "jsonl_download_uri": "https://data.scryfall.io/unique-artwork.jsonl.gz",
         },
         {
             "object": "bulk_data",
             "type": "rulings",
             "updated_at": fx.RULINGS_UPDATED_AT,
-            "download_uri": RULINGS_URI,
+            "jsonl_download_uri": RULINGS_URI,
         },
     ]
     return {"object": "list", "has_more": False, "data": entries, **overrides}
@@ -108,10 +108,10 @@ def test_malformed_index_is_refused(index: object) -> None:
         select_bulk_entries(index)
 
 
-def test_entry_without_download_uri_is_refused() -> None:
+def test_entry_without_jsonl_download_uri_is_refused() -> None:
     index = bulk_index()
-    del index["data"][0]["download_uri"]
-    with pytest.raises(FetchError, match="lacks updated_at/download_uri"):
+    del index["data"][0]["jsonl_download_uri"]
+    with pytest.raises(FetchError, match="lacks updated_at/jsonl_download_uri"):
         select_bulk_entries(index)
 
 
@@ -139,11 +139,13 @@ def test_fetch_downloads_validates_and_records_snapshot(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("oracle", "rulings", "message"),
     [
-        (b"not json", None, "not a valid oracle_cards bulk file"),
-        (b"[]", None, "contains no cards"),
+        (b"not gzip", None, "not a valid oracle_cards bulk file"),
+        (fx.oracle_cards_bytes()[:-20], None, "not a valid oracle_cards bulk file"),
+        (fx.jsonl_gz([{"name": "Forest"}]), None, "not a valid oracle_cards bulk file"),
+        (fx.jsonl_gz([]), None, "contains no cards"),
         (fx.oracle_cards_bytes([fx.FOREST, fx.FOREST]), None, "more than once"),
         (fx.rulings_bytes(), None, "not a valid oracle_cards bulk file"),
-        (None, b"[]", "contains no rulings"),
+        (None, fx.jsonl_gz([]), "contains no rulings"),
         (None, fx.oracle_cards_bytes(), "not a valid rulings bulk file"),
     ],
 )
@@ -162,8 +164,8 @@ def test_invalid_download_leaves_existing_snapshot_untouched(
 
 def write_downloads(directory: Path) -> tuple[Path, Path]:
     directory.mkdir()
-    oracle = directory / "oracle-cards-20261018090211.json"
-    rulings = directory / "rulings-20261018090034.json"
+    oracle = directory / "oracle-cards-20261018090211.jsonl.gz"
+    rulings = directory / "rulings-20261018090034.jsonl.gz"
     oracle.write_bytes(fx.oracle_cards_bytes())
     rulings.write_bytes(fx.rulings_bytes())
     return oracle, rulings
@@ -185,10 +187,10 @@ def test_import_reads_publication_time_from_scryfall_file_names(tmp_path: Path) 
 def test_import_with_explicit_publication_time(tmp_path: Path) -> None:
     downloads = tmp_path / "downloads"
     downloads.mkdir()
-    (downloads / "cards.json").write_bytes(fx.oracle_cards_bytes())
-    (downloads / "rules.json").write_bytes(fx.rulings_bytes())
+    (downloads / "cards.jsonl.gz").write_bytes(fx.oracle_cards_bytes())
+    (downloads / "rules.jsonl.gz").write_bytes(fx.rulings_bytes())
     snapshot = import_snapshot(
-        tmp_path, downloads / "cards.json", downloads / "rules.json", "2026-10-17T08:00:00Z"
+        tmp_path, downloads / "cards.jsonl.gz", downloads / "rules.jsonl.gz", "2026-10-17T08:00:00Z"
     )
     assert snapshot.date == date(2026, 10, 17)
 
@@ -209,7 +211,7 @@ def test_import_with_files_swapped_is_refused(tmp_path: Path) -> None:
 def test_import_of_missing_file_is_refused(tmp_path: Path) -> None:
     oracle, _ = write_downloads(tmp_path / "downloads")
     with pytest.raises(FetchError, match="does not exist"):
-        import_snapshot(tmp_path, oracle, tmp_path / "rulings-20261018090034.json")
+        import_snapshot(tmp_path, oracle, tmp_path / "rulings-20261018090034.jsonl.gz")
     assert not (tmp_path / SNAPSHOT_FILE).exists()
     assert not list(tmp_path.glob("*.part"))
 
@@ -227,17 +229,25 @@ def test_import_rejects_bad_publication_time(tmp_path: Path, updated_at: str, me
 @pytest.mark.parametrize(
     ("name", "kind", "expected"),
     [
-        ("oracle-cards-20261018090211.json", "oracle-cards", "2026-10-18T09:02:11+00:00"),
-        ("rulings-20260101000000.json", "rulings", "2026-01-01T00:00:00+00:00"),
+        ("oracle-cards-20261018090211.jsonl.gz", "oracle-cards", "2026-10-18T09:02:11+00:00"),
+        ("rulings-20260101000000.jsonl.gz", "rulings", "2026-01-01T00:00:00+00:00"),
     ],
 )
 def test_publication_time_from_file_name(name: str, kind: str, expected: str) -> None:
     assert updated_at_from_file_name(Path(name), kind) == expected
 
 
-def test_default_cards_file_name_is_not_accepted_as_oracle_cards() -> None:
+@pytest.mark.parametrize(
+    "name",
+    [
+        "default-cards-20261018090211.jsonl.gz",
+        "oracle-cards-20261018090211.json",  # the old, uncompressed JSON-array format
+        "oracle-cards-2026101809.jsonl.gz",
+    ],
+)
+def test_other_file_names_are_not_accepted_as_oracle_cards(name: str) -> None:
     with pytest.raises(FetchError, match="pass --updated-at"):
-        updated_at_from_file_name(Path("default-cards-20261018090211.json"), "oracle-cards")
+        updated_at_from_file_name(Path(name), "oracle-cards")
 
 
 # --- Recording the snapshot in docs/rules/README.md -----------------------------------------------

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import gzip
 import json
 import pickle
 from pathlib import Path
@@ -23,6 +24,7 @@ from resolve.data.cards import (
     parse_card,
     parse_oracle_cards,
     parse_rulings,
+    read_jsonl_gz,
 )
 from tests import scryfall_fixtures as fx
 
@@ -126,6 +128,33 @@ def test_bulk_files_must_be_lists() -> None:
         parse_oracle_cards({"data": []})
     with pytest.raises(CardDataError, match="expected a JSON list"):
         parse_rulings("nope")
+
+
+def test_bulk_file_that_is_not_gzip_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "oracle-cards.jsonl.gz"
+    path.write_bytes(b'{"name": "Forest"}\n')
+    with pytest.raises(CardDataError, match="not a readable gzip file"):
+        read_jsonl_gz(path)
+
+
+def test_truncated_bulk_file_is_refused(tmp_path: Path) -> None:
+    path = tmp_path / "oracle-cards.jsonl.gz"
+    path.write_bytes(fx.oracle_cards_bytes()[:-20])
+    with pytest.raises(CardDataError, match="not a readable gzip file"):
+        read_jsonl_gz(path)
+
+
+def test_bad_json_line_is_reported_with_its_line_number(tmp_path: Path) -> None:
+    path = tmp_path / "rulings.jsonl.gz"
+    path.write_bytes(gzip.compress(b'{"a": 1}\n\n{"b": \n'))
+    with pytest.raises(CardDataError, match=r"rulings.jsonl.gz:3: invalid JSON"):
+        read_jsonl_gz(path)
+
+
+def test_blank_lines_in_bulk_file_are_skipped(tmp_path: Path) -> None:
+    path = tmp_path / "rulings.jsonl.gz"
+    path.write_bytes(gzip.compress(b'{"a": 1}\n\n{"b": 2}\n'))
+    assert read_jsonl_gz(path) == [{"a": 1}, {"b": 2}]
 
 
 def test_card_data_survives_deepcopy_and_pickle() -> None:
@@ -264,16 +293,16 @@ def test_missing_snapshot_explains_how_to_fetch(tmp_path: Path) -> None:
 
 def test_modified_file_is_refused(tmp_path: Path) -> None:
     fx.write_snapshot(tmp_path)
-    path = tmp_path / ORACLE_CARDS_FILE
-    path.write_bytes(path.read_bytes().replace(b"Llanowar", b"Llanowor"))
+    renamed = {**fx.LLANOWAR_ELVES, "name": "Llanowor Elves"}
+    (tmp_path / ORACLE_CARDS_FILE).write_bytes(fx.oracle_cards_bytes([renamed]))
     with pytest.raises(CardDataError, match="SHA-256"):
         load_card_database(tmp_path)
 
 
 def test_verification_can_be_skipped(tmp_path: Path) -> None:
     fx.write_snapshot(tmp_path)
-    path = tmp_path / ORACLE_CARDS_FILE
-    path.write_bytes(path.read_bytes().replace(b"Llanowar", b"Llanowor"))
+    renamed = {**fx.LLANOWAR_ELVES, "name": "Llanowor Elves"}
+    (tmp_path / ORACLE_CARDS_FILE).write_bytes(fx.oracle_cards_bytes([renamed]))
     assert "Llanowor Elves" in load_card_database(tmp_path, verify=False)
 
 

@@ -7,6 +7,7 @@ with "Test" are invented to exercise edge cases. Rulings here are placeholders, 
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 from pathlib import Path
@@ -177,12 +178,18 @@ def default_rulings() -> list[dict[str, Any]]:
     ]
 
 
+def jsonl_gz(items: list[dict[str, Any]]) -> bytes:
+    """Items in Scryfall's bulk format: gzip-compressed JSON Lines (mtime 0, so reproducible)."""
+    text = "".join(json.dumps(item) + "\n" for item in items)
+    return gzip.compress(text.encode(), mtime=0)
+
+
 def oracle_cards_bytes(cards: list[dict[str, Any]] | None = None) -> bytes:
-    return json.dumps(default_cards() if cards is None else cards).encode()
+    return jsonl_gz(default_cards() if cards is None else cards)
 
 
 def rulings_bytes(rulings: list[dict[str, Any]] | None = None) -> bytes:
-    return json.dumps(default_rulings() if rulings is None else rulings).encode()
+    return jsonl_gz(default_rulings() if rulings is None else rulings)
 
 
 def write_snapshot(

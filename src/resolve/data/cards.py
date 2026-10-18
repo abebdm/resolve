@@ -2,8 +2,11 @@
 
 The snapshot lives in ``data/`` (gitignored) and is written by ``tools/fetch_scryfall.py``:
 
-- ``oracle-cards.json``: Scryfall's "Oracle Cards" bulk file, one object per Oracle card.
-- ``rulings.json``: Scryfall's "Rulings" bulk file.
+- ``oracle-cards.jsonl.gz``: Scryfall's "Oracle Cards" bulk file, one card object per Oracle ID.
+- ``rulings.jsonl.gz``: Scryfall's "Rulings" bulk file.
+
+Both are kept exactly as Scryfall serves them: gzip-compressed JSON Lines (one JSON object per
+line).
 - ``snapshot.json``: a manifest recording when each file was published and its SHA-256, so a
   changed or partial file is detected instead of silently changing what tests mean.
 
@@ -13,6 +16,7 @@ behaves in a game is a card definition in ``resolve.cards``; this data is the in
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import json
 from collections.abc import Iterable, Mapping
@@ -21,8 +25,8 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import cast
 
-ORACLE_CARDS_FILE = "oracle-cards.json"
-RULINGS_FILE = "rulings.json"
+ORACLE_CARDS_FILE = "oracle-cards.jsonl.gz"
+RULINGS_FILE = "rulings.jsonl.gz"
 SNAPSHOT_FILE = "snapshot.json"
 SNAPSHOT_FORMAT = 1
 
@@ -33,12 +37,14 @@ RULINGS_TYPE = "rulings"
 # Layouts that are not cards a deck can contain. Tokens, emblems and the like share names with
 # each other (there are many different "Soldier" tokens), so they are kept out of the name index.
 # "reversible_card" objects are two-sided printings of cards that also exist with their normal
-# layout; indexing them would make those names ambiguous.
+# layout, and "front_card" objects are Jumpstart theme-card fronts (memorabilia); both share names
+# with real cards, so indexing them would make those names ambiguous.
 NON_DECK_LAYOUTS = frozenset(
     {
         "art_series",
         "double_faced_token",
         "emblem",
+        "front_card",
         "planar",
         "reversible_card",
         "scheme",
@@ -302,8 +308,7 @@ def load_card_database(data_dir: Path | None = None, *, verify: bool = True) -> 
                 f"{path} does not match the SHA-256 recorded in {SNAPSHOT_FILE}; "
                 "re-fetch the snapshot with tools/fetch_scryfall.py"
             )
-        with path.open(encoding="utf-8") as handle:
-            payloads[info.type] = json.load(handle)
+        payloads[info.type] = read_jsonl_gz(path)
     return CardDatabase(
         cards=parse_oracle_cards(payloads[ORACLE_CARDS_TYPE]),
         rulings=parse_rulings(payloads[RULINGS_TYPE]),
@@ -314,13 +319,31 @@ def load_card_database(data_dir: Path | None = None, *, verify: bool = True) -> 
 # --- Parsing Scryfall JSON ---------------------------------------------------------------------
 
 
+def read_jsonl_gz(path: Path) -> list[object]:
+    """Read a gzip-compressed JSON Lines file (Scryfall's bulk format) into a list of values."""
+    items: list[object] = []
+    try:
+        with gzip.open(path, "rt", encoding="utf-8") as handle:
+            for number, line in enumerate(handle, start=1):
+                if not line.strip():
+                    continue
+                try:
+                    items.append(json.loads(line))
+                except ValueError as error:
+                    raise CardDataError(f"{path}:{number}: invalid JSON: {error}") from error
+    except (OSError, EOFError) as error:
+        # gzip.BadGzipFile is an OSError; a truncated file raises EOFError.
+        raise CardDataError(f"{path}: not a readable gzip file: {error}") from error
+    return items
+
+
 def parse_oracle_cards(payload: object) -> list[CardData]:
-    """Parse Scryfall's "Oracle Cards" bulk file (a JSON list of card objects)."""
+    """Parse Scryfall's "Oracle Cards" bulk data (a list of card objects)."""
     return [parse_card(item) for item in as_json_list(payload, ORACLE_CARDS_FILE)]
 
 
 def parse_rulings(payload: object) -> list[Ruling]:
-    """Parse Scryfall's "Rulings" bulk file (a JSON list of ruling objects)."""
+    """Parse Scryfall's "Rulings" bulk data (a list of ruling objects)."""
     rulings: list[Ruling] = []
     for item in as_json_list(payload, RULINGS_FILE):
         raw = as_json_object(item, "ruling")

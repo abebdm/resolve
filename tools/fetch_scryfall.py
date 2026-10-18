@@ -4,12 +4,14 @@ Usage::
 
     uv run python tools/fetch_scryfall.py              # download the current snapshot
     uv run python tools/fetch_scryfall.py --update     # replace an existing snapshot
-    uv run python tools/fetch_scryfall.py --import-files ORACLE.json RULINGS.json
+    uv run python tools/fetch_scryfall.py --import-files ORACLE.jsonl.gz RULINGS.jsonl.gz
 
 ``--import-files`` takes the "Oracle Cards" and "Rulings" files downloaded by hand from
 https://scryfall.com/docs/api/bulk-data, for machines that can't reach Scryfall's API. Their
-publication time is read from Scryfall's file names (``oracle-cards-YYYYMMDDHHMMSS.json``); for
-renamed files, pass ``--updated-at`` with an ISO 8601 UTC time.
+publication time is read from Scryfall's file names (``oracle-cards-YYYYMMDDHHMMSS.jsonl.gz``);
+for renamed files, pass ``--updated-at`` with an ISO 8601 UTC time.
+
+Scryfall serves bulk data as gzip-compressed JSON Lines; the files are stored as served.
 
 Either way the files are validated (they must parse as the right bulk type) before anything in
 ``data/`` is replaced, ``data/snapshot.json`` records their publication time and SHA-256, and the
@@ -48,6 +50,7 @@ from resolve.data.cards import (
     default_data_dir,
     parse_oracle_cards,
     parse_rulings,
+    read_jsonl_gz,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -60,7 +63,7 @@ ACCEPT = "application/json;q=0.9,*/*;q=0.8"
 
 FILE_NAMES = {ORACLE_CARDS_TYPE: ORACLE_CARDS_FILE, RULINGS_TYPE: RULINGS_FILE}
 README_ROW_LABEL = "Scryfall Oracle cards + rulings"
-SCRYFALL_FILE_NAME = re.compile(r"^(?P<kind>oracle-cards|rulings)-(?P<stamp>\d{14})\.json$")
+SCRYFALL_FILE_NAME = re.compile(r"^(?P<kind>oracle-cards|rulings)-(?P<stamp>\d{14})\.jsonl\.gz$")
 
 Opener = Callable[[str], AbstractContextManager[BinaryIO]]
 
@@ -93,9 +96,11 @@ def select_bulk_entries(index: object) -> dict[str, BulkEntry]:
             bulk_type = raw.get("type")
             if not isinstance(bulk_type, str) or bulk_type not in FILE_NAMES:
                 continue
-            updated_at, uri = raw.get("updated_at"), raw.get("download_uri")
+            updated_at, uri = raw.get("updated_at"), raw.get("jsonl_download_uri")
             if not isinstance(updated_at, str) or not isinstance(uri, str):
-                raise FetchError(f"bulk-data entry {bulk_type!r} lacks updated_at/download_uri")
+                raise FetchError(
+                    f"bulk-data entry {bulk_type!r} lacks updated_at/jsonl_download_uri"
+                )
             entries[bulk_type] = BulkEntry(bulk_type, updated_at, uri)
     except CardDataError as error:
         raise FetchError(f"unexpected bulk-data index format: {error}") from error
@@ -117,8 +122,7 @@ def validate_bulk_file(bulk_type: str, path: Path) -> None:
     Cards" and so on) parse as cards too, but list each Oracle card many times.
     """
     try:
-        with path.open(encoding="utf-8") as handle:
-            payload = json.load(handle)
+        payload = read_jsonl_gz(path)
         if bulk_type == ORACLE_CARDS_TYPE:
             cards = parse_oracle_cards(payload)
             if not cards:
@@ -132,7 +136,7 @@ def validate_bulk_file(bulk_type: str, path: Path) -> None:
         else:
             if not parse_rulings(payload):
                 raise FetchError(f"{path}: contains no rulings")
-    except (CardDataError, ValueError) as error:
+    except CardDataError as error:
         raise FetchError(f"{path} is not a valid {bulk_type} bulk file: {error}") from error
 
 
@@ -195,7 +199,7 @@ def updated_at_from_file_name(path: Path, expected_kind: str) -> str:
     if match is None:
         raise FetchError(
             f"can't read a publication time from {path.name!r} (expected "
-            f"'{expected_kind}-YYYYMMDDHHMMSS.json'); pass --updated-at"
+            f"'{expected_kind}-YYYYMMDDHHMMSS.jsonl.gz'); pass --updated-at"
         )
     if match["kind"] != expected_kind:
         raise FetchError(f"{path.name!r} looks like a {match['kind']} file, not {expected_kind}")

@@ -17,38 +17,125 @@ Sideboard cards are out of scope.
 | `gishath_dinosaurs.txt` | Gishath, Sun's Avatar | R/G/W | 100 (86 unique non-commander lines) |
 | `byrke_counters.txt` | Byrke, Long Ear of the Law | G/W | 100 (81 unique non-commander lines) |
 
-**Mechanics these decks are expected to need.** This list is preliminary and will be confirmed by
-the coverage audit in M0.
+**Mechanics these decks need.** From the M0 coverage audit: `tools/coverage.py --oracle` run on
+both decks against the Scryfall snapshot of 2026-10-17. Example cards are in parentheses. Sideboard
+cards are not included.
 
-- **Combat:** flying, trample, double strike, vigilance, haste, indestructible, first strike,
-  evasion restrictions.
-- **Damage-driven triggers:** enrage-style "whenever this is dealt damage", and fight effects.
+- **Keyword abilities:**
+  - evasion and combat: flying, reach, trample, vigilance, haste, first strike, double strike,
+    lifelink
+  - protection: indestructible, hexproof, shroud, ward {2} (Rampaging Aetherhood, Sovereign Okinec
+    Ahau), protection from blue / from multicolored / from each color (Shifting Ceratops, Basri's
+    Lieutenant, Akroma's Will)
+  - +1/+1 counter keywords: evolve (Gyre Sage, Dinosaur Egg), outlast, adapt (Evolution Witness,
+    Incubation Druid), level up with the leveler layout (Joraga Treespeaker), riot granted to other
+    creatures (Rhythm of the Wild)
+  - others: equip, saddle and "attacks while saddled" (Bulwark Ox, Ornery Tumblewagg), offspring,
+    an optional additional cost that creates a token copy (Tender Wildguide), myriad (Scion of
+    Calamity), overload (Fangs of Kalonia), cycling and basic landcycling, ascend and the city's
+    blessing (Arch of Orazca, Wayward Swordtooth), hideaway 4 (Mosswort Bridge)
+  - Choose a Background (Lae'zel) only matters while the card is a commander. It is in the 99
+    here, so it has no effect in game.
+- **Keyword actions:**
+  - fight (Apex Altisaur, Savage Stomp, Wayta); "deals damage equal to its power" bites
+    (Hunter's Edge, Itzquinth, Chandra's Ignition)
+  - proliferate (Karn's Bastion, Unnatural Restoration), double counters (see below), regenerate
+    (Asceticism), scry, discover X (Pantlaza, Dinosaur Egg), transform (Dowsing Dagger // Lost Vale)
+- **Ability words:** enrage (three Dinosaurs), landfall (Undergrowth Champion), lieutenant (Loyal
+  Guardian, which needs "if you control your commander").
 - **+1/+1 counters, heavily:**
-  - replacement effects that modify how many counters are placed, with 616 ordering
-  - counter doubling
-  - proliferate
-  - evolve
-  - outlast
-  - level up
+  - replacement effects that change how many counters are placed, combined in the 616 order the
+    affected player chooses: "twice that many" (Branching Evolution); "that many plus one" (Hardened
+    Scales, Conclave Mentor, Kami of Whispered Hopes); "plus one of each kind" on creatures,
+    planeswalkers *and players* (Lae'zel)
+  - entering with counters, including X (Kalonian Hydra, Mikaeus, Wildwood Scourge), and Arwen's
+    "enters with additional counters equal to Arwen's toughness" (614.1c)
+  - doubling counters (Byrke, Kalonian Hydra, Biogenic Upgrade, Fangs of Kalonia, Ornery
+    Tumblewagg); Aetheric Amplifier doubles every kind of counter on a permanent or on a player
+  - distributing counters among targets at cast time (Biogenic Upgrade, 601.2d)
+  - triggers on counters being put: "one or more" (Evolution Witness, Wildwood Scourge) and "the
+    first time this turn" (Botanical Brawler, which needs per-turn history)
+  - removing counters as a cost (Mikaeus; Quilled Greatwurm removes six from among creatures you
+    control)
+  - other counter kinds: level (Joraga), finality (From the Rubble), energy {E} on players,
+    gained and paid (Rampaging Aetherhood)
 - **Static and continuous effects:**
-  - anthems and other effects that grant abilities
-  - effects that grant mana abilities based on counters
-  - Gods and devotion, which change whether something is a creature (layer 4)
-- **Protection:** hexproof, protection, and indestructible grants; regeneration.
-- **Equipment and auras;** a transforming double-faced card.
+  - abilities granted to "each creature you control with a +1/+1 counter on it" (Abzan Battle
+    Priest, Abzan Falconer, Ainok Bond-Kin, Duskshell Crawler, Pridemalkin) or with any counter
+    (Bulwark Ox)
+  - granted mana abilities: Rishkar (creatures with counters), Enduring Vitality (all creatures),
+    Joraga level 5+ (Elves)
+  - anthems and lords: Thundering Spineback, Regisaur Alpha (haste), Drover of the Mighty
+    (conditional +2/+2), Return of the Wildspeaker
+  - type-changing effects (layer 4): Xenagos (devotion to two colors), and Enduring Vitality
+    returning as a non-creature enchantment
+  - copy effects (layer 1): Sunfrill Imitator becomes a copy "except its name is … and it has this
+    ability"; offspring and myriad create token copies
+  - "power greater than its base power" (Kutzil, Sovereign Okinec Ahau)
+  - Kutzil: "your opponents can't cast spells during your turn"
+- **Replacement and prevention effects:**
+  - entering tapped: always, conditionally (check lands, battle lands, Overgrown Farmland), with a
+    reveal from hand (Fortified Village, Furycalm Snarl, Game Trail), and for opposing creatures
+    (Kinjalli's Sunwing)
+  - "as this enters, choose a color" or "choose a creature type" (Thriving lands, From the Rubble,
+    Progenitor's Icon, Secluded Courtyard, Unclaimed Territory)
+  - prevention: Undergrowth Champion (prevent, then remove a counter); Temple Altisaur (prevent all
+    but 1)
+  - finality counters (die → exile instead); Mana Reflection (mana doubling)
+- **Triggered abilities:**
+  - intervening-if (Scute Mob, Basri's Lieutenant, Loyal Guardian); "if you cast it" and "if you
+    cast it from your hand" (Zacama, Wakening Sun's Avatar)
+  - looking back in time (603.10): dies triggers that read counters, power or toughness (Basri's
+    Lieutenant, Conclave Mentor, Dinosaur Egg)
+  - reflexive triggers (Itzquinth: "When you do"); "Do this only once each turn" (Pantlaza)
+  - Wayta: a creature being dealt damage makes triggers trigger an additional time
+  - Wrathful Raptors: a damage-driven trigger that deals "that much damage"
+  - spell and ability triggers: any player casting a spell (Managorger Hydra), casting a creature
+    spell (Lifecrafter's Bestiary), an opponent activating a non-mana ability (Runic Armasaur)
+  - "whenever you attack" (Ghalta and Mavren) and combat-damage triggers, including batched "one
+    or more creatures … deal combat damage" (Quartzwood Crasher, Kutzil, Curious Altisaur,
+    Gishath, Scion of Calamity)
+- **Combat:**
+  - creating tokens tapped and attacking (Ghalta and Mavren; myriad attacking other opponents in
+    multiplayer)
+  - restrictions: "can't attack or block unless" (Topiary Stomper, Wayward Swordtooth); "can't be
+    blocked" (Rogue's Passage); "creatures with power less than this creature's power can't block
+    creatures you control" (Champion of Lambholt)
+- **Casting and costs:**
+  - cost reduction: by color (Emerald Medallion), by type (Kinjalli's Caller, Otepec Huntmaster,
+    Marauding Raptor), by a count (Hamza; Ghalta's "X less" for total power), when the spell
+    targets a Dinosaur (Savage Stomp), and for an activated ability that targets two of your
+    creatures (Wayta)
+  - additional costs: "reveal a Dinosaur card or pay {1}" (Thunderherd Migration), offspring
+  - casting without paying the mana cost from the library top (Descendants' Path), from cards
+    exiled from *each player's* library (Etali), from hand (Rishkar's Expertise), via discover,
+    and playing a hideaway card
+  - casting from the graveyard with an extra cost (Quilled Greatwurm); flash granted to the next
+    spell of a chosen type (Progenitor's Icon)
+  - "can't be countered" (Shifting Ceratops, Rhythm of the Wild); modes: choose the same mode more
+    than once (Fiery Confluence), "choose both if you control a commander" (Akroma's Will)
+  - X spells (Mikaeus, Wildwood Scourge, Kessig Wolf Run)
 - **Mana:**
-  - cost reduction
-  - mana-doubling replacement effects
-  - restricted mana ("spend only on creature spells of the chosen type")
-  - conditional mana abilities
+  - "any color in your commander's color identity" (Command Tower, Arcane Signet, Path of Ancestry,
+    which also triggers when its mana is spent on a creature sharing a type with your commander)
+  - "any color that a land an opponent controls could produce" (Exotic Orchard) and "any type that
+    a land you control could produce" (Incubation Druid)
+  - variable amounts: Gyre Sage ({G} per counter), Kami of Whispered Hopes (X of one color equal
+    to its power), Lost Vale (three of any one color), Incubation Druid (three with a counter)
+  - restricted mana: Ixalli's Lorekeeper, Secluded Courtyard, Unclaimed Territory
+  - mana abilities with activation conditions (Temple of the False God); a triggered mana ability
+    (Regal Behemoth while you're the monarch, 605.1b); mana doubling (Mana Reflection)
 - **Library and lands:**
-  - land search and fetch effects
-  - lands that enter tapped conditionally
-  - "choose a color as this enters"
-- **Card selection:** reveal or exile from the top of the library, and casting without paying the
-  mana cost; discover.
-- **Designations:** the monarch, and the city's blessing (ascend).
-- **Other:** hideaway; modal spells, including choosing the same mode more than once.
+  - land search: basics (Rampant Growth, Cultivate, Evolving Wilds, Path to Exile for the exiled
+    creature's controller), by land type (Farseek), "two basics that share a land type" (Myriad
+    Landscape), and as an optional enrage trigger (Ranging Raptors)
+  - additional land plays (Explore, Wayward Swordtooth); returning a land to hand (Selesnya
+    Sanctuary); no maximum hand size (Reliquary Tower)
+  - revealing cards and putting the rest on the bottom in a random order (Gishath, discover,
+    hideaway)
+- **Designations:** the monarch (Regal Behemoth); the city's blessing (ascend).
+- **Tokens and other players:** tokens created for another player (Generous Gift, Dowsing Dagger's
+  Plants for an opponent); "each opponent" damage (Chandra's Ignition, Fiery Confluence).
 
 ---
 
@@ -60,7 +147,7 @@ the coverage audit in M0.
   record the snapshot date in `docs/rules/README.md`.
 - [x] Card data loader (`resolve.data`) and decklist parser (the `decks/` format).
 - [x] Card registry, plus `tools/coverage.py`: report implemented and missing cards per deck.
-- [ ] **Coverage audit:** run the coverage tool on both target decks, then update the "Mechanics"
+- [x] **Coverage audit:** run the coverage tool on both target decks, then update the "Mechanics"
   list above from the actual Oracle text.
 - [ ] Core state types:
   - `GameState`, `Player`, `GameObject`, zones

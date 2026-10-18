@@ -6,7 +6,7 @@ card data. They are updated together, deliberately, with an entry in the changel
 | What | Version | Location |
 |---|---|---|
 | Comprehensive Rules | Effective 2026-09-25 | `MagicCompRules-20260925.txt` (this folder) |
-| Scryfall Oracle cards + rulings | *Not yet fetched (M0)* | `data/` (gitignored; run `tools/fetch_scryfall.py`) |
+| Scryfall Oracle cards + rulings | Snapshot 2026-10-17 | `data/` (gitignored; run `tools/fetch_scryfall.py`) |
 
 The Comprehensive Rules text is © Wizards of the Coast. This repository is private and
 non-commercial.
@@ -16,3 +16,4 @@ non-commercial.
 | Date | Change |
 |---|---|
 | 2026-10-17 | Pinned the Comprehensive Rules effective 2026-09-25. |
+| 2026-10-18 | Pinned the Scryfall Oracle cards and rulings bulk data: Snapshot 2026-10-17. |
