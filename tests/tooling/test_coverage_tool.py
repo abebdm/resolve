@@ -74,7 +74,7 @@ def test_report_lists_cards_by_status_with_counts() -> None:
     report = format_report(coverage)
     assert report.splitlines()[:2] == [
         "== deck ==",
-        "33 cards, 4 distinct: 1 implemented, 2 missing, 1 unknown",
+        "33 cards, 4 distinct: 1 implemented, 2 missing, 1 unknown, 0 unreadable",
     ]
     assert "Unknown (not in the card data):\n  1 Not A Real Card  [Mainboard]  -- no card" in report
     assert "Missing:\n  1 Test Daybreaker  [Commander]  (faces missing: " in report

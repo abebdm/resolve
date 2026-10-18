@@ -117,8 +117,11 @@ def deck_coverage(
             continue
         missing_faces = registry.missing_faces(card)
         if card.type_line_problems:
-            problem = "its type line doesn't follow 205 (" + "; ".join(card.type_line_problems) + ")"
-            status, reason = CoverageStatus.UNREADABLE, problem
+            problems = "; ".join(card.type_line_problems)
+            status, reason = (
+                CoverageStatus.UNREADABLE,
+                f"its type line doesn't follow 205 ({problems})",
+            )
         elif missing_faces:
             status, reason = CoverageStatus.MISSING, None
         else:

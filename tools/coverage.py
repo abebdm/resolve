@@ -7,8 +7,9 @@ Usage::
     uv run python tools/coverage.py --oracle            # also print Oracle text of missing cards
 
 Sideboards are out of scope for coverage (see docs/roadmap.md) and are only counted with
-``--include-sideboard``. The exit status is 1 if a deck can't be parsed or names a card that isn't
-in the card data snapshot; with ``--require-complete`` it is also 1 if any card is missing.
+``--include-sideboard``. The exit status is 1 if a deck can't be parsed, names a card that isn't
+in the card data snapshot, or has a card whose type line the engine can't read (205, an Un-set
+joke type); with ``--require-complete`` it is also 1 if any card is missing.
 """
 
 from __future__ import annotations
@@ -59,7 +60,8 @@ def _entry_line(entry: CardCoverage) -> str:
 
 
 def format_report(coverage: DeckCoverage, *, show_oracle: bool = False) -> str:
-    """One deck's report: counts, then unknown, missing and implemented cards, then keywords.
+    """One deck's report: counts, then unknown, unreadable, missing and implemented cards, then
+    keywords.
 
     With ``show_oracle``, each missing card is followed by its printed characteristics, which is
     what the coverage audit reads. The keyword summary counts Scryfall's keyword list over
@@ -70,10 +72,11 @@ def format_report(coverage: DeckCoverage, *, show_oracle: bool = False) -> str:
         f"== {coverage.deck_name} ==",
         f"{total} cards, {len(coverage.cards)} distinct: "
         f"{len(coverage.implemented)} implemented, {len(coverage.missing)} missing, "
-        f"{len(coverage.unknown)} unknown",
+        f"{len(coverage.unknown)} unknown, {len(coverage.unreadable)} unreadable",
     ]
     for title, entries in (
         ("Unknown (not in the card data)", coverage.unknown),
+        ("Unreadable (type line doesn't follow 205)", coverage.unreadable),
         ("Missing", coverage.missing),
         ("Implemented", coverage.implemented),
     ):
@@ -122,7 +125,11 @@ def run(
             continue
         coverage = deck_coverage(decklist, database, registry, include_sideboard=include_sideboard)
         sections.append(format_report(coverage, show_oracle=show_oracle))
-        if coverage.unknown or (require_complete and not coverage.is_fully_implemented):
+        if (
+            coverage.unknown
+            or coverage.unreadable
+            or (require_complete and not coverage.is_fully_implemented)
+        ):
             status = 1
     return "\n\n".join(sections) + "\n", status
 
