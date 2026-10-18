@@ -288,8 +288,19 @@ This gives Commander multiplayer, 1v1 Commander and regular 1v1 from one engine.
 
 New primitives are engine code and get careful review.
 
-**Licensing.** Forge and XMage are read for ideas only. Their code and scripts are never copied or
-translated into this repo.
+**Reference engines and licensing**
+
+- **XMage (MIT).** It may be read freely:
+  - to check card behavior
+  - to guide the design of our primitive vocabulary (its ability and effect taxonomy reflects
+    years of discovering which building blocks Magic needs)
+
+  It is **not** mechanically translated. XMage cards call into a large framework that mutates game
+  objects directly, which doesn't fit our pure-data state, event pipeline and object-identity
+  model. If a substantial piece of logic is ever adapted from XMage, its MIT copyright notice goes
+  in `THIRD_PARTY_NOTICES.md`.
+- **Forge (GPL).** It is read for ideas only. Its code and card scripts are never copied or
+  translated into this repo; doing so would likely make the project a GPL derivative.
 
 ---
 

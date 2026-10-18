@@ -48,7 +48,14 @@ decklist parser), the card registry (`resolve.cards.registry`), `tools/fetch_scr
    - a new primitive requires its own tests.
 10. **Architecture changes need the user's sign-off** before code is written. If a design.md
     decision seems wrong, stop and raise it; don't work around it.
-11. **Forge and XMage code is for reading only.** Never copy or translate it into this repo (licensing).
+11. **Reference engines:**
+    - **XMage (MIT license).** Read it freely: to check how cards behave, and to inform the design
+      of primitives (its ability and effect taxonomy is a useful guide). Don't mechanically
+      translate its code; its architecture differs from ours (design.md §11). If a substantial
+      piece of logic is ever adapted from XMage, add XMage's MIT copyright notice to
+      `THIRD_PARTY_NOTICES.md` and say so in the PR.
+    - **Forge (GPL license).** Read for ideas only. Never copy or translate its code or card
+      scripts into this repo.
 
 ## Architecture in brief (details in docs/design.md)
 
