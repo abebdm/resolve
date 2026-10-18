@@ -150,7 +150,13 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 - **Decision:** the fuzz tests add `PatientAgent` (`tests/engine_support.py`): a random agent
   that passes priority 31 times in 32, so random games reach later turns (draws, discards,
   decking) instead of stopping at the first offered gap. Only some long games run the copy and
-  invalid-answer checks, which are slow on long logs. `ALLOWED_GAPS` was 305.1, 601.2 and 800.4a in M1.2; M1.3 removed 305.1.
+  invalid-answer checks, which are slow on long logs. The broad fuzz test
+  (`test_random_agent_games_complete_with_every_check_passing`) uses decks of 7 to 11 cards,
+  each with an elf, and one empty deck in some games: with 6 or fewer cards every player drew
+  from an empty library during 103.5 and every game ended at the first state-based-action
+  check, before any priority. When every deck has 8 or more cards it asserts that priority
+  was asked, and it counts every object a player owns, in every zone. `ALLOWED_GAPS` was
+  305.1, 601.2 and 800.4a in M1.2; M1.3 removed 305.1.
 - **Rules:** none.
 - **Where:** `tests/fuzz/test_fuzz.py`, `tools/fuzz.py`.
 
@@ -190,7 +196,9 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   so replacement effects will apply per draw, 121.6b). An event is proposed without its outcome
   and `Event.apply` may return a copy recording it (the drawn library object, the new hand
   object); the pipeline logs that applied form. Drawing from an empty library draws nothing,
-  sets `Player.drew_from_empty_library` (cleared by the state-based action check, 704.5b) and
+  sets `Player.drew_from_empty_library` (cleared by the state-based action check, 704.5b;
+  **superseded by 2026-10-18 "State-based actions 704.5a and 704.5b, and losing"**: only the
+  loss clears it) and
   adds 121.4 to the event's rules. A `LogEntry` hidden from some players may carry a `redacted`
   form (`Event.redacted()`), which `view_for` shows to the others with `visible_to=None`
   (`LogEntry.shown_to`). A draw is fully visible only to the drawer; others see the new hand
