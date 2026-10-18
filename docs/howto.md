@@ -93,6 +93,26 @@ Tests never read `data/` or the network; they build card data from `tests/scryfa
 4. Put the test in `tests/data/`, `tests/registry/` or `tests/tooling/` (or `tests/cards/` for a
    card), with a file name that is unique across all test folders.
 
+### Review a PR's tests independently
+
+Every PR that changes game behavior gets an independent test review (CLAUDE.md, "Testing
+requirements"). The reviewer is the `test-reviewer` subagent in `.claude/agents/test-reviewer.md`.
+It checks tests against the CR and rulings, never against the implementation, and doesn't edit
+files.
+
+**As part of implementing** (the normal path):
+1. When the tests and implementation are done and the suite passes, run the `test-reviewer`
+   subagent on the branch.
+2. For each finding, add or fix tests, or explain with CR citations why you disagree.
+3. Re-run the reviewer if the changes were substantial.
+4. Record the verdict and how each finding was handled in the PR description.
+
+**As a separate check** (the user, in a fresh session, for extra independence):
+1. Check out the PR's branch (`git fetch && git checkout <branch>`), or name the PR.
+2. Ask: *"Use the test-reviewer agent to review the tests on this branch (PR #N)."*
+3. Paste the report into the PR as a comment. Ask the implementing session to address it, or
+   address it in this session.
+
 ---
 
 ## Still to write

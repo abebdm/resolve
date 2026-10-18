@@ -118,6 +118,22 @@ afterthought.
 - Each rules test cites the CR number it checks, in its name or docstring. For example,
   `test_704_5a_player_with_zero_life_loses`.
 - When the CR or a ruling is ambiguous, write down the interpretation in the test's docstring.
+- Never compute an expected value by calling the code under test. Write expected values out,
+  worked from the rules.
+
+**Tests first for rules and cards**
+
+For any change that implements or alters game behavior (rules, primitives, keywords, cards):
+
+1. Write the tests from the CR and the rulings before writing the implementation.
+2. Run them and confirm each one **fails for the right reason**. "The player didn't lose" is the
+   right reason. An import error or a missing function is not; add a stub that raises
+   `NotImplementedRule` so the test reaches its assertion.
+3. Then write the implementation and make the tests pass.
+4. The PR description lists which tests were confirmed failing before the implementation, and
+   names any test that couldn't be (with the reason).
+
+Pure infrastructure (tooling, data loading, internal plumbing) may write tests alongside the code.
 
 **Test what must happen and what must not**
 
@@ -155,6 +171,16 @@ afterthought.
 - Don't delete, skip, `xfail`, or loosen an existing test to make a change pass.
 - If a test seems wrong, stop and explain why with CR citations, and let the user decide.
 - An unimplemented rule is tested as raising `NotImplementedRule`, not skipped silently.
+
+**Independent test review before every PR that changes game behavior**
+
+- Before opening the PR, run the `test-reviewer` subagent (`.claude/agents/test-reviewer.md`) on
+  the branch. It starts with fresh context and checks the tests against the CR and rulings, not
+  against the implementation.
+- Address every finding: add the missing tests, or fix the wrong ones. Where you disagree with a
+  finding, explain why with CR citations.
+- Put the reviewer's verdict and how each finding was handled in the PR description.
+- The user may also run a review in a separate session; the recipe is in `docs/howto.md`.
 
 **Use the shared helpers**
 
