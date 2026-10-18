@@ -330,3 +330,19 @@ class GapOnAnswer(Task):
 
     def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
         raise NotImplementedRule(f"{self.rule}: a test gap")
+
+
+@dataclass(slots=True)
+class LossyPickle(Task):
+    """Copies faithfully with ``deepcopy`` but loses ``value`` when pickled (a state bug)."""
+
+    value: int = 0
+
+    def __deepcopy__(self, memo: dict[int, object]) -> LossyPickle:
+        return LossyPickle(self.value)
+
+    def __reduce__(self) -> tuple[type[LossyPickle], tuple[()]]:
+        return (LossyPickle, ())
+
+    def run(self, state: GameState) -> TaskResult:
+        return Done()

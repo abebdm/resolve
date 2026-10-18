@@ -55,6 +55,7 @@ from tests.engine_support import (
     EndGame,
     GapOnAnswer,
     HoldsValue,
+    LossyPickle,
     RejectsEverything,
     Unrepeatable,
     running,
@@ -233,6 +234,31 @@ def test_an_engine_ignoring_the_request_id_and_player_is_caught(
 
     monkeypatch.setattr(engine_loop, "validate_answer", space_only)
     with pytest.raises(FuzzFailure, match=r"the invalid answer DecisionAnswer\(request_id=2"):
+        fuzz_game(GameConfig.standard(), decks_for(3, False, 1), 1)
+
+
+def test_a_pickle_round_trip_that_loses_data_is_a_failure() -> None:
+    """The pickled-copy check on its own: a deep copy of this state is faithful, a pickle isn't."""
+    with pytest.raises(FuzzFailure, match="a pickled copy differs from the state after 0 answers"):
+        fuzz(AskTwice(PlayerId(0)), beneath=LossyPickle(7))
+
+
+def test_an_engine_ignoring_only_the_player_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
+    """design.md §6: an answer from a player other than the decider is rejected, even when its
+    request id and value are right."""
+
+    def no_player_check(request: DecisionRequest, answer: DecisionAnswer) -> None:
+        if answer.request_id != request.id:
+            raise InvalidAnswer("wrong request")
+        request.space.validate(answer.value)
+
+    monkeypatch.setattr(engine_loop, "validate_answer", no_player_check)
+    state = new_game(GameConfig.standard(), decks_for(3, False, 1), 1)
+    chooser = state.pending.player if state.pending else 0
+    other = (chooser + 1) % 3
+    with pytest.raises(
+        FuzzFailure, match=rf"the invalid answer DecisionAnswer\(request_id=1, player={other},"
+    ):
         fuzz_game(GameConfig.standard(), decks_for(3, False, 1), 1)
 
 

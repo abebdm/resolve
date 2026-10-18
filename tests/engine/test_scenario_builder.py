@@ -228,10 +228,10 @@ def test_a_commander_cant_be_in_another_players_hand() -> None:
     assert state.players[0].commanders == () and state.cards == {}
 
 
-def test_a_second_commander_is_recorded_like_a_partner() -> None:
-    """903.3 and 702.124: a player may have two commanders (partner). Whether the pair is legal
-    is deck construction (M7); the engine raises the 613.7m gap when it would have to order
-    them entering the command zone together."""
+def test_a_second_commander_is_recorded_without_a_legality_check() -> None:
+    """903.3 and 702.124a: two commanders need partner, which neither card has. Whether the pair
+    is legal is deck construction, not checked until M7; the engine raises the 613.7m gap when
+    it would have to order them entering the command zone together."""
     scenario = Scenario(2, config=GameConfig.commander_game(), starting_player=None)
     first = scenario.commander(P0, "Test Daybreaker", zone=Zone.library(P0))
     second = scenario.commander(P0, "Llanowar Elves", zone=Zone.library(P0))

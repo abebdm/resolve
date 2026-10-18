@@ -1,9 +1,9 @@
 """State equality is complete, so the fuzz harness's ``==`` checks mean what they say.
 
 The harness (``tools/fuzz.py``) compares states with ``==`` to check copies, resumption and
-replays (design.md §5, §12). A dataclass field with ``compare=False``, or a dataclass with
-``eq=False``, would hide a difference from every one of those checks, so none may exist in the
-engine.
+replays (design.md §5, §12). A dataclass field with ``compare=False``, a dataclass with
+``eq=False`` or a hand-written ``__eq__`` would hide a difference from every one of those
+checks, so none may exist in the engine.
 """
 
 from __future__ import annotations
@@ -44,4 +44,12 @@ def test_every_engine_dataclass_compares_every_field() -> None:
         for cls in engine_dataclasses()
         if not cls.__dataclass_params__.eq  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
     ]
-    assert hidden == [] and no_eq == []
+    # dataclass keeps an __eq__ written in the class body; a generated one isn't in its file.
+    handwritten = [
+        cls.__qualname__
+        for cls in engine_dataclasses()
+        if "__eq__" in cls.__dict__
+        and getattr(cls.__dict__["__eq__"], "__code__", None) is not None
+        and cls.__dict__["__eq__"].__code__.co_filename == inspect.getfile(cls)
+    ]
+    assert hidden == [] and no_eq == [] and handwritten == []

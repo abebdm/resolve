@@ -41,8 +41,8 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   player counts 2-6 and both formats, gives seat `i` of game seed `s` deck
   `(s + i) % len(decks)` so a failure reproduces from its seed alone, and prints games per
   second; the number isn't stored anywhere yet. Every check relies on `==` between states, so
-  `tests/state/test_state_equality.py` forbids `compare=False` fields and `eq=False`
-  dataclasses in the engine; and a test replays a game in two processes with different
+  `tests/state/test_state_equality.py` forbids `compare=False` fields, `eq=False`
+  dataclasses and hand-written `__eq__` methods in the engine; and a test replays a game in two processes with different
   `PYTHONHASHSEED`s and requires byte-identical pickles (CLAUDE.md rule 6).
 - **Why:** design.md §14 and the roadmap. The harness lives in `tools/` because rule 4 keeps
   agent-using code out of the engine and tools can't import `tests/`. Submitting to copies at

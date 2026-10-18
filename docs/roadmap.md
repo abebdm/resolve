@@ -271,6 +271,8 @@ cards are not included.
 - [ ] The command zone, casting commanders, and commander tax.
 - [ ] Commander damage (903.10a) and the zone-change rules (903.9a/b).
 - [ ] Color identity and deck validation; Commander mulligan rules.
+- [ ] The scenario builder refuses commanders `validate_deck` would refuse (903.3, 903.5,
+  702.124a), and the tests that use the fixtures' non-legendary commanders are updated.
 - [ ] Designations: the monarch, the city's blessing.
 - [ ] Loop guard (104.4b).
 
