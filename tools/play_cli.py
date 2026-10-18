@@ -7,7 +7,9 @@ Usage::
     uv run python tools/play_cli.py --random 1 2             # seats 1 and 2 play randomly
     uv run python tools/play_cli.py --deck decks/a.txt --deck decks/b.txt
 
-Each human seat sees only its own view (design.md §9). Answers are typed as described in
+Each human seat sees only its own view (design.md §9). At the end the final view is shown only
+if a single seat is human (or, when every seat is random, player 0's). A ``--random`` seat ``i``
+plays as ``RandomAgent(agent_seed + i)``. Answers are typed as described in
 ``resolve.agents.text`` (``help`` at the prompt). With ``--deck``, one decklist per player, the
 cards come from the snapshot in ``data/`` and every card must be implemented; decks are refused,
 never approximated. Without ``--deck`` every player gets an empty deck, since no card is
@@ -54,9 +56,23 @@ def load_decks(paths: Sequence[Path], data_dir: Path | None) -> list[Deck]:
 
 
 def play_game(
-    state: GameState, agents: Sequence[Agent], output: TextIO, *, viewer: PlayerId
+    state: GameState, agents: Sequence[Agent], output: TextIO, *, viewer: PlayerId | None
 ) -> int:
-    """Drive ``state`` with ``agents`` and report how it ended; returns the exit status."""
+    """Drive ``state`` with ``agents`` and report how it ended; returns the exit status.
+
+    At the end, ``viewer``'s view is printed: the one human at the terminal. With several humans
+    (hot-seat) ``viewer`` is ``None`` and no hand is shown, only how the game ended.
+    """
+
+    def final_view() -> None:
+        if viewer is not None:
+            print(render_view(view_for(state, viewer)), file=output)
+        elif state.result is not None:
+            winners = ", ".join(f"player {p}" for p in state.result.winners)
+            print(
+                f"Game over: {'a draw' if state.result.is_draw else 'won by ' + winners}.",
+                file=output,
+            )
 
     def rejected(error: InvalidAnswer) -> None:
         print(f"The engine rejected that answer: {error}", file=output, flush=True)
@@ -64,13 +80,13 @@ def play_game(
     try:
         play(state, agents, on_invalid=rejected)
     except NotImplementedRule as gap:
-        print(render_view(view_for(state, viewer)), file=output)
+        final_view()
         print(f"Stopped: the engine doesn't implement {gap} yet.", file=output)
         return EXIT_GAP
     except QuitGame:
         print("Game abandoned.", file=output)
         return EXIT_QUIT
-    print(render_view(view_for(state, viewer)), file=output)
+    final_view()
     return EXIT_OVER
 
 
@@ -102,8 +118,8 @@ def main(
     seats: list[int] = args.random
     if any(not 0 <= seat < players for seat in seats):
         parser.error(f"--random seats must be between 0 and {players - 1}")
-    if not 0 <= args.agent_seed < 2**64 - players:
-        parser.error("--agent-seed must be between 0 and 2**64 - 1 - the number of players")
+    if not 0 <= args.agent_seed <= 2**64 - players:
+        parser.error("--agent-seed must be between 0 and 2**64 minus the number of players")
     config = GameConfig.commander_game() if args.commander else GameConfig.standard()
 
     try:
@@ -126,8 +142,10 @@ def main(
     agents: list[Agent] = [
         RandomAgent(args.agent_seed + seat) if seat in seats else human for seat in range(players)
     ]
-    viewer = next((seat for seat in range(players) if seat not in seats), 0)
-    return play_game(state, agents, out, viewer=PlayerId(viewer))
+    humans = [PlayerId(seat) for seat in range(players) if seat not in seats]
+    # The one human's view; player 0's when only random agents play; no one's in hot-seat play.
+    viewer = humans[0] if len(humans) == 1 else (PlayerId(0) if not humans else None)
+    return play_game(state, agents, out, viewer=viewer)
 
 
 if __name__ == "__main__":

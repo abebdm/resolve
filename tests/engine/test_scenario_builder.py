@@ -20,7 +20,7 @@ from resolve.state.game import turn_order
 from resolve.state.ids import PlayerId
 from resolve.state.invariants import invariant_violations, state_impurities
 from resolve.state.zones import BATTLEFIELD, COMMAND, EXILE, STACK, Zone
-from tests.engine_support import AskTwice, markers
+from tests.engine_support import AskTwice, EndGame, markers
 from tests.scenario import Scenario, ScenarioError, names, run_script
 
 P0, P1, P2, P3 = (PlayerId(p) for p in range(4))
@@ -137,6 +137,17 @@ def test_known_to_records_who_knows_a_hidden_card() -> None:
     assert [view.name for view in view_for(state, P0).players[0].hand] == ["Llanowar Elves"]
 
 
+def test_known_to_works_with_more_than_two_players() -> None:
+    """400.2: a hidden card is known to its owner (402.3) and to the players listed, not to
+    the others."""
+    scenario = Scenario(4)
+    card = scenario.add("Forest", owner=P1, zone=Zone.hand(P1), known_to=[P2])
+    state = scenario.build()
+    shown = {p: view_for(state, p).players[1].hand[0].name for p in (P0, P1, P2, P3)}
+    assert shown == {P0: None, P1: "Forest", P2: "Forest", P3: None}
+    assert state.objects[card].known_to == (P2,)
+
+
 def test_a_card_cant_be_put_into_another_players_own_zones() -> None:
     """400.3: a card can only be in its owner's library, hand or graveyard."""
     scenario = Scenario(2)
@@ -147,19 +158,28 @@ def test_a_card_cant_be_put_into_another_players_own_zones() -> None:
 
 
 @pytest.mark.parametrize(
-    ("zone", "controller"),
-    [(BATTLEFIELD, None), (STACK, None), (EXILE, P0), (COMMAND, P0), (Zone.hand(P0), P0)],
+    ("zone", "controller", "error", "message"),
+    [
+        (BATTLEFIELD, None, EngineError, "objects in the battlefield need controller"),
+        (STACK, None, EngineError, "objects in the stack need controller"),
+        (EXILE, P0, EngineError, "objects in the exile have no controller"),
+        (Zone.hand(P0), P0, EngineError, "hand of player 0 have no controller"),
+        (COMMAND, P0, NotImplementedRule, r"^109\.4c: "),
+    ],
 )
 def test_a_controller_is_required_exactly_on_the_battlefield_and_the_stack(
-    zone: Zone, controller: PlayerId | None
+    zone: Zone, controller: PlayerId | None, error: type[Exception], message: str
 ) -> None:
-    """108.4 and 110.2: only permanents and objects on the stack have controllers. 109.4c
-    (emblems) is a gap."""
+    """108.4 and 110.2: only permanents and objects on the stack have controllers. A controlled
+    object in the command zone (an emblem, 109.4c) is a gap. A refused card changes nothing:
+    the next card still gets object ID 1 and timestamp 1 (400.7, 613.7d)."""
     scenario = Scenario(2)
-    with pytest.raises((EngineError, NotImplementedRule)):
+    with pytest.raises(error, match=message):
         scenario.add("Forest", owner=P0, zone=zone, controller=controller)
+    obj = scenario.hand(P0, ["Forest"])[0]
     state = scenario.build()
-    assert state.cards == {} and state.objects == {}
+    assert obj == 1 and state.objects[obj].timestamp == 1 and state.objects[obj].card == 1
+    assert list(state.cards) == [1] and state.next_object_id == 2 and state.next_timestamp == 2
 
 
 def test_unknown_and_unimplemented_cards_are_refused() -> None:
@@ -181,7 +201,12 @@ def test_players_and_known_to_must_exist() -> None:
 
 
 def test_commanders_are_designated_in_any_zone() -> None:
-    """903.3: each deck has a commander; it is a commander in every zone (903.3)."""
+    """903.3: a commander is designated for the whole game, whatever zone it is in.
+
+    Whether a card may be a commander (903.3: legendary creature; 903.5) is deck construction,
+    which neither ``new_game`` nor the builder checks until deck validation in M7
+    (docs/decisions.md). The fixtures have no legendary card, so the commanders here aren't
+    legal ones."""
     scenario = Scenario(3, config=GameConfig.commander_game())
     in_command = scenario.commander(P0, "Test Daybreaker")
     on_battlefield = scenario.commander(P1, "Test Daybreaker", zone=BATTLEFIELD)
@@ -192,6 +217,31 @@ def test_commanders_are_designated_in_any_zone() -> None:
     assert state.players[2].hand == [in_hand]
     for player, obj in zip(state.players, (in_command, on_battlefield, in_hand), strict=True):
         assert player.commanders == (state.objects[obj].card,)
+
+
+def test_a_commander_cant_be_in_another_players_hand() -> None:
+    """400.3: a card can only be in its owner's hand."""
+    scenario = Scenario(2, config=GameConfig.commander_game())
+    with pytest.raises(ScenarioError, match=r"\(400\.3\)"):
+        scenario.commander(P0, "Test Daybreaker", zone=Zone.hand(P1))
+    state = scenario.build()
+    assert state.players[0].commanders == () and state.cards == {}
+
+
+def test_a_second_commander_is_recorded_like_a_partner() -> None:
+    """903.3 and 702.124: a player may have two commanders (partner). Whether the pair is legal
+    is deck construction (M7); the engine raises the 613.7m gap when it would have to order
+    them entering the command zone together."""
+    scenario = Scenario(2, config=GameConfig.commander_game(), starting_player=None)
+    first = scenario.commander(P0, "Test Daybreaker", zone=Zone.library(P0))
+    second = scenario.commander(P0, "Llanowar Elves", zone=Zone.library(P0))
+    state = scenario.build(StartGame())
+    assert state.players[0].commanders == (
+        state.objects[first].card,
+        state.objects[second].card,
+    )
+    with pytest.raises(NotImplementedRule, match=r"^613\.7m: "):
+        run_script(state, choose(PlayerOption(P0)))
 
 
 def test_commanders_need_the_commander_rules() -> None:
@@ -247,10 +297,17 @@ def test_run_script_uses_every_step() -> None:
         run_script(state, Step(Number(2), player=P0))
 
 
-def test_run_script_reports_a_game_that_ends_before_the_script() -> None:
+def test_run_script_raises_a_rejected_answer() -> None:
     state = Scenario(2).build(AskTwice(P0))
     with pytest.raises(InvalidAnswer, match="even"):
         run_script(state, Step(Number(3)))
+
+
+def test_run_script_reports_a_game_that_ends_before_the_script() -> None:
+    state = Scenario(2).build(AskTwice(P0), EndGame(()))
+    with pytest.raises(ScriptError, match="1 of 3 script steps were unused"):
+        run_script(state, Step(Number(2)), Step(Number(4)), Step(Number(6)))
+    assert state.result is not None
 
 
 def test_built_states_survive_copy_and_pickle() -> None:

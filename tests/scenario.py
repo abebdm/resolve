@@ -158,7 +158,9 @@ class Scenario:
         """Make a card named ``name`` one of ``player``'s commanders (903.3), in ``zone``.
 
         Needs the Commander rules in the config. A commander on the battlefield or the stack is
-        controlled by its owner.
+        controlled by its owner. Like ``new_game``, the builder doesn't check whether the card
+        may be a commander (legendary creature, partner for a second one: 903.3, 903.5); that is
+        deck validation, in M7.
         """
         state = self._open()
         if state.config.commander is None:

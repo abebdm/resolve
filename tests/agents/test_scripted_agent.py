@@ -146,3 +146,31 @@ def test_from_log_replays_a_real_game_start() -> None:
     with pytest.raises(NotImplementedRule):
         play(again, ScriptedAgent.from_log(state.event_log))
     assert again == state
+
+
+def test_a_choose_step_checks_the_expected_player_and_kind() -> None:
+    state = start(3)
+    request = request_of(state)
+    view = view_for(state, request.player)
+    other = PlayerId((request.player + 1) % 3)
+    with pytest.raises(ScriptError, match=f"expects player {other}"):
+        ScriptedAgent([choose(PlayerOption(P0), player=other)]).decide(view, request)
+    with pytest.raises(ScriptError, match="expects choose_x"):
+        ScriptedAgent([choose(PlayerOption(P0), kind=DecisionKind.CHOOSE_X)]).decide(view, request)
+
+
+def test_a_replay_of_another_game_stops_at_the_first_mismatch() -> None:
+    """design.md §12: a replay checks who is asked, so replaying against a game with another
+    seed (and so, here, another chooser, 103.1) fails at once."""
+    config = GameConfig.standard()
+    original = new_game(config, decks(4), seed=1)
+    with pytest.raises(NotImplementedRule):
+        play(original, ScriptedAgent([choose(PlayerOption(P0))]))
+    chooser = request_of(new_game(config, decks(4), seed=1)).player
+    other_seed = next(
+        seed
+        for seed in range(2, 50)
+        if request_of(new_game(config, decks(4), seed)).player != chooser
+    )
+    with pytest.raises(ScriptError, match=f"step 1 expects player {chooser}"):
+        play(new_game(config, decks(4), other_seed), ScriptedAgent.from_log(original.event_log))

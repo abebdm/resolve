@@ -225,7 +225,7 @@ def test_text_agent_can_skip_the_view() -> None:
 
 
 def test_a_hidden_library_card_never_appears_in_any_view() -> None:
-    """401.3: no one may look at a library's cards; the view shows only a count."""
+    """401.2: no player may look at the cards in a library; the view shows only a count (401.3)."""
     scenario = Scenario(2)
     scenario.library(P0, ["Llanowar Elves"])
     scenario.add("Forest", owner=P1, zone=Zone.library(P1), known_to=[P1])

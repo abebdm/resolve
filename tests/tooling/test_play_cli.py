@@ -32,7 +32,33 @@ def test_a_human_answers_after_a_rejected_answer() -> None:
     assert status == EXIT_GAP
     assert "life 40" in text
     assert "The engine rejected that answer: option index must be in 0..1" in text
-    assert "StartingPlayerChosen" in text and "starting_player=0" in text
+    assert "Stopped: the engine doesn't implement 103.5" in text
+
+
+def test_hot_seat_prompts_show_the_deciding_players_view_and_no_final_view() -> None:
+    """design.md §9: each human sees only their own view, so with several humans at one terminal
+    the game ends without printing anyone's hand. Seed 1 of a 2-player game asks player 1."""
+    status, text = run_cli(["--seed", "1"], "0\n")
+    assert status == EXIT_GAP
+    assert text.count("=== Player 1's view ===") == 1
+    assert "=== Player 0's view ===" not in text
+    assert text.index("=== Player 1's view ===") < text.index("Player 1: Choose which player")
+
+
+def test_a_single_human_sees_the_final_view() -> None:
+    status, text = run_cli(["--players", "3", "--random", "1", "2", "--seed", "2"], "0\n")
+    assert status == EXIT_GAP
+    final = text.split("Stopped:")[0]
+    assert final.rstrip().endswith(")") and "=== Player 0's view ===" in final
+    assert "=== Player 1's view ===" not in text and "=== Player 2's view ===" not in text
+
+
+def test_the_largest_agent_seed_is_accepted() -> None:
+    """Seat i plays with seed agent_seed + i, which must stay below 2**64."""
+    status, _ = run_cli(["--random", "0", "1", "--agent-seed", str(2**64 - 2)])
+    assert status == EXIT_GAP
+    with pytest.raises(SystemExit):
+        run_cli(["--random", "0", "1", "--agent-seed", str(2**64 - 1)])
 
 
 def test_quitting_at_the_prompt() -> None:
