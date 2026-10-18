@@ -13,7 +13,7 @@ from resolve.decisions.request import DecisionRequest
 from resolve.decisions.spaces import AnswerValue, ChooseNumber, Number
 from resolve.engine.loop import run
 from resolve.engine.setup import initial_state
-from resolve.errors import InvalidAnswer
+from resolve.errors import EngineError, InvalidAnswer, NotImplementedRule
 from resolve.events.base import Event
 from resolve.events.game import GameEnded
 from resolve.events.pipeline import ApplyEvents
@@ -207,3 +207,126 @@ def holds_object(state: GameState) -> GameObject:
 def a_function() -> Callable[[], int]:
     """A function value (not pure data)."""
     return lambda: 1
+
+
+# --- Broken tasks, for the fuzz harness's negative tests ---------------------------------------
+
+_UNREPEATABLE_CALLS: list[int] = []
+
+
+@dataclass(slots=True)
+class Unrepeatable(Task):
+    """Breaks determinism: what it logs depends on a module-level counter, not on the state."""
+
+    def run(self, state: GameState) -> TaskResult:
+        return NeedDecision(
+            player=PlayerId(0),
+            kind=DecisionKind.MAY,
+            space=ChooseNumber(0, 0),
+            prompt="Unrepeatable.",
+            rules=("117.1",),
+        )
+
+    def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
+        _UNREPEATABLE_CALLS.append(1)
+        return Push((Mark(f"call {len(_UNREPEATABLE_CALLS)}"),))
+
+
+@dataclass(slots=True)
+class CheckThatChanges(Task):
+    """Breaks the rule that ``check_answer`` changes nothing: it costs life, then rejects 1."""
+
+    def run(self, state: GameState) -> TaskResult:
+        return NeedDecision(
+            player=PlayerId(0),
+            kind=DecisionKind.MAY,
+            space=ChooseNumber(0, 1),
+            prompt="Pick 0.",
+            rules=("117.1",),
+        )
+
+    def check_answer(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> None:
+        state.players[0].life -= 1
+        if answer == Number(1):
+            raise InvalidAnswer("pick 0")
+
+    def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
+        return Done()
+
+
+@dataclass(frozen=True)
+class LaxSpace(ChooseNumber):
+    """An answer space whose ``validate`` accepts anything (an engine bug)."""
+
+    def validate(self, answer: AnswerValue) -> None:
+        return None
+
+
+@dataclass(slots=True)
+class AsksLaxly(Task):
+    """Asks with a ``LaxSpace``, so answers outside the space get through."""
+
+    def run(self, state: GameState) -> TaskResult:
+        return NeedDecision(
+            player=PlayerId(0),
+            kind=DecisionKind.CHOOSE_X,
+            space=LaxSpace(0, 3),
+            prompt="Choose.",
+            rules=("107.3a",),
+        )
+
+    def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
+        return Done()
+
+
+@dataclass(slots=True)
+class RejectsEverything(Task):
+    """Asks a question no answer satisfies (an engine bug)."""
+
+    def run(self, state: GameState) -> TaskResult:
+        return NeedDecision(
+            player=PlayerId(0),
+            kind=DecisionKind.MAY,
+            space=ChooseNumber(0, 1),
+            prompt="Impossible.",
+            rules=("117.1",),
+        )
+
+    def check_answer(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> None:
+        raise InvalidAnswer("no answer is legal")
+
+
+@dataclass(slots=True)
+class CrashOnAnswer(Task):
+    """Raises an ``EngineError`` once answered."""
+
+    def run(self, state: GameState) -> TaskResult:
+        return NeedDecision(
+            player=PlayerId(1),
+            kind=DecisionKind.MAY,
+            space=ChooseNumber(0, 0),
+            prompt="Crash.",
+            rules=("117.1",),
+        )
+
+    def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
+        raise EngineError("crashed")
+
+
+@dataclass(slots=True)
+class GapOnAnswer(Task):
+    """Raises ``NotImplementedRule`` for ``rule`` once answered."""
+
+    rule: str
+
+    def run(self, state: GameState) -> TaskResult:
+        return NeedDecision(
+            player=PlayerId(0),
+            kind=DecisionKind.MAY,
+            space=ChooseNumber(0, 0),
+            prompt="Gap.",
+            rules=("117.1",),
+        )
+
+    def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
+        raise NotImplementedRule(f"{self.rule}: a test gap")

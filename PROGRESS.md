@@ -29,9 +29,13 @@ Follow CLAUDE.md fully; run the test-reviewer before the PR. Branch:
 - Step 3: `resolve.agents.text` (renderer, `parse_answer`, `TextAgent`), `tools/play_cli.py`;
   tests in `tests/agents/test_text_agent.py`, `tests/tooling/test_play_cli.py`.
 
+- Step 4: `tools/fuzz.py` (`fuzz_run`, `fuzz_game`, `state_problems`, `invalid_answers`, CLI
+  with games/second); broken test tasks in `tests/engine_support.py`; `tests/fuzz/test_fuzz.py`.
+  Determinism lint now scans `resolve.agents`.
+
 ## In progress
 
-- Step 4: fuzz harness (tools/fuzz.py, tests/fuzz/).
+- Step 5: docs (decisions, howto, CLAUDE.md status, roadmap, primitives? no).
 
 ## Decisions not yet in the docs
 
