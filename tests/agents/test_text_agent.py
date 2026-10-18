@@ -12,6 +12,7 @@ from resolve.agents.text import (
     QuitGame,
     TextAgent,
     describe_option,
+    describe_turn,
     parse_answer,
     render_log_entry,
     render_request,
@@ -23,6 +24,7 @@ from resolve.decisions.spaces import (
     Amounts,
     AnswerSpace,
     AnswerValue,
+    CastSpellOption,
     ChooseNumber,
     ChooseOne,
     ChooseOrder,
@@ -31,14 +33,18 @@ from resolve.decisions.spaces import (
     Number,
     ObjectOption,
     Order,
+    PassOption,
     Pick,
     PickMany,
     PlayerOption,
+    PlayLandOption,
 )
 from resolve.engine.api import view_for
 from resolve.engine.view import PlayerView
 from resolve.state.config import GameConfig
 from resolve.state.ids import ObjectId, PlayerId
+from resolve.state.turn import Phase
+from resolve.state.turn import Step as TurnStep
 from resolve.state.zones import Zone
 from tests.engine_support import AskTwice
 from tests.game_fixtures import choose_starting_player, request_of, start
@@ -233,3 +239,31 @@ def test_a_hidden_library_card_never_appears_in_any_view() -> None:
     for player in (P0, P1):
         text = render_view(view_for(state, player))
         assert "Llanowar Elves" not in text and "Forest" not in text
+
+
+def test_priority_options_are_described_in_words() -> None:
+    own, other, ids = board()
+    assert describe_option(PassOption(), own) == "pass priority"
+    assert describe_option(CastSpellOption(ids["hand"]), own) == (
+        f"cast Llanowar Elves #{ids['hand']}"
+    )
+    assert (
+        describe_option(CastSpellOption(ids["hand"]), other) == f"cast hidden card #{ids['hand']}"
+    )
+    assert describe_option(PlayLandOption(ids["grave"]), own) == f"play Forest #{ids['grave']}"
+
+
+def test_render_view_shows_the_turn_and_who_lost() -> None:
+    scenario = Scenario(2)
+    scenario.at(Phase.PRECOMBAT_MAIN, active=P1, number=3, priority=P0, passed=[P1])
+    view = view_for(scenario.build(), P0)
+    text = render_view(view)
+    assert "Turn 3, player 1's turn: precombat main phase; player 0 has priority." in text
+    assert describe_turn(view_for(Scenario(2).build(), P0)) is None
+
+    scenario = Scenario(2)
+    scenario.life(P1, 0)
+    scenario.at(TurnStep.UPKEEP)
+    text = render_view(view_for(scenario.build(), P0))
+    assert "Player 1 (lost): life 0" in text
+    assert "Turn 1, player 0's turn: upkeep step; nobody has priority." in text

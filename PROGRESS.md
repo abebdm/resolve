@@ -41,15 +41,18 @@ PyPI is blocked here; the venv was assembled from the uv cache (ruff 0.16.8, not
   with the turn tasks stubbed to raise NotImplementedRule("500.1: STUB") (54 raised the stub,
   4 asserted a different gap rule), then passing with the implementation.
 
-## In progress
-- Updating old tests that assumed the 103.8 gap: mulligan tests (act helper), 103 starting
-  tests, fuzz tests (ALLOWED_GAPS = 601.2, 305.1, 800.4a; endings), play_cli tests, gaps tool
-  test. Then: invariants for the turn, fuzz oracle for TurnView/lost, text agent rendering of
-  new options and the turn line, play_cli docstrings.
+- Old tests updated for the first turn (no assertion loosened): mulligan `act` returns the first
+  turn instead of the 103.8 gap; 903.6 log-order test compares up to TurnBegan; gaps-tool test
+  names 601.2; play_cli tests (empty decks now end in a draw at the first upkeep; a new
+  play_game test reaches the 305.1 gap); fuzz tests (ALLOWED_GAPS, endings, new PatientAgent
+  long games, oracle negatives for turn/lost).
+- Infrastructure tests: tests/state/test_turn_state.py (sequence, invariants),
+  tests/events/test_turn_events.py (events, characteristics), scenario at() tests, text agent.
+- Full suite, ruff, pyright passing.
 
 ## Next
 - Docs: decisions.md (priority pointers not events; offering gaps; 514.1 order via
   ORDER_CARDS 404.3; multiplayer attack-multiple-players 802.2; 109.3 multi-face gap;
-  characteristics no cache), design.md §4 (turn), howto (scenario at()), CLAUDE.md status,
-  roadmap (tick "phases and steps"; untap/cleanup partially), api docstrings.
+  characteristics no cache; PatientAgent in fuzz tests), design.md §4 (turn), howto (scenario
+  at()), CLAUDE.md status, roadmap (tick "phases and steps"), howto fuzz/play_cli notes.
 - test-reviewer, PR (base claude/m1-1-mulligans), then M1.3-M1.5.

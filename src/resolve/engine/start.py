@@ -109,4 +109,3 @@ class ShuffleLibraries(Task):
             for player in turn_order(state)
         )
         return Push((ApplyEvents(shuffles),))
-

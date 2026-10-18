@@ -181,4 +181,3 @@ class PriorityRound(Task):
         self.next_player = next_in_turn_order(state, player)
         self.stage = Stage.CHECK
         return Push((passed, self))
-

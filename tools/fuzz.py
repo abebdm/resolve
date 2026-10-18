@@ -13,8 +13,10 @@ Each game is played by ``RandomAgent``s. Before every answer the harness checks:
 
 - the state's bookkeeping invariants and that it is pure data (``resolve.state.invariants``);
 - every player's view, against an oracle written out from the rules rather than the engine's
-  own helpers: deeply immutable; the request only for the deciding player; every player's life,
-  library count (401.2), hand and graveyard objects in order (402.3, 404.2) and the shared zones;
+  own helpers: deeply immutable; the request only for the deciding player; the turn (number,
+  active player, phase, step and priority holder, all public); every player's life, whether they
+  lost, library count (401.2), hand and graveyard objects in order (402.3, 404.2) and the shared
+  zones;
   card names exactly where the viewer may know them (400.2, 402.3); and only the log entries the
   viewer may see, with answers visible only to their player (design.md §7), and the redacted
   form of the others, which never shows another player's library objects (design.md §9);
@@ -28,10 +30,9 @@ original (design.md §5). A random answer the asking task rejects must change no
 answers again. At the end, the game is replayed from its config, decks, seed and recorded
 answers and must reproduce the identical state (design.md §12).
 
-A game ends when it is over or when it reaches a ``NotImplementedRule`` for an allowed rule.
-Until the turn structure exists (M1.2) every game stops after the mulligans, at
-``NotImplementedRule("103.8: ...")``. Any other exception, a disallowed gap, or a failed check
-raises ``FuzzFailure`` naming the seed. The command line prints games per second as a rough
+A game ends when it is over or when it reaches a ``NotImplementedRule`` for an allowed rule
+(``ALLOWED_GAPS``). Any other exception, a disallowed gap, or a failed check raises
+``FuzzFailure`` naming the seed. The command line prints games per second as a rough
 benchmark.
 
 Exit status: 0 every game passed; 1 a game failed, or the decks couldn't be built.
@@ -83,9 +84,10 @@ from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.invariants import invariant_violations, mutable_parts, state_impurities
 from resolve.state.zones import ZoneKind
 
-# Gaps that end a fuzz game normally. Until the turn structure exists (M1.2), every game stops
-# after the mulligans, at 103.8.
-ALLOWED_GAPS: tuple[str, ...] = ("103.8",)
+# Gaps that end a fuzz game normally: actions a random agent may choose that the engine can't take
+# yet (playing a land until M1.3, casting a spell until M2), and a game that would continue after
+# a player loses (until M1.5).
+ALLOWED_GAPS: tuple[str, ...] = ("305.1", "601.2", "800.4a")
 # A game that hasn't ended after this many answers is reported as a failure (a runaway game).
 MAX_ANSWERS = 10_000
 
@@ -157,6 +159,16 @@ def view_problems(state: GameState, viewer: PlayerId) -> list[str]:
         problems.append(f"{where} says it is waiting for {waiting}, not {expected_waiting}")
     if view.result != state.result or view.starting_player != state.starting_player:
         problems.append(f"{where} misreports the result or the starting player")
+    turn = state.turn
+    expected_turn = None
+    if turn is not None:
+        expected_turn = (turn.number, turn.active_player, turn.phase, turn.step, turn.priority)
+    shown_turn = None
+    if view.turn is not None:
+        shown = view.turn
+        shown_turn = (shown.number, shown.active_player, shown.phase, shown.step, shown.priority)
+    if shown_turn != expected_turn:
+        problems.append(f"{where} shows the turn as {shown_turn}, not {expected_turn}")
 
     def compare(shown: tuple[ObjectView, ...], actual: list[ObjectId], zone: str) -> None:
         # Hands may be counted (402.3) and public piles keep their order (404.2, 405.2).
@@ -172,6 +184,8 @@ def view_problems(state: GameState, viewer: PlayerId) -> list[str]:
     for summary, player in zip(view.players, state.players, strict=False):
         if summary.life != player.life:
             problems.append(f"{where} shows player {player.id} at the wrong life total")
+        if summary.lost != player.lost:
+            problems.append(f"{where} misreports whether player {player.id} lost")
         if summary.library_size != len(player.library):  # 401.2: only a count
             problems.append(f"{where} miscounts player {player.id}'s library")
         compare(summary.hand, player.hand, f"player {player.id}'s hand")

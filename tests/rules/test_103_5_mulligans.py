@@ -17,8 +17,7 @@ Worked from the pinned CR text:
   not take further mulligans" (103.5). Interpretation (docs/decisions.md): the mulligan that
   leaves zero cards may be taken; after it the player keeps without being asked.
 
-Until the turn structure exists (M1.2), a game stops at ``NotImplementedRule("103.8: ...")`` once
-every player has kept.
+Once every player has kept, the starting player's first turn begins (103.8).
 """
 
 from __future__ import annotations
@@ -42,7 +41,7 @@ from resolve.decisions.spaces import (
 from resolve.engine.api import new_game, pending_decision, submit, view_for
 from resolve.engine.deck import Deck
 from resolve.engine.mulligans import KEEP, MULLIGAN
-from resolve.errors import InvalidAnswer, NotImplementedRule
+from resolve.errors import InvalidAnswer
 from resolve.events.base import AnswerRecord
 from resolve.events.cards import CardDrawn, CardsPutOnBottom, HandShuffledIntoLibrary
 from resolve.events.game import MulliganDeclared
@@ -50,6 +49,7 @@ from resolve.state.config import GameConfig
 from resolve.state.game import GameState
 from resolve.state.ids import CardId, ObjectId, PlayerId
 from resolve.state.invariants import invariant_violations, state_impurities
+from resolve.state.turn import TurnState
 from resolve.state.zones import ZoneKind
 from tests.game_fixtures import DAYBREAKER, answer, choose_starting_player, deck, request_of
 from tests.scenario import run_script
@@ -72,14 +72,17 @@ def mulligan_game(
     return state
 
 
-def act(state: GameState, *steps: ScriptStep) -> NotImplementedRule | None:
-    """Play ``steps``. Until M1.2 the game stops at the 103.8 gap once everyone has kept."""
-    try:
-        run_script(state, *steps)
-    except NotImplementedRule as gap:
-        assert gap.rule == "103.8", gap
-        return gap
-    return None
+def act(state: GameState, *steps: ScriptStep) -> TurnState | None:
+    """Play ``steps``; returns the first turn once the mulligans are over (103.8), else ``None``.
+
+    The mulligans are over when the starting player's first turn has begun.
+    """
+    run_script(state, *steps)
+    turn = state.turn
+    if turn is None:
+        return None
+    assert turn.number == 1 and turn.active_player == state.starting_player
+    return turn
 
 
 def keep(player: PlayerId) -> ScriptStep:
@@ -125,8 +128,8 @@ def test_103_5_each_player_draws_their_starting_hand_size(
 def test_103_5_a_starting_hand_size_of_zero_draws_nothing_and_asks_nothing() -> None:
     """With nothing to draw, a mulligan would leave zero cards already: nobody is asked."""
     state = new_game(GameConfig(starting_hand_size=0), [deck(10, 10), deck(10, 10)], seed=1)
-    gap = choose_starting_player(state, 0)
-    assert gap is not None and gap.rule == "103.8"
+    assert choose_starting_player(state, 0) is None
+    assert state.turn is not None and state.turn.number == 1  # straight to the first turn
     assert all(player.hand == [] and len(player.library) == 20 for player in state.players)
     assert events(state, CardDrawn) == []
     assert events(state, MulliganDeclared) == []

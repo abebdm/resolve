@@ -72,5 +72,5 @@ def _face(state: GameState, obj: ObjectId) -> CardFace:
     if data.layout in FRONT_FACE_LAYOUTS:
         return data.faces[0]  # 712.8a, 712.8c, 712.8d
     raise NotImplementedRule(
-        f"109.3: the characteristics of a card with the {data.layout!r} layout ({data.name})"
+        "109.3: the characteristics of multi-faced cards other than double-faced cards"
     )

@@ -8,11 +8,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 
+from resolve.agents.random_agent import RandomAgent
 from resolve.decisions.kinds import DecisionKind
-from resolve.decisions.request import DecisionRequest
-from resolve.decisions.spaces import AnswerValue, ChooseNumber, Number
+from resolve.decisions.request import DecisionAnswer, DecisionRequest
+from resolve.decisions.spaces import AnswerValue, ChooseNumber, ChooseOne, Number, PassOption, Pick
 from resolve.engine.loop import run
 from resolve.engine.setup import initial_state
+from resolve.engine.view import PlayerView
 from resolve.errors import EngineError, InvalidAnswer, NotImplementedRule
 from resolve.events.base import Event, append_log
 from resolve.events.cards import CardDrawn, CardsPutOnBottom
@@ -394,3 +396,32 @@ class LossyPickle(Task):
 
     def run(self, state: GameState) -> TaskResult:
         return Done()
+
+
+# --- Agents for long fuzz games ----------------------------------------------------------------
+
+
+class PatientAgent:
+    """A random agent that usually passes priority, so random games last many turns.
+
+    With priority it passes, except one time in ``patience`` (drawn from its own ``Rng``), when
+    it answers uniformly at random like ``RandomAgent``; every other decision is random.
+    """
+
+    def __init__(self, seed: int, patience: int = 32) -> None:
+        self.random = RandomAgent(seed)
+        self.patience = patience
+
+    def decide(self, view: PlayerView, request: DecisionRequest) -> DecisionAnswer:
+        """Pass priority, mostly; otherwise a random answer."""
+        space = request.space
+        if (
+            request.kind is DecisionKind.PRIORITY_ACTION
+            and isinstance(space, ChooseOne)
+            and PassOption() in space.options
+            and self.random.rng.randbelow(self.patience) != 0
+        ):
+            return DecisionAnswer(
+                request.id, request.player, Pick(space.options.index(PassOption()))
+            )
+        return self.random.decide(view, request)

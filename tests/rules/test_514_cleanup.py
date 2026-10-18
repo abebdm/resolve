@@ -62,11 +62,12 @@ def test_514_1_the_active_player_discards_down_to_seven() -> None:
     )
     assert len(state.player(P0).hand) == 7
     assert names(state, Zone.graveyard(P0)) == ["Test Shock", "Llanowar Elves"]  # top last
-    discards = [e for e in state.event_log if isinstance(e.record, CardDiscarded)]
-    assert [e.record.card for e in discards] == [hand[3], hand[1]]
-    assert all(e.visible_to is None for e in discards)  # public
-    assert all(e.record.rules == ("514.1", "701.9a") for e in discards)
-    assert all(e.record.discarded in state.player(P0).graveyard for e in discards)  # 400.7
+    entries = [e for e in state.event_log if isinstance(e.record, CardDiscarded)]
+    discards = [e.record for e in entries if isinstance(e.record, CardDiscarded)]
+    assert [d.card for d in discards] == [hand[3], hand[1]]  # bottom first
+    assert all(e.visible_to is None for e in entries)  # public
+    assert all(d.rules == ("514.1", "701.9a") for d in discards)
+    assert [d.discarded for d in discards] == state.player(P0).graveyard  # 400.7
     # The cleanup step is over and the next turn has begun (514.3: no priority in cleanup).
     turn = state.turn
     assert turn is not None and (turn.number, turn.active_player) == (2, P1)
