@@ -12,6 +12,7 @@ from resolve.data.cards import (
     UnknownCardError,
     default_data_dir,
     load_card_database,
+    load_card_excerpt,
     load_snapshot_info,
 )
 from resolve.data.decklist import (
@@ -39,6 +40,7 @@ __all__ = [
     "UnknownCardError",
     "default_data_dir",
     "load_card_database",
+    "load_card_excerpt",
     "load_decklist",
     "load_snapshot_info",
     "parse_decklist",

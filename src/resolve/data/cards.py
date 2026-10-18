@@ -32,6 +32,29 @@ ORACLE_CARDS_FILE = "oracle-cards.jsonl.gz"
 RULINGS_FILE = "rulings.jsonl.gz"
 SNAPSHOT_FILE = "snapshot.json"
 SNAPSHOT_FORMAT = 1
+# A card data excerpt (``load_card_excerpt``): a few cards copied from a snapshot, committed so
+# tools can use them without the snapshot. Only the fields ``parse_card`` reads are kept; the rest
+# of a Scryfall card object (prices, images, printings) changes daily and isn't card data the
+# engine uses.
+EXCERPT_FORMAT = 1
+EXCERPT_CARD_FIELDS = (
+    "object",
+    "oracle_id",
+    "name",
+    "layout",
+    "mana_cost",
+    "cmc",
+    "type_line",
+    "oracle_text",
+    "colors",
+    "color_identity",
+    "keywords",
+    "power",
+    "toughness",
+    "loyalty",
+    "defense",
+    "card_faces",
+)
 
 # Scryfall bulk-data types, as named by https://api.scryfall.com/bulk-data.
 ORACLE_CARDS_TYPE = "oracle_cards"
@@ -350,8 +373,13 @@ def load_snapshot_info(data_dir: Path) -> SnapshotInfo:
             "run `uv run python tools/fetch_scryfall.py` first"
         )
     raw = as_json_object(json.loads(path.read_text(encoding="utf-8")), SNAPSHOT_FILE)
+    return parse_snapshot_info(raw, str(path))
+
+
+def parse_snapshot_info(raw: Mapping[str, object], where: str) -> SnapshotInfo:
+    """Parse a manifest as ``SnapshotInfo.to_json`` writes it; ``where`` names it in errors."""
     if raw.get("format") != SNAPSHOT_FORMAT:
-        raise CardDataError(f"{path}: unsupported snapshot format {raw.get('format')!r}")
+        raise CardDataError(f"{where}: unsupported snapshot format {raw.get('format')!r}")
     files = as_json_object(raw.get("files"), f"{SNAPSHOT_FILE} files")
     return SnapshotInfo(
         oracle_cards=_parse_bulk_file_info(files, ORACLE_CARDS_TYPE),
@@ -382,6 +410,34 @@ def load_card_database(data_dir: Path | None = None, *, verify: bool = True) -> 
         cards=parse_oracle_cards(payloads[ORACLE_CARDS_TYPE]),
         rulings=parse_rulings(payloads[RULINGS_TYPE]),
         snapshot=snapshot,
+    )
+
+
+def load_card_excerpt(path: Path) -> CardDatabase:
+    """Load a card data excerpt: a few cards' records copied from a snapshot (``EXCERPT_FORMAT``).
+
+    An excerpt is a JSON object with ``format``, ``taken_from`` (the manifest of the snapshot the
+    records were copied from, as ``SnapshotInfo.to_json`` writes it), ``cards`` (Scryfall card
+    objects, trimmed to ``EXCERPT_CARD_FIELDS``) and ``rulings`` (Scryfall ruling objects).
+    ``tools/card_excerpt.py`` writes excerpts and checks them against a local snapshot. The
+    database's ``snapshot`` is the one the records were taken from. Raises ``CardDataError`` if
+    the file is missing or malformed.
+    """
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
+        raise CardDataError(f"can't read the card data excerpt {path}: {error}") from error
+    try:
+        raw = as_json_object(json.loads(text), str(path))
+    except ValueError as error:
+        raise CardDataError(f"{path}: invalid JSON: {error}") from error
+    if raw.get("format") != EXCERPT_FORMAT:
+        raise CardDataError(f"{path}: unsupported excerpt format {raw.get('format')!r}")
+    taken_from = as_json_object(raw.get("taken_from"), f"{path} taken_from")
+    return CardDatabase(
+        cards=parse_oracle_cards(raw.get("cards")),
+        rulings=parse_rulings(raw.get("rulings")),
+        snapshot=parse_snapshot_info(taken_from, f"{path} taken_from"),
     )
 
 
