@@ -5,9 +5,9 @@ from __future__ import annotations
 import pytest
 
 from resolve.engine.api import new_game
-from resolve.errors import EngineError
+from resolve.errors import EngineError, NotImplementedRule
 from resolve.state.config import GameConfig
-from resolve.state.game import create_object, zone_list
+from resolve.state.game import create_object, move_object, zone_list
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.invariants import invariant_violations
 from resolve.state.zones import BATTLEFIELD, COMMAND, EXILE, STACK, Zone, ZoneKind
@@ -112,3 +112,34 @@ def test_new_objects_go_on_top_of_ordered_zones() -> None:
     second = create_object(state, card=None, owner=PlayerId(0), zone=graveyard)
     assert zone_list(state, graveyard) == [first.id, second.id]
     assert invariant_violations(state) == []
+
+
+def test_109_4c_controlled_objects_in_the_command_zone_are_not_implemented_yet() -> None:
+    """109.4c: an emblem is controlled by the player who puts it into the command zone."""
+    state = start(2)
+    with pytest.raises(NotImplementedRule) as gap:
+        create_object(state, card=None, owner=PlayerId(0), zone=COMMAND, controller=PlayerId(0))
+    assert gap.value.rule == "109.4c"
+
+
+def test_400_7_an_object_that_changes_zones_becomes_a_new_object() -> None:
+    state = start(2)
+    old_id = state.players[1].library[-1]
+    old = state.objects[old_id]
+    new = move_object(state, old_id, COMMAND)
+    assert new.id == ObjectId(21), "a new ID, never a reused one"
+    assert old_id not in state.objects
+    assert old_id not in state.players[1].library
+    assert state.command == [new.id]
+    assert (new.card, new.owner, new.zone, new.controller) == (old.card, 1, COMMAND, None)
+    assert new.timestamp == 21, "613.7d: a new timestamp on entering the zone"
+    assert new.known_to == ()
+    assert invariant_violations(state) == []
+
+
+def test_400_3_a_moved_object_goes_to_its_owners_zone_only() -> None:
+    state = start(2)
+    with pytest.raises(EngineError, match="owned by player 0"):
+        move_object(state, state.players[0].library[0], Zone.hand(PlayerId(1)))
+    with pytest.raises(EngineError, match="no object 999"):
+        move_object(state, ObjectId(999), EXILE)

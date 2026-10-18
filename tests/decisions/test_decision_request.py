@@ -50,6 +50,7 @@ def test_requests_must_cite_the_rules_that_ask_for_them(rules: tuple[str, ...]) 
 
 
 def test_decision_kinds_have_distinct_values() -> None:
-    values = [kind.value for kind in DecisionKind]
-    assert len(values) == len(set(values))
-    assert DecisionKind.CHOOSE_STARTING_PLAYER in DecisionKind
+    """A duplicate value would silently make one kind an alias of another."""
+    members = DecisionKind.__members__
+    assert len({kind.value for kind in members.values()}) == len(members)
+    assert "MULLIGAN" in members and members["MULLIGAN"].name == "MULLIGAN"

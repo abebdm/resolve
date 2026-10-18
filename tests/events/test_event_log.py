@@ -110,3 +110,17 @@ def test_104_1_the_game_ends_once() -> None:
 def test_winners_must_be_players() -> None:
     with pytest.raises(EngineError, match="no player 3"):
         GameEnded(winners=(PlayerId(3),), rules=("104.1",)).apply(start(3))
+
+
+def test_701_24a_a_shuffle_changes_only_the_named_players_library() -> None:
+    state = start(3, seed=6)
+    untouched = [list(p.library) for p in state.players]
+    state.objects[state.players[0].library[0]].known_to = (PlayerId(0),)
+    state.objects[state.players[2].library[0]].known_to = (PlayerId(1),)
+    LibraryShuffled(player=PlayerId(2), rules=("701.24a",)).apply(state)
+    assert state.players[0].library == untouched[0]
+    assert state.players[1].library == untouched[1]
+    assert state.players[2].library != untouched[2]
+    assert sorted(state.players[2].library) == sorted(untouched[2])
+    assert state.objects[state.players[0].library[0]].known_to == (0,)
+    assert all(state.objects[obj].known_to == () for obj in state.players[2].library)

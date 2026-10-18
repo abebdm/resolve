@@ -53,23 +53,48 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   `src/resolve/state/invariants.py`.
 
 ### 2026-10-18: Starting the game in M0
-- **Decision:** `initial_state` creates every card's object directly in its starting zone: library
-  cards in deck order, commanders face up in the command zone (103.2c, 903.6), and sets life from
-  the config (103.4). `CardId`s and timestamps are assigned in seat order, commanders first, then
-  deck order. `StartGame` picks the player who chooses the starting player uniformly with the
-  game's RNG, asks them (`CHOOSE_STARTING_PLAYER`, every player an option, themselves included),
-  then shuffles each library in turn order from the starting player (103.3), then stops at
-  `NotImplementedRule("103.5: ...")`. The opponents' optional extra shuffle or cut (103.3) is left
-  out. Matches aren't modeled: `new_game` is one game, so 103.1's "loser of the previous game
-  chooses" belongs to whoever runs a match.
-- **Why:** 103.1 leaves the method of picking the chooser to the players; a uniform random pick is
-  such a method and keeps the game a function of its seed. A uniformly random library stays
-  uniformly random after any further shuffle or cut, so offering it would add a decision with no
-  effect. The setup timestamps aren't ordered by 613.7m: there is no active player before the
-  first turn, and nothing can observe the relative timestamps of cards in a library or the
-  command zone before they next change zone and get a new one.
-- **Rules:** 103.1-103.5, 613.7d, 613.7m, 701.24a, 903.6, 903.7.
-- **Where:** `src/resolve/engine/setup.py`, `src/resolve/engine/start.py`.
+- **Decision:** `initial_state` creates every card's object in its owner's library (commanders
+  first, then deck order), which stands for the player's deck before 103.3: hidden and unshuffled.
+  It records each player's commanders (`Player.commanders`, 903.3) and sets life from the config
+  (103.4). `CardId`s and setup timestamps follow seat order, commanders first, then deck order.
+  `StartGame` then:
+  1. picks the player who chooses the starting player uniformly with the game's RNG and asks them
+     (`CHOOSE_STARTING_PLAYER`; every player is an option, the chooser included) (103.1);
+  2. in a Commander game, puts every commander into the command zone with one set of simultaneous
+     `CommanderPutIntoCommandZone` events in turn order from the starting player (103.2c, 903.6).
+     Each commander becomes a new object (400.7) whose timestamp follows APNAP order (613.7m,
+     with the starting player as active player, 101.4e). A player with several commanders
+     (partners) raises `NotImplementedRule("613.7m: ...")`, because that player chooses the
+     order among their own;
+  3. shuffles each library in turn order (103.3);
+  4. stops at `NotImplementedRule("103.5: ...")`.
+
+  The opponents' optional extra shuffle or cut (103.3) is left out. Matches aren't modeled:
+  `new_game` is one game, so 103.1's "loser of the previous game chooses" belongs to whoever runs a
+  match.
+- **Why:** 103.2 puts 103.2c after the starting player is determined, so the chooser must not see
+  the other players' commanders yet. The test review caught that an earlier version of this branch
+  put them in the command zone at setup. 103.1 leaves the method of picking the chooser to the
+  players; a uniform random pick is such a method and keeps the game a function of its seed. A
+  uniformly random library stays uniformly random after any further shuffle or cut, so offering
+  that choice would add a decision with no effect. The setup timestamps aren't ordered by
+  613.7m: there is no starting player yet, and nothing can observe the relative timestamps of
+  cards in a library before they next change zone. The `CommanderPutIntoCommandZone` log entries
+  show the commanders' old library IDs to everyone; that reveals nothing, because the commander
+  is leaving and the rest of the library is shuffled next.
+- **Rules:** 101.4e, 103.1-103.5, 400.7, 613.7d, 613.7m, 701.24a, 903.3, 903.6, 903.7.
+- **Where:** `src/resolve/engine/setup.py`, `src/resolve/engine/start.py`,
+  `src/resolve/events/game.py`.
+
+### 2026-10-18: Moving objects between zones
+- **Decision:** `resolve.state.game.move_object` implements 400.7: the object is removed and a new
+  object with a new ID and timestamp is created on top of the destination, with no knowledge
+  carried over. It checks the destination before changing anything (400.3: owner's per-player
+  zones; a controller exactly on the battlefield and the stack). A controlled object in the
+  command zone (an emblem, 109.4c) raises `NotImplementedRule`. Only events call it. Last-known
+  information and the 400.7 exceptions arrive with the milestones that need them (M1, M4).
+- **Rules:** 400.3, 400.7, 109.4, 109.4c, 613.7d.
+- **Where:** `src/resolve/state/game.py`.
 
 ### 2026-10-18: Identifiers, seating and pile order
 - **Decision:** `PlayerId`, `ObjectId` and `CardId` are `NewType` ints. `PlayerId` is the seat

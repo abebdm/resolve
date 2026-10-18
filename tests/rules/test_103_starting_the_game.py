@@ -12,19 +12,19 @@ import pytest
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer
 from resolve.decisions.spaces import ChooseOne, Number, Pick, PlayerOption
-from resolve.engine.api import new_game, submit
+from resolve.engine.api import new_game, submit, view_for
 from resolve.engine.deck import Deck
 from resolve.errors import InvalidAnswer
 from resolve.events.game import LibraryShuffled, StartingPlayerChosen
 from resolve.state.config import GameConfig
-from resolve.state.game import turn_order
-from resolve.state.ids import PlayerId
-from resolve.state.zones import ZoneKind
+from resolve.state.game import GameState, turn_order
+from resolve.state.ids import ObjectId, PlayerId
 from tests.game_fixtures import (
     DAYBREAKER,
     answer,
     choose_starting_player,
     deck,
+    decks,
     request_of,
     start,
 )
@@ -91,6 +91,25 @@ def test_103_3_each_library_is_shuffled_in_turn_order_from_the_starting_player()
     assert all(event.rules == ("103.3", "701.24a") for event in shuffles)
 
 
+def test_103_3_no_library_is_shuffled_before_the_starting_player_is_chosen() -> None:
+    state = start(3)
+    for player in state.players:
+        assert player.library == sorted(player.library), "still in deck order"
+    assert not any(isinstance(entry.record, LibraryShuffled) for entry in state.event_log)
+
+
+def test_103_3_every_players_library_is_shuffled() -> None:
+    orders: dict[int, set[tuple[int, ...]]] = {0: set(), 1: set(), 2: set()}
+    for seed in range(20):
+        state = start(3, seed)
+        initial = [list(player.library) for player in state.players]
+        choose_starting_player(state, seed % 3)
+        for player in state.players:
+            assert sorted(player.library) == sorted(initial[player.id])
+            orders[player.id].add(tuple(player.library))
+    assert all(len(seen) > 15 for seen in orders.values()), "each library's order varies"
+
+
 def test_103_3_each_library_becomes_a_random_permutation_of_its_deck() -> None:
     orders: set[tuple[int, ...]] = set()
     for seed in range(20):
@@ -122,24 +141,100 @@ def test_103_4_each_player_starts_at_20_life() -> None:
     assert [player.life for player in state.players] == [20, 20, 20, 20]
 
 
+def test_103_4_starting_life_comes_from_the_config() -> None:
+    """103.4: variants set other starting life totals (for example 30 in Two-Headed Giant)."""
+    state = new_game(GameConfig(starting_life=30), decks(3), seed=1)
+    assert [player.life for player in state.players] == [30, 30, 30]
+
+
 def test_103_4c_in_commander_each_player_starts_at_40_life() -> None:
     commander_decks = [deck(commanders=[DAYBREAKER]) for _ in range(4)]
     state = new_game(GameConfig.commander_game(), commander_decks, seed=1)
     assert [player.life for player in state.players] == [40, 40, 40, 40]
 
 
-def test_903_6_commanders_start_face_up_in_the_command_zone_not_the_library() -> None:
-    commander_decks = [deck(3, 0, commanders=[DAYBREAKER]) for _ in range(2)]
-    state = new_game(GameConfig.commander_game(), commander_decks, seed=1)
-    assert len(state.command) == 2
-    for obj_id, owner in zip(state.command, (0, 1), strict=True):
+COMMANDER_NAME = "Test Daybreaker // Test Nightfall"
+
+
+def commander_game(players: int = 3, seed: int = 1) -> GameState:
+    """A Commander game whose decks are three Forests and Test Daybreaker as commander."""
+    commander_decks = [deck(3, 0, commanders=[DAYBREAKER]) for _ in range(players)]
+    return new_game(GameConfig.commander_game(), commander_decks, seed)
+
+
+def name_of(state: GameState, obj_id: ObjectId) -> str:
+    card = state.objects[obj_id].card
+    assert card is not None
+    return state.cards[card].data.name
+
+
+def test_103_2c_commanders_stay_in_their_decks_until_the_starting_player_is_chosen() -> None:
+    """103.2: the additional steps, including 103.2c, come after the starting player is chosen.
+
+    Before 103.3 a player's deck is represented by their library, in deck order (hidden, 400.2),
+    so the player choosing who goes first doesn't see the other players' commanders.
+    """
+    state = commander_game()
+    assert state.command == []
+    for player in state.players:
+        names = sorted(name_of(state, obj) for obj in player.library)
+        assert names == ["Forest", "Forest", "Forest", COMMANDER_NAME]
+    for viewer in range(3):
+        assert view_for(state, PlayerId(viewer)).command == ()
+
+
+def test_903_6_after_the_choice_each_commander_is_put_face_up_into_the_command_zone() -> None:
+    state = commander_game()
+    library_ids = {
+        obj: player.id
+        for player in state.players
+        for obj in player.library
+        if name_of(state, obj) == COMMANDER_NAME
+    }
+    choose_starting_player(state, 1)
+    assert [state.objects[obj].owner for obj in state.command] == [1, 2, 0]
+    for obj_id in state.command:
         obj = state.objects[obj_id]
-        assert obj.owner == owner
-        assert obj.zone.kind is ZoneKind.COMMAND
-        assert obj.zone.kind.is_public  # face up: everyone sees it (400.2)
-        assert obj.card is not None
-        assert state.cards[obj.card].data.name == "Test Daybreaker // Test Nightfall"
-    assert all(len(player.library) == 3 for player in state.players)
+        assert name_of(state, obj_id) == COMMANDER_NAME
+        assert obj.controller is None
+        assert obj.zone.kind.is_public  # face up: every player sees it (400.2)
+    for viewer in range(3):
+        assert [o.name for o in view_for(state, PlayerId(viewer)).command] == [COMMANDER_NAME] * 3
+    # 400.7: a commander that changes zones is a new object.
+    for old_id in library_ids:
+        assert old_id not in state.objects
+        assert old_id not in state.command
+
+
+def test_903_6_the_remaining_cards_are_shuffled_and_no_commander_is_left_in_a_library() -> None:
+    state = commander_game()
+    choose_starting_player(state, 0)
+    for player in state.players:
+        assert len(player.library) == 3
+        assert all(name_of(state, obj) == "Forest" for obj in player.library)
+    kinds = [type(entry.record).__name__ for entry in state.event_log[1:]]
+    assert (
+        kinds
+        == ["StartingPlayerChosen"] + ["CommanderPutIntoCommandZone"] * 3 + ["LibraryShuffled"] * 3
+    ), "103.2c comes after 103.1 and before the 103.3 shuffle"
+
+
+def test_613_7m_commanders_entering_together_get_timestamps_in_apnap_order() -> None:
+    """101.4e: while starting the game the starting player counts as the active player."""
+    state = commander_game()
+    setup_max = max(obj.timestamp for obj in state.objects.values())
+    choose_starting_player(state, 2)
+    owners_by_timestamp = sorted(state.command, key=lambda obj: state.objects[obj].timestamp)
+    assert [state.objects[obj].owner for obj in owners_by_timestamp] == [2, 0, 1]
+    assert all(state.objects[obj].timestamp > setup_max for obj in state.command)
+
+
+def test_613_7m_a_player_with_two_commanders_chooses_their_order_which_is_not_implemented() -> None:
+    """Partner commanders entering together: their controller-less owner orders them (613.7m)."""
+    decks_ = [deck(3, 0, commanders=[DAYBREAKER, DAYBREAKER]), deck(3, 0, commanders=[DAYBREAKER])]
+    state = new_game(GameConfig.commander_game(), decks_, seed=1)
+    gap = choose_starting_player(state, 0)
+    assert gap.rule == "613.7m"
 
 
 def test_103_5_opening_hands_are_not_implemented_yet_and_stop_the_game_loudly() -> None:

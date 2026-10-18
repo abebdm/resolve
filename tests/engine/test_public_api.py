@@ -9,13 +9,22 @@ from resolve.decisions.request import DecisionAnswer
 from resolve.decisions.spaces import Number, Pick
 from resolve.engine.api import new_game, pending_decision, submit, view_for
 from resolve.engine.deck import Deck
+from resolve.engine.view import WaitingFor
 from resolve.errors import DeckError, EngineError
 from resolve.events.base import append_log
 from resolve.state.config import GameConfig
 from resolve.state.ids import PlayerId
 from resolve.state.zones import Zone
 from tests.engine_support import AskTwice, Marker, running
-from tests.game_fixtures import DAYBREAKER, answer, choose_starting_player, deck, decks, start
+from tests.game_fixtures import (
+    DAYBREAKER,
+    answer,
+    choose_starting_player,
+    deck,
+    decks,
+    request_of,
+    start,
+)
 
 
 def test_new_game_runs_to_the_first_decision() -> None:
@@ -77,6 +86,7 @@ def test_view_shows_hands_to_their_owner_only() -> None:
 def test_view_shows_public_zones_to_everyone() -> None:
     commander_decks = [deck(commanders=[DAYBREAKER]) for _ in range(2)]
     state = new_game(GameConfig.commander_game(), commander_decks, seed=1)
+    choose_starting_player(state, 0)  # commanders enter the command zone after 103.1 (103.2c)
     for viewer in (PlayerId(0), PlayerId(1)):
         names = [obj.name for obj in view_for(state, viewer).command]
         assert names == ["Test Daybreaker // Test Nightfall"] * 2
@@ -125,3 +135,21 @@ def test_after_a_rules_gap_the_state_is_not_waiting_for_anything() -> None:
         pending_decision(state)
     with pytest.raises(EngineError):
         submit(state, DecisionAnswer(1, PlayerId(0), Pick(0)))
+
+
+def test_views_during_and_after_the_103_1_choice() -> None:
+    """Only the chooser gets the request and sees their answer; the outcome is public."""
+    state = start(3, seed=2)
+    chooser = request_of(state).player
+    others = [PlayerId(p) for p in range(3) if p != chooser]
+    assert view_for(state, chooser).request is state.pending
+    for other in others:
+        view = view_for(state, other)
+        assert view.request is None
+        assert view.waiting_for == WaitingFor(chooser, DecisionKind.CHOOSE_STARTING_PLAYER)
+    choose_starting_player(state, 1)
+    public = [type(e.record).__name__ for e in view_for(state, others[0]).log]
+    assert public == ["StartingPlayerChosen"] + ["LibraryShuffled"] * 3
+    own = [type(e.record).__name__ for e in view_for(state, chooser).log]
+    assert own == ["AnswerRecord", "StartingPlayerChosen"] + ["LibraryShuffled"] * 3
+    assert all(view_for(state, PlayerId(p)).starting_player == 1 for p in range(3))

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from resolve.cards.registry import CardDefinition
 from resolve.data.cards import CardData
-from resolve.errors import EngineError
+from resolve.errors import EngineError, NotImplementedRule
 from resolve.state.config import GameConfig
 from resolve.state.ids import CardId, ObjectId, PlayerId
 from resolve.state.rng import Rng
@@ -71,10 +71,14 @@ class GameObject:
 
 @dataclass(slots=True)
 class Player:
-    """A player (102.1) and their own zones (400.1). The last element of a pile is its top."""
+    """A player (102.1) and their own zones (400.1). The last element of a pile is its top.
+
+    ``commanders`` are the cards designated as this player's commanders (903.3).
+    """
 
     id: PlayerId
     life: int
+    commanders: tuple[CardId, ...] = ()
     library: list[ObjectId] = field(default_factory=list[ObjectId])
     hand: list[ObjectId] = field(default_factory=list[ObjectId])
     graveyard: list[ObjectId] = field(default_factory=list[ObjectId])
@@ -185,6 +189,18 @@ def new_timestamp(state: GameState) -> int:
     return timestamp
 
 
+def _check_destination(owner: PlayerId, zone: Zone, controller: PlayerId | None) -> None:
+    if zone.kind.is_per_player and zone.owner != owner:
+        # 400.3: an object goes to its owner's library, hand or graveyard.
+        raise EngineError(f"an object owned by player {owner} can't be put into the {zone}")
+    if zone.kind is ZoneKind.COMMAND and controller is not None:
+        raise NotImplementedRule("109.4c: objects with a controller in the command zone (emblems)")
+    has_controller = zone.kind in (ZoneKind.BATTLEFIELD, ZoneKind.STACK)
+    if has_controller != (controller is not None):
+        needs = "need" if has_controller else "have no"
+        raise EngineError(f"objects in the {zone} {needs} controller")
+
+
 def create_object(
     state: GameState,
     *,
@@ -194,14 +210,7 @@ def create_object(
     controller: PlayerId | None = None,
 ) -> GameObject:
     """Create a new object on top of ``zone``, with a new ID and timestamp (400.7, 613.7d)."""
-    if zone.kind.is_per_player and zone.owner != owner:
-        # 400.3: an object goes to its owner's library, hand or graveyard.
-        raise EngineError(f"an object owned by player {owner} can't be put into the {zone}")
-    has_controller = zone.kind in (ZoneKind.BATTLEFIELD, ZoneKind.STACK)
-    if has_controller != (controller is not None):
-        raise EngineError(
-            f"objects in the {zone} {'need' if has_controller else 'have no'} controller"
-        )
+    _check_destination(owner, zone, controller)
     obj = GameObject(
         id=ObjectId(state.next_object_id),
         card=card,
@@ -214,3 +223,19 @@ def create_object(
     state.objects[obj.id] = obj
     zone_list(state, zone).append(obj.id)
     return obj
+
+
+def move_object(
+    state: GameState, obj_id: ObjectId, zone: Zone, *, controller: PlayerId | None = None
+) -> GameObject:
+    """Move an object to the top of ``zone``; it becomes a new object (400.7).
+
+    The new object has a new ID and timestamp (613.7d) and no memory of the old one: no
+    knowledge carries over. The old object is removed from the game state. Nothing is changed if
+    the move isn't allowed. Only events call this.
+    """
+    old = state.object(obj_id)
+    _check_destination(old.owner, zone, controller)
+    zone_list(state, old.zone).remove(obj_id)
+    del state.objects[obj_id]
+    return create_object(state, card=old.card, owner=old.owner, zone=zone, controller=controller)

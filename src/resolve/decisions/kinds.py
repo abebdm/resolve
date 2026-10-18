@@ -10,9 +10,10 @@ once the task that asks it exists; in M0 that is ``CHOOSE_STARTING_PLAYER`` alon
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import Enum, unique
 
 
+@unique
 class DecisionKind(Enum):
     """The kinds of decisions players make, each with the rule that asks for it."""
 

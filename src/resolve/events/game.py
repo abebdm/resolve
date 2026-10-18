@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING
 
 from resolve.errors import EngineError
 from resolve.events.base import Event
-from resolve.state.game import GameResult
-from resolve.state.ids import PlayerId
+from resolve.state.game import GameResult, move_object
+from resolve.state.ids import ObjectId, PlayerId
+from resolve.state.zones import COMMAND
 
 if TYPE_CHECKING:
     from resolve.state.game import GameState
@@ -26,6 +27,23 @@ class StartingPlayerChosen(Event):
             raise EngineError("the starting player has already been chosen")
         state.player(self.starting_player)  # validates the ID
         state.starting_player = self.starting_player
+
+
+@dataclass(frozen=True, kw_only=True)
+class CommanderPutIntoCommandZone(Event):
+    """``player`` put their commander ``obj`` from their deck face up into the command zone.
+
+    103.2c and 903.6. The commander becomes a new object in the command zone (400.7).
+    """
+
+    player: PlayerId
+    obj: ObjectId
+
+    def apply(self, state: GameState) -> None:
+        old = state.object(self.obj)
+        if old.owner != self.player or old.card not in state.player(self.player).commanders:
+            raise EngineError(f"object {self.obj} isn't a commander of player {self.player}")
+        move_object(state, self.obj, COMMAND)
 
 
 @dataclass(frozen=True, kw_only=True)

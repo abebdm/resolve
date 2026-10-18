@@ -4,7 +4,9 @@
 
 1. 103.1: a player, picked at random with the game's RNG (the "mutually agreeable method" of a
    single game), chooses who takes the first turn.
-2. 103.2c / 903.6: commanders are already in the command zone (``initial_state``).
+2. 103.2c / 903.6: in a Commander game, each player puts their commander from their deck face up
+   into the command zone. They do so simultaneously, so the new objects get timestamps in APNAP
+   order from the starting player (613.7m, 101.4e).
 3. 103.3: each player's library is shuffled, in turn order. The optional extra shuffle or cut by
    opponents is left out: a uniformly random order stays uniformly random.
 4. 103.4: life totals were set by ``initial_state``.
@@ -19,11 +21,15 @@ from typing import TYPE_CHECKING
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import AnswerValue, ChooseOne, Pick, PlayerOption
 from resolve.errors import EngineError, NotImplementedRule
-from resolve.events.game import LibraryShuffled, StartingPlayerChosen
+from resolve.events.game import (
+    CommanderPutIntoCommandZone,
+    LibraryShuffled,
+    StartingPlayerChosen,
+)
 from resolve.events.pipeline import ApplyEvents
 from resolve.state.game import turn_order
 from resolve.state.ids import PlayerId
-from resolve.tasks import NeedDecision, Push, Task, TaskResult
+from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
 
 if TYPE_CHECKING:
     from resolve.decisions.request import DecisionRequest
@@ -57,7 +63,35 @@ class StartGame(Task):
         chosen = StartingPlayerChosen(
             chooser=self.chooser, starting_player=option.player, rules=("103.1",)
         )
-        return Push((ApplyEvents((chosen,)), ShuffleLibraries(), OpeningHands()))
+        next_steps: tuple[Task, ...] = (ShuffleLibraries(), OpeningHands())
+        if state.config.commander is not None:
+            next_steps = (PutCommandersIntoCommandZone(), *next_steps)
+        return Push((ApplyEvents((chosen,)), *next_steps))
+
+
+@dataclass(slots=True)
+class PutCommandersIntoCommandZone(Task):
+    """103.2c / 903.6: each player puts their commander face up into the command zone."""
+
+    def run(self, state: GameState) -> TaskResult:
+        events: list[CommanderPutIntoCommandZone] = []
+        for player_id in turn_order(state):
+            player = state.player(player_id)
+            if len(player.commanders) > 1:
+                raise NotImplementedRule(
+                    "613.7m: a player ordering the timestamps of their commanders entering "
+                    "the command zone together"
+                )
+            for obj in player.library:
+                if state.objects[obj].card in player.commanders:
+                    events.append(
+                        CommanderPutIntoCommandZone(
+                            player=player_id, obj=obj, rules=("103.2c", "903.6", "613.7m")
+                        )
+                    )
+        if not events:
+            return Done()
+        return Push((ApplyEvents(tuple(events)),))
 
 
 @dataclass(slots=True)
