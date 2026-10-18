@@ -4,13 +4,15 @@ version = "0.0.0"
 description = "A Magic: The Gathering rules engine aiming for Comprehensive-Rules accuracy."
 readme = "README.md"
 requires-python = ">=3.12"
+# The engine has no runtime dependencies; keep it that way unless there is a strong reason.
 dependencies = []
 
 [dependency-groups]
 dev = [
-    "pytest",
-    "ruff",
-    "pyright",
+    "pytest>=8.3",
+    "ruff>=0.8",
+    # The [nodejs] extra ships Node as a wheel, so pyright never downloads it at run time.
+    "pyright[nodejs]>=1.1.390",
 ]
 
 [build-system]
@@ -20,8 +22,17 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/resolve"]
 
+[tool.uv]
+# uv installs the project itself (editable) into the environment, so `import resolve` works
+# from tests and tools without path tweaks.
+package = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# The repo root is on the path so tests can import the command-line tools (`tools.coverage`).
+pythonpath = ["."]
+addopts = ["--strict-markers", "--strict-config"]
+xfail_strict = true
 
 [tool.ruff]
 line-length = 100

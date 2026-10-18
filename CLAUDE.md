@@ -15,8 +15,10 @@ the engine's API, so nothing here may depend on them.
 
 ## Current status
 
-The repository structure and docs exist. **No engine code has been written yet.** The next
-milestone is M0 (see the roadmap). Do not start a milestone unless the user asks.
+M0 is in progress. The data and tooling part is done: `resolve.data` (card data loader and
+decklist parser), the card registry (`resolve.cards.registry`), `tools/fetch_scryfall.py`,
+`tools/coverage.py` and CI. **The engine core has not been started.** Do not start a milestone
+(or the rest of M0) unless the user asks.
 
 ## Non-negotiable rules
 
@@ -157,6 +159,8 @@ uv run pyright             # type check
 
 - Work in small, milestone-scoped branches and PRs. Tick items off in `docs/roadmap.md` as they land.
 - Tests live under `tests/rules/` (named by CR section, for example `test_117_priority.py`),
-  `tests/cards/`, `tests/interactions/` and `tests/fuzz/`.
+  `tests/cards/`, `tests/interactions/` and `tests/fuzz/`. Infrastructure has its own folders:
+  `tests/data/` (card data and decklists), `tests/registry/` and `tests/tooling/` (the `tools/`
+  scripts). Tests never need the real Scryfall snapshot; they use `tests/scryfall_fixtures.py`.
 - When a design decision changes (with the user's OK), update `docs/design.md` in the same PR.
 - Prefer clear, boring code over clever code. This engine will be read far more than written.

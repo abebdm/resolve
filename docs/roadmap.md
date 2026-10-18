@@ -3,7 +3,7 @@
 Milestones are worked in order. Each milestone ends with every listed item done, tests passing,
 and `pytest`, `ruff` and `pyright` clean in CI. Tick items off in the same PR that completes them.
 
-**Current milestone: M0 (not started).**
+**Current milestone: M0 (in progress).**
 
 ---
 
@@ -54,12 +54,12 @@ the coverage audit in M0.
 
 ## M0 — Skeleton
 
-- [ ] Tooling: `pyproject.toml` finalized, `uv`, `ruff`, `pyright`, `pytest`; GitHub Actions CI
+- [x] Tooling: `pyproject.toml` finalized, `uv`, `ruff`, `pyright`, `pytest`; GitHub Actions CI
   workflow.
-- [ ] `tools/fetch_scryfall.py`: download the Oracle-cards and rulings bulk data into `data/`, and
+- [x] `tools/fetch_scryfall.py`: download the Oracle-cards and rulings bulk data into `data/`, and
   record the snapshot date in `docs/rules/README.md`.
-- [ ] Card data loader (`resolve.data`) and decklist parser (the `decks/` format).
-- [ ] Card registry, plus `tools/coverage.py`: report implemented and missing cards per deck.
+- [x] Card data loader (`resolve.data`) and decklist parser (the `decks/` format).
+- [x] Card registry, plus `tools/coverage.py`: report implemented and missing cards per deck.
 - [ ] **Coverage audit:** run the coverage tool on both target decks, then update the "Mechanics"
   list above from the actual Oracle text.
 - [ ] Core state types:

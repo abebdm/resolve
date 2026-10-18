@@ -13,7 +13,8 @@ be built later on top of its API.
 - Target decks: [`decks/`](decks/)
 - Guide for Claude Code: [`CLAUDE.md`](CLAUDE.md)
 
-**Status:** repository structure and design docs only; no engine code yet.
+**Status:** M0 in progress: card data loading, decklists, the card registry and coverage
+tooling exist; the engine core is not written yet.
 
 Resolve is unofficial Fan Content permitted under the Wizards of the Coast Fan Content Policy. It
 is not approved or endorsed by Wizards. Portions of the materials used are property of Wizards of
