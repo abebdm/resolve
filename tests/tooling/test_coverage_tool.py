@@ -178,8 +178,19 @@ def test_redirected_report_with_oracle_text_is_written_as_utf8(tmp_path: Path) -
         check=False,
     )
     assert completed.returncode == 0, completed.stderr.decode("utf-8", "replace")
-    report = completed.stdout.decode("utf-8")
+    report = completed.stdout.decode("utf-8").replace("\r\n", "\n")
     assert (
-        "Legendary Planeswalker \u2014 Test\n+1: Draw a card.\n\u22123: Exile target creature.\n"
-        in (report.replace("\r\n", "\n"))
+        "  1 Test Walker  [Mainboard]\n"
+        "      Test Walker {1}\n"
+        "      Legendary Planeswalker \u2014 Test\n"
+        "      +1: Draw a card.\n"
+        "      \u22123: Exile target creature.\n"
+        "      Loyalty 4\n"
+    ) in report
+    assert report.endswith(
+        "  9 Forest  [Mainboard]\n"
+        "      Forest\n"
+        "      Basic Land \u2014 Forest\n"
+        "      ({T}: Add {G}.)\n"
+        "\n"
     )

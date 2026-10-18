@@ -284,7 +284,16 @@ must work there first. CI runs the full suite on Windows and Linux with Python 3
   separators.
 - Open text files with an explicit `encoding="utf-8"`. When reading, don't assume `\n` line
   endings: git on Windows may check files out with `\r\n`. When writing data that must be
-  byte-identical, open in binary mode, or pass `newline="\n"`.
+  byte-identical, open in binary mode, or pass `newline="\n"`. Two checks enforce the encoding
+  rule: `tests/tooling/test_portability_lint.py` (on every run), and in CI
+  `PYTHONWARNDEFAULTENCODING=1`, which makes any use of the locale encoding fail a test. To run
+  the second locally in PowerShell: `$env:PYTHONWARNDEFAULTENCODING = "1"; uv run pytest`.
+- Files people make on Windows arrive with a byte order mark or as UTF-16 (Notepad, PowerShell
+  5.1). Readers of user files accept those, as `load_decklist` does, and refuse other encodings
+  loudly.
+- A tool's output may be redirected, and redirected output on Windows is cp1252. Every tool's
+  `if __name__ == "__main__":` block reconfigures `sys.stdout` to UTF-8 first (copy an existing
+  tool); `tests/tooling/test_tool_output_encoding.py` checks each tool.
 - No POSIX-only features: `fcntl`, `os.fork`, Unix signals, `/tmp`, shell pipelines,
   executable bits or shebang-only scripts. Run subprocesses with `sys.executable` and a list
   of arguments, never a shell string.

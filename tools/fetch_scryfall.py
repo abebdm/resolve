@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import io
 import json
 import os
 import re
@@ -179,7 +180,7 @@ def install_snapshot(data_dir: Path, staged: dict[str, tuple[Path, str, str]]) -
     for bulk_type, (path, _, _) in staged.items():
         os.replace(path, data_dir / FILE_NAMES[bulk_type])
     manifest = json.dumps(snapshot.to_json(), indent=2) + "\n"
-    (data_dir / SNAPSHOT_FILE).write_text(manifest, encoding="utf-8")
+    (data_dir / SNAPSHOT_FILE).write_text(manifest, encoding="utf-8", newline="\n")
     return snapshot
 
 
@@ -320,9 +321,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         else:
             snapshot = fetch_snapshot(data_dir)
         readme: Path = args.rules_readme
+        # "\n" on every platform: the README is tracked by git (CLAUDE.md, Platform).
         readme.write_text(
             update_rules_readme(readme.read_text(encoding="utf-8"), snapshot, date.today()),
             encoding="utf-8",
+            newline="\n",
         )
     except (FetchError, OSError) as error:
         print(f"error: {error}", file=sys.stderr)
@@ -333,4 +336,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
+    # Redirected output would use the locale's code page, cp1252 on Windows, which can't encode
+    # every card or path name; write UTF-8 everywhere (CLAUDE.md, Platform).
+    stdout = sys.stdout
+    if isinstance(stdout, io.TextIOWrapper):
+        stdout.reconfigure(encoding="utf-8")
     sys.exit(main())
