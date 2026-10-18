@@ -186,7 +186,19 @@ cards are not included.
 - [ ] Timing rules for sorceries, instants and permanents; flash.
 - [ ] Resolution (608), including checking targets again on resolution (608.2b) and partial
   fizzling.
-- [ ] Mana payment details: generic, colored, hybrid, X costs, cost increases and reductions.
+- [ ] Mana payment details: generic, colored, hybrid, X costs, cost increases and reductions,
+  including reductions that depend on a count or on the spell's targets (Ghalta, Hamza, Savage
+  Stomp).
+- [ ] Alternative and additional costs (118.9, 601.2b, 601.2f): casting without paying the mana
+  cost, overload (702.96), optional additional costs (offspring, 702.175), "reveal a card or pay
+  {1}" (Thunderherd Migration).
+- [ ] Casting from zones other than the hand: the graveyard (Quilled Greatwurm), exile and the top
+  of the library (Etali, Descendants' Path, discover 701.57, hideaway 702.75); flash granted by an
+  effect (Progenitor's Icon); casting prohibitions (601.3, Kutzil); "can't be countered".
+- [ ] Mana abilities beyond basic lands (605): "any color in your commander's color identity",
+  "any color a land could produce", variable amounts, activation conditions, triggered mana
+  abilities (605.1b, Regal Behemoth), and restricted mana with "when that mana is spent" triggers
+  (Ixalli's Lorekeeper, Path of Ancestry).
 - [ ] The first primitives: damage, destroy, exile, draw, life gain and loss, counter target spell.
 - [ ] Cards: about 10 simple spells and creatures drawn from the target decks.
 
@@ -194,7 +206,10 @@ cards are not included.
 
 - [ ] Beginning of combat, declare attackers, declare blockers, combat damage, end of combat
   (506–511).
-- [ ] Attack and block requirements and restrictions (508.1d, 509.1c).
+- [ ] Attack and block requirements and restrictions (508.1d, 509.1c), including "can't attack or
+  block unless" (Topiary Stomper), "can't be blocked" (Rogue's Passage) and power-based blocking
+  restrictions (Champion of Lambholt).
+- [ ] Creatures put onto the battlefield tapped and attacking (508.4, Ghalta and Mavren).
 - [ ] First strike and double strike damage steps; trample; deathtouch; lifelink; flying and reach;
   vigilance; menace.
 - [ ] Multiplayer attacks: choosing which player or planeswalker each creature attacks.
@@ -208,7 +223,15 @@ cards are not included.
   - looking back in time (603.10)
   - delayed triggers
   - "may" choices
+- [ ] Trigger variants: reflexive triggers (603.12), triggering additional times (603.2d, Wayta),
+  "do this only once each turn" (Pantlaza), batched "one or more" triggers, and spell-cast and
+  ability-activation triggers.
 - [ ] Damage-driven triggers (enrage), fight.
+- [ ] Counters (122) on permanents and on players (energy): putting and removing them, counters as
+  costs, doubling (701.10e) and proliferate (701.34).
+- [ ] Keyword abilities built on activated and triggered abilities: saddle (702.171) and "attacks
+  while saddled", cycling and landcycling (702.29), outlast (702.107), level up (702.87), adapt
+  (701.46), evolve (702.100), ward (702.21).
 - [ ] Equipment and auras: attaching, and state-based actions for illegal attachments.
 
 ## M5 — Continuous effects and layers
@@ -217,14 +240,20 @@ cards are not included.
   (613.8).
 - [ ] Static abilities; counters as power/toughness modifiers; effects that grant abilities.
 - [ ] Characteristic-defining abilities, Gods and devotion, type-changing effects.
+- [ ] Copy effects (707) in layer 1, including copies with exceptions (707.9, Sunfrill Imitator)
+  and token copies (offspring, myriad).
 - [ ] Interaction tests for classic layer puzzles.
 
 ## M6 — Replacement and prevention effects
 
 - [ ] Replacement effects (614), including entering-the-battlefield modifications (614.1c–d, 614.12).
-- [ ] Prevention effects (615).
+- [ ] Prevention effects (615), including Undergrowth Champion (prevent, then remove a counter) and
+  Temple Altisaur (prevent all but 1).
+- [ ] Entering-the-battlefield choices and modifications from other permanents: riot (702.136),
+  "creatures your opponents control enter tapped" (Kinjalli's Sunwing).
 - [ ] Multiple replacement effects with the affected player choosing order (616), including
-  counter-placement stacking (for example doubling plus "one additional").
+  counter-placement stacking (for example doubling plus "one additional"), on players as well as
+  permanents (Lae'zel).
 - [ ] Regeneration (701.19); mana-doubling replacements.
 
 ## M7 — Multiplayer and Commander
@@ -232,6 +261,7 @@ cards are not included.
 - [ ] Games with any number of players: APNAP order everywhere; turn order; attacking multiple
   players.
 - [ ] Leaving the game (800.4) and all its consequences.
+- [ ] Myriad (702.116): token copies attacking each other opponent.
 - [ ] The command zone, casting commanders, and commander tax.
 - [ ] Commander damage (903.10a) and the zone-change rules (903.9a/b).
 - [ ] Color identity and deck validation; Commander mulligan rules.

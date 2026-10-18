@@ -21,6 +21,12 @@ The tool validates both files before replacing anything, then records the snapsh
 `docs/rules/README.md`. The card data and the rules are updated together and deliberately, so an
 existing snapshot is only replaced with `--update`.
 
+Scryfall only serves its current bulk files, so a fresh checkout can't download the exact pinned
+snapshot. Fetching on a new machine installs the current one and changes the pinned date in
+`docs/rules/README.md`. That shows up in `git diff`: commit it if you mean to move the pin,
+otherwise `git checkout docs/rules/README.md`. Oracle text rarely changes between snapshots, so
+this is accepted rather than worked around.
+
 **Without access to Scryfall's API** (for example from a restricted network), download the files
 by hand and import them:
 
