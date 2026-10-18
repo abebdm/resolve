@@ -274,6 +274,27 @@ that, and a fresh session must be able to resume it.
 - **Before opening the PR,** move anything lasting from `PROGRESS.md` into the proper docs
   (decisions.md, howto.md, and so on), then delete `PROGRESS.md`. It must never reach `main`.
 
+## Platform: Windows first
+
+The players run Windows 10/11 with a current Python (3.14 at the time of writing). Everything
+must work there first. CI runs the full suite on Windows and Linux with Python 3.12, 3.13 and
+3.14, and a PR isn't done until every combination passes.
+
+- Use `pathlib` for paths. Never build paths with `/` string concatenation, and never assume
+  separators.
+- Open text files with an explicit `encoding="utf-8"`. When reading, don't assume `\n` line
+  endings: git on Windows may check files out with `\r\n`. When writing data that must be
+  byte-identical, open in binary mode, or pass `newline="\n"`.
+- No POSIX-only features: `fcntl`, `os.fork`, Unix signals, `/tmp`, shell pipelines,
+  executable bits or shebang-only scripts. Run subprocesses with `sys.executable` and a list
+  of arguments, never a shell string.
+- File names must be valid on Windows and must not differ only in case. Windows file systems
+  are case-insensitive, and names can't contain characters such as `: * ? " < > |`.
+- **Commands in docs and PR descriptions must work in Windows PowerShell.** If a command
+  differs, give the PowerShell form; Unix tools like `tail`, `grep` and `cat` don't exist there.
+- **A test may never be skipped or loosened on Windows to get green.** That is weakening a test
+  (see "Never weaken tests"). Fix the code instead.
+
 ## Working style
 
 - Work in small, milestone-scoped branches and PRs. Tick items off in `docs/roadmap.md` as they land.

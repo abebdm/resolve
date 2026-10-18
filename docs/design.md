@@ -17,6 +17,8 @@ as the code that depends on them.
   3. Regular 1v1
 - Make every intermediate state inspectable, so a UI can show the stack, pending triggers and
   choices at every point.
+- Run on ordinary Windows PCs first and foremost: the players use Windows 10/11 with a current
+  Python. Linux and macOS should also work, but Windows is the platform that must never break.
 - Be a foundation for three future consumers, without engine changes:
   - a desktop UI
   - networked play between friends (no paid servers)
