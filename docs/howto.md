@@ -116,8 +116,9 @@ Until the scenario builder exists, engine-loop tests drive the loop with small t
 1. In `src/resolve/events/`, write a `@dataclass(frozen=True, kw_only=True)` subclass of `Event`.
    Its fields are scalars, enums, tuples and IDs only, never `GameObject`s or `Player`s
    (`tests/state/test_immutability.py` checks every event class).
-2. Implement `apply(state)`, the change itself. Override `visible_to(state)` if some players may
-   not see it in the log (it is judged before the event is applied).
+2. Implement `apply(state)`, the change itself. A zone change goes through
+   `resolve.state.game.move_object` (400.7, 400.3). Override `visible_to(state)` if some players
+   may not see it in the log (it is judged before the event is applied).
 3. Propose it from a task with `Push((ApplyEvents((event, ...)), ...))`, passing
    `rules=(...)` with the causing rule first. Never call `apply` directly from engine code.
 4. Test: the change, what it must not change, rejected inputs, and the log entry with its

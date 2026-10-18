@@ -32,8 +32,9 @@ the engine's API, so nothing here may depend on them.
     public API (`resolve.tasks`, `resolve.engine`: `new_game`, `pending_decision`, `view_for`,
     `submit`, `build_deck`), decision kinds, answer spaces and validation (`resolve.decisions`),
     events, the event pipeline (with stubbed replacement and trigger stages) and the event log
-    (`resolve.events`), and `NotImplementedRule` (`resolve.errors`). A game runs 103.1 to 103.4
-    (choosing the starting player, shuffling) and stops at `NotImplementedRule("103.5: ...")`.
+    (`resolve.events`), `NotImplementedRule` (`resolve.errors`), and zone moves (`move_object`,
+    400.7). A game runs 103.1 to 103.4 (choosing the starting player, Commander's 103.2c,
+    shuffling) and stops at `NotImplementedRule("103.5: ...")`.
 - **Next:** the rest of M0: the scenario builder (`tests/scenario.py`), agents, `tools/play_cli.py`
   and the fuzz harness. No card primitives exist yet.
 
