@@ -19,6 +19,50 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-18: Windows first: the CI matrix and the encoding checks
+- **Decision:** CI runs ruff, pyright and pytest on `windows-latest` and `ubuntu-latest` with
+  Python 3.12, 3.13 and 3.14 (supersedes the CI part of "Tooling: uv lockfile, pyright from a
+  wheel, CI on two Pythons"). Every text file is opened with an explicit encoding, UTF-8 unless
+  there is a reason. Two checks enforce it: `tests/tooling/test_portability_lint.py` scans
+  `src`, `tools` and `tests` for text I/O without an encoding (also shell-string subprocesses,
+  POSIX-only modules and calls, and `/tmp`), and CI sets `PYTHONWARNDEFAULTENCODING=1` while
+  `pyproject.toml` turns `EncodingWarning` into a test failure. There is no `.gitattributes`:
+  code must read `\r\n` and `\n` alike, and tests feed it `\r\n` explicitly.
+- **Why:** Python 3.12 to 3.14 on Windows default to the ANSI code page (cp1252) for files and
+  redirected output; UTF-8 becomes the default only in 3.15 (PEP 686). PR #11's Windows jobs
+  failed exactly this way: a test wrote the rules README with `write_text()` and no encoding
+  (`©` became byte 0xa9) and the tool read it as UTF-8. The scan runs on every platform and
+  every local `uv run pytest`; the warning catches calls a scan can't see. Running in UTF-8 mode
+  (`PYTHONUTF8=1`) was rejected: it would hide the bug from CI while players, who don't run in
+  that mode, still hit it. Ruff's `PLW1514` was rejected: it is preview-only and found none of
+  the 15 offending calls (it can't tell that `readme` is a `Path`).
+- **Where:** `.github/workflows/ci.yml`, `pyproject.toml`, `tests/tooling/test_portability_lint.py`.
+
+### 2026-10-18: Tools write UTF-8 output and LF files
+- **Decision:** each tool's `__main__` block reconfigures `sys.stdout` to UTF-8 before calling
+  `main()`. `tools/fetch_scryfall.py` writes the rules README and `snapshot.json` with
+  `newline="\n"`. Standard input and standard error are left alone.
+- **Why:** output redirected to a file or pipe on Windows is encoded as cp1252, which has no
+  `−` (U+2212, the minus sign of planeswalker abilities) and nothing outside Western European
+  scripts; `coverage.py --oracle > report.txt` crashed halfway. A console already gets UTF-8
+  (PEP 528), so this changes only redirected output, and matches what Python 3.15 will do.
+  `errors="replace"` was rejected because it silently changes the text. The README is tracked
+  by git, so the tool writes the same bytes on every platform. Standard error already escapes
+  what it can't encode (`backslashreplace`), and the terminal player's input is ASCII.
+- **Where:** `tools/*.py`, `tests/tooling/test_tool_output_encoding.py` (probes every tool),
+  `tests/tooling/test_coverage_tool.py`, `tests/tooling/test_fetch_scryfall_tool.py`.
+
+### 2026-10-18: Decklist and source file encodings
+- **Decision:** `load_decklist` reads UTF-8, with or without a byte order mark, and UTF-16 with
+  a byte order mark. Anything else is a `DecklistError` naming the file. `tools/gaps.py` parses
+  source files from their bytes, so it decodes them as Python does (BOM, PEP 263 declarations).
+- **Why:** these are what Windows editors and shells write: Notepad and PowerShell 5.1's
+  `Out-File -Encoding utf8` add a UTF-8 byte order mark, and PowerShell 5.1's `>` writes UTF-16.
+  Before, a BOM made the first line unreadable and UTF-16 crashed with a `UnicodeDecodeError`.
+  A file saved as "ANSI" is refused rather than guessed at: the same bytes are different card
+  names in different code pages (non-negotiable rule 1: accuracy over convenience).
+- **Where:** `src/resolve/data/decklist.py`, `tools/gaps.py`.
+
 ### 2026-10-18: The fuzz harness
 - **Decision:** the harness is `tools/fuzz.py` (`fuzz_run`, `fuzz_game`, `state_problems`,
   `invalid_answers`), tested and used by `tests/fuzz/test_fuzz.py` (imported as `tools.fuzz`,
@@ -409,6 +453,8 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 - **Where:** `src/resolve/data/cards.py`, `tools/fetch_scryfall.py`.
 
 ### 2026-10-18: Tooling: uv lockfile, pyright from a wheel, CI on two Pythons
+**Superseded by 2026-10-18 (Windows first: the CI matrix and the encoding checks)** for the CI
+matrix; the lockfile and pyright parts stand.
 - **Decision:** `uv.lock` is committed and CI runs `uv sync --locked`, so a stale lockfile fails
   CI. Pyright is installed as `pyright[nodejs]`, which ships Node as a wheel. CI runs
   `ruff check`, `ruff format --check`, `pyright` (strict) and `pytest` on Python 3.12 (the

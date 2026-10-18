@@ -433,6 +433,7 @@ def test_replays_dont_depend_on_the_hash_seed() -> None:
             env=env,
             capture_output=True,
             text=True,
+            encoding="utf-8",
             check=True,
         )
         digests.add(completed.stdout.strip())

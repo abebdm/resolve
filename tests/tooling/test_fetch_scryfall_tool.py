@@ -309,7 +309,9 @@ def test_unexpected_rules_readme_is_refused(tmp_path: Path, text: str, message: 
 
 def readme_copy(tmp_path: Path) -> Path:
     readme = tmp_path / "README.md"
-    readme.write_text((REPO_ROOT / "docs" / "rules" / "README.md").read_text(encoding="utf-8"))
+    readme.write_text(
+        (REPO_ROOT / "docs" / "rules" / "README.md").read_text(encoding="utf-8"), encoding="utf-8"
+    )
     return readme
 
 
@@ -320,7 +322,26 @@ def test_cli_import_installs_and_records(tmp_path: Path) -> None:
     args = ["--data-dir", str(data_dir), "--rules-readme", str(readme)]
     assert fetch_scryfall.main([*args, "--import-files", str(oracle), str(rulings)]) == 0
     assert (data_dir / SNAPSHOT_FILE).exists()
-    assert "Snapshot 2026-10-18" in readme.read_text()
+    assert "Snapshot 2026-10-18" in readme.read_text(encoding="utf-8")
+
+
+def test_cli_writes_lf_line_endings_on_every_platform(tmp_path: Path) -> None:
+    """The rules README is tracked by git, so the tool writes the same bytes everywhere: "\n"
+    line endings, even on Windows, where text mode would write "\r\n". A README checked out
+    with "\r\n" (git's autocrlf on Windows) is read correctly. The manifest is LF too."""
+    oracle, rulings = write_downloads(tmp_path / "downloads")
+    original = (REPO_ROOT / "docs" / "rules" / "README.md").read_text(encoding="utf-8")
+    readme = tmp_path / "README.md"
+    readme.write_bytes(original.replace("\n", "\r\n").encode("utf-8"))
+    data_dir = tmp_path / "data"
+    args = ["--data-dir", str(data_dir), "--rules-readme", str(readme)]
+    assert fetch_scryfall.main([*args, "--import-files", str(oracle), str(rulings)]) == 0
+
+    written = readme.read_bytes()
+    assert b"\r" not in written
+    assert written.count(b"\n") == original.count("\n") + 1, "one changelog row added"
+    assert b"Snapshot 2026-10-18" in written
+    assert b"\r" not in (data_dir / SNAPSHOT_FILE).read_bytes()
 
 
 def test_cli_refuses_to_replace_a_pinned_snapshot_without_update(
@@ -330,17 +351,17 @@ def test_cli_refuses_to_replace_a_pinned_snapshot_without_update(
     data_dir = tmp_path / "data"
     fx.write_snapshot(data_dir, cards=[fx.FOREST])
     readme = readme_copy(tmp_path)
-    before = (data_dir / SNAPSHOT_FILE).read_text()
+    before = (data_dir / SNAPSHOT_FILE).read_text(encoding="utf-8")
     args = ["--data-dir", str(data_dir), "--rules-readme", str(readme)]
 
     assert fetch_scryfall.main([*args, "--import-files", str(oracle), str(rulings)]) == 1
     assert "--update" in capsys.readouterr().err
-    assert (data_dir / SNAPSHOT_FILE).read_text() == before
+    assert (data_dir / SNAPSHOT_FILE).read_text(encoding="utf-8") == before
 
     assert (
         fetch_scryfall.main([*args, "--update", "--import-files", str(oracle), str(rulings)]) == 0
     )
-    assert (data_dir / SNAPSHOT_FILE).read_text() != before
+    assert (data_dir / SNAPSHOT_FILE).read_text(encoding="utf-8") != before
 
 
 def test_cli_reports_errors_without_traceback(

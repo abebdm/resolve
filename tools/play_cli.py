@@ -23,6 +23,7 @@ at 103.5); 4 a person quit.
 from __future__ import annotations
 
 import argparse
+import io
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -149,4 +150,9 @@ def main(
 
 
 if __name__ == "__main__":
+    # Redirected output would use the locale's code page, cp1252 on Windows, which can't encode
+    # every card or path name; write UTF-8 everywhere (CLAUDE.md, Platform).
+    stdout = sys.stdout
+    if isinstance(stdout, io.TextIOWrapper):
+        stdout.reconfigure(encoding="utf-8")
     sys.exit(main())

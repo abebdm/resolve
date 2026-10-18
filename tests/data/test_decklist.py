@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 from pathlib import Path
 
 import pytest
@@ -135,6 +136,42 @@ def test_load_decklist_names_deck_after_file(tmp_path: Path) -> None:
     path = tmp_path / "my_deck.txt"
     path.write_text("Mainboard\n1 Forest\n", encoding="utf-8")
     assert load_decklist(path).name == "my_deck"
+
+
+WINDOWS_DECK = "Commander\r\n1 Lim-D\u00fbl the Necromancer\r\n\r\nMainboard\r\n8 Forest\r\n"
+
+
+@pytest.mark.parametrize(
+    "encoded",
+    [
+        WINDOWS_DECK.encode("utf-8"),
+        codecs.BOM_UTF8 + WINDOWS_DECK.encode("utf-8"),
+        codecs.BOM_UTF16_LE + WINDOWS_DECK.encode("utf-16-le"),
+        codecs.BOM_UTF16_BE + WINDOWS_DECK.encode("utf-16-be"),
+    ],
+    ids=["utf-8", "utf-8 with BOM", "utf-16-le with BOM", "utf-16-be with BOM"],
+)
+def test_load_decklist_reads_the_encodings_windows_tools_write(
+    tmp_path: Path, encoded: bytes
+) -> None:
+    """Notepad and PowerShell 5.1 (``Out-File -Encoding utf8``) save UTF-8 with a byte order
+    mark, and PowerShell 5.1's ``>`` saves UTF-16 with one. The mark isn't part of the text, so
+    the first line is still a section header and the card name keeps its accent."""
+    path = tmp_path / "windows_deck.txt"
+    path.write_bytes(encoded)
+    deck = load_decklist(path)
+    assert deck.commander == (DeckEntry(1, "Lim-D\u00fbl the Necromancer"),)
+    assert deck.mainboard == (DeckEntry(8, "Forest"),)
+
+
+def test_load_decklist_refuses_text_that_is_not_utf8(tmp_path: Path) -> None:
+    """A deck saved as "ANSI" (cp1252) isn't guessed at: the same bytes mean different names in
+    different code pages. The error is a DecklistError that names the file, not a traceback."""
+    path = tmp_path / "ansi_deck.txt"
+    path.write_bytes("Mainboard\r\n1 Lim-D\u00fbl the Necromancer\r\n".encode("cp1252"))
+    with pytest.raises(DecklistError, match=r"ansi_deck\.txt.*UTF-8") as caught:
+        load_decklist(path)
+    assert caught.value.source == "ansi_deck"
 
 
 @pytest.mark.parametrize(

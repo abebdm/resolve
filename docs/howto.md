@@ -162,6 +162,23 @@ own view. Type option numbers from 0 (`help` at the prompt lists the syntax; `vi
 `quit` also work). Without `--deck` the decks are empty. Every M0 game stops at 103.5 (exit
 status 3).
 
+### Check that a change works on Windows
+
+CI runs every check on Windows and Linux with Python 3.12, 3.13 and 3.14; a PR isn't done until
+all six pass. Before pushing:
+
+1. Run the suite with the encoding warning on, as CI does. PowerShell:
+   `$env:PYTHONWARNDEFAULTENCODING = "1"; uv run pytest`. Linux or macOS:
+   `PYTHONWARNDEFAULTENCODING=1 uv run pytest`.
+2. On Linux, `LC_ALL=C PYTHONCOERCECLOCALE=0 PYTHONUTF8=0 uv run pytest` runs with an ASCII
+   locale, which fails wherever code relies on the locale encoding, much as cp1252 does on
+   Windows.
+3. A test of output a Windows user may redirect sets `PYTHONIOENCODING=cp1252` in a subprocess
+   (see `tests/tooling/test_tool_output_encoding.py`). A test of a file a Windows user may make
+   writes the bytes itself: `\r\n`, a byte order mark, UTF-16 (see `tests/data/test_decklist.py`).
+4. A new tool in `tools/` copies the `__main__` block of an existing one (UTF-8 standard output);
+   the output-encoding test picks it up automatically.
+
 ### Add an event type
 
 1. In `src/resolve/events/`, write a `@dataclass(frozen=True, kw_only=True)` subclass of `Event`.

@@ -315,18 +315,18 @@ def test_file_listed_in_manifest_but_missing_is_refused(tmp_path: Path) -> None:
 
 def test_unsupported_manifest_format_is_refused(tmp_path: Path) -> None:
     fx.write_snapshot(tmp_path)
-    manifest = json.loads((tmp_path / SNAPSHOT_FILE).read_text())
+    manifest = json.loads((tmp_path / SNAPSHOT_FILE).read_text(encoding="utf-8"))
     manifest["format"] = 99
-    (tmp_path / SNAPSHOT_FILE).write_text(json.dumps(manifest))
+    (tmp_path / SNAPSHOT_FILE).write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(CardDataError, match="unsupported snapshot format"):
         load_snapshot_info(tmp_path)
 
 
 def test_manifest_with_bad_size_is_refused(tmp_path: Path) -> None:
     fx.write_snapshot(tmp_path)
-    manifest = json.loads((tmp_path / SNAPSHOT_FILE).read_text())
+    manifest = json.loads((tmp_path / SNAPSHOT_FILE).read_text(encoding="utf-8"))
     manifest["files"]["rulings"]["size"] = "12"
-    (tmp_path / SNAPSHOT_FILE).write_text(json.dumps(manifest))
+    (tmp_path / SNAPSHOT_FILE).write_text(json.dumps(manifest), encoding="utf-8")
     with pytest.raises(CardDataError, match="size"):
         load_snapshot_info(tmp_path)
 
@@ -334,9 +334,9 @@ def test_manifest_with_bad_size_is_refused(tmp_path: Path) -> None:
 def test_snapshot_date_is_utc(tmp_path: Path) -> None:
     """A file published late on the 18th in UTC-5 belongs to the 19th in UTC."""
     fx.write_snapshot(tmp_path)
-    manifest = json.loads((tmp_path / SNAPSHOT_FILE).read_text())
+    manifest = json.loads((tmp_path / SNAPSHOT_FILE).read_text(encoding="utf-8"))
     manifest["files"]["oracle_cards"]["updated_at"] = "2026-10-18T22:30:00-05:00"
-    (tmp_path / SNAPSHOT_FILE).write_text(json.dumps(manifest))
+    (tmp_path / SNAPSHOT_FILE).write_text(json.dumps(manifest), encoding="utf-8")
     snapshot = load_snapshot_info(tmp_path)
     assert snapshot.date.isoformat() == "2026-10-19"
     assert snapshot.describe() == (
@@ -352,5 +352,5 @@ def test_snapshot_description_with_matching_dates(tmp_path: Path) -> None:
 def test_snapshot_info_round_trips_through_json(tmp_path: Path) -> None:
     fx.write_snapshot(tmp_path)
     snapshot = load_snapshot_info(tmp_path)
-    (tmp_path / SNAPSHOT_FILE).write_text(json.dumps(snapshot.to_json()))
+    (tmp_path / SNAPSHOT_FILE).write_text(json.dumps(snapshot.to_json()), encoding="utf-8")
     assert load_snapshot_info(tmp_path) == snapshot

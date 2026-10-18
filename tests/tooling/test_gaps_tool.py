@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import codecs
 from pathlib import Path
 
 import pytest
@@ -91,3 +92,20 @@ def test_the_engine_gaps_are_all_listable_and_include_103_5(
     out = capsys.readouterr().out
     assert "103.5     opening hands and mulligans" in out
     assert "src/resolve/engine/start.py:" in out
+
+
+def test_reads_sources_the_way_python_does(tmp_path: Path) -> None:
+    """Some Windows editors save Python files as UTF-8 with a byte order mark, and Python runs
+    them; so does the scan. A ``coding`` declaration (PEP 263) is honored too."""
+    raise_gap = 'raise NotImplementedRule("104.3a: conceding — any time")\n'
+    (tmp_path / "bom.py").write_bytes(codecs.BOM_UTF8 + raise_gap.encode("utf-8"))
+    (tmp_path / "latin.py").write_bytes(
+        b"# -*- coding: latin-1 -*-\n"
+        + 'raise NotImplementedRule("103.5: Lûm")\n'.encode("latin-1")
+    )
+    gaps, unlistable = find_gaps(tmp_path)
+    assert unlistable == []
+    assert [(gap.rule, gap.what, gap.path.name) for gap in gaps] == [
+        ("103.5", "Lûm", "latin.py"),
+        ("104.3a", "conceding — any time", "bom.py"),
+    ]
