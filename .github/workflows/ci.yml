@@ -9,6 +9,19 @@ permissions:
   contents: read
 
 jobs:
+  no-progress-note:
+    # CLAUDE.md, "Work in checkpoints": PROGRESS.md is a working note and must never reach main.
+    name: No PROGRESS.md
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail if PROGRESS.md exists
+        run: |
+          if [ -e PROGRESS.md ]; then
+            echo "::error file=PROGRESS.md::Move anything lasting into the docs and delete PROGRESS.md before merging (CLAUDE.md, Work in checkpoints)."
+            exit 1
+          fi
+
   check:
     name: pytest, ruff, pyright (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
