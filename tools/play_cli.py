@@ -12,8 +12,8 @@ if a single seat is human (or, when every seat is random, player 0's). A ``--ran
 plays as ``RandomAgent(agent_seed + i)``. Answers are typed as described in
 ``resolve.agents.text`` (``help`` at the prompt). With ``--deck``, one decklist per player, the
 cards come from the snapshot in ``data/`` and every card must be implemented; decks are refused,
-never approximated. Without ``--deck`` every player gets an empty deck, since no card is
-implemented yet: every opening draw fails, so every player loses at the first upkeep (121.4,
+never approximated. Without ``--deck`` every player gets an empty deck (tools never invent
+cards): every opening draw fails, so every player loses at the first upkeep (121.4,
 704.5b) and the game is a draw (104.4a).
 
 Exit status: 0 the game ended; 1 the game couldn't start (bad deck, missing card data);

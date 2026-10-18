@@ -224,7 +224,7 @@ independent of the kind:
 
 Every outcome has exactly one valid answer (canonical forms), which helps AI search. Options are
 typed (`PlayerOption`, `ObjectOption`, `NamedOption`, and the priority actions `PassOption`,
-`PlayLandOption`, `CastSpellOption`) so a UI can tell them apart. A priority request lists every
+`PlayLandOption`, `ActivateAbilityOption`, `CastSpellOption`) so a UI can tell them apart. A priority request lists every
 legal action, including ones the engine can't take yet, which raise `NotImplementedRule` when
 chosen. A request contains only
 what its deciding player may know; one decision is pending at a time, which matches the
