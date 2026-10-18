@@ -40,8 +40,8 @@ from resolve.values import Immutable
 class ObjectView(Immutable):
     """An object as one player sees it; ``name`` is ``None`` when its identity is hidden.
 
-    ``tapped`` is a permanent's status (110.5), which everyone sees; ``False`` off the
-    battlefield.
+    ``tapped`` is a permanent's status (110.5) and ``damage`` the damage marked on it (120.6),
+    which everyone sees; ``False`` and 0 off the battlefield.
     """
 
     id: ObjectId
@@ -49,6 +49,7 @@ class ObjectView(Immutable):
     owner: PlayerId
     controller: PlayerId | None
     tapped: bool = False
+    damage: int = 0
 
 
 @dataclass(frozen=True)
@@ -161,4 +162,4 @@ def _object_view(state: GameState, obj: GameObject, viewer: PlayerId) -> ObjectV
         if obj.card is None:
             raise NotImplementedRule("111.1: viewing objects not represented by a card")
         name = state.cards[obj.card].data.name
-    return ObjectView(obj.id, name, obj.owner, obj.controller, obj.tapped)
+    return ObjectView(obj.id, name, obj.owner, obj.controller, obj.tapped, obj.damage)

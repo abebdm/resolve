@@ -170,15 +170,15 @@ cards are not included.
 - [x] Opening hands and mulligans (103.5), including the free first mulligan in multiplayer
   (103.5c), and the redaction of drawn cards in other players' views and logs (design.md §9).
 - [x] All phases and steps (500–514), with priority passed in each step where it applies.
-- [ ] Untap, draw (including the first-turn draw skip in two-player games), and cleanup
-  (discarding to hand size, removing damage, ending "until end of turn" effects). Done: draw,
-  the draw skip, discarding to hand size and 514.3a (M1.2), untapping (M1.3).
+- [x] Untap, draw (including the first-turn draw skip in two-player games), and cleanup
+  (discarding to hand size, removing damage, ending "until end of turn" effects; no "until end
+  of turn" effect can exist yet).
 - [x] Playing lands (305) as a special action; basic lands' mana abilities; mana pools emptying
   between steps.
-- [ ] Basic state-based actions: 0 or less life, drawing from an empty library (done in M1.2),
-  lethal damage and 0 toughness.
+- [x] Basic state-based actions: 0 or less life, drawing from an empty library, lethal damage and
+  0 toughness.
 - [ ] Concession at any time (104.3a), through its own API entry point, `concede` (design.md §3).
-- [ ] Cards: basic lands (done in M1.3) and a few vanilla creatures.
+- [x] Cards: basic lands and a few vanilla creatures.
 - [x] The scenario builder sets the turn, phase, step and priority holder; the fuzz harness's
   allowed gaps move past 103.5.
 

@@ -62,6 +62,8 @@ class GameObject:
       listed here.
     - ``tapped``: its status (110.5). Only permanents have status (110.5d); a new object is
       untapped (110.5b).
+    - ``damage``: damage marked on it (120.3, 120.6); only permanents have any, and a new object
+      has none (400.7).
     """
 
     id: ObjectId
@@ -72,6 +74,7 @@ class GameObject:
     timestamp: int
     known_to: tuple[PlayerId, ...] = ()
     tapped: bool = False
+    damage: int = 0
 
 
 @dataclass(slots=True)
@@ -202,6 +205,22 @@ def players_in_game(state: GameState) -> tuple[PlayerId, ...]:
     A player who lost the game has left it (104.5).
     """
     return tuple(player for player in turn_order(state) if not state.player(player).lost)
+
+
+def apnap_order(state: GameState) -> tuple[PlayerId, ...]:
+    """The players still in the game in APNAP order (101.4): the active player first, then the
+    others in turn order. Before the first turn the starting player counts as active (101.4e).
+    """
+    in_game = players_in_game(state)
+    active = state.starting_player if state.turn is None else state.turn.active_player
+    if active not in in_game:
+        # 800.4j: a turn can continue after its active player left; start from the next player.
+        assert active is not None
+        if not in_game:
+            return ()
+        active = next_in_turn_order(state, active)
+    start = in_game.index(active)
+    return in_game[start:] + in_game[:start]
 
 
 def next_in_turn_order(state: GameState, player: PlayerId) -> PlayerId:

@@ -77,7 +77,8 @@ def _objects(view: PlayerView) -> dict[ObjectId, ObjectView]:
 def describe_object(obj: ObjectView) -> str:
     """``"Llanowar Elves #12"``, ``"Forest #3 (tapped)"``, or ``"hidden card #12"`` when its
     identity is hidden."""
-    return f"{obj.name or 'hidden card'} #{obj.id}" + (" (tapped)" if obj.tapped else "")
+    marks = (" (tapped)" if obj.tapped else "") + (f" ({obj.damage} damage)" if obj.damage else "")
+    return f"{obj.name or 'hidden card'} #{obj.id}" + marks
 
 
 def describe_option(option: Option, view: PlayerView) -> str:

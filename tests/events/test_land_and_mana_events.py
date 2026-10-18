@@ -4,9 +4,17 @@ from __future__ import annotations
 
 import pytest
 
-from resolve.errors import EngineError
+from resolve.effects.characteristics import characteristics
+from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.mana import ManaAdded, ManaPoolEmptied
-from resolve.events.permanents import LandPlayed, PermanentsUntapped, PermanentTapped
+from resolve.events.permanents import (
+    DamageRemoved,
+    LandPlayed,
+    PermanentDestroyed,
+    PermanentsUntapped,
+    PermanentTapped,
+    PutIntoGraveyard,
+)
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.invariants import invariant_violations
 from resolve.state.mana import Mana, ManaType
@@ -98,3 +106,74 @@ def test_invariants_catch_status_off_the_battlefield_and_unknown_mana_sources() 
     state.objects[in_hand].tapped = False
     state.player(P1).mana_pool.append(Mana(ManaType.GREEN, ObjectId(500)))
     assert any("unknown source 500" in p for p in invariant_violations(state))
+
+
+def test_701_8a_destroying_and_704_5f_putting_into_the_graveyard() -> None:
+    scenario = Scenario(2)
+    bears, giant = scenario.battlefield(P1, ["Grizzly Bears", "Hill Giant"], owner=P0)
+    (in_hand,) = scenario.hand(P0, ["Forest"])
+    state = scenario.build()
+    destroyed = PermanentDestroyed(obj=bears, rules=("701.8a",)).apply(state)
+    moved = PutIntoGraveyard(obj=giant, rules=("704.5f",)).apply(state)
+    assert isinstance(destroyed, PermanentDestroyed) and isinstance(moved, PutIntoGraveyard)
+    assert state.player(P0).graveyard == [destroyed.moved, moved.moved]  # the owner's
+    assert state.battlefield == []
+    with pytest.raises(EngineError, match="isn't a permanent"):
+        PermanentDestroyed(obj=in_hand, rules=("701.8a",)).apply(state)
+
+
+def test_514_2_damage_removed_clears_damage_and_refuses_non_permanents() -> None:
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    (in_hand,) = scenario.hand(P0, ["Forest"])
+    scenario.damage(bears, 1)
+    with pytest.raises(ScenarioError, match="isn't a permanent"):
+        scenario.damage(in_hand, 1)
+    with pytest.raises(ScenarioError, match="negative"):
+        scenario.damage(bears, -1)
+    state = scenario.build()
+    with pytest.raises(EngineError, match="isn't a permanent"):
+        DamageRemoved(objs=(bears, in_hand), rules=("514.2",)).apply(state)
+    assert state.objects[bears].damage == 1
+    DamageRemoved(objs=(bears,), rules=("514.2",)).apply(state)
+    assert state.objects[bears].damage == 0
+
+
+def test_invariants_catch_damage_off_the_battlefield_or_negative() -> None:
+    scenario = Scenario(2)
+    (in_hand,) = scenario.hand(P0, ["Forest"])
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    state = scenario.build()
+    state.objects[in_hand].damage = 1
+    state.objects[bears].damage = -1
+    problems = invariant_violations(state)
+    assert any("120.6" in p for p in problems)
+    assert any("negative damage" in p for p in problems)
+
+
+def test_208_3_a_noncreature_permanent_has_no_power_or_toughness() -> None:
+    """Even with numbers printed on it (a Vehicle); off the battlefield it has them."""
+    scenario = Scenario(2)
+    (on_field,) = scenario.battlefield(P0, ["Test Wagon"])
+    (in_hand,) = scenario.hand(P0, ["Test Wagon"])
+    state = scenario.build()
+    assert (characteristics(state, on_field).power, characteristics(state, on_field).toughness) == (
+        None,
+        None,
+    )
+    assert (characteristics(state, in_hand).power, characteristics(state, in_hand).toughness) == (
+        3,
+        3,
+    )
+
+
+def test_208_3_power_and_toughness_of_noncreatures_are_none() -> None:
+    scenario = Scenario(2)
+    (forest,) = scenario.battlefield(P0, ["Forest"])
+    (star,) = scenario.hand(P0, ["Test Star"])
+    state = scenario.build()
+    chars = characteristics(state, forest)
+    assert (chars.power, chars.toughness) == (None, None)
+    star_chars = characteristics(state, star)  # computing is fine; reading the star isn't
+    with pytest.raises(NotImplementedRule):
+        _ = star_chars.power

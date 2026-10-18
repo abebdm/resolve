@@ -9,7 +9,10 @@ From the pinned CR:
   player chooses which. 404.3: cards put into a graveyard at the same time are arranged by
   their owner (asked as ``ORDER_CARDS``, listed top to bottom). A discarded card becomes a new
   object (400.7) in a public zone, so every player sees it.
-- 514.3: normally no player receives priority in the cleanup step.
+- 514.2: then all damage marked on permanents is removed, at the same time.
+- 514.3: normally no player receives priority in the cleanup step. 514.3a: if state-based
+  actions would be performed, they are, the active player receives priority, and once all pass
+  another cleanup step begins.
 """
 
 from __future__ import annotations
@@ -25,6 +28,8 @@ from resolve.decisions.spaces import ChooseSubset, ObjectOption, Order, PassOpti
 from resolve.engine.api import submit, view_for
 from resolve.errors import InvalidAnswer
 from resolve.events.cards import CardDiscarded
+from resolve.events.permanents import DamageRemoved
+from resolve.events.turn import StepBegan
 from resolve.state.config import GameConfig
 from resolve.state.ids import PlayerId
 from resolve.state.turn import Phase, Step
@@ -221,3 +226,79 @@ def test_514_3a_discarding_comes_before_the_state_based_actions() -> None:
     assert state.result is not None and state.result.winners == (P0,)
     turn = state.turn
     assert turn is not None and turn.step is Step.CLEANUP
+
+
+# --- 514.2 and 514.3a with creatures ------------------------------------------------------------
+
+
+def test_514_2_damage_is_removed_from_all_permanents() -> None:
+    """Both players' permanents, creatures or not, at the same time."""
+    scenario = cleanup()
+    (mine,) = scenario.battlefield(P0, ["Hill Giant"])
+    (theirs,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    (land,) = scenario.battlefield(P1, ["Forest"])
+    scenario.damage(mine, 2).damage(theirs, 1).damage(land, 4)
+    scenario.at(Step.CLEANUP)
+    state = scenario.build()
+    assert [state.objects[o].damage for o in (mine, theirs, land)] == [0, 0, 0]
+    (removed,) = [e.record for e in state.event_log if isinstance(e.record, DamageRemoved)]
+    assert set(removed.objs) == {mine, theirs, land}
+    assert removed.rules[0] == "514.2"
+
+
+def test_514_2_damage_is_removed_after_the_discard() -> None:
+    scenario = cleanup()
+    hand = scenario.hand(P0, NINE[:8])
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    scenario.damage(bears, 1)
+    scenario.at(Step.CLEANUP)
+    state = scenario.build()
+    assert request_of(state).kind is DecisionKind.DISCARD
+    assert state.objects[bears].damage == 1  # 514.1 first
+    run_script(state, choose(ObjectOption(hand[0])))
+    assert state.objects[bears].damage == 0
+
+
+def test_514_2_without_damage_nothing_is_logged() -> None:
+    scenario = cleanup()
+    scenario.battlefield(P0, ["Grizzly Bears"])
+    scenario.at(Step.CLEANUP)
+    state = scenario.build()
+    assert not any(isinstance(e.record, DamageRemoved) for e in state.event_log)
+
+
+def test_514_3a_a_state_based_action_in_cleanup_gives_priority_and_another_cleanup() -> None:
+    """A creature with 0 toughness in the cleanup step dies (704.5f), the active player receives
+    priority in that cleanup step, and once all pass another cleanup step begins (514.3a)."""
+    scenario = cleanup()
+    scenario.battlefield(P0, ["Test Wisp"])
+    scenario.at(Step.CLEANUP)
+    state = scenario.build()
+    turn = state.turn
+    assert turn is not None and (turn.number, turn.step) == (1, Step.CLEANUP)
+    assert state.battlefield == [] and names(state, Zone.graveyard(P0)) == ["Test Wisp"]
+    request = request_of(state)
+    assert request.kind is DecisionKind.PRIORITY_ACTION and request.player == P0
+    run_script(state, choose(PassOption(), player=P0), choose(PassOption(), player=P1))
+    cleanups = [
+        e.record
+        for e in state.event_log
+        if isinstance(e.record, StepBegan) and e.record.step is Step.CLEANUP
+    ]
+    assert len(cleanups) == 2
+    # The second cleanup step had nothing to do, so the next turn began.
+    turn = state.turn
+    assert turn is not None and (turn.number, turn.active_player) == (2, P1)
+
+
+def test_514_2_lethal_damage_removed_in_cleanup_doesnt_kill() -> None:
+    """514.2 comes before 514.3a's check, so damage marked on a creature as cleanup begins is
+    gone before state-based actions are checked."""
+    scenario = cleanup()
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    scenario.damage(bears, 2)
+    scenario.at(Step.CLEANUP)
+    state = scenario.build()
+    assert state.battlefield == [bears]
+    turn = state.turn
+    assert turn is not None and turn.number == 2  # no priority in that cleanup
