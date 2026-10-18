@@ -14,6 +14,9 @@
    listed top to bottom), and the cards go to the bottom together.
 4. Steps 2 and 3 repeat until no player takes a mulligan.
 
+Players who leave the game during the procedure (800.4a) are no longer asked or dealt with; a
+task asking a player who left asks the next one instead (800.4h).
+
 In a game that begins with more than two players (100.1b) the first mulligan a player takes
 doesn't count toward the cards they put on the bottom or the mulligans they may take (103.5c).
 
@@ -49,7 +52,7 @@ from resolve.errors import EngineError
 from resolve.events.cards import CardsPutOnBottom, HandShuffledIntoLibrary
 from resolve.events.game import MulliganDeclared
 from resolve.events.pipeline import ApplyEvents
-from resolve.state.game import turn_order
+from resolve.state.game import players_in_game, turn_order
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
 
@@ -126,7 +129,7 @@ class OpeningHands(Task):
         return bool(state.player(player).hand)
 
     def _declare(self, state: GameState) -> TaskResult:
-        for player in turn_order(state):
+        for player in players_in_game(state):
             if player in self.kept or player in self.declared:
                 continue
             if not self._may_mulligan(state, player):
@@ -141,7 +144,7 @@ class OpeningHands(Task):
                 prompt="Keep this hand, or take a mulligan?",
                 rules=("103.5",),
             )
-        mulliganing = tuple(p for p in turn_order(state) if self.declared.get(p))
+        mulliganing = tuple(p for p in players_in_game(state) if self.declared.get(p))
         if not mulliganing:
             return Done()
         for player in mulliganing:
@@ -156,7 +159,9 @@ class OpeningHands(Task):
         return Push((ApplyEvents(shuffles), *self._draws(state, mulliganing), self))
 
     def _bottom(self, state: GameState) -> TaskResult:
-        for player in turn_order(state):
+        if any(obj not in state.objects for obj in self.choosing):
+            self.choosing = ()  # the player choosing an order left the game (800.4a)
+        for player in players_in_game(state):
             if not self.declared.get(player) or player in self.chosen:
                 continue
             hand = state.player(player).hand
@@ -186,7 +191,7 @@ class OpeningHands(Task):
             )
         events = tuple(
             CardsPutOnBottom(player=player, cards=cards, count=len(cards), rules=("103.5",))
-            for player in turn_order(state)
+            for player in players_in_game(state)
             if (cards := self.chosen.get(player, ()))
         )
         self.declared.clear()

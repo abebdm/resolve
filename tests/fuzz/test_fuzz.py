@@ -43,6 +43,7 @@ from resolve.engine.deck import Deck
 from resolve.engine.view import PlayerView
 from resolve.errors import InvalidAnswer
 from resolve.events.base import AnswerRecord
+from resolve.events.game import Conceded
 from resolve.state.config import GameConfig
 from resolve.state.game import GameObject, GameState
 from resolve.state.ids import PlayerId
@@ -104,11 +105,15 @@ def test_random_agent_games_complete_with_every_check_passing(
     active = None if state.turn is None else state.turn.active_player
     for player in state.players:
         held = len(player.hand) + len(player.library) + len(player.graveyard)
+        if player.left_game:  # 800.4a: their cards left the game with them
+            assert held == 0 and not any(o.owner == player.id for o in state.objects.values())
+            continue
         assert held == len(decks[player.id].cards), "every card is in a hand, library or graveyard"
         # 514.1: only the active player can be above seven, by the card drawn this turn.
         assert len(player.hand) <= (8 if player.id == active else 7)
     if commander:
-        assert len(state.command) == players  # 103.2c
+        in_game = sum(1 for player in state.players if not player.left_game)
+        assert len(state.command) == in_game  # 103.2c (800.4a for those who left)
     else:
         assert state.command == []
 
@@ -145,6 +150,26 @@ def test_random_agents_finish_two_player_land_only_games(seed: int) -> None:
     state = result.state
     assert state.result is not None and len(state.result.winners) <= 1
     assert state.battlefield, "lands were played"
+
+
+@pytest.mark.parametrize("players", [2, 3, 4])
+@pytest.mark.parametrize("seed", range(2))
+def test_random_agents_finish_land_only_games_with_concessions(seed: int, players: int) -> None:
+    """M1 done: 2 to 4 players, land-only decks, random concessions (104.3a): every game ends,
+    by decking or concessions, and the replay of answers and concessions reproduces it."""
+    decks = [deck(forests=8 + seat, elves=0) for seat in range(players)]
+    result = fuzz_game(
+        GameConfig.standard(),
+        decks,
+        seed,
+        check_copies=seed == 0,
+        probe_invalid=False,
+        concession_chance=15,
+    )
+    assert result.gap is None
+    state = result.state
+    assert state.result is not None
+    assert any(isinstance(e.record, Conceded) for e in state.event_log) or players == 2
 
 
 def test_patient_games_include_decking_and_discards() -> None:
@@ -361,7 +386,7 @@ def test_a_replay_that_asks_someone_else_is_a_failure() -> None:
             AskTwice(PlayerId(next(seeds) % 2)), EndGame(())
         )
 
-    with pytest.raises(FuzzFailure, match="the replay failed: ScriptError: step 1 expects player"):
+    with pytest.raises(FuzzFailure, match="the replay ended differently: input 1 expects player"):
         fuzz_run(make, [RandomAgent(1), RandomAgent(2)], describe="test")
 
 

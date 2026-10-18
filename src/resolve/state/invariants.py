@@ -163,6 +163,15 @@ def invariant_violations(state: GameState) -> list[str]:
         if obj.tapped and obj.zone.kind is not ZoneKind.BATTLEFIELD:
             problems.append(f"{where} is tapped in the {obj.zone}: only permanents (110.5d)")
     for player in state.players:
+        if player.left_game:
+            if any(obj.owner == player.id for obj in state.objects.values()):
+                problems.append(f"player {player.id} left the game but owns objects (800.4a)")
+            if player.mana_pool:
+                problems.append(f"player {player.id} left the game but has mana")
+            if state.pending is not None and state.pending.player == player.id:
+                problems.append(f"player {player.id} left the game but is asked a decision")
+        if player.left_game and not player.lost and state.result is None:
+            problems.append(f"player {player.id} left a game in progress without losing")
         for unit in player.mana_pool:
             if unit.source is not None and not 1 <= unit.source < state.next_object_id:
                 problems.append(f"player {player.id}'s mana has an unknown source {unit.source}")
@@ -208,7 +217,7 @@ def _turn_violations(state: GameState) -> list[str]:
     if turn.priority is not None:
         if not 0 <= turn.priority < count:
             problems.append(f"the priority holder {turn.priority} isn't a player")
-        elif state.player(turn.priority).lost:
+        elif state.player(turn.priority).left_game:
             problems.append(f"player {turn.priority} holds priority but has left the game")
     if any(not 0 <= p < count for p in turn.passed) or len(set(turn.passed)) != len(turn.passed):
         problems.append(f"the players who passed {turn.passed} aren't distinct players")

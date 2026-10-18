@@ -51,7 +51,7 @@ from resolve.events.turn import PriorityPassed
 from resolve.state.game import next_in_turn_order, players_in_game
 from resolve.state.ids import PlayerId
 from resolve.state.turn import TurnState
-from resolve.tasks import NeedDecision, Push, Task, TaskResult
+from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
 
 if TYPE_CHECKING:
     from resolve.decisions.request import DecisionRequest
@@ -144,6 +144,15 @@ class PriorityRound(Task):
             self.stage = Stage.ASK
             return Push((CheckStateBasedActions(), self))
         player = turn.active_player if self.next_player is None else self.next_player
+        if state.player(player).left_game:
+            # 800.4a, 800.4j: the player who would receive priority has left the game. If every
+            # player still in it has passed in succession, that is all players passing (117.4);
+            # otherwise priority goes to the next player in turn order still in the game.
+            if all(p in turn.passed for p in players_in_game(state)):
+                return self._all_passed(state)
+            self.next_player = next_in_turn_order(state, player)
+            self.stage = Stage.CHECK
+            return self.run(state)
         turn.priority = player
         return NeedDecision(
             player=player,
@@ -172,6 +181,12 @@ class PriorityRound(Task):
             case option:
                 raise EngineError(f"unexpected priority option {option!r}")
 
+    def _all_passed(self, state: GameState) -> TaskResult:
+        """117.4: all players passed in succession. With an empty stack the step ends."""
+        if state.stack:
+            raise NotImplementedRule("608.1: resolving the top object of the stack (roadmap M2)")
+        return Done()
+
     def _acted(self, turn: TurnState, player: PlayerId, action: Task) -> TaskResult:
         # 117.3c: the player who acted receives priority again; 117.4: passing in succession
         # starts over.
@@ -185,8 +200,7 @@ class PriorityRound(Task):
         # 117.3d: the player passes; then the next player in turn order receives priority.
         everyone = all(p in (*turn.passed, player) for p in players_in_game(state))
         if everyone and state.stack:
-            # 117.4: all players passed in succession, so the top of the stack resolves.
-            raise NotImplementedRule("608.1: resolving the top object of the stack (roadmap M2)")
+            return self._all_passed(state)
         turn.priority = None
         turn.passed.append(player)
         pool = tuple(state.player(player).mana_pool)
