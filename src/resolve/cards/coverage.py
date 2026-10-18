@@ -15,14 +15,24 @@ from resolve.data.decklist import Decklist, Section
 
 
 class CoverageStatus(Enum):
+    """Whether the engine can play a deck card."""
+
     IMPLEMENTED = "implemented"
     MISSING = "missing"
-    # The name doesn't identify exactly one card in the card data snapshot.
+    # The name doesn't identify exactly one card in the card data snapshot (a typo, a card newer
+    # than the snapshot, or an ambiguous name).
     UNKNOWN = "unknown"
 
 
 @dataclass(frozen=True)
 class CardCoverage:
+    """The coverage of one distinct card name in a deck.
+
+    ``count`` adds up the copies across the sections that were checked, and ``sections`` lists
+    them. ``card`` is the matched card data (``None`` when the name is unknown), ``missing_faces``
+    names the faces that still need a definition, and ``problem`` explains an unknown name.
+    """
+
     name: str
     count: int
     sections: tuple[Section, ...]
@@ -34,26 +44,33 @@ class CardCoverage:
 
 @dataclass(frozen=True)
 class DeckCoverage:
+    """The coverage of every distinct card in a deck, in order of first appearance."""
+
     deck_name: str | None
     cards: tuple[CardCoverage, ...]
 
     def with_status(self, status: CoverageStatus) -> tuple[CardCoverage, ...]:
+        """The cards with this status, in deck order."""
         return tuple(card for card in self.cards if card.status is status)
 
     @property
     def implemented(self) -> tuple[CardCoverage, ...]:
+        """Cards whose every face has a definition."""
         return self.with_status(CoverageStatus.IMPLEMENTED)
 
     @property
     def missing(self) -> tuple[CardCoverage, ...]:
+        """Cards found in the card data but missing a definition for at least one face."""
         return self.with_status(CoverageStatus.MISSING)
 
     @property
     def unknown(self) -> tuple[CardCoverage, ...]:
+        """Names that don't identify exactly one card in the card data."""
         return self.with_status(CoverageStatus.UNKNOWN)
 
     @property
     def is_fully_implemented(self) -> bool:
+        """Whether every card is implemented, so the deck could be played (an empty deck is)."""
         return all(card.status is CoverageStatus.IMPLEMENTED for card in self.cards)
 
 
@@ -64,7 +81,11 @@ def deck_coverage(
     *,
     include_sideboard: bool = False,
 ) -> DeckCoverage:
-    """Classify each distinct card name in the deck, in order of first appearance."""
+    """Classify each distinct card name in the deck, in order of first appearance.
+
+    The commander and mainboard are checked; the sideboard (100.4) only with
+    ``include_sideboard``. A name in several sections is reported once, with its counts added.
+    """
     sections = [Section.COMMANDER, Section.MAINBOARD]
     if include_sideboard:
         sections.append(Section.SIDEBOARD)

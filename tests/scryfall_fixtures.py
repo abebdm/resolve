@@ -122,6 +122,7 @@ SPLIT_CARD: dict[str, Any] = {
 
 
 def token(oracle_id: str, name: str = "Soldier") -> dict[str, Any]:
+    """A token object (layout ``token``), which the name index must ignore."""
     return {
         "object": "card",
         "oracle_id": oracle_id,
@@ -139,6 +140,7 @@ def token(oracle_id: str, name: str = "Soldier") -> dict[str, Any]:
 
 
 def simple_card(name: str, oracle_id: str, **overrides: Any) -> dict[str, Any]:
+    """A plain single-faced artifact; ``overrides`` replace or add Scryfall fields."""
     card: dict[str, Any] = {
         "object": "card",
         "oracle_id": oracle_id,
@@ -157,6 +159,7 @@ def simple_card(name: str, oracle_id: str, **overrides: Any) -> dict[str, Any]:
 
 
 def ruling(oracle_id: str, published_at: str, comment: str) -> dict[str, Any]:
+    """A ruling object from Wizards (source ``wotc``)."""
     return {
         "object": "ruling",
         "oracle_id": oracle_id,
@@ -167,10 +170,12 @@ def ruling(oracle_id: str, published_at: str, comment: str) -> dict[str, Any]:
 
 
 def default_cards() -> list[dict[str, Any]]:
+    """The standard fixture cards: four deck cards (normal, land, transform, split) and a token."""
     return [LLANOWAR_ELVES, FOREST, TRANSFORM_CARD, SPLIT_CARD, token("oid-soldier-1")]
 
 
 def default_rulings() -> list[dict[str, Any]]:
+    """Placeholder rulings: two for Llanowar Elves (out of date order) and one for the DFC."""
     return [
         ruling("oid-llanowar-elves", "2020-06-01", "Placeholder ruling B."),
         ruling("oid-llanowar-elves", "2019-01-01", "Placeholder ruling A."),
@@ -185,10 +190,12 @@ def jsonl_gz(items: list[dict[str, Any]]) -> bytes:
 
 
 def oracle_cards_bytes(cards: list[dict[str, Any]] | None = None) -> bytes:
+    """An Oracle-cards bulk file's bytes (default: ``default_cards()``)."""
     return jsonl_gz(default_cards() if cards is None else cards)
 
 
 def rulings_bytes(rulings: list[dict[str, Any]] | None = None) -> bytes:
+    """A rulings bulk file's bytes (default: ``default_rulings()``)."""
     return jsonl_gz(default_rulings() if rulings is None else rulings)
 
 

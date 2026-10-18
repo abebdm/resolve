@@ -58,6 +58,12 @@ def _entry_line(entry: CardCoverage) -> str:
 
 
 def format_report(coverage: DeckCoverage, *, show_oracle: bool = False) -> str:
+    """One deck's report: counts, then unknown, missing and implemented cards, then keywords.
+
+    With ``show_oracle``, each missing card is followed by its printed characteristics, which is
+    what the coverage audit reads. The keyword summary counts Scryfall's keyword list over
+    distinct cards.
+    """
     total = sum(entry.count for entry in coverage.cards)
     lines = [
         f"== {coverage.deck_name} ==",
@@ -121,6 +127,7 @@ def run(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """Run the command line; returns the exit status described in the module docstring."""
     parser = argparse.ArgumentParser(description="Report implemented and missing cards per deck.")
     parser.add_argument("decks", nargs="*", type=Path, help="decklists (default: decks/*.txt)")
     parser.add_argument("--data-dir", type=Path, default=None, help="card data snapshot directory")
