@@ -58,8 +58,8 @@ from resolve.agents.driver import MAX_ATTEMPTS, agent_for
 from resolve.agents.random_agent import RandomAgent
 from resolve.agents.replay import ReplayDiverged, replay
 from resolve.cards.registry import default_registry
-from resolve.data.cards import CardDataError, load_card_database
-from resolve.data.decklist import DecklistError, load_decklist
+from resolve.data.cards import CardDataError, load_card_database, load_card_excerpt
+from resolve.data.decklist import DeckEntry, Decklist, DecklistError, load_decklist
 from resolve.decisions.request import DecisionAnswer, DecisionRequest
 from resolve.decisions.spaces import (
     Amounts,
@@ -81,6 +81,9 @@ from resolve.engine.view import ObjectView
 from resolve.errors import DeckError, InvalidAnswer, NotImplementedRule
 from resolve.events.base import AnswerRecord, LogEntry
 from resolve.events.cards import CardDrawn, CardsPutOnBottom
+from resolve.events.game import PlayerLost
+from resolve.events.mana import ManaAdded
+from resolve.events.permanents import LandPlayed
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState, players_in_game
 from resolve.state.ids import ObjectId, PlayerId
@@ -93,6 +96,8 @@ from resolve.state.zones import ZoneKind
 ALLOWED_GAPS: tuple[str, ...] = ("601.2",)
 # By default, before each decision a player concedes with probability 1 in this (104.3a).
 DEFAULT_CONCESSION_CHANCE = 200
+# The command line's default number of games.
+DEFAULT_GAMES = 200
 # A game that hasn't ended after this many answers is reported as a failure (a runaway game).
 MAX_ANSWERS = 10_000
 
@@ -309,6 +314,7 @@ def fuzz_run(
     probe_invalid: bool = True,
     concession_chance: int = 0,
     concession_seed: int = 0,
+    check_every: int = 1,
 ) -> FuzzResult:
     """Play the game ``make_state()`` starts with ``agents`` (one per seat), checking it.
 
@@ -317,7 +323,17 @@ def fuzz_run(
     With ``concession_chance`` N > 0, before each decision a player still in the game concedes
     with probability 1/N (104.3a), drawn from ``Rng.from_seed(concession_seed)``; the state's
     copies concede too and must end up equal.
+
+    With ``check_every`` N > 1, the full checks (``state_problems``, the copies, the invalid
+    answers, and that a rejected answer changed nothing) run only while the number of accepted
+    answers is a multiple of N, and on the final state; the bookkeeping invariants
+    (``invariant_violations``) and the replay are still checked for every game. Most full checks
+    walk, copy or compare the whole state, event log included, so their cost grows with the
+    game; long games need N > 1 to finish in reasonable time. A rejected answer that changed the
+    state between full checks still fails the replay, which never submits it.
     """
+    if check_every < 1:
+        raise ValueError("check_every must be at least 1")
 
     def fail(problem: str) -> FuzzFailure:
         return FuzzFailure(f"{describe}: {problem}")
@@ -340,14 +356,19 @@ def fuzz_run(
     concessions = Rng.from_seed(concession_seed)
     try:
         while gap is None:
-            check(state, f"after {answers} answers")
             request = pending_decision(state)
+            full = request is None or answers % check_every == 0
+            if full:
+                check(state, f"after {answers} answers")
+            elif problems := invariant_violations(state):
+                raise fail(f"after {answers} answers:\n" + "\n".join(f"- {p}" for p in problems))
             if request is None:
                 break
+            copying = check_copies and full
             if concession_chance > 0 and concessions.randbelow(concession_chance) == 0:
                 in_game = players_in_game(state)
                 player = in_game[concessions.randbelow(len(in_game))]
-                copies = [copy.deepcopy(state), _pickled(state)] if check_copies else []
+                copies = [copy.deepcopy(state), _pickled(state)] if copying else []
                 outcome = _concede(state, player)
                 for name, other in zip(("deep copy", "pickled copy"), copies, strict=False):
                     if _concede(other, player) != outcome or other != state:
@@ -359,22 +380,22 @@ def fuzz_run(
                 continue
             if answers >= max_answers:
                 raise fail(f"the game didn't end within {max_answers} answers")
-            snapshot = pickle.dumps(state)
-            if check_copies:
+            snapshot = pickle.dumps(state) if full else None
+            if copying:
                 if copy.deepcopy(state) != state:
                     raise fail(f"a deep copy differs from the state after {answers} answers")
                 if _pickled(state) != state:
                     raise fail(f"a pickled copy differs from the state after {answers} answers")
             agent = agent_for(agents, request.player)
             answer = agent.decide(view_for(state, request.player), request)
-            if probe_invalid:
+            if probe_invalid and snapshot is not None:
                 for bad in invalid_answers(request, len(state.players), answer.value):
                     outcome = _submit(state, bad)
                     if outcome[0] != "rejected":
                         raise fail(f"the invalid answer {bad} was {outcome[0]}")
                     if state != pickle.loads(snapshot):
                         raise fail(f"the rejected answer {bad} changed the state")
-            copies = [copy.deepcopy(state), _pickled(state)] if check_copies else []
+            copies = [copy.deepcopy(state), _pickled(state)] if copying else []
             outcome = _submit(state, answer)
             for name, other in zip(("deep copy", "pickled copy"), copies, strict=False):
                 other_outcome = _submit(other, answer)
@@ -390,7 +411,7 @@ def fuzz_run(
                     in_a_row += 1
                     if in_a_row >= MAX_ATTEMPTS:
                         raise fail(f"{MAX_ATTEMPTS} random answers in a row were rejected")
-                    if state != pickle.loads(snapshot):
+                    if snapshot is not None and state != pickle.loads(snapshot):
                         raise fail(f"the rejected answer {answer} changed the state")
                 case ("accepted", _):
                     answers += 1
@@ -444,6 +465,7 @@ def fuzz_game(
     check_copies: bool = True,
     probe_invalid: bool = True,
     concession_chance: int = 0,
+    check_every: int = 1,
 ) -> FuzzResult:
     """Fuzz one game of ``new_game(config, decks, seed)``; the options are ``fuzz_run``'s.
 
@@ -455,7 +477,7 @@ def fuzz_game(
     describe = (
         f"game seed {seed}, {len(decks)} players{commander} "
         f"(reproduce: uv run python tools/fuzz.py --games 1 --seed {seed} "
-        f"--players {len(decks)}{commander}, with the same --deck options)"
+        f"--players {len(decks)}{commander}, with the same deck and --concessions options)"
     )
     return fuzz_run(
         lambda: new_game(config, decks, seed),
@@ -467,13 +489,134 @@ def fuzz_game(
         probe_invalid=probe_invalid,
         concession_chance=concession_chance,
         concession_seed=seed,
+        check_every=check_every,
     )
+
+
+# --- The summary -------------------------------------------------------------------------------
+
+# How a game ended, as the summary counts it (``ending``).
+DECKED = "decked"
+LIFE_TOTAL = "life total"
+CONCESSION = "concession"
+DRAW = "draw"
+RULES_GAP = "rules gap"
+ENDINGS = (DECKED, LIFE_TOTAL, CONCESSION, DRAW, RULES_GAP)
+# The rule a player lost by (``PlayerLost.rules[0]``), for each ending.
+_LOSSES = {"704.5b": DECKED, "704.5a": LIFE_TOTAL, "104.3a": CONCESSION}
+
+
+def ending(result: FuzzResult) -> str:
+    """How a fuzz game ended: one of ``ENDINGS``, or ``"other (<rule>)"``.
+
+    A game stopped at an allowed gap ended at a ``RULES_GAP``. A game over with no winner is a
+    ``DRAW`` (104.4a), however the players lost. Otherwise the game is named after how the last
+    player to lose lost: drawing from an empty library (704.5b), 0 or less life (704.5a), or
+    conceding (104.3a). A loss by any other rule is reported as ``"other (<rule>)"``, and a win
+    without a loss (none is possible yet) as ``"other (no loss)"``.
+    """
+    if result.gap is not None:
+        return RULES_GAP
+    outcome = result.state.result
+    if outcome is None:
+        raise ValueError("the game is neither over nor stopped at a gap")
+    if outcome.is_draw:
+        return DRAW
+    losses = [e.record for e in result.state.event_log if isinstance(e.record, PlayerLost)]
+    if not losses:
+        return "other (no loss)"
+    rule = losses[-1].rules[0]
+    return _LOSSES.get(rule, f"other ({rule})")
+
+
+@dataclass(frozen=True)
+class GameStats:
+    """What one fuzz game exercised, for the summary.
+
+    - ``answers``, ``rejected``: answers the engine accepted and random answers it rejected.
+    - ``turns``: the number of the last turn that began (0 if the game ended before turn 1).
+    - ``ending``: how it ended (``ending``).
+    - ``lands_played``: lands played (``LandPlayed``, 305.1).
+    - ``mana_abilities``: mana abilities activated, counted by the mana they added
+      (``ManaAdded``, 605.3a, 106.4).
+    """
+
+    answers: int
+    rejected: int
+    turns: int
+    ending: str
+    lands_played: int
+    mana_abilities: int
+
+    @staticmethod
+    def of(result: FuzzResult) -> GameStats:
+        """The statistics of a finished fuzz game."""
+        state = result.state
+        records = [entry.record for entry in state.event_log]
+        return GameStats(
+            answers=result.answers,
+            rejected=result.rejected,
+            turns=0 if state.turn is None else state.turn.number,
+            ending=ending(result),
+            lands_played=sum(isinstance(record, LandPlayed) for record in records),
+            mana_abilities=sum(isinstance(record, ManaAdded) for record in records),
+        )
+
+
+def _spread(values: Sequence[int]) -> str:
+    return f"min {min(values)}, average {sum(values) / len(values):.1f}, max {max(values)}"
+
+
+def summary_lines(games: Sequence[GameStats]) -> list[str]:
+    """The summary of a fuzz run, one line per item; there must be at least one game.
+
+    Every ending in ``ENDINGS`` is listed, in that order, even if no game ended that way; other
+    endings follow, sorted.
+    """
+    endings = Counter(game.ending for game in games)
+    names = [*ENDINGS, *sorted(name for name in endings if name not in ENDINGS)]
+    answers = [game.answers for game in games]
+    return [
+        f"{len(games)} games passed: {sum(answers)} answers accepted, "
+        f"{sum(game.rejected for game in games)} rejected.",
+        f"Answers per game: {_spread(answers)}.",
+        f"Turns per game: {_spread([game.turns for game in games])}.",
+        "Endings: " + ", ".join(f"{name} x{endings[name]}" for name in names) + ".",
+        f"Played: {sum(game.lands_played for game in games)} lands, "
+        f"{sum(game.mana_abilities for game in games)} mana abilities activated.",
+    ]
+
+
+# --- The command line --------------------------------------------------------------------------
+
+# The default decks: the five basic lands, copied from the Scryfall snapshot into an excerpt that
+# is committed (tools/card_excerpt.py), so no snapshot is needed.
+BASIC_LANDS_EXCERPT = Path(__file__).resolve().parent / "excerpts" / "basic_lands.json"
+BASIC_LAND_NAMES = ("Plains", "Island", "Swamp", "Mountain", "Forest")
+# Copies of each basic land in a default deck.
+DEFAULT_COPIES = 8
+# The command line's default for ``check_every``.
+DEFAULT_CHECK_EVERY = 10
+
+
+def basic_land_deck(copies: int = DEFAULT_COPIES, excerpt: Path = BASIC_LANDS_EXCERPT) -> Deck:
+    """A deck of ``copies`` of each basic land, Plains to Forest, from the excerpt."""
+    decklist = Decklist(
+        mainboard=tuple(DeckEntry(copies, name) for name in BASIC_LAND_NAMES),
+        name=f"{copies * len(BASIC_LAND_NAMES)} basic lands",
+    )
+    return build_deck(decklist, load_card_excerpt(excerpt), default_registry())
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command line; returns the exit status described in the module docstring."""
     parser = argparse.ArgumentParser(description="Fuzz the engine with random-agent games.")
-    parser.add_argument("--games", type=int, default=200, help="number of games (default 200)")
+    parser.add_argument(
+        "--games",
+        type=int,
+        default=DEFAULT_GAMES,
+        help=f"number of games (default {DEFAULT_GAMES})",
+    )
     parser.add_argument("--seed", type=int, default=0, help="seed of the first game")
     parser.add_argument(
         "--players", type=int, nargs="*", default=[2, 3, 4, 5, 6], help="player counts to cycle"
@@ -485,20 +628,37 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="which game formats to cycle",
     )
     parser.add_argument("--commander", action="store_true", help="same as --format commander")
-    parser.add_argument(
-        "--deck", type=Path, action="append", default=[], help="decklists to cycle (default: empty)"
+    decks = parser.add_mutually_exclusive_group()
+    decks.add_argument(
+        "--deck",
+        type=Path,
+        action="append",
+        default=[],
+        help="decklists to cycle, from the snapshot (default: 40 basic lands each)",
     )
+    decks.add_argument("--empty-decks", action="store_true", help="give every player an empty deck")
     parser.add_argument("--data-dir", type=Path, default=None, help="card data snapshot directory")
     parser.add_argument(
         "--concessions",
         type=int,
         default=DEFAULT_CONCESSION_CHANCE,
         metavar="N",
-        help="a player concedes before a decision 1 time in N (0: never)",
+        help=f"a player concedes before a decision 1 time in N (0: never; default "
+        f"{DEFAULT_CONCESSION_CHANCE})",
+    )
+    parser.add_argument(
+        "--check-every",
+        type=int,
+        default=DEFAULT_CHECK_EVERY,
+        metavar="N",
+        help=f"run the full checks every N answers (1: every decision; default "
+        f"{DEFAULT_CHECK_EVERY})",
     )
     args = parser.parse_args(argv)
     if args.games < 1 or not args.players or min(args.players) < 2:
         parser.error("need at least one game and player counts of at least 2 (100.1)")
+    if args.check_every < 1 or args.concessions < 0:
+        parser.error("--check-every must be at least 1 and --concessions at least 0")
 
     fmt = "commander" if args.commander else args.format
     configs = {
@@ -507,34 +667,45 @@ def main(argv: Sequence[str] | None = None) -> int:
         "commander": [GameConfig.commander_game()],
     }[fmt]
     try:
-        pool = _load_decks(args.deck, args.data_dir) if args.deck else [Deck(())]
+        if args.empty_decks:
+            pool, deck_names = [Deck(())], "empty"
+        elif args.deck:
+            pool = _load_decks(args.deck, args.data_dir)
+            deck_names = ", ".join(str(path) for path in args.deck)
+        else:
+            pool = [basic_land_deck()]
+            deck_names = f"{DEFAULT_COPIES} of each basic land ({BASIC_LANDS_EXCERPT.name})"
     except (CardDataError, DecklistError, DeckError, OSError) as error:
         print(f"error: {error}")
         return 1
 
-    endings: Counter[str] = Counter()
+    games: list[GameStats] = []
     formats: Counter[str] = Counter()
-    answers = rejected = 0
     started = time.perf_counter()
     for game in range(args.games):
         seed: int = args.seed + game
         players: int = args.players[game % len(args.players)]
         config = configs[(game // len(args.players)) % len(configs)]
-        decks = [pool[(seed + seat) % len(pool)] for seat in range(players)]
+        decks_now = [pool[(seed + seat) % len(pool)] for seat in range(players)]
         try:
-            result = fuzz_game(config, decks, seed, concession_chance=args.concessions)
+            result = fuzz_game(
+                config,
+                decks_now,
+                seed,
+                concession_chance=args.concessions,
+                check_every=args.check_every,
+            )
         except FuzzFailure as failure:
             print(f"FAILED: {failure}")
             return 1
-        answers += result.answers
-        rejected += result.rejected
-        endings[result.gap.split(": ", 1)[0] if result.gap else "game over"] += 1
+        games.append(GameStats.of(result))
         formats["commander" if config.commander is not None else "standard"] += 1
     elapsed = time.perf_counter() - started
-    print(f"{args.games} games passed: {answers} answers accepted, {rejected} rejected.")
-    print("Endings: " + ", ".join(f"{name} x{count}" for name, count in sorted(endings.items())))
+    print(f"Decks: {deck_names}.")
+    print("\n".join(summary_lines(games)))
     print("Formats: " + ", ".join(f"{name} x{count}" for name, count in sorted(formats.items())))
-    print(f"{args.games / elapsed:.1f} games per second (with every check on).")
+    checks = "every decision" if args.check_every == 1 else f"every {args.check_every} answers"
+    print(f"{args.games / elapsed:.2f} games per second (full checks {checks}).")
     return 0
 
 

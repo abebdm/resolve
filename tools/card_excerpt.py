@@ -2,8 +2,11 @@
 
 Usage::
 
-    uv run python tools/card_excerpt.py tools/excerpts/basic_lands.json Plains Island Swamp Mountain Forest
-    uv run python tools/card_excerpt.py tools/excerpts/basic_lands.json --check
+    uv run python tools/card_excerpt.py EXCERPT NAME [NAME ...]   # write EXCERPT with these cards
+    uv run python tools/card_excerpt.py EXCERPT --check            # compare EXCERPT with data/
+
+The fuzz harness's basic lands are ``tools/excerpts/basic_lands.json`` (Plains, Island, Swamp,
+Mountain and Forest, in that order).
 
 An excerpt is a few cards' records copied from the Scryfall snapshot in ``data/`` and committed,
 so a tool can use those cards on a machine without the snapshot (CI, a fresh checkout). The
@@ -108,7 +111,7 @@ def excerpt_of(
 
 
 def write_excerpt(path: Path, excerpt: Mapping[str, object]) -> None:
-    """Write ``excerpt`` as UTF-8 JSON with ``\\n`` line endings, the same bytes on every platform."""
+    """Write ``excerpt`` as UTF-8 JSON with ``\\n`` line endings: the same bytes everywhere."""
     text = json.dumps(excerpt, ensure_ascii=False, indent=2) + "\n"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8", newline="\n")
