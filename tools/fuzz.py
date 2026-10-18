@@ -186,15 +186,18 @@ def view_problems(state: GameState, viewer: PlayerId) -> list[str]:
     visible: list[LogEntry] = []
     for entry in state.event_log:
         if entry.visible_to is None or viewer in entry.visible_to:
-            visible.append(entry)
+            shown = entry
         elif entry.redacted is not None:
-            visible.append(LogEntry(entry.index, entry.redacted, None))
-            # design.md §9: library object IDs survive shuffles, so no other player sees them.
-            record = entry.redacted
-            if isinstance(record, CardDrawn) and record.drawn_from is not None:
-                problems.append(f"log entry {entry.index} shows {where} a drawn library card")
-            if isinstance(record, CardsPutOnBottom) and record.cards:
-                problems.append(f"log entry {entry.index} shows {where} the bottomed cards")
+            shown = LogEntry(entry.index, entry.redacted, None)
+        else:
+            continue
+        visible.append(shown)
+        # design.md §9: library object IDs survive shuffles, so no other player sees them.
+        record = shown.record
+        if isinstance(record, CardDrawn) and record.player != viewer and record.drawn_from:
+            problems.append(f"log entry {entry.index} shows {where} a drawn library card")
+        if isinstance(record, CardsPutOnBottom) and record.player != viewer and record.cards:
+            problems.append(f"log entry {entry.index} shows {where} the bottomed cards")
     if view.log != tuple(visible):
         problems.append(f"{where} shows the wrong log entries")
     for entry in state.event_log:

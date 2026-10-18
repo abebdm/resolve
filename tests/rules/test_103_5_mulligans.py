@@ -226,9 +226,121 @@ def test_103_5_a_mulligan_shuffles_the_hand_back_and_draws_a_new_hand() -> None:
     assert shuffled[0].rules[:2] == ("103.5", "701.24a")
     player = state.players[0]
     assert len(player.hand) == 7 and len(player.library) == 13
-    every_card = sorted(card_of(state, o) for o in player.hand + player.library)
-    assert set(old_cards) <= set(every_card), "the old hand went back into the library"
-    assert all(state.objects[o].known_to == () for o in player.library), "701.24a"
+    assert not set(old_hand) & set(state.objects), "the old hand objects are gone (400.7)"
+    assert not set(old_hand) & set(player.library), "the library holds new objects only"
+    del old_cards
+
+
+def test_103_5_701_24a_a_mulligan_really_shuffles_the_library() -> None:
+    """Without a shuffle P0 would draw back exactly the old seven cards (the hand goes on top).
+
+    Over a few seeds, the new hand differs from the old one at least once; and the shuffle
+    touches only the mulliganing player's library.
+    """
+    differs = 0
+    for seed in range(5):
+        state = mulligan_game(2, seed=seed)
+        old = sorted(card_of(state, o) for o in state.players[0].hand)
+        other_library = list(state.players[1].library)
+        act(state, mulligan(P0), keep(P1))
+        new = sorted(card_of(state, o) for o in state.players[0].hand)
+        differs += new != old
+        assert state.players[1].library == other_library
+    assert differs > 0
+
+
+def test_701_24a_a_later_mulligan_forgets_the_cards_put_on_the_bottom_earlier() -> None:
+    state = mulligan_game(2)
+    act(state, mulligan(P0), keep(P1))
+    act(state, bottom(P0, state.players[0].hand[0]))
+    assert state.objects[state.players[0].library[0]].known_to == (P0,)
+    act(state, mulligan(P0))
+    assert request_of(state).kind is DecisionKind.PUT_ON_BOTTOM
+    assert all(state.objects[o].known_to == () for o in state.players[0].library)
+
+
+def test_103_5_a_later_round_still_starts_from_the_starting_player_in_turn_order() -> None:
+    """The starting player kept; the next round asks the others in turn order from them."""
+    state = mulligan_game(4, starting=2)
+    act(state, keep(P2), mulligan(P3), mulligan(P0), mulligan(P1))  # first mulligans are free
+    asked: list[PlayerId] = []
+    for player in (P3, P0, P1):
+        asked.append(request_of(state).player)
+        act(state, keep(player))
+    assert asked == [P3, P0, P1]
+
+
+def test_103_5_a_player_who_kept_keeps_the_same_hand_while_others_mulligan() -> None:
+    state = mulligan_game(3)
+    kept = list(state.players[1].hand)
+    act(state, mulligan(P0), keep(P1), keep(P2))
+    act(state, mulligan(P0))
+    act(state, bottom(P0, state.players[0].hand[0]))
+    assert state.players[1].hand == kept
+
+
+def test_103_5_a_third_mulligan_orders_three_cards() -> None:
+    state = mulligan_game(2)
+    act(state, mulligan(P0), keep(P1))
+    act(state, bottom(P0, state.players[0].hand[0]))
+    act(state, mulligan(P0))
+    first, second = state.players[0].hand[:2]
+    act(state, bottom(P0, first, second), order(P0, first, second))
+    act(state, mulligan(P0))
+    a, b, c = state.players[0].hand[4], state.players[0].hand[0], state.players[0].hand[2]
+    cards = (card_of(state, a), card_of(state, b), card_of(state, c))
+    act(state, bottom(P0, a, b, c), order(P0, a, b, c))  # top to bottom: a, b, c
+    library = state.players[0].library
+    assert (card_of(state, library[2]), card_of(state, library[1]), card_of(state, library[0])) == (
+        cards
+    )
+    assert len(state.players[0].hand) == 4
+
+
+def test_103_5_the_standard_hand_allows_seven_mulligans_in_two_player_games() -> None:
+    """Seven cards: hands of 6, 5, ... 0 after seven mulligans; then no eighth (103.5)."""
+    state = mulligan_game(2)
+    act(state, mulligan(P0), keep(P1))
+    gap = None
+    for taken in range(1, 8):
+        hand = state.players[0].hand
+        if taken < 7:  # the seventh puts the whole hand on the bottom: only the order is asked
+            act(state, bottom(P0, *hand[:taken]))
+        if taken > 1:
+            gap = act(state, order(P0, *hand[:taken]))
+        assert len(state.players[0].hand) == 7 - taken
+        if taken < 7:
+            act(state, mulligan(P0))
+    assert gap is not None, "no eighth mulligan is offered: the mulligans are over"
+
+
+def test_103_5c_the_standard_hand_allows_eight_mulligans_in_multiplayer_games() -> None:
+    """The free first mulligan (103.5c) keeps seven cards; then 6, 5, ... 0 after the eighth."""
+    state = mulligan_game(3)
+    act(state, mulligan(P0), keep(P1), keep(P2))
+    assert len(state.players[0].hand) == 7
+    gap = None
+    for counted in range(1, 8):
+        act(state, mulligan(P0))
+        hand = state.players[0].hand
+        if counted < 7:
+            act(state, bottom(P0, *hand[:counted]))
+        if counted > 1:
+            gap = act(state, order(P0, *hand[:counted]))
+        assert len(state.players[0].hand) == 7 - counted
+    assert gap is not None, "no ninth mulligan is offered"
+
+
+def test_103_5_put_on_bottom_rejects_repeats_and_unknown_cards() -> None:
+    state = mulligan_game(2)
+    act(state, mulligan(P0), keep(P1))
+    act(state, bottom(P0, state.players[0].hand[0]))
+    act(state, mulligan(P0))
+    before = copy.deepcopy(state)
+    for bad in (PickMany((0, 0)), PickMany((1, 0)), PickMany((0, 7)), PickMany((0,))):
+        with pytest.raises(InvalidAnswer):
+            submit(state, answer(state, bad))
+        assert state == before
 
 
 def test_103_5_the_first_mulligan_in_a_two_player_game_puts_one_card_on_the_bottom() -> None:
@@ -427,12 +539,45 @@ def test_121_4_a_short_library_is_drawn_out_and_remembered_but_doesnt_lose_yet()
     assert [e.player for e in empties] == [P1, P1]
 
 
-def test_103_5_an_empty_deck_draws_nothing_and_may_still_be_kept() -> None:
+def test_103_5_a_player_whose_opening_hand_is_zero_cards_may_not_mulligan() -> None:
+    """103.5: "until their opening hand would be zero cards, after which they may not take
+    further mulligans." An empty library gives a zero-card hand at once, so P0 isn't asked."""
     state = new_game(GameConfig.standard(), [Deck(()), deck(10, 10)], seed=1)
     choose_starting_player(state, 0)
     assert state.players[0].hand == []
     assert state.players[0].drew_from_empty_library
-    assert request_of(state).player == P0, "a mulligan would still be allowed (hand 7 - 1 > 0)"
+    request = request_of(state)
+    assert (request.player, request.kind) == (P1, DecisionKind.MULLIGAN)
+
+
+def test_103_5_a_short_library_reaches_a_zero_card_hand_sooner() -> None:
+    """A 3-card library: hands of 3, 2, 1 and then 0 cards; the limit is the cards, not 7."""
+    state = new_game(GameConfig.standard(), [deck(2, 1), deck(10, 10)], seed=1)
+    choose_starting_player(state, 0)
+    act(state, mulligan(P0), keep(P1))
+    act(state, bottom(P0, state.players[0].hand[0]))
+    assert len(state.players[0].hand) == 2
+    act(state, mulligan(P0))
+    first, second = state.players[0].hand[:2]
+    act(state, bottom(P0, first, second), order(P0, first, second))
+    assert len(state.players[0].hand) == 1
+    act(state, mulligan(P0))
+    hand = state.players[0].hand
+    assert request_of(state).kind is DecisionKind.ORDER_CARDS, "all three must go to the bottom"
+    gap = act(state, order(P0, *hand))
+    assert gap is not None, "the hand is zero cards: no further mulligan is offered"
+    assert state.players[0].hand == []
+
+
+def test_121_4_727_3_mulligans_dont_undo_drawing_from_an_empty_library() -> None:
+    """727.3: a player with fewer than seven cards loses "regardless of any mulligans"."""
+    state = new_game(GameConfig.standard(), [deck(10, 10), deck(3, 2)], seed=1)
+    choose_starting_player(state, 0)
+    act(state, keep(P0), mulligan(P1))
+    act(state, bottom(P1, state.players[1].hand[0]))
+    assert state.players[1].drew_from_empty_library
+    empties = [e.player for e in events(state, CardDrawn) if e.empty_library]
+    assert empties == [P1, P1, P1, P1], "two failed draws for each of the two hands"
 
 
 def test_103_5_illegal_answers_are_rejected_and_change_nothing() -> None:
