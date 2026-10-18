@@ -237,6 +237,27 @@ uv run ruff format .       # format
 uv run pyright             # type check
 ```
 
+## Work in checkpoints
+
+A session can stop at any time: a usage limit, a closed app, a lost connection. Work must survive
+that, and a fresh session must be able to resume it.
+
+- **Commit and push to the working branch after each meaningful step,** not just at the end.
+  Examples: a passing group of tests, a finished module, a doc update. Work-in-progress commits
+  are fine on a branch. Never push to `main`.
+- **Keep a progress note in `PROGRESS.md` at the repo root** while a task is under way. Update it
+  with each checkpoint commit. It holds:
+  - the task, and a link to the PR or prompt it came from
+  - what's done
+  - what's in progress, including any half-finished change and how far it got
+  - what's next
+  - decisions made so far that aren't yet in the docs
+  - open questions for the user
+- **Resuming:** if `PROGRESS.md` exists on the branch you're asked to work on, read it first and
+  continue from it rather than starting over.
+- **Before opening the PR,** move anything lasting from `PROGRESS.md` into the proper docs
+  (decisions.md, howto.md, and so on), then delete `PROGRESS.md`. It must never reach `main`.
+
 ## Working style
 
 - Work in small, milestone-scoped branches and PRs. Tick items off in `docs/roadmap.md` as they land.
