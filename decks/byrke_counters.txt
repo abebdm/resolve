@@ -1,0 +1,89 @@
+# Byrke, Long Ear of the Law — +1/+1 Counters (Selesnya)
+# Format: '<count> <card name>' per line. Sections: Commander / Mainboard / Sideboard.
+# Sideboard cards are out of scope for card coverage.
+
+Commander
+1 Byrke, Long Ear of the Law
+
+Mainboard
+1 Abzan Battle Priest
+1 Abzan Falconer
+1 Aetheric Amplifier
+1 Ainok Bond-Kin
+1 Arbor Armament
+1 Arcane Signet
+1 Arwen, Weaver of Hope
+1 Asceticism
+1 Ash Barrens
+1 Avacyn's Pilgrim
+1 Basri's Lieutenant
+1 Basri's Solidarity
+1 Battlefield Promotion
+1 Biogenic Upgrade
+1 Blossoming Sands
+1 Botanical Brawler
+1 Branching Evolution
+1 Bulwark Ox
+1 Canopy Vista
+1 Champion of Lambholt
+1 Command Tower
+1 Conclave Mentor
+1 Dowsing Dagger
+1 Duskshell Crawler
+1 Emerald Medallion
+1 Enduring Vitality
+1 Evolution Witness
+1 Explore
+1 Fangs of Kalonia
+1 Farseek
+1 Finneas, Ace Archer
+13 Forest
+1 Fortified Village
+1 Generous Gift
+1 Good-Fortune Unicorn
+1 Gyre Sage
+1 Hamza, Guardian of Arashin
+1 Hardened Scales
+1 Heroic Intervention
+1 Hunter's Edge
+1 Incubation Druid
+1 Inspiring Call
+1 Ivy Lane Denizen
+1 Joraga Treespeaker
+1 Kalonian Hydra
+1 Kami of Whispered Hopes
+1 Karn's Bastion
+1 Kutzil, Malamet Exemplar
+1 Lae'zel, Vlaakith's Champion
+1 Lightning Greaves
+1 Llanowar Elves
+1 Loyal Guardian
+1 Managorger Hydra
+1 Mikaeus, the Lunarch
+1 Myriad Landscape
+1 Ornery Tumblewagg
+1 Overgrown Farmland
+1 Path to Exile
+7 Plains
+1 Pridemalkin
+1 Quilled Greatwurm
+1 Radiant Grove
+1 Rampaging Aetherhood
+1 Rampant Growth
+1 Reliquary Tower
+1 Return of the Wildspeaker
+1 Rishkar, Peema Renegade
+1 Scute Mob
+1 Selesnya Sanctuary
+1 Selesnya Signet
+1 Selfless Spirit
+1 Sol Ring
+1 Sovereign Okinec Ahau
+1 Sunpetal Grove
+1 Swiftfoot Boots
+1 Swords to Plowshares
+1 Tender Wildguide
+1 Thriving Heath
+1 Undergrowth Champion
+1 Unnatural Restoration
+1 Wildwood Scourge
