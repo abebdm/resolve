@@ -27,7 +27,8 @@ The turn-based actions implemented:
   option, so all the active player's opponents are defending players (802.2, docs/decisions.md).
 - declare attackers: with no creature to attack with, the declaration is empty (508.1).
 - cleanup: the active player discards down to their maximum hand size of seven (514.1, 402.2);
-  514.2 removes damage and ends "until end of turn" effects, none of which can exist yet; then
+  514.2 removes all damage from permanents (and would end "until end of turn" effects, none of
+  which can exist yet); then
   514.3a: if state-based actions would be performed (or triggers are waiting), they are, the
   active player receives priority, and another cleanup step follows.
 
@@ -59,7 +60,7 @@ from resolve.engine.priority import PriorityRound, current_turn
 from resolve.engine.sba import state_based_actions
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.cards import CardDiscarded
-from resolve.events.permanents import PermanentsUntapped
+from resolve.events.permanents import DamageRemoved, PermanentsUntapped
 from resolve.events.pipeline import ApplyEvents
 from resolve.events.turn import StepBegan, TurnBegan
 from resolve.state.game import next_in_turn_order
@@ -194,7 +195,7 @@ class RunStep(Task):
                         raise NotImplementedRule("508.1: declaring attackers (roadmap M3)")
                 return ()  # 508.1: the active player controls no creature, so none attack
             case Step.CLEANUP:
-                return (DiscardToHandSize(active),)
+                return (DiscardToHandSize(active), RemoveDamage())
             case _:
                 return ()
 
@@ -214,6 +215,18 @@ def _begin_rules(step: Step | None) -> tuple[str, ...]:
         Step.CLEANUP: "514",
     }
     return (rules[step], "500.6")
+
+
+@dataclass(slots=True)
+class RemoveDamage(Task):
+    """514.2: all damage marked on permanents is removed, at the same time ("until end of turn"
+    and "this turn" effects would end with it; none can exist yet)."""
+
+    def run(self, state: GameState) -> TaskResult:
+        damaged = tuple(obj for obj in state.battlefield if state.objects[obj].damage)
+        if not damaged:
+            return Done()
+        return Push((ApplyEvents((DamageRemoved(objs=damaged, rules=("514.2", "120.6")),)),))
 
 
 @dataclass(slots=True)

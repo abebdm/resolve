@@ -16,7 +16,8 @@ What a scenario can set:
 - cards in any zone: libraries, hands and graveyards (added on top, listed top first), the
   battlefield and the stack (with a controller), exile and the command zone;
 - which players know a hidden card (``known_to``, 400.2);
-- which permanents are tapped (``tap``, 110.5) and the mana in each pool (``mana``, 106.4);
+- which permanents are tapped (``tap``, 110.5), the damage marked on them (``damage``, 120.6)
+  and the mana in each pool (``mana``, 106.4);
 - each player's commanders (903.3), in any zone;
 - the starting player (103.1), which fixes turn order; ``None`` means not chosen yet;
 - with ``at(...)``, the turn in progress: its number, the active player, the phase and step, who
@@ -191,6 +192,16 @@ class Scenario:
                 raise ScenarioError(f"object {obj} isn't a permanent, so it can't be tapped")
         for obj in objs:
             state.objects[obj].tapped = True
+        return self
+
+    def damage(self, obj: ObjectId, amount: int) -> Scenario:
+        """Mark ``amount`` damage on a permanent (120.3e); only permanents can have damage."""
+        state = self._open()
+        if state.object(obj).zone.kind is not ZoneKind.BATTLEFIELD:
+            raise ScenarioError(f"object {obj} isn't a permanent, so it can't have damage")
+        if amount < 0:
+            raise ScenarioError("damage can't be negative")
+        state.objects[obj].damage = amount
         return self
 
     def mana(self, player: PlayerId, *mana: ManaType) -> Scenario:

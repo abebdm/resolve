@@ -59,9 +59,12 @@ lands and mana; creatures and damage; concession and leaving the game.
   intrinsic mana abilities added by `characteristics`), tapped status, the untap step (502.3),
   mana pools emptying as steps end (500.5), and mana abilities at priority (605.3a). Random
   agents finish two-player land-only games.
-- **Next:** M1.4, creatures and damage: a few vanilla creatures, damage marked on permanents,
-  704.5f and 704.5g, damage removal in cleanup (514.2) and 514.3a with a real state-based
-  action.
+- **Done (M1.4):** vanilla creatures (`resolve.cards.definitions.vanilla_creatures`), power and
+  toughness in `characteristics`, damage marked on permanents, the state-based actions 704.5f
+  and 704.5g (with the owner ordering cards that reach a graveyard together, 404.3), and damage
+  removal in cleanup (514.2).
+- **Next:** M1.5, concession and leaving the game: `concede` (104.3a), leaving the game (800.4a,
+  h, j, k), multiplayer endings (104.2a, 104.4a), replays with concessions; then M1 is done.
 
 Do not start a milestone unless the user asks.
 

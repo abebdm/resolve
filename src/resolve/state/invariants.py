@@ -156,6 +156,10 @@ def invariant_violations(state: GameState) -> list[str]:
                 problems.append(f"{where}: owner {obj.owner} differs from its card's owner")
         if list(obj.known_to) != sorted(dict.fromkeys(obj.known_to)):
             problems.append(f"{where}: known_to isn't sorted and unique")
+        if obj.damage < 0:
+            problems.append(f"{where} has negative damage {obj.damage}")
+        if obj.damage and obj.zone.kind is not ZoneKind.BATTLEFIELD:
+            problems.append(f"{where} has damage in the {obj.zone}: only permanents (120.6)")
         if obj.tapped and obj.zone.kind is not ZoneKind.BATTLEFIELD:
             problems.append(f"{where} is tapped in the {obj.zone}: only permanents (110.5d)")
     for player in state.players:

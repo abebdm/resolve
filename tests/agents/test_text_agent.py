@@ -282,3 +282,11 @@ def test_render_view_shows_tapped_permanents_mana_and_abilities() -> None:
     assert describe_option(ActivateAbilityOption(forest, 0), view) == (
         f"activate ability 0 of Forest #{forest} (tapped)"
     )
+
+
+def test_describe_object_shows_damage() -> None:
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    scenario.damage(bears, 1)
+    text = render_view(view_for(scenario.build(), P1))
+    assert f"Grizzly Bears #{bears} (1 damage)" in text

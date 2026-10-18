@@ -1,4 +1,5 @@
-"""Events that change permanents: playing a land onto the battlefield, tapping and untapping."""
+"""Events that change permanents: playing a land, tapping and untapping, damage removal, and
+permanents leaving for the graveyard (701.8, 704.5f, 704.5g)."""
 
 from __future__ import annotations
 
@@ -9,7 +10,7 @@ from resolve.errors import EngineError
 from resolve.events.base import Event
 from resolve.state.game import move_object
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.zones import BATTLEFIELD, ZoneKind
+from resolve.state.zones import BATTLEFIELD, Zone, ZoneKind
 
 if TYPE_CHECKING:
     from resolve.state.game import GameState
@@ -72,3 +73,51 @@ class PermanentsUntapped(Event):
                 raise EngineError(f"object {obj} isn't tapped (701.26b)")
         for obj in self.objs:
             state.objects[obj].tapped = False
+
+
+def _to_graveyard(state: GameState, obj: ObjectId) -> ObjectId:
+    _permanent(state, obj)
+    owner = state.objects[obj].owner
+    return move_object(state, obj, Zone.graveyard(owner)).id
+
+
+@dataclass(frozen=True, kw_only=True)
+class PermanentDestroyed(Event):
+    """The permanent ``obj`` is destroyed: it moves to its owner's graveyard (701.8a), as a new
+    object (400.7, recorded as ``moved``). Lethal damage (704.5g) destroys; 701.8b."""
+
+    obj: ObjectId
+    moved: ObjectId | None = None
+
+    def apply(self, state: GameState) -> Event:
+        if self.moved is not None:
+            raise EngineError("a destruction is proposed without its outcome")
+        return replace(self, moved=_to_graveyard(state, self.obj))
+
+
+@dataclass(frozen=True, kw_only=True)
+class PutIntoGraveyard(Event):
+    """The permanent ``obj`` is put into its owner's graveyard without being destroyed
+    (701.8b), as for a creature with 0 or less toughness (704.5f). ``moved`` is the new object
+    (400.7)."""
+
+    obj: ObjectId
+    moved: ObjectId | None = None
+
+    def apply(self, state: GameState) -> Event:
+        if self.moved is not None:
+            raise EngineError("a move is proposed without its outcome")
+        return replace(self, moved=_to_graveyard(state, self.obj))
+
+
+@dataclass(frozen=True, kw_only=True)
+class DamageRemoved(Event):
+    """All damage marked on the permanents ``objs`` is removed, at the same time (514.2)."""
+
+    objs: tuple[ObjectId, ...]
+
+    def apply(self, state: GameState) -> None:
+        for obj in self.objs:
+            _permanent(state, obj)
+        for obj in self.objs:
+            state.objects[obj].damage = 0

@@ -110,6 +110,35 @@ DUAL_LAND: dict[str, Any] = {
     "color_identity": ["G", "U"],
 }
 
+
+def vanilla(
+    name: str, cost: str, cmc: float, subtype: str, pt: tuple[str, str], color: str
+) -> dict[str, Any]:
+    """A creature with no rules text."""
+    return {
+        "object": "card",
+        "oracle_id": "oid-" + name.lower().replace(" ", "-"),
+        "name": name,
+        "layout": "normal",
+        "mana_cost": cost,
+        "cmc": cmc,
+        "type_line": f"Creature — {subtype}",
+        "oracle_text": "",
+        "power": pt[0],
+        "toughness": pt[1],
+        "colors": [color],
+        "color_identity": [color],
+        "keywords": [],
+    }
+
+
+# Real vanilla creatures (Oracle text empty), and invented ones for 704.5f and 208.2.
+GRIZZLY_BEARS = vanilla("Grizzly Bears", "{1}{G}", 2.0, "Bear", ("2", "2"), "G")
+SAVANNAH_LIONS = vanilla("Savannah Lions", "{W}", 1.0, "Cat", ("2", "1"), "W")
+HILL_GIANT = vanilla("Hill Giant", "{3}{R}", 4.0, "Giant", ("3", "3"), "R")
+ZERO_TOUGHNESS = vanilla("Test Wisp", "{G}", 1.0, "Spirit", ("1", "0"), "G")
+STAR_CREATURE = vanilla("Test Star", "{1}{G}", 2.0, "Elemental", ("*", "*"), "G")
+
 # A transforming double-faced card: colors live on the faces, not on the card.
 TRANSFORM_CARD: dict[str, Any] = {
     "object": "card",

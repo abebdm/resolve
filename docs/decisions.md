@@ -19,6 +19,37 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-18: Creatures, damage and state-based actions 704.5f and 704.5g
+- **Decision:** damage is a number marked on the permanent (`GameObject.damage`, 120.6); only
+  permanents have any, and a new object has none (400.7). Nothing deals damage yet (combat is
+  M3, damage effects M2), so tests mark it with the scenario builder.
+- **Decision:** `characteristics` gives power and toughness from the printed numbers (208.1,
+  302.4c) through `power` and `toughness`, which raise `NotImplementedRule("208.2")` for a star;
+  a missing value counts as 0 for the state-based actions (208.5). Noncreature permanents have
+  `None` (208.3).
+- **Decision:** 704.5f puts a creature with 0 or less toughness into its owner's graveyard as
+  `PutIntoGraveyard` (not destroyed, 701.8b); 704.5g destroys a creature with toughness above 0
+  and damage at least its toughness (`PermanentDestroyed`, 701.8a). A creature with 0 toughness
+  and damage gets only 704.5f. The events of one check are listed creatures first (battlefield
+  order), then players; they are applied as one `ApplyEvents`.
+- **Decision:** when one check puts two or more cards into one player's graveyard, that owner
+  orders them first (404.3, `ORDER_CARDS`, listed top to bottom; owners asked in APNAP order).
+  `CheckStateBasedActions` holds the check's events while it asks, so the check isn't
+  recomputed between the answers.
+- **Decision:** 514.2 removes all damage from permanents as one `DamageRemoved` event after the
+  discard, and before 514.3a's check, so damage marked as cleanup begins can't kill. A
+  state-based action in the cleanup step now gives the active player priority there, and
+  another cleanup step follows (514.3a, tested with a 0-toughness creature).
+- **Decision:** the vanilla creatures are Grizzly Bears, Savannah Lions and Hill Giant, whose
+  Oracle text is empty. Their definitions hold only names. They could not be checked against the
+  pinned snapshot in this session (it isn't available in the cloud); their test fixtures follow
+  their Oracle data.
+- **Rules:** 120.6, 208.1, 208.2, 208.3, 208.5, 302.4c, 404.3, 514.2, 514.3a, 701.8a, 701.8b,
+  704.3, 704.5f, 704.5g.
+- **Where:** `resolve.engine.sba`, `resolve.engine.turns.RemoveDamage`,
+  `resolve.events.permanents`, `resolve.effects.characteristics`,
+  `resolve.cards.definitions.vanilla_creatures`.
+
 ### 2026-10-18: Lands, mana abilities and mana pools
 - **Decision:** playing a land is a `PlayLandOption` at priority (305.1-305.3, 116.2a) and one
   `LandPlayed` event: the land becomes a new, untapped permanent under its player's control

@@ -16,7 +16,7 @@ Each game is played by ``RandomAgent``s. Before every answer the harness checks:
   own helpers: deeply immutable; the request only for the deciding player; the turn (number,
   active player, phase, step and priority holder, all public); every player's life, whether
   they lost, their mana pool, library count (401.2), hand and graveyard objects in order
-  (402.3, 404.2) and the shared zones, with each permanent's tapped status;
+  (402.3, 404.2) and the shared zones, with each permanent's tapped status and damage;
   card names exactly where the viewer may know them (400.2, 402.3); and only the log entries the
   viewer may see, with answers visible only to their player (design.md §7), and the redacted
   form of the others, which never shows another player's library objects (design.md §9);
@@ -180,6 +180,8 @@ def view_problems(state: GameState, viewer: PlayerId) -> list[str]:
                 problems.append(f"{where} of object {obj.id} is wrong")
             if obj.tapped != state.objects[obj.id].tapped:  # 110.5: status is public
                 problems.append(f"{where} misreports whether object {obj.id} is tapped")
+            if obj.damage != state.objects[obj.id].damage:  # 120.6: marked damage is public
+                problems.append(f"{where} misreports the damage on object {obj.id}")
 
     if [summary.id for summary in view.players] != [player.id for player in state.players]:
         problems.append(f"{where} lists the wrong players")

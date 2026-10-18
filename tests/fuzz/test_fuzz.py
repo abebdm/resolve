@@ -734,3 +734,22 @@ def test_state_problems_finds_a_view_misreporting_tapped_permanents_and_mana(
     assert f"player 0's view misreports whether object {forest} is tapped" in problems
     assert "player 1's view misreports player 1's mana pool" in problems
     assert len(problems) == 4
+
+
+def test_state_problems_finds_a_view_misreporting_damage(monkeypatch: pytest.MonkeyPatch) -> None:
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(PlayerId(0), ["Grizzly Bears"])
+    scenario.damage(bears, 1)
+    scenario.at(TurnStep.UPKEEP)
+    state = scenario.build()
+    assert state_problems(state) == []
+
+    def undamaged(view: PlayerView) -> PlayerView:
+        field = tuple(dataclasses.replace(obj, damage=0) for obj in view.battlefield)
+        return dataclasses.replace(view, battlefield=field)
+
+    leaking(monkeypatch, undamaged)
+    assert state_problems(state) == [
+        f"player 0's view misreports the damage on object {bears}",
+        f"player 1's view misreports the damage on object {bears}",
+    ]

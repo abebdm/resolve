@@ -62,6 +62,8 @@ class GameObject:
       listed here.
     - ``tapped``: its status (110.5). Only permanents have status (110.5d); a new object is
       untapped (110.5b).
+    - ``damage``: damage marked on it (120.3, 120.6); only permanents have any, and a new object
+      has none (400.7).
     """
 
     id: ObjectId
@@ -72,6 +74,7 @@ class GameObject:
     timestamp: int
     known_to: tuple[PlayerId, ...] = ()
     tapped: bool = False
+    damage: int = 0
 
 
 @dataclass(slots=True)
