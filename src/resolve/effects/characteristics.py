@@ -32,6 +32,7 @@ from resolve.data.cards import CardData
 from resolve.data.types import CardType, Supertype
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.state.ids import ObjectId
+from resolve.state.zones import ZoneKind
 from resolve.values import Immutable
 
 if TYPE_CHECKING:
@@ -80,7 +81,8 @@ def _number(text: str | None, what: str) -> int | None:
 
 def characteristics(state: GameState, obj: ObjectId) -> Characteristics:
     """The current characteristics of ``obj`` (109.3; layers arrive in M5)."""
-    card = state.card_of(state.object(obj))
+    game_object = state.object(obj)
+    card = state.card_of(game_object)
     index = _face_index(card.data)
     face = card.data.faces[index]
     types = face.types
@@ -91,14 +93,18 @@ def characteristics(state: GameState, obj: ObjectId) -> Characteristics:
     if CardType.LAND in types.card_types:
         # 305.6: each basic land type gives the land its intrinsic mana ability.
         abilities += [intrinsic_mana_ability(t) for t in types.subtypes if t in BASIC_LAND_MANA]
+    # 208.3: a noncreature permanent has no power or toughness, even if some is printed.
+    has_numbers = (
+        CardType.CREATURE in types.card_types or game_object.zone.kind is not ZoneKind.BATTLEFIELD
+    )
     return Characteristics(
         name=face.name,
         supertypes=types.supertypes,
         card_types=types.card_types,
         subtypes=types.subtypes,
         abilities=tuple(abilities),
-        power_text=face.power,
-        toughness_text=face.toughness,
+        power_text=face.power if has_numbers else None,
+        toughness_text=face.toughness if has_numbers else None,
     )
 
 

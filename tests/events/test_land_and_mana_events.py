@@ -151,6 +151,22 @@ def test_invariants_catch_damage_off_the_battlefield_or_negative() -> None:
     assert any("negative damage" in p for p in problems)
 
 
+def test_208_3_a_noncreature_permanent_has_no_power_or_toughness() -> None:
+    """Even with numbers printed on it (a Vehicle); off the battlefield it has them."""
+    scenario = Scenario(2)
+    (on_field,) = scenario.battlefield(P0, ["Test Wagon"])
+    (in_hand,) = scenario.hand(P0, ["Test Wagon"])
+    state = scenario.build()
+    assert (characteristics(state, on_field).power, characteristics(state, on_field).toughness) == (
+        None,
+        None,
+    )
+    assert (characteristics(state, in_hand).power, characteristics(state, in_hand).toughness) == (
+        3,
+        3,
+    )
+
+
 def test_208_3_power_and_toughness_of_noncreatures_are_none() -> None:
     scenario = Scenario(2)
     (forest,) = scenario.battlefield(P0, ["Forest"])

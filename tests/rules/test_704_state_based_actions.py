@@ -19,14 +19,16 @@ From the pinned CR:
 
 from __future__ import annotations
 
+import copy
+
 import pytest
 
 from resolve.agents.scripted import choose
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer
-from resolve.decisions.spaces import ObjectOption, Pick
+from resolve.decisions.spaces import ObjectOption, Order, Pick
 from resolve.engine.api import new_game, pending_decision, submit, view_for
-from resolve.errors import NotImplementedRule
+from resolve.errors import InvalidAnswer, NotImplementedRule
 from resolve.events.game import GameEnded, PlayerLost
 from resolve.events.permanents import PermanentDestroyed, PutIntoGraveyard
 from resolve.state.config import GameConfig
@@ -314,3 +316,81 @@ def test_208_2_a_star_power_or_toughness_is_a_gap() -> None:
     with pytest.raises(NotImplementedRule) as gap:
         scenario.build()
     assert gap.value.rule == "208.2"
+
+
+def test_101_4_404_3_owners_order_their_cards_in_apnap_order_from_the_active_player() -> None:
+    """Turn 2, player 1 active (player 0 started): player 1 orders first, then player 0."""
+    scenario = Scenario(2)
+    mine = scenario.battlefield(P1, ["Grizzly Bears", "Hill Giant"])
+    theirs = scenario.battlefield(P0, ["Grizzly Bears", "Savannah Lions"])
+    for obj in (*mine, *theirs):
+        scenario.damage(obj, 3)
+    scenario.at(Step.UPKEEP, active=P1, number=2)
+    state = scenario.build()
+    first = request_of(state)
+    assert (first.kind, first.player) == (DecisionKind.ORDER_CARDS, P1)
+    run_script(state, choose(*(ObjectOption(o) for o in mine), player=P1))
+    second = request_of(state)
+    assert (second.kind, second.player) == (DecisionKind.ORDER_CARDS, P0)
+
+
+def test_101_4_404_3_three_players_asked_from_the_active_player_only_with_two_cards() -> None:
+    scenario = Scenario(3)
+    p0 = scenario.battlefield(P0, ["Grizzly Bears", "Hill Giant"])
+    p2 = scenario.battlefield(P2, ["Grizzly Bears", "Hill Giant"])
+    (single,) = scenario.battlefield(P1, ["Savannah Lions"])
+    for obj in (*p0, *p2, single):
+        scenario.damage(obj, 3)
+    scenario.at(Step.UPKEEP, active=P1, number=2)
+    state = scenario.build()
+    asked: list[PlayerId] = []
+    for cards in ((p2, P2), (p0, P0)):
+        request = request_of(state)
+        assert request.kind is DecisionKind.ORDER_CARDS
+        asked.append(request.player)
+        run_script(state, choose(*(ObjectOption(o) for o in cards[0]), player=cards[1]))
+    assert asked == [P2, P0]  # APNAP from player 1; player 1 has one card, so isn't asked
+    assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
+    assert names(state, Zone.graveyard(P1)) == ["Savannah Lions"]
+
+
+def test_404_3_cards_are_grouped_by_owner_not_controller() -> None:
+    """Player 1 controls both, but they go to different graveyards: nothing to order."""
+    scenario = Scenario(2)
+    (borrowed,) = scenario.battlefield(P1, ["Grizzly Bears"], owner=P0)
+    (own,) = scenario.battlefield(P1, ["Hill Giant"])
+    scenario.damage(borrowed, 2).damage(own, 3)
+    scenario.at(Step.UPKEEP)
+    state = scenario.build()
+    assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
+    assert names(state, Zone.graveyard(P0)) == ["Grizzly Bears"]
+    assert names(state, Zone.graveyard(P1)) == ["Hill Giant"]
+
+
+def test_404_3_an_invalid_graveyard_order_is_rejected() -> None:
+    scenario = Scenario(2)
+    lions, giant = scenario.battlefield(P1, ["Savannah Lions", "Hill Giant"])
+    scenario.damage(lions, 1).damage(giant, 3)
+    scenario.at(Step.UPKEEP)
+    state = scenario.build()
+    request = request_of(state)
+    before = copy.deepcopy(state)
+    for bad in (
+        DecisionAnswer(request.id, P1, Order((0,))),
+        DecisionAnswer(request.id, P1, Order((1, 1))),
+        DecisionAnswer(request.id, P0, Order((0, 1))),
+    ):
+        with pytest.raises(InvalidAnswer):
+            submit(state, bad)
+        assert state == before
+
+
+def test_120_6_damage_stays_until_the_cleanup_step() -> None:
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    scenario.damage(bears, 1)
+    scenario.library(P0, ["Forest"])
+    scenario.at(Step.UPKEEP, number=3)
+    state = scenario.build()
+    pass_until(state, lambda s: s.turn is not None and s.turn.step is Step.END)
+    assert state.objects[bears].damage == 1

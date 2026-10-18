@@ -10,7 +10,7 @@ from resolve.effects.characteristics import characteristics
 from resolve.errors import EngineError
 from resolve.events.mana import ManaPoolEmptied
 from resolve.events.pipeline import ApplyEvents
-from resolve.state.game import players_in_game
+from resolve.state.game import apnap_order
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.tasks import Done, Push, Task, TaskResult
 
@@ -48,11 +48,11 @@ class ActivateManaAbility(Task):
 
 
 def empty_mana_pools(state: GameState) -> tuple[Event, ...]:
-    """500.5, 703.4q: every player's unspent mana empties, in turn order; nothing for empty
+    """500.5, 703.4q: every player's unspent mana empties, in APNAP order; nothing for empty
     pools."""
     return tuple(
         ManaPoolEmptied(player=player, mana=tuple(pool), rules=("500.5", "703.4q", "106.4"))
-        for player in players_in_game(state)
+        for player in apnap_order(state)
         if (pool := state.player(player).mana_pool)
     )
 

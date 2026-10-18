@@ -137,6 +137,12 @@ GRIZZLY_BEARS = vanilla("Grizzly Bears", "{1}{G}", 2.0, "Bear", ("2", "2"), "G")
 SAVANNAH_LIONS = vanilla("Savannah Lions", "{W}", 1.0, "Cat", ("2", "1"), "W")
 HILL_GIANT = vanilla("Hill Giant", "{3}{R}", 4.0, "Giant", ("3", "3"), "R")
 ZERO_TOUGHNESS = vanilla("Test Wisp", "{G}", 1.0, "Spirit", ("1", "0"), "G")
+VEHICLE: dict[str, Any] = {
+    **vanilla("Test Wagon", "{2}", 2.0, "Vehicle", ("3", "3"), "C"),
+    "type_line": "Artifact — Vehicle",
+    "colors": [],
+    "color_identity": [],
+}
 STAR_CREATURE = vanilla("Test Star", "{1}{G}", 2.0, "Elemental", ("*", "*"), "G")
 
 # A transforming double-faced card: colors live on the faces, not on the card.

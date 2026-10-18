@@ -28,7 +28,7 @@ from resolve.events.base import Event
 from resolve.events.game import GameEnded, PlayerLost
 from resolve.events.permanents import PermanentDestroyed, PutIntoGraveyard
 from resolve.events.pipeline import ApplyEvents
-from resolve.state.game import players_in_game, turn_order
+from resolve.state.game import apnap_order, players_in_game
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
 
@@ -53,7 +53,7 @@ def state_based_actions(state: GameState) -> tuple[Event, ...]:
             events.append(PutIntoGraveyard(obj=obj, rules=("704.5f", "704.3")))
         elif state.objects[obj].damage > 0 and toughness <= state.objects[obj].damage:
             events.append(PermanentDestroyed(obj=obj, rules=("704.5g", "120.6", "701.8a")))
-    for player_id in players_in_game(state):
+    for player_id in apnap_order(state):
         player = state.player(player_id)
         if player.life <= 0:
             events.append(PlayerLost(player=player_id, rules=("704.5a", "704.3")))
@@ -125,7 +125,7 @@ class CheckStateBasedActions(Task):
                 by_owner.setdefault(state.objects[obj].owner, []).append(obj)
         return [
             (owner, tuple(by_owner[owner]))
-            for owner in turn_order(state)
+            for owner in apnap_order(state)
             if len(by_owner.get(owner, ())) > 1
         ]
 

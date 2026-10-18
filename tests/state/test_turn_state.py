@@ -11,7 +11,7 @@ from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionRequest
 from resolve.decisions.spaces import ChooseOne, PassOption
 from resolve.errors import EngineError
-from resolve.state.game import GameState, next_in_turn_order, players_in_game
+from resolve.state.game import GameState, apnap_order, next_in_turn_order, players_in_game
 from resolve.state.ids import PlayerId
 from resolve.state.invariants import invariant_violations, state_impurities
 from resolve.state.turn import (
@@ -158,3 +158,15 @@ def test_the_check_reads_the_pending_request() -> None:
         ("117.1",),
     )
     assert any("is asked for a priority action" in p for p in invariant_violations(state))
+
+
+def test_101_4_apnap_order_starts_with_the_active_player() -> None:
+    scenario = Scenario(4, starting_player=1)
+    state = scenario.build()
+    assert apnap_order(state) == (P1, P2, P3, P0)  # 101.4e: before the first turn
+    state.turn = TurnState(3, P3)
+    assert apnap_order(state) == (P3, P0, P1, P2)
+    state.player(P0).lost = True
+    assert apnap_order(state) == (P3, P1, P2)
+    state.player(P3).lost = True  # 800.4j: the turn goes on without its active player
+    assert apnap_order(state) == (P1, P2)

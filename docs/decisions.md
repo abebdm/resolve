@@ -25,15 +25,17 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   M3, damage effects M2), so tests mark it with the scenario builder.
 - **Decision:** `characteristics` gives power and toughness from the printed numbers (208.1,
   302.4c) through `power` and `toughness`, which raise `NotImplementedRule("208.2")` for a star;
-  a missing value counts as 0 for the state-based actions (208.5). Noncreature permanents have
-  `None` (208.3).
+  a missing value counts as 0 for the state-based actions (208.5). A noncreature permanent has
+  `None` even with numbers printed on it (a Vehicle); off the battlefield a card has its printed
+  numbers (208.3).
 - **Decision:** 704.5f puts a creature with 0 or less toughness into its owner's graveyard as
   `PutIntoGraveyard` (not destroyed, 701.8b); 704.5g destroys a creature with toughness above 0
   and damage at least its toughness (`PermanentDestroyed`, 701.8a). A creature with 0 toughness
   and damage gets only 704.5f. The events of one check are listed creatures first (battlefield
   order), then players; they are applied as one `ApplyEvents`.
 - **Decision:** when one check puts two or more cards into one player's graveyard, that owner
-  orders them first (404.3, `ORDER_CARDS`, listed top to bottom; owners asked in APNAP order).
+  orders them first (404.3, `ORDER_CARDS`, listed top to bottom; owners asked in APNAP order,
+  from the active player: `apnap_order`, 101.4).
   `CheckStateBasedActions` holds the check's events while it asks, so the check isn't
   recomputed between the answers.
 - **Decision:** 514.2 removes all damage from permanents as one `DamageRemoved` event after the
