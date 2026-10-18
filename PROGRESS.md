@@ -26,7 +26,11 @@ finish M1.5, open its PR against `claude/m1-4-creatures`.
 - test-reviewer on origin/main...this branch: Adequate with gaps, no wrong tests.
 
 ## In progress
-- Addressing the review's findings, tests first (see "Findings" below).
+- Review findings addressed (commits c487b9a, 590879e and the next): all 13 missing tests and 3
+  hollow ones, tests first. Code changes: replay raises ReplayDiverged for a stale concession or
+  an ended game; PlayerLeftGame counts library objects (library_size) instead of naming them.
+  Mutation-checked the coverage tests (sba _still_apply, discard re-ask, chooser kept, 800.4k,
+  117.4 count-based). Docs updated (decisions M1.5 entry, design §9/§12, howto line).
 
 ## Findings to address (test-reviewer, session 2)
 1. Concession during SBA graveyard ORDER_CARDS (`_still_apply`), 4 players.
@@ -46,7 +50,7 @@ Hollow: 800.4j test claims; `any(Conceded) or players == 2`; card conservation i
 concession fuzz test.
 
 ## Next
-- Then: re-run test-reviewer, delete PROGRESS.md, end-of-M1 verification (fuzz with basic-land
+- Re-run test-reviewer, delete PROGRESS.md, end-of-M1 verification (fuzz with basic-land
   decks needs a snapshot: `tools/fetch_scryfall.py --data-dir <scratch>`), play_cli decking
   game, open the PR against claude/m1-4-creatures, update #13-#15 descriptions.
 

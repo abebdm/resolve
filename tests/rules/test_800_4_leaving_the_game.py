@@ -66,6 +66,7 @@ def test_800_4a_a_conceding_players_objects_leave_the_game() -> None:
     scenario.at(Step.UPKEEP, number=2)
     state = scenario.build()
     owned = sorted(obj for obj, o in state.objects.items() if o.owner == P2)
+    library = list(state.player(P2).library)
     old = request_of(state)
     concede(state, P2)
     assert not any(o.owner == P2 for o in state.objects.values())
@@ -73,7 +74,9 @@ def test_800_4a_a_conceding_players_objects_leave_the_game() -> None:
     assert (player.library, player.hand, player.graveyard, player.mana_pool) == ([], [], [], [])
     assert state.exile == [] and state.battlefield == []
     (left,) = [e.record for e in state.event_log if isinstance(e.record, PlayerLeftGame)]
-    assert sorted(left.removed) == owned
+    # design.md §9: the library's objects are counted, not named.
+    assert sorted(left.removed + tuple(library)) == owned
+    assert left.library_size == len(library) == 4
     assert left.rules[:2] == ("800.4a", "104.5")
     # Player 0's request was withdrawn and asked again with a new id.
     again = request_of(state)

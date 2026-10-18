@@ -30,7 +30,7 @@ def test_a_game_of_random_agents_with_empty_decks_ends_in_a_draw() -> None:
     assert "No --deck given: every player gets an empty deck." in text
     # The draws from empty libraries have scrolled out of the recent log; the losses cite them.
     assert "PlayerLost(player=2)  (704.5b, 121.4, 704.3)" in text
-    assert "PlayerLeftGame(player=2, removed=())  (800.4a, 104.5)" in text
+    assert "PlayerLeftGame(player=2, removed=(), library_size=0)  (800.4a, 104.5)" in text
     assert "Game over: a draw." in text
     assert "Turn 1, player " in text and "upkeep step; nobody has priority." in text
 

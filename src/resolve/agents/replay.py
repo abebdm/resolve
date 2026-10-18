@@ -31,13 +31,20 @@ def inputs(log: Iterable[LogEntry]) -> list[AnswerRecord | Conceded]:
 def replay(state: GameState, log: Iterable[LogEntry]) -> int:
     """Apply the inputs of ``log`` to ``state``, a new game of the same config, decks and seed.
 
-    Each answer must fit the decision the game is asking (same player and kind), or
-    ``ReplayDiverged`` is raised. Returns the number of inputs applied. Rules gaps
+    Each answer must fit the decision the game is asking (same player and kind), and each
+    concession must come from a player still in the game, or ``ReplayDiverged`` is raised; so it
+    is if the game ends before the last input. Returns the number of inputs applied. Rules gaps
     (``NotImplementedRule``) propagate.
     """
     applied = 0
     for record in inputs(log):
+        if state.result is not None:
+            raise ReplayDiverged(f"the game ended before input {applied + 1}")
         if isinstance(record, Conceded):
+            if state.player(record.player).left_game:
+                raise ReplayDiverged(
+                    f"input {applied + 1}: player {record.player} has already left the game"
+                )
             concede(state, record.player)
         else:
             request = pending_decision(state)

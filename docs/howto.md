@@ -150,8 +150,8 @@ For the engine loop itself, drive it with small tasks.
 3. Answer with `submit(state, answer(state, value))`, or `play(state, agent)` from
    `resolve.agents`. `concede(state, player)` (`resolve.engine`) concedes for a player at the
    paused decision; `resolve.agents.replay.replay(new_state, state.event_log)` replays a game's
-   answers and concessions into a new game. To show a rejected answer changed nothing, compare with a `copy.deepcopy`
-   taken before.
+   answers and concessions into a new game. To show a rejected answer changed nothing, compare
+   with a `copy.deepcopy` taken before.
 4. Check `state_impurities(state) == []` and `invariant_violations(state) == []`
    (`resolve.state.invariants`) on any new kind of state.
 5. Put the test in `tests/engine/`, `tests/state/`, `tests/decisions/`, `tests/events/`,

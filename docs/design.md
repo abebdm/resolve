@@ -315,7 +315,9 @@ choose…".
   decklist order. For the same reason, a log entry that would reveal a library object's ID to
   another player carries a redacted form for them (`Event.redacted`, `LogEntry.redacted`): a
   draw shows other players the new hand object but not the library object it came from, and
-  cards put on the bottom of a library show only how many there were.
+  cards put on the bottom of a library show only how many there were. An event that is public
+  anyway may count library objects instead of naming them: a player leaving the game
+  (`PlayerLeftGame`) names the objects that left from the other zones and counts the library.
 - The library order is hidden from everyone, except where knowledge was gained (for example by scry).
 - The event log is filtered per viewer by each entry's visibility.
 - Agents (including the AI) only ever see `PlayerView`s. This is required for fair networked play and
@@ -427,7 +429,9 @@ New primitives are engine code and get careful review.
 
 - The game is a pure function of (config, decks, seed, ordered list of inputs): the decision
   answers and the concessions, in the order they happened. Both are in the event log
-  (`AnswerRecord`, `Conceded`); `resolve.agents.replay.replay` applies them to a new game.
+  (`AnswerRecord`, `Conceded`); `resolve.agents.replay.replay` applies them to a new game, and
+  raises `ReplayDiverged` when the new game asks something else, ends sooner, or has a
+  conceding player already out of it.
 - The **replay / save format** is exactly that, plus the engine version, CR version and card-data
   snapshot date. One format serves save files, bug reports and (later) the network lockstep
   protocol.

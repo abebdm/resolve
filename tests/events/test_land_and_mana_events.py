@@ -188,9 +188,14 @@ def test_800_4a_player_left_game_removes_every_object_they_own() -> None:
     (kept,) = scenario.battlefield(P0, ["Forest"])
     scenario.mana(P1, ManaType.GREEN)
     state = scenario.build()
+    library = list(state.player(P1).library)
     owned = sorted(o for o, obj in state.objects.items() if obj.owner == P1)
     applied = PlayerLeftGame(player=P1, rules=("800.4a",)).apply(state)
-    assert isinstance(applied, PlayerLeftGame) and sorted(applied.removed) == owned
+    assert isinstance(applied, PlayerLeftGame)
+    # design.md §9: the library's objects are counted, not named.
+    assert sorted(applied.removed) == [o for o in owned if o not in library]
+    assert applied.library_size == 1
+    assert not any(obj in state.objects for obj in owned)
     assert state.player(P1).left_game and state.player(P1).mana_pool == []
     assert state.battlefield == [kept]
     with pytest.raises(EngineError, match="already left"):
