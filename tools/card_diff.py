@@ -17,7 +17,6 @@ whatever the differences are, and 1 if a snapshot or decklist can't be read.
 from __future__ import annotations
 
 import argparse
-import difflib
 import io
 import sys
 from collections.abc import Sequence
@@ -28,15 +27,25 @@ from resolve.data.cards import (
     CardData,
     CardDatabase,
     CardDataError,
-    UnknownCardError,
     load_card_database,
     load_card_excerpt,
 )
 from resolve.data.decklist import DecklistError, load_decklist
+from resolve.data.rules_text import word_diff
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DECKS_DIR = REPO_ROOT / "decks"
-_FACE_FIELDS = ("name", "mana_cost", "type_line", "power", "toughness", "loyalty", "defense")
+_CARD_FIELDS = ("name", "layout", "mana_value", "color_identity")
+_FACE_FIELDS = (
+    "name",
+    "mana_cost",
+    "type_line",
+    "colors",
+    "power",
+    "toughness",
+    "loyalty",
+    "defense",
+)
 
 
 def load_database(path: Path) -> CardDatabase:
@@ -46,26 +55,15 @@ def load_database(path: Path) -> CardDatabase:
     return load_card_database(path, verify=False)
 
 
-def word_diff(old: str, new: str) -> str:
-    """Show ``new`` against ``old`` word by word: ``[-removed-]`` and ``{+added+}``."""
-    a, b = old.split(), new.split()
-    parts: list[str] = []
-    for op, a1, a2, b1, b2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
-        if op == "equal":
-            parts.append(" ".join(a[a1:a2]))
-            continue
-        if a2 > a1:
-            parts.append("[-" + " ".join(a[a1:a2]) + "-]")
-        if b2 > b1:
-            parts.append("{+" + " ".join(b[b1:b2]) + "+}")
-    return " ".join(parts)
-
-
 def card_changes(
     old: CardData, new: CardData, old_db: CardDatabase, new_db: CardDatabase
 ) -> list[str]:
     """Describe how one card differs between the snapshots; empty if it doesn't."""
     changes: list[str] = []
+    for field in _CARD_FIELDS:
+        a, b = getattr(old, field), getattr(new, field)
+        if a != b:
+            changes.append(f"{field}: {a!r} -> {b!r}")
     if len(old.faces) != len(new.faces):
         changes.append(f"faces: {len(old.faces)} -> {len(new.faces)}")
     for before, after in zip(old.faces, new.faces, strict=False):
@@ -93,28 +91,48 @@ def card_changes(
     return changes
 
 
+def find_card(name: str, database: CardDatabase) -> CardData | None:
+    """The card with this name, or one of whose faces has it (a back face), or ``None``."""
+    if name in database:
+        return database.get(name)
+    for card in database.cards():
+        if name in card.face_names:
+            return card
+    return None
+
+
 def compare(
     names: Sequence[str], old_db: CardDatabase, new_db: CardDatabase
 ) -> tuple[list[str], int]:
-    """Report lines for the named cards, and how many cards were checked in both snapshots."""
+    """Report lines for the cards with these names, and how many were found in both snapshots.
+
+    A name is looked up as a card name or a face name; a card named by several names (its faces)
+    is reported once. A card absent from the new snapshot under its old name is looked up by
+    Oracle ID, and reported as renamed if it is there (definitions are registered by name).
+    """
     lines: list[str] = []
     checked = 0
+    seen: set[str] = set()
     for name in names:
-        try:
-            old = old_db.get(name)
-        except UnknownCardError:
+        old = find_card(name, old_db)
+        if old is None:
             lines.append(f"{name}: not in the old snapshot")
             continue
-        try:
-            new = new_db.get(name)
-        except UnknownCardError:
-            lines.append(f"{name}: MISSING from the new snapshot (renamed or removed)")
+        if old.oracle_id in seen:
+            continue
+        seen.add(old.oracle_id)
+        new = find_card(old.name, new_db) or new_db.by_oracle_id(old.oracle_id)
+        if new is None:
+            lines.append(f"{old.name}: MISSING from the new snapshot (removed)")
             continue
         checked += 1
         changes = card_changes(old, new, old_db, new_db)
-        if changes:
-            lines.append(f"{name}:")
-            lines += [f"  {change}" for change in changes]
+        renamed = new.name != old.name
+        if renamed:
+            lines.append(f"{old.name}: RENAMED to {new.name} (rename its definition and tests)")
+        elif changes:
+            lines.append(f"{old.name}:")
+        lines += [f"  {change}" for change in changes]
     return lines, checked
 
 

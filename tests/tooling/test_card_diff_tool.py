@@ -5,7 +5,9 @@ from __future__ import annotations
 import io
 from contextlib import redirect_stdout
 from pathlib import Path
+from typing import Any
 
+from resolve.data.cards import CardDatabase
 from tests import scryfall_fixtures as fx
 from tools import card_diff as tool
 
@@ -81,3 +83,53 @@ def test_every_implemented_card_is_compared_even_if_no_deck_names_it(tmp_path: P
 def test_an_unreadable_snapshot_is_an_error(tmp_path: Path) -> None:
     status, _ = run(str(tmp_path / "missing1"), str(tmp_path / "missing2"), deck(tmp_path, "X"))
     assert status == 1
+
+
+def databases(tmp_path: Path, new_cards: list[dict[str, Any]]) -> tuple[CardDatabase, CardDatabase]:
+    old, new = snapshots(tmp_path, new_cards, fx.default_rulings())  # type: ignore[arg-type]
+    return tool.load_database(Path(old)), tool.load_database(Path(new))
+
+
+def test_card_level_fields_and_color_indicators_are_compared(tmp_path: Path) -> None:
+    elves = {**fx.LLANOWAR_ELVES, "color_identity": ["G", "U"], "layout": "saga", "cmc": 3.0}
+    forest = {**fx.FOREST, "colors": ["G"]}
+    cards = [elves if c["name"] == "Llanowar Elves" else c for c in fx.default_cards()]
+    cards = [forest if c["name"] == "Forest" else c for c in cards]
+    old_db, new_db = databases(tmp_path, cards)
+    lines, checked = tool.compare(["Llanowar Elves", "Forest"], old_db, new_db)
+    text = "\n".join(lines)
+    assert checked == 2
+    assert "color_identity: ('G',) -> ('G', 'U')" in text
+    assert "layout: 'normal' -> 'saga'" in text
+    assert "mana_value: 1.0 -> 3.0" in text
+    assert "colors: () -> ('G',)" in text, "a color indicator on a face"
+
+
+def test_a_card_renamed_by_errata_is_matched_by_oracle_id(tmp_path: Path) -> None:
+    renamed = {**fx.LLANOWAR_ELVES, "name": "Llanowar Elf"}
+    cards = [renamed if c["name"] == "Llanowar Elves" else c for c in fx.default_cards()]
+    old_db, new_db = databases(tmp_path, cards)
+    lines, checked = tool.compare(["Llanowar Elves"], old_db, new_db)
+    assert checked == 1
+    assert lines[0] == "Llanowar Elves: RENAMED to Llanowar Elf (rename its definition and tests)"
+    assert "MISSING" not in "\n".join(lines)
+
+
+def test_a_back_face_name_finds_its_card_and_each_card_is_reported_once(tmp_path: Path) -> None:
+    changed = {
+        **fx.TRANSFORM_CARD,
+        "card_faces": [
+            {**fx.TRANSFORM_CARD["card_faces"][0], "oracle_text": "Changed."},
+            fx.TRANSFORM_CARD["card_faces"][1],
+        ],
+    }
+    cards = [changed if c["name"] == changed["name"] else c for c in fx.default_cards()]
+    old_db, new_db = databases(tmp_path, cards)
+    names = ["Test Nightfall", "Test Daybreaker"]  # the back face first, then the front
+    lines, checked = tool.compare(names, old_db, new_db)
+    assert checked == 1
+    assert "not in the old snapshot" not in "\n".join(lines)
+    assert [line for line in lines if not line.startswith("  ")] == [
+        "Test Daybreaker // Test Nightfall:"
+    ]
+    assert any("[Test Daybreaker] oracle text:" in line for line in lines)

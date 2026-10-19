@@ -11,7 +11,6 @@ Citations are collected three ways, so a typo or a renumbered rule is caught whe
 from __future__ import annotations
 
 import ast
-import re
 from functools import cache
 from pathlib import Path
 
@@ -19,7 +18,8 @@ import pytest
 
 from resolve.agents.driver import play
 from resolve.agents.random_agent import RandomAgent
-from resolve.citations import is_rule_reference
+from resolve.citations import cited_rules, is_rule_reference
+from resolve.data.rules_text import parse_rules
 from resolve.errors import NotImplementedRule
 from resolve.events.base import LogEntry
 from tests.game_fixtures import request_of, start
@@ -30,24 +30,11 @@ REPO = Path(__file__).resolve().parents[2]
 ENGINE = REPO / "src" / "resolve"
 RULES_FILE = REPO / "docs" / "rules" / "MagicCompRules-20260925.txt"
 
-# "103. Starting the Game", "103.1. At the start...", "103.1a In a game..."
-_SECTION = re.compile(r"^(\d{3})\. ")
-_RULE = re.compile(r"^(\d{3}\.\d+)\. ")
-_SUBRULE = re.compile(r"^(\d{3}\.\d+[a-z]) ")
-# A dotted CR number in prose: three digits, a dot, a number, maybe a letter ("613.7m").
-_DOTTED = re.compile(r"(?<![\w.])([1-9]\d{2}\.\d+[a-z]?)(?![\w.]*\d)")
-
 
 @cache
 def pinned_rules() -> frozenset[str]:
     """Every section, rule and subrule number in the pinned CR."""
-    numbers: set[str] = set()
-    for line in RULES_FILE.read_text(encoding="utf-8").splitlines():
-        for pattern in (_SECTION, _RULE, _SUBRULE):
-            match = pattern.match(line)
-            if match:
-                numbers.add(match.group(1))
-    return frozenset(numbers)
+    return frozenset(parse_rules(RULES_FILE.read_text(encoding="utf-8")))
 
 
 def structured_citations(source: str) -> list[str]:
@@ -71,7 +58,7 @@ def structured_citations(source: str) -> list[str]:
 
 def prose_citations(source: str) -> list[str]:
     """Dotted CR numbers anywhere in the text: comments, docstrings, messages."""
-    return _DOTTED.findall(source)
+    return cited_rules(source)
 
 
 def engine_citations() -> dict[str, list[str]]:
@@ -91,7 +78,7 @@ def engine_citations() -> dict[str, list[str]]:
 
 def test_the_rules_file_parses_into_sections_rules_and_subrules() -> None:
     rules = pinned_rules()
-    assert {"103", "103.1", "103.1a", "613.7m", "701.24a", "903.10a"} <= rules
+    assert {"103", "103.1", "103.1a", "613.7m", "701.24a", "903.10a", "704.5aa"} <= rules
     assert "613.7l" not in rules, "the CR skips the letters l and o"
     assert len(rules) > 2500
 
@@ -140,8 +127,6 @@ _SYNTHETIC_CITATIONS = {
     "tests/tooling/test_rules_diff.py",
     "tests/tooling/test_gaps_tool.py",
     "tests/state/test_errors_and_citations.py",
-    "tools/gaps.py",  # the sort-order example in rule_sort_key's docstring
-    "tools/rules_diff.py",  # the same example
 }
 
 

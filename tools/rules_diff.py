@@ -9,37 +9,36 @@ Reports, in CR order:
 
 - **changed** rules (same number, different text), with a word-level diff: ``[-old-]`` marks
   removed words and ``{+new+}`` added ones;
-- **renumbered** rules: a removed number whose text is nearly the same as an added number's
-  (matched by text similarity, best pairs first; ``--threshold`` sets the cut-off);
+- **renumbered** rules: a rule whose text now sits under another number, matched by text
+  similarity (best pairs first; ``--threshold`` sets the cut-off). This covers a subrule inserted
+  in the middle of a list, which shifts every later letter, as well as moves between sections;
 - **removed** and **added** rules (what is left after matching).
 
-For every changed, removed or renumbered rule it then lists each place in ``src/``, ``tools/``
-and ``tests/`` that cites it (exact number; a citation of a parent rule is not matched). Those
-citations, and the tests next to them, are what to review against the new text
-(docs/howto.md, "Update to a new Comprehensive Rules version"). The exit status is 0 whatever the
-differences are, and 1 if a file can't be read.
+For every changed, removed or renumbered rule (by its old number) it lists each place that cites
+it, in two groups: code and tests (``.py`` files in ``src/``, ``tools/`` and ``tests/``), and
+documents (``docs/**/*.md``, except ``docs/rules/``, and ``.claude/agents/*.md``). A citation
+such as ``704.5a/b`` cites both rules. Citations of the *parent* of a flagged subrule (``702.16``
+when 702.16e changed) are listed separately, because that code may rely on the changed subrule.
+The exit status is 0 whatever the differences are, and 1 if a file can't be read. The glossary of
+the CR is not compared.
 """
 
 from __future__ import annotations
 
 import argparse
-import difflib
 import io
-import re
 import sys
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SCAN_DIRS = ("src", "tools", "tests")
-DEFAULT_THRESHOLD = 0.8
+from resolve.citations import cited_rules, parent_rule, rule_sort_key
+from resolve.data.rules_text import load_rules, similarity, word_diff
 
-# "103. Starting the Game", "103.1. At the start...", "103.1a In a game..."
-_RULE_LINE = re.compile(r"^(\d{3}(?:\.\d+[a-z]?)?)\.?\s+(\S.*)$")
-# A dotted CR number in prose: three digits, a dot, a number, maybe a letter ("613.7m").
-_DOTTED = re.compile(r"(?<![\w.])([1-9]\d{2}\.\d+[a-z]?)(?![\w.]*\d)")
-_RULE_PARTS = re.compile(r"(\d+)(?:\.(\d+)([a-z]?))?")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DEFAULT_SCAN = ("src", "tools", "tests", "docs", ".claude/agents")
+DEFAULT_THRESHOLD = 0.8
+RULES_DOCS = Path("docs") / "rules"
 
 
 @dataclass(frozen=True)
@@ -72,109 +71,99 @@ class RulesDiff:
     added: tuple[tuple[str, str], ...]
 
 
-def rule_sort_key(rule: str) -> tuple[int, int, str]:
-    """Sort CR numbers numerically: 103.5 < 103.10 < 104 < 104.3a."""
-    match = _RULE_PARTS.fullmatch(rule)
-    if match is None:
-        return (sys.maxsize, 0, rule)
-    section, number, letter = match.groups()
-    return (int(section), -1 if number is None else int(number), letter or "")
-
-
-def parse_rules(text: str) -> dict[str, str]:
-    """Map each rule number in the CR text to its text.
-
-    Lines that don't start with a number continue the previous rule (the "Example:" paragraphs
-    belong to the rule they follow). The contents list and the glossary have no rule numbers of
-    the form 103.1, but the contents list repeats section numbers such as ``103.``: the body comes
-    later in the file, so the last occurrence of a number wins.
-    """
-    rules: dict[str, str] = {}
-    current: str | None = None
-    for raw in text.splitlines():
-        line = raw.strip()
-        if not line:
-            continue
-        match = _RULE_LINE.match(line)
-        if match:
-            current = str(match.group(1))
-            rules[current] = str(match.group(2))
-        elif current is not None and line.startswith("Example:"):
-            rules[current] += "\n" + line
-    return rules
-
-
-def load_rules(path: Path) -> dict[str, str]:
-    """Read a CR text file (UTF-8, with or without a byte order mark; any line endings)."""
-    return parse_rules(path.read_text(encoding="utf-8-sig"))
-
-
-def word_diff(old: str, new: str) -> str:
-    """Show ``new`` against ``old`` word by word: ``[-removed-]`` and ``{+added+}``."""
-    a, b = old.split(), new.split()
-    parts: list[str] = []
-    for op, a1, a2, b1, b2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes():
-        if op == "equal":
-            parts.append(" ".join(a[a1:a2]))
-            continue
-        if a2 > a1:
-            parts.append("[-" + " ".join(a[a1:a2]) + "-]")
-        if b2 > b1:
-            parts.append("{+" + " ".join(b[b1:b2]) + "+}")
-    return " ".join(parts)
-
-
-def similarity(a: str, b: str) -> float:
-    """How alike two rule texts are, from 0 to 1, comparing words."""
-    return difflib.SequenceMatcher(None, a.split(), b.split(), autojunk=False).ratio()
+def _section(number: str) -> str:
+    return number[:3]
 
 
 def diff_rules(
     old: dict[str, str], new: dict[str, str], *, threshold: float = DEFAULT_THRESHOLD
 ) -> RulesDiff:
-    """Compare two rule maps; ``threshold`` is the least similarity that counts as a renumbering."""
-    changed = tuple(
-        Changed(number, old[number], new[number])
-        for number in sorted(old.keys() & new.keys(), key=rule_sort_key)
-        if old[number].split() != new[number].split()
-    )
-    gone = sorted(old.keys() - new.keys(), key=rule_sort_key)
-    fresh = sorted(new.keys() - old.keys(), key=rule_sort_key)
-    candidates = sorted(
-        (
-            (score, o, n)
-            for o in gone
-            for n in fresh
-            if (score := similarity(old[o], new[n])) >= threshold
-        ),
-        # Best match first; ties go to the numbers that sit closest in CR order.
-        key=lambda c: (-c[0], rule_sort_key(c[1]), rule_sort_key(c[2])),
-    )
+    """Compare two rule maps; ``threshold`` is the least similarity that counts as a renumbering.
+
+    Rules with the same number and the same words are unchanged. Of the rest, an old rule is
+    paired with a new rule under another number when their texts are alike (at least
+    ``threshold``) and more alike than the old rule is to whatever now has its own number. Pairs
+    are taken best first, each rule once. Within a section every leftover old rule is a candidate
+    for every leftover new rule, which finds a subrule inserted mid-list (every later letter
+    shifts); across sections only removed numbers are matched with added numbers. After that, a
+    number whose old text found no partner is *changed* if its new text found none either,
+    otherwise *removed* (its new text came from elsewhere); likewise a new number is *added*.
+    """
+    unchanged = {n for n in old.keys() & new.keys() if old[n].split() == new[n].split()}
+    old_open = sorted(old.keys() - unchanged, key=rule_sort_key)
+    new_open = sorted(new.keys() - unchanged, key=rule_sort_key)
+    stay = {n: similarity(old[n], new[n]) for n in old_open if n in new}
+
+    candidates: list[tuple[float, str, str]] = []
+    for o in old_open:
+        for n in new_open:
+            if o == n:
+                continue
+            same_section = _section(o) == _section(n)
+            if not same_section and (o in new or n in old):
+                continue
+            if not _could_match(old[o], new[n], threshold):
+                continue
+            score = similarity(old[o], new[n])
+            if score >= threshold and score > stay.get(o, 0.0):
+                candidates.append((score, o, n))
+    # Best match first; ties go to the numbers that sit closest in CR order.
+    candidates.sort(key=lambda c: (-c[0], rule_sort_key(c[1]), rule_sort_key(c[2])))
+
     moved: list[Renumbered] = []
-    used_old: set[str] = set()
-    used_new: set[str] = set()
+    old_gone: set[str] = set()  # old numbers whose text moved elsewhere
+    new_from: set[str] = set()  # new numbers whose text came from elsewhere
     for score, o, n in candidates:
-        if o in used_old or n in used_new:
+        if o in old_gone or n in new_from:
             continue
-        used_old.add(o)
-        used_new.add(n)
+        old_gone.add(o)
+        new_from.add(n)
         moved.append(Renumbered(o, n, old[o], new[n], score))
     moved.sort(key=lambda m: rule_sort_key(m.old_number))
-    return RulesDiff(
-        changed=changed,
-        renumbered=tuple(moved),
-        removed=tuple((o, old[o]) for o in gone if o not in used_old),
-        added=tuple((n, new[n]) for n in fresh if n not in used_new),
-    )
+
+    changed: list[Changed] = []
+    removed: list[tuple[str, str]] = []
+    added: list[tuple[str, str]] = []
+    for o in old_open:
+        if o in old_gone:
+            continue
+        if o in new and o not in new_from:
+            changed.append(Changed(o, old[o], new[o]))
+        else:
+            removed.append((o, old[o]))
+    changed_numbers = {c.number for c in changed}
+    for n in new_open:
+        if n not in new_from and n not in changed_numbers:
+            added.append((n, new[n]))
+    return RulesDiff(tuple(changed), tuple(moved), tuple(removed), tuple(added))
 
 
-def python_files(root: Path) -> list[Path]:
-    """Every ``.py`` file under ``root``, sorted by path."""
-    return sorted(root.rglob("*.py"))
+def _could_match(a: str, b: str, threshold: float) -> bool:
+    """A cheap test that rules out most pairs before the real similarity is computed."""
+    words_a, words_b = len(a.split()), len(b.split())
+    return 2 * min(words_a, words_b) >= threshold * (words_a + words_b)
+
+
+def scan_files(roots: Iterable[Path]) -> list[Path]:
+    """The ``.py`` and ``.md`` files under the roots, sorted, without ``docs/rules/``."""
+    files: set[Path] = set()
+    for root in roots:
+        for pattern in ("*.py", "*.md"):
+            files.update(root.rglob(pattern))
+    return sorted(f for f in files if not _in_rules_folder(f))
+
+
+def _in_rules_folder(path: Path) -> bool:
+    """Whether the path is in a ``docs/rules`` folder, which holds the CR text itself."""
+    parts = path.parts
+    return any(parts[i : i + 2] == RULES_DOCS.parts for i in range(len(parts) - 1))
 
 
 def find_citations(paths: Iterable[Path], *, relative_to: Path) -> dict[str, list[str]]:
-    """Map each dotted CR number cited in the files to where: ``"path:line"``, in order."""
+    """Map each dotted CR number cited in the files to where: ``"path:line"``, in order.
+
+    A line citing a rule more than once is listed once for it; ``704.5a/b`` cites both rules.
+    """
     cited: dict[str, list[str]] = {}
     for path in paths:
         try:
@@ -182,7 +171,7 @@ def find_citations(paths: Iterable[Path], *, relative_to: Path) -> dict[str, lis
         except ValueError:
             shown = path.as_posix()
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
-            for rule in _DOTTED.findall(line):
+            for rule in dict.fromkeys(cited_rules(line)):
                 cited.setdefault(rule, []).append(f"{shown}:{number}")
     return cited
 
@@ -192,13 +181,22 @@ def _short(text: str, limit: int = 100) -> str:
     return text if len(text) <= limit else text[: limit - 1] + "…"
 
 
-def format_report(diff: RulesDiff, citations: dict[str, list[str]]) -> str:
-    """The report described in the module docstring."""
+def format_report(diff: RulesDiff, code: dict[str, list[str]], docs: dict[str, list[str]]) -> str:
+    """The report described in the module docstring.
 
-    def cited_by(rule: str) -> list[str]:
-        places = citations.get(rule, [])
-        return [f"      cited at {place}" for place in places] or ["      (not cited)"]
+    ``code`` and ``docs`` map a rule to where it is cited in code and tests, and in documents.
+    """
 
+    def cited_by(rule: str, indent: str = "      ") -> list[str]:
+        lines = [f"{indent}cited in code/tests at {place}" for place in code.get(rule, [])]
+        lines += [f"{indent}cited in docs at {place}" for place in docs.get(rule, [])]
+        return lines or [f"{indent}(not cited)"]
+
+    flagged = (
+        [c.number for c in diff.changed]
+        + [m.old_number for m in diff.renumbered]
+        + [number for number, _ in diff.removed]
+    )
     lines = [
         f"changed: {len(diff.changed)}, renumbered: {len(diff.renumbered)}, "
         f"removed: {len(diff.removed)}, added: {len(diff.added)}"
@@ -208,6 +206,7 @@ def format_report(diff: RulesDiff, citations: dict[str, list[str]]) -> str:
         lines.append(f"  {item.number}: {word_diff(item.old, item.new)}")
         lines += cited_by(item.number)
     lines += ["", f"== Probably renumbered ({len(diff.renumbered)}) =="]
+    lines.append("  (citations are listed under the old number; change them to the new one)")
     for moved in diff.renumbered:
         lines.append(
             f"  {moved.old_number} -> {moved.new_number} (similarity {moved.similarity:.2f}): "
@@ -220,6 +219,19 @@ def format_report(diff: RulesDiff, citations: dict[str, list[str]]) -> str:
         lines += cited_by(number)
     lines += ["", f"== Added rules ({len(diff.added)}) =="]
     lines += [f"  {number}: {_short(text)}" for number, text in diff.added]
+
+    children: dict[str, list[str]] = {}
+    for number in flagged:
+        parent = parent_rule(number)
+        if parent is not None and parent not in flagged:
+            children.setdefault(parent, []).append(number)
+    parents = sorted((p for p in children if p in code or p in docs), key=rule_sort_key)
+    lines += ["", f"== Citations of the parent rule of a flagged subrule ({len(parents)}) =="]
+    for parent in parents:
+        shown = ", ".join(sorted(children[parent], key=rule_sort_key)[:6])
+        more = " ..." if len(children[parent]) > 6 else ""
+        lines.append(f"  {parent} (parent of {shown}{more}):")
+        lines += cited_by(parent)
     return "\n".join(lines) + "\n"
 
 
@@ -232,7 +244,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--scan",
         action="append",
         type=Path,
-        help=f"folder to search for citations (repeatable; default: {' '.join(DEFAULT_SCAN_DIRS)})",
+        help=f"folder to search for citations in .py and .md files (repeatable; default: "
+        f"{' '.join(DEFAULT_SCAN)})",
     )
     parser.add_argument(
         "--threshold",
@@ -244,12 +257,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         old, new = load_rules(args.old), load_rules(args.new)
     except (OSError, UnicodeDecodeError) as error:
-        print(f"error: {error}", file=sys.stderr)
+        print(
+            f"error: {error}\n(the rules file must be UTF-8; re-save it as UTF-8 if it isn't)",
+            file=sys.stderr,
+        )
         return 1
-    roots: list[Path] = args.scan or [REPO_ROOT / name for name in DEFAULT_SCAN_DIRS]
-    files = [path for root in roots for path in python_files(root)]
+    roots: list[Path] = args.scan or [REPO_ROOT / name for name in DEFAULT_SCAN]
+    files = scan_files(root for root in roots if root.exists())
     citations = find_citations(files, relative_to=REPO_ROOT)
-    sys.stdout.write(format_report(diff_rules(old, new, threshold=args.threshold), citations))
+    code = {r: [w for w in where if ".py:" in w] for r, where in citations.items()}
+    docs = {r: [w for w in where if ".md:" in w] for r, where in citations.items()}
+    diff = diff_rules(old, new, threshold=args.threshold)
+    sys.stdout.write(format_report(diff, code, docs))
     return 0
 
 

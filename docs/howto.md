@@ -339,13 +339,20 @@ update (above) in the same change if you are moving both pins. All commands are 
 1. **Download the new rules** as plain text from <https://magic.wizards.com/en/rules> (the page
    links the `.txt` file) into the rules folder, under its dated name:
    `Invoke-WebRequest -Uri "<link to the .txt>" -OutFile docs/rules/MagicCompRules-YYYYMMDD.txt`.
-   Keep the old file until the end.
+   Keep the old file until the end. The tool reads UTF-8 (a byte order mark is fine); if it stops
+   with a decode error, open the file in an editor and save it again as UTF-8.
 2. **Run the diff** into a file (it can be long):
    `uv run python tools/rules_diff.py docs/rules/MagicCompRules-OLD.txt docs/rules/MagicCompRules-NEW.txt > rules_diff.txt`.
-   It lists changed rules (with a word diff: `[-old-]` `{+new+}`), probably renumbered rules
-   (matched by text; `--threshold 0.7` finds looser matches), removed and added rules, and for each
-   changed, removed or renumbered rule every `file:line` in `src/`, `tools/` and `tests/` that
-   cites it. Also read the "added" list: a new rule may cover something we implement.
+   It lists, in CR order: changed rules (with a word diff: `[-old-]` `{+new+}`); probably
+   renumbered rules, matched by text (a subrule inserted mid-list shifts every later letter and is
+   reported as a run of renumberings plus one added rule; `--threshold 0.7` finds looser matches);
+   removed and added rules. For each changed, removed or renumbered rule it lists every `file:line`
+   that cites it, split into code and tests (`src/`, `tools/`, `tests/`) and documents
+   (`docs/**/*.md` except `docs/rules/`, and `.claude/agents/*.md`). A last group lists citations
+   of the *parent* rule (`702.16` when `702.16e` changed), which may rely on the changed subrule.
+   Citations of a renumbered rule are listed under its old number. The glossary isn't compared:
+   skim it in the new file for terms that matter. Also read the "added" list: a new rule may cover
+   something we implement.
 3. **Review every flagged citation** against the new text. For each, decide: the code and its test
    still match the new rule (only the citation, if renumbered, changes); the behavior changed
    (the rule's meaning differs); or the rule was removed. Don't trust the diff to be complete:
@@ -353,7 +360,8 @@ update (above) in the same change if you are moving both pins. All commands are 
 4. **Update tests first.** Change each affected test to the new rule text, with the new CR number
    in its name or docstring, and confirm it fails for the right reason before touching the code
    (CLAUDE.md, "Tests first"). Renumbered rules only need their citations changed in code,
-   tests, docs and `docs/decisions.md`.
+   tests and documents (the roadmap's rules coverage map, `docs/decisions.md`, `docs/design.md`,
+   `docs/primitives.md`, the torture tests, the test-reviewer agent).
 5. **Update the code** to make the tests pass; raise `NotImplementedRule` for new rules that
    we need but haven't built. Add a `docs/decisions.md` entry for each judgment call.
 6. **Move the pin:** point `RULES_FILE` in `tests/tooling/test_rule_citations.py` and the

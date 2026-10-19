@@ -38,12 +38,12 @@ def test_not_implemented_rule_survives_copy_and_pickle() -> None:
         assert (clone.rule, clone.what) == ("103.5", "opening hands")
 
 
-@pytest.mark.parametrize("text", ["103", "103.1", "701.24a", "903.10a", "613.7m"])
+@pytest.mark.parametrize("text", ["103", "103.1", "701.24a", "903.10a", "613.7m", "704.5aa"])
 def test_valid_rule_references(text: str) -> None:
     assert is_rule_reference(text)
 
 
-@pytest.mark.parametrize("text", ["", "10", "1034", "099.1", "103.", "103.1A", "103.0", "103.1ab"])
+@pytest.mark.parametrize("text", ["", "10", "1034", "099.1", "103.", "103.1A", "103.0", "103.1abc"])
 def test_invalid_rule_references(text: str) -> None:
     assert not is_rule_reference(text)
 
