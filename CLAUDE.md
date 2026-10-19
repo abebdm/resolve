@@ -353,6 +353,26 @@ must work there first. CI runs the full suite on Windows and Linux with Python 3
 - **A test may never be skipped or loosened on Windows to get green.** That is weakening a test
   (see "Never weaken tests"). Fix the code instead.
 
+## Planning a milestone
+
+Every milestone starts with a plan the user approves (design, tests first, PR-sized steps).
+When writing one:
+
+- **Check the keywords against the milestone's systems.** Skim every keyword ability (CR 702)
+  and keyword action (CR 701), including ones this milestone won't implement. For each that
+  touches a system the milestone builds or changes, make sure the design leaves room for it,
+  and say so in the plan. For example: targeting must allow hexproof, shroud and protection;
+  combat damage must allow first strike, double strike, trample and deathtouch; priority must
+  allow split second. Adding a keyword later is cheap; retrofitting a system that wasn't designed
+  for it is not.
+- **Follow the roadmap's keyword table.** `docs/roadmap.md` assigns every keyword to the
+  milestone where its rules live. Implement the ones assigned to the current milestone, test
+  them with fixture or excerpt cards where no target-deck card has them, and record each in
+  `docs/primitives.md`. If the plan finds a keyword assigned to the wrong milestone, propose
+  moving it.
+- **Save the approved plan** to `docs/plans/<milestone>.md`, with the user's approval notes,
+  before writing code, so later agents can resume it; delete it in the milestone's last PR.
+
 ## Working style
 
 - Work in small, milestone-scoped branches and PRs. Tick items off in `docs/roadmap.md` as they land.
