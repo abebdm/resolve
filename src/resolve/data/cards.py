@@ -337,6 +337,14 @@ class CardDatabase:
         except KeyError:
             raise UnknownCardError(name) from None
 
+    def cards(self) -> tuple[CardData, ...]:
+        """Every card in the database, sorted by name (for tools that compare snapshots)."""
+        return tuple(sorted(self._by_oracle_id.values(), key=lambda card: card.name))
+
+    def by_oracle_id(self, oracle_id: str) -> CardData | None:
+        """The card with this Oracle ID, or ``None``; it survives a rename by errata."""
+        return self._by_oracle_id.get(oracle_id)
+
     def rulings_for(self, card: CardData) -> tuple[Ruling, ...]:
         """The card's rulings, oldest first; rulings from the same day keep Scryfall's order."""
         return self._rulings.get(card.oracle_id, ())

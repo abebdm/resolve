@@ -16,18 +16,15 @@ from __future__ import annotations
 import argparse
 import ast
 import io
-import re
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from resolve.citations import is_rule_reference
+from resolve.citations import is_rule_reference, rule_sort_key
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ENGINE_DIR = REPO_ROOT / "src" / "resolve"
-
-_RULE_PARTS = re.compile(r"(\d+)(?:\.(\d+)([a-z]?))?")
 
 
 @dataclass(frozen=True)
@@ -47,15 +44,6 @@ class UnlistableGap:
     path: Path
     line: int
     reason: str
-
-
-def rule_sort_key(rule: str) -> tuple[int, int, str]:
-    """Sort CR citations numerically: 103.5 < 103.10 < 104 < 104.3a."""
-    match = _RULE_PARTS.fullmatch(rule)
-    if match is None:
-        return (sys.maxsize, 0, rule)
-    section, number, letter = match.groups()
-    return (int(section), -1 if number is None else int(number), letter or "")
 
 
 def _message(node: ast.expr) -> str | None:
