@@ -365,6 +365,67 @@ triggered mana abilities and "when that mana is spent" → M4; offspring, castin
 - [ ] Every row of the map is either implemented or out of scope with a reason the user approved.
 - [ ] The torture tests assigned to M9 in `docs/torture-tests.md`.
 
+## What's built
+
+What each completed step added, with the modules to look in. Update this list in the PR that
+completes a step (CLAUDE.md, "Documentation requirements").
+
+- **Done (M0):**
+  - Data and tooling: `resolve.data` (card data loader and decklist parser), the card registry
+    and deck coverage (`resolve.cards.registry`, `resolve.cards.coverage`),
+    `tools/fetch_scryfall.py`, `tools/coverage.py`, `tools/gaps.py` (lists every
+    `NotImplementedRule`), CI, and the coverage audit (the Scryfall snapshot of 2026-10-17 is
+    pinned).
+  - The engine core: state types (`resolve.state`: `GameState`, `Player`, `GameObject`, zones,
+    IDs, `GameConfig`, the engine's own PRNG, invariant and purity checks), the task loop and
+    public API (`resolve.tasks`, `resolve.engine`: `new_game`, `pending_decision`, `view_for`,
+    `submit`, `build_deck`), decision kinds, answer spaces and validation (`resolve.decisions`),
+    events, the event pipeline (with stubbed replacement and trigger stages) and the event log
+    (`resolve.events`), `NotImplementedRule` (`resolve.errors`), and zone moves (`move_object`,
+    400.7).
+  - Agents and test tooling: `resolve.agents` (the `Agent` protocol, the `play` driver,
+    `RandomAgent`, `ScriptedAgent` with replays from the log, and the text renderer and
+    `TextAgent` in `resolve.agents.text`); the scenario builder `tests/scenario.py`;
+    `tools/play_cli.py`; and the fuzz harness `tools/fuzz.py` with `tests/fuzz/`.
+- **Done (M1.1):** drawing (`resolve.engine.drawing.DrawCards`, `CardDrawn`, 121), opening hands
+  and mulligans (`resolve.engine.mulligans.OpeningHands`, 103.5 and 103.5c), events logged as
+  applied, and redacted log entries for other players (design.md §7, §9).
+- **Done (M1.2):** turns, phases and steps (`resolve.state.turn`, `resolve.engine.turns`:
+  `TakeTurn`, `RunStep`, 500-514, the 103.8a draw skip, 508.8), priority
+  (`resolve.engine.priority.PriorityRound`, 117; casting is offered and raises
+  `NotImplementedRule("601.2")` when chosen), the state-based actions 704.5a and 704.5b and the end
+  of two-player games (`resolve.engine.sba`, 104.2a, 104.4a), discarding to hand size in cleanup
+  (514.1) and 514.3a, type-line parsing (`resolve.data.types`, 205), the characteristics entry point
+  without layers (`resolve.effects.characteristics`), turn info in views, and the scenario builder's
+  `at(...)`. Two-player games with any decks play to a decking loss when every player passes.
+- **Done (M1.3):** the five basic lands (`resolve.cards.definitions.basic_lands`), playing
+  lands (305), the first primitives (`TapSelfCost`, `AddMana`, `ActivatedManaAbility`; 305.6
+  intrinsic mana abilities added by `characteristics`), tapped status, the untap step (502.3),
+  mana pools emptying as steps end (500.5), and mana abilities at priority (605.3a). Random
+  agents finish two-player land-only games.
+- **Done (M1.4):** vanilla creatures (`resolve.cards.definitions.vanilla_creatures`), power and
+  toughness in `characteristics`, damage marked on permanents, the state-based actions 704.5f
+  and 704.5g (with the owner ordering cards that reach a graveyard together, 404.3), and damage
+  removal in cleanup (514.2).
+- **Done (M1.5):** concession (`resolve.engine.concede`, 104.3a), leaving the game
+  (`LeaveGame`, 800.4a, 800.4h, 800.4j, 800.4k), multiplayer endings (104.2a, 104.4a), re-entrant
+  asking tasks, and replays of answers and concessions (`resolve.agents.replay`). The fuzz
+  harness concedes at random and random agents finish 2- to 4-player land-only games.
+- **Done (tooling, after M1):** `tools/fuzz.py` plays basic-land decks by default (from the
+  committed excerpt `tools/excerpts/basic_lands.json`, written by `tools/card_excerpt.py`; no
+  snapshot needed), with a quick default run (about 20 seconds) and a `--thorough` preset for
+  the user's milestone verification (`docs/verification.md`), games in parallel (`--jobs`), and
+  a summary of answers, turns, endings, lands and mana.
+- **Done (tooling, CR and card-data updates):** `tools/rules_diff.py` compares two CR text files
+  (changed, renumbered, removed and added rules, with the code and tests that cite them),
+  `tools/card_diff.py` compares two card data snapshots for implemented and deck cards, and a
+  test checks every CR number cited in `src/`, `tools/` and `tests/` against the pinned rules.
+  The recipe is in `docs/howto.md` ("Update to a new Comprehensive Rules version").
+- **Done (M2.0, documentation):** the approved M2 plan (`docs/plans/m2.md`), the rules coverage
+  map and the per-milestone checklists in `docs/roadmap.md`, the torture tests
+  (`docs/torture-tests.md`), rules 12 and 13 below, and the provisional design-ahead sections of
+  `docs/design.md`.
+
 ---
 
 ## Rules coverage map

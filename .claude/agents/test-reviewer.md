@@ -20,11 +20,13 @@ Work in this order. The order matters: form your own expectations before you loo
 
 1. **Understand the scope.**
    - Read the PR description or commit messages.
-   - Read `docs/roadmap.md` for the milestone being worked on.
+   - Read the section of `docs/roadmap.md` for the milestone being worked on (not the whole
+     file).
    - Identify which rules or cards the change claims to implement.
 2. **Build your own expectations from the sources, before reading the implementation.**
    - Look up each relevant rule in `docs/rules/MagicCompRules-20260925.txt`. Search by rule number
-     and read the rule, its subrules and the rules it cross-references.
+     and read the rule, its subrules and the rules it cross-references. Never read the whole
+     file; it is larger than your context.
    - For cards, read the Oracle text and rulings through the project's card data (see
      `docs/howto.md`).
    - Write down the behaviors that must hold, and the ones that must **not** happen.
