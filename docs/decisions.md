@@ -19,6 +19,25 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-19: Keyword coverage: tiers, M9, and planning for every keyword
+- **Decision:** the engine aims to support every keyword ability (CR 702: 194 in the pinned rules)
+  and keyword action (CR 701: 71), not only those the target decks use. The roadmap's keyword
+  table gives each one the milestone where its rules live and a tier:
+  - **evergreen/common** keywords are implemented in that milestone;
+  - **set mechanics** and **exotic** keywords are implemented in the new M9 (keyword coverage),
+    unless a target deck needs one, which is then done in its own milestone.
+
+  Card coverage for the target decks is M8 (formerly "M8+"). Every milestone's plan skims all of
+  CR 702 and 701 and designs its systems to leave room for every keyword, implemented now or not
+  (CLAUDE.md, "Planning a milestone").
+- **Why:** the user wants every keyword eventually. Adding a keyword is cheap once the system it
+  plugs into exists, but retrofitting a system not designed for it is expensive (for example two
+  combat damage steps for first strike, or priority for split second). Implementing all ~265
+  keywords as their milestones land would roughly double each milestone, so only the common ones
+  are done early, and the engine reaches playable games with the target decks sooner.
+- **Where:** `CLAUDE.md` ("Planning a milestone"), `docs/roadmap.md` (M2, M8, M9, "Keyword
+  table"), `docs/design.md` §11.
+
 ### 2026-10-19: Basic-land decks, presets and the summary of the fuzz command line
 - **Decision:** `uv run python tools/fuzz.py` gives the players decks of basic lands, the same
   number of each, so its games play turns (lands, mana abilities, priority, cleanup, decking,

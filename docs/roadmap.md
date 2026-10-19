@@ -193,6 +193,11 @@ cards are not included.
   - activate mana abilities
   - pay costs
 - [ ] Timing rules for sorceries, instants and permanents; flash.
+- [ ] Evergreen keywords whose rules live here: flash (702.8), hexproof (702.11), shroud (702.18),
+  indestructible (702.12), and the targeting part of protection (702.16). Design targeting so these
+  restrictions fit naturally.
+- [ ] Create the keyword table at the end of this file: every keyword ability (CR 702) and keyword
+  action (CR 701), with its milestone and tier (see "Keyword table").
 - [ ] Resolution (608), including checking targets again on resolution (608.2b) and partial
   fizzling.
 - [ ] Mana payment details: generic, colored, hybrid, X costs, cost increases and reductions,
@@ -280,12 +285,41 @@ cards are not included.
 - [ ] Designations: the monarch, the city's blessing.
 - [ ] Loop guard (104.4b).
 
-## M8+ — Card coverage
+## M8 — Card coverage
 
 - [ ] Implement the remaining cards of `gishath_dinosaurs.txt`, tracked by `tools/coverage.py`.
 - [ ] Implement the remaining cards of `byrke_counters.txt`.
 - [ ] Both decks pass validation and play complete random-agent games with no crashes or invariant
   violations, plus a ruling-derived test for every card.
+
+## M9 — Keyword coverage
+
+- [ ] Implement every keyword in the keyword table below whose tier is **set mechanic** or
+  **exotic** and that isn't done yet, each with rules tests and a fixture or excerpt card.
+- [ ] Every keyword ability (CR 702) and keyword action (CR 701) in the pinned rules is either
+  implemented or explicitly listed as deferred, with the reason and the user's approval.
+
+---
+
+## Keyword table
+
+Every keyword ability (CR 702) and keyword action (CR 701) in the pinned rules, the milestone where
+its rules live, and its tier. Created during M2 planning; each milestone's plan checks and corrects
+it (CLAUDE.md, "Planning a milestone").
+
+**Tiers and when each is implemented:**
+
+- **Evergreen/common** (flying, trample, flash, ward, scry, mill, and so on): in the milestone
+  where its rules live.
+- **Set mechanic** (cascade, convoke, kicker, cycling, and so on): in M9, unless a target deck
+  needs it, in which case it's done in the milestone where its rules live.
+- **Exotic** (banding, phasing, mutate, companion, one-card mechanics, and so on): the same as set
+  mechanics.
+
+Whatever the tier, the systems built in earlier milestones must leave room for every keyword in
+this table.
+
+*The table itself is added during M2 planning.*
 
 ---
 

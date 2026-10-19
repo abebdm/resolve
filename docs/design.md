@@ -389,7 +389,11 @@ game that begins with more than two players (903.12g is for Brawl only).
   - **triggers:** event matchers, intervening-if conditions (603.4), delayed triggers
   - **conditions:** predicates on the state
   - **costs, durations, static abilities, replacement effects**
-  - a **keyword library** (flying, trample, ward, equip, ...)
+  - a **keyword library** (flying, trample, ward, equip, ...). The goal is every keyword ability
+    (CR 702) and keyword action (CR 701), not only those the target decks use. The roadmap's
+    keyword table gives each one a milestone and a tier: evergreen and common keywords are built
+    in the milestone where their rules live, the rest in M9 (keyword coverage). Every system is
+    designed to leave room for all of them.
 - Truly unusual cards may register a **custom** effect or task class under their name. The state
   still holds only data plus registry references.
 - Definitions are declarative wherever possible, so the engine (and later the AI) can inspect them.
