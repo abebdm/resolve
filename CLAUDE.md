@@ -9,7 +9,13 @@ the engine's API, so nothing here may depend on them.
 ## Read first
 
 - `docs/design.md`: the architecture. It is authoritative; follow it.
-- `docs/roadmap.md`: milestones, "done" criteria, and which milestone is current.
+- `docs/roadmap.md`: milestones, "done" criteria, and which milestone is current. Its **rules
+  coverage map** gives every numbered CR section, keyword ability and keyword action a milestone
+  and a tier.
+- `docs/plans/m2.md`: the approved plan of the current milestone. Its "How to use this plan" says
+  which parts to read for your step.
+- `docs/torture-tests.md`: famously difficult cards, the rules each stresses and the milestone
+  that must handle it.
 - `docs/rules/MagicCompRules-20260925.txt`: the pinned Comprehensive Rules (CR). Look rules up here
   by number; do not rely on memory.
 - `docs/howto.md`: step-by-step recipes for recurring tasks. Follow them.
@@ -20,8 +26,9 @@ the engine's API, so nothing here may depend on them.
 
 ## Current status
 
-**Current milestone: M2 (Spells and the stack), not started. M0 (Skeleton) and M1 (Turn
-structure) are complete.**
+**Current milestone: M2 (Spells and the stack), in progress: the plan is approved
+(`docs/plans/m2.md`) and its first step, M2.0 (documentation), is done. M0 (Skeleton) and M1
+(Turn structure) are complete.**
 
 - **Done (M0):**
   - Data and tooling: `resolve.data` (card data loader and decklist parser), the card registry
@@ -74,8 +81,16 @@ structure) are complete.**
   `tools/card_diff.py` compares two card data snapshots for implemented and deck cards, and a
   test checks every CR number cited in `src/`, `tools/` and `tests/` against the pinned rules.
   The recipe is in `docs/howto.md` ("Update to a new Comprehensive Rules version").
-- **Next:** M2 (spells and the stack), starting with the casting process (601.2), which is the
-  `NotImplementedRule("601.2")` gap every game with a nonland card can reach.
+- **Done (M2.0, documentation):** the approved M2 plan (`docs/plans/m2.md`), the rules coverage
+  map and the per-milestone checklists in `docs/roadmap.md`, the torture tests
+  (`docs/torture-tests.md`), rules 12 and 13 below, and the provisional design-ahead sections of
+  `docs/design.md`.
+- **Known violations of rule 12:** the M0/M1 code still hard-codes the rule defaults listed in
+  `docs/plans/m2.md` §5.1 (one land per turn, maximum hand size seven, the fixed turn sequence,
+  the affected player always deciding, and others). M2.1 removes them.
+- **Next:** M2.1, the coverage-map consistency test and the rule-default functions. Then M2.2
+  onward: casting (601.2), which is the `NotImplementedRule("601.2")` gap every game with a
+  nonland card can reach.
 
 Do not start a milestone unless the user asks.
 
@@ -115,6 +130,22 @@ Do not start a milestone unless the user asks.
       `THIRD_PARTY_NOTICES.md` and say so in the PR.
     - **Forge (GPL license).** Read for ideas only. Never copy or translate its code or card
       scripts into this repo.
+12. **No hard-coded rule defaults.** Any value or procedure that a card or effect could change is
+    never written as a fixed literal or assumption in engine code. That includes:
+    - counts and limits (land plays, hand size, cards drawn, starting life, damage thresholds)
+    - the turn's structure (which turns, phases and steps happen, and in what order)
+    - who makes a decision and what each player can see
+    - which zones a player may play or cast cards from
+    - the default timing permissions
+
+    Each one comes from a single function that reads the game state, cites its CR rule and is
+    the one place effects plug into, even if no effect can modify it yet. When adding one, check
+    the rules coverage map for the cards and rules that change it. A reviewer who finds a rule
+    default hard-coded elsewhere treats it as a bug.
+13. **Torture tests.** `docs/torture-tests.md` lists famously difficult cards. Each milestone's
+    plan shows how its design handles the torture tests assigned to it and those assigned to
+    later milestones that touch its systems. The milestone implements the ones assigned to it,
+    each with rules tests.
 
 ## Architecture in brief (details in docs/design.md)
 
@@ -200,6 +231,15 @@ Pure infrastructure (tooling, data loading, internal plumbing) may write tests a
 - Every implemented card gets tests in `tests/cards/`, including one for each relevant official
   ruling.
 
+**Rule defaults are tested through their seam**
+
+- Each rule-default function (rule 12) gets a test that it returns the CR's default, and a
+  **seam test**: replace the function with `monkeypatch` and check that the engine obeys it
+  everywhere it applies (for example, two land plays allowed means a second land is offered).
+  That proves the function is the one place effects plug into.
+- M5, when effects can change these defaults, replaces the seam tests with tests using real
+  effects.
+
 **Invariants and determinism**
 
 - Engine changes keep the fuzz tests passing:
@@ -269,7 +309,8 @@ below match the code.
   a human reader: which milestones are complete, what a game can do now, which cards are
   implemented, and what's next. Update it in the same PR as "Current status"; the two must never
   disagree.
-- **`docs/roadmap.md`:** tick off completed items.
+- **`docs/roadmap.md`:** tick off completed items, and update the rules coverage map's rows
+  for what the PR implements (and its torture-test status in `docs/torture-tests.md`).
 - **`docs/primitives.md`:** every new or changed primitive, keyword or target filter gets an
   entry. An entry has:
   - its name and module
@@ -363,24 +404,39 @@ must work there first. CI runs the full suite on Windows and Linux with Python 3
 Every milestone starts with a plan the user approves (design, tests first, PR-sized steps).
 When writing one:
 
-- **Check the keywords against the milestone's systems.** Skim every keyword ability (CR 702)
-  and keyword action (CR 701), including ones this milestone won't implement. For each that
+- **Check the rules coverage map against the milestone's systems.** `docs/roadmap.md`'s rules
+  coverage map lists every numbered CR section, keyword ability (CR 702) and keyword action
+  (CR 701). Skim all of it, including rows this milestone won't implement. For each row that
   touches a system the milestone builds or changes, make sure the design leaves room for it,
-  and say so in the plan. For example: targeting must allow hexproof, shroud and protection;
-  combat damage must allow first strike, double strike, trample and deathtouch; priority must
-  allow split second. Adding a keyword later is cheap; retrofitting a system that wasn't designed
-  for it is not.
-- **Follow the roadmap's keyword table.** `docs/roadmap.md` gives every keyword the milestone
-  where its rules live and a tier:
-  - **evergreen/common** keywords are implemented in that milestone;
-  - **set mechanics** and **exotic** keywords are implemented in M9 (keyword coverage), unless a
-    target deck needs one, in which case it's done in its own milestone.
+  and say so in the plan. For example:
+  - targeting must allow hexproof, shroud and protection;
+  - combat damage must allow first strike, double strike, trample and deathtouch;
+  - priority must allow split second;
+  - casting must allow split cards, double-faced cards, adventures and casting from other zones.
 
-  Test keywords with fixture or excerpt cards where no target-deck card has them, and record each
-  in `docs/primitives.md`. If the plan finds a keyword in the wrong milestone or tier, propose
-  moving it.
+  Adding a rule later is cheap; retrofitting a system that wasn't designed for it is not.
+- **Follow the map's milestones and tiers.** Each row has the milestone where its rules live and
+  a tier:
+  - **evergreen/common** rows are implemented in that milestone;
+  - **set mechanic** and **exotic** rows are implemented in M9 (rules coverage), unless a target
+    deck needs one, in which case it's done in its own milestone;
+  - **out of scope** rows (approved by the user, with a reason) aren't implemented.
+
+  Test keywords and rules with fixture or excerpt cards where no target-deck card has them, and
+  record each primitive in `docs/primitives.md`. If the plan finds a row in the wrong milestone
+  or tier, propose moving it. Add the milestone's rows to its own checklist in the roadmap.
+- **Check the torture tests** (`docs/torture-tests.md`, rule 13): show how the design handles
+  those assigned to this milestone and those assigned to later milestones that touch its
+  systems. Plan the implementation of those assigned to it.
+- **Check for hard-coded rule defaults** (rule 12) in the code the milestone touches, and plan
+  their removal.
+- **Design ahead only provisionally.** A plan may add design-ahead sections to `docs/design.md`
+  for later milestones, marked "Provisional: designed in Mx's plan, built in My". The later
+  milestone's plan may revise them, with the user's sign-off.
 - **Save the approved plan** to `docs/plans/<milestone>.md`, with the user's approval notes,
   before writing code, so later agents can resume it; delete it in the milestone's last PR.
+  Keep it cheap to read: point to content that lives elsewhere (the coverage map, the torture
+  tests) rather than copying it.
 
 ## Working style
 

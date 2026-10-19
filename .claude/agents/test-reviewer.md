@@ -41,8 +41,30 @@ Work in this order. The order matters: form your own expectations before you loo
    - assertions that can't fail
    - over-mocking
    - tests that check a helper rather than the rule
-5. **Run the suite**: `uv run pytest -q`. Report failures. If useful, run single tests.
-6. **Optional spot check.** Pick one or two important behaviors and reason concretely about whether
+5. **Hard-coded rule defaults** (CLAUDE.md rule 12). Search the diff, and the engine code it
+   touches, for any value or procedure a card or effect could change that is written as a fixed
+   literal or assumption instead of coming from its single rule-default function. Look for:
+   - comparisons against fixed counts (land plays, hand size, cards drawn, life, thresholds);
+   - a fixed list or order of turns, phases or steps;
+   - a decision addressed straight to the affected player instead of through
+     `deciding_player`;
+   - visibility decided outside `knows_identity`;
+   - zones or timing for playing or casting checked outside the permission and timing
+     functions.
+
+   For each, give the CR rule and the function that should own it, and check the rules coverage
+   map (`docs/roadmap.md`) for the cards that change it. Check that every rule-default function
+   the PR adds or changes has a test of its default and a seam test (CLAUDE.md, "Rule defaults
+   are tested through their seam").
+6. **Torture tests** (CLAUDE.md rule 13). List the torture tests in `docs/torture-tests.md`
+   whose rules or "Touches" column involve a system the PR builds or changes.
+   - For each one assigned to the current milestone, check that tests exist for it, worked out
+     from the CR and the card's rulings.
+   - For each one assigned to a later milestone, check that the PR's design doesn't block it.
+     For example: a hard-coded assumption, a decision that can't be routed to another player,
+     or a stack object that can't be copied.
+7. **Run the suite**: `uv run pytest -q`. Report failures. If useful, run single tests.
+8. **Optional spot check.** Pick one or two important behaviors and reason concretely about whether
    a plausible bug would make a test fail. Examples: an off-by-one, a wrong comparison, a
    condition ignored, the wrong player chosen. Describe the bug and which test (if any) would catch
    it. Don't edit files to try it.
@@ -60,6 +82,10 @@ Reply with exactly these sections:
 - **Missing tests:** behaviors from your list that no test checks, most important first. Each
   entry should be specific enough to write the test from, and cite the rule.
 - **Hollow tests:** tests that couldn't fail, or that don't test what their name says.
+- **Hard-coded rule defaults:** each one found, with its file and line, CR rule and the function
+  that should own it; and missing default or seam tests.
+- **Torture tests:** the torture tests the PR touches, and for each: tested, not blocked, or
+  blocked (and how).
 - **Spot check:** the bugs you considered and whether the tests would catch them.
 - **Suite result:** the pytest summary line.
 

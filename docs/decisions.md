@@ -19,7 +19,153 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-19: Card scope: tournament legality
+- **Decision (the user's test):** a card is **in scope** if Scryfall lists it as legal or banned
+  in at least one format. It is **out of scope** only if it is acorn-stamped, silver-bordered, or
+  otherwise never tournament-legal. This replaces "appears in an Un set". A rule is out of scope
+  only if no in-scope card and no supported format uses it.
+- **Decision (reading the test):** only **paper formats** count, and "restricted" (Vintage)
+  counts as legal.
+  - Of 38,861 cards in the snapshot, 702 are legal only in MTG Arena formats (alchemy, historic,
+    timeless, gladiator, brawl, standardbrawl, competitivebrawl): 638 Alchemy cards plus
+    digital-only versions.
+  - Sixteen of those are acorn-stamped Mystery Booster Commander cards that Arena lists as
+    legal, so counting every format would put acorn cards in scope, which the test says can't
+    happen.
+  - Alchemy cards also use mechanics the CR doesn't define ("seek", "perpetually"), and the
+    engine follows the CR.
+  - **Confirmed by the user** (paper formats only).
+- **Check against the card data:** the pinned snapshot (2026-10-17) can't be downloaded again
+  (2026-10-18 "Snapshot drift"). The check used Scryfall's Oracle-cards file of 2026-10-18
+  (`oracle-cards-20261018210200`), the same one the excerpts came from.
+  - Legal or banned in a paper format: 32,199 cards. **None** is acorn-stamped or
+    silver-bordered, so the test and the stamp and border criteria agree exactly.
+  - Never legal in a paper format: 6,662 cards. 3,863 are tokens, emblems, art cards and
+    variant cards; 129 are acorn-stamped; 458 silver-bordered; 702 legal only on Arena. The
+    other 1,510 are playtest cards, memorabilia and unreleased sets, such as Star Trek (released
+    2026-11-13).
+  - Scryfall gives unreleased cards no legality, so they come into scope when a later snapshot
+    is pinned after their release. Stamps and borders belong to a printing, while legality
+    belongs to the card, so legality decides.
+- **Rows moved into scope** (all were out as "Un-set only" or as a variant):
+
+  | Rows | In-scope cards | Tier, milestone |
+  |---|---|---|
+  | 123 stickers | 47 Unfinity cards that use stickers and 48 sticker sheets, all Commander-legal | set mechanic, M5 (characteristics) and M7 (sheets chosen before the game) |
+  | 717 Attraction cards | 22 Attractions without the acorn stamp, Commander-legal | set mechanic, M7 |
+  | 702.159 visit | the same 22 Attractions | set mechanic, M7 |
+  | 701.51 open an Attraction | 20 Commander-legal cards (Complaints Clerk, Coming Attraction, ...) | set mechanic, M7 |
+  | 701.52 roll to visit your Attractions | "Lifetime" Pass Holder, Line Cutter, Command Performance | set mechanic, M7 |
+  | 702.158 space sculptor, 704.5u | Space Beleren (oval stamp, Commander-legal) | exotic, M7 |
+  | 701.45 assemble | Steamflogger Boss (Future Sight) modifies assembling; no tournament-legal card assembles | exotic, M6 |
+  | 407 ante | 9 ante cards (Contract from Below, Darkpact, Jeweled Bird, ...), banned rather than never legal | exotic, M7 |
+  | 315 conspiracies, 702.106 hidden agenda, 116.2j | 25 conspiracy cards, banned rather than never legal (14 with hidden agenda); used only in limited play (315.1) | exotic, M7 |
+
+  All are set mechanics or exotic, so they're implemented in M9. Their milestones say which
+  systems must leave room. M7's checklist now names what players bring besides their deck
+  (Attraction decks, sticker sheets, conspiracies, ante).
+- **Rows that stay out of scope:** the Vanguard, Planechase and Archenemy rows (none of their 414
+  cards is legal or banned anywhere); 905's draft (the game's conspiracy rules are 315 and
+  702.106); substitute cards; the sections with no game rules; and the multiplayer options and
+  variants Commander doesn't use.
+- **Why:** the user's goal is every card that has ever been tournament-legal. Unfinity's
+  black-bordered cards are legal in Commander, the project's format. Ante cards and conspiracies
+  are banned, not never legal.
+- **Rules:** 123, 315, 407, 701.45, 701.51, 701.52, 702.106, 702.158, 702.159, 704.5u, 717, 905.
+- **Where:** `docs/roadmap.md` (the coverage map and its out-of-scope list, M7), `docs/design.md`
+  §1, `docs/plans/m2.md` (approval notes), `README.md`, `docs/torture-tests.md`.
+
+### 2026-10-19: The M2 plan, the rules coverage map, torture tests, and rules 12 and 13
+**Superseded in part by 2026-10-19 "Card scope: tournament legality"**: the rows below marked out
+of scope as Un-set only (717, 702.158, 702.159 and the rest) are in scope, and so are ante and
+conspiracy cards.
+- **Decision:** M2 follows an approved plan, `docs/plans/m2.md`, in twelve steps (M2.0 to
+  M2.11). M2.0, documentation only, comes first, so every later step starts from the updated
+  rules.
+- **Decision:** the keyword table becomes the **rules coverage map** (`docs/roadmap.md`): every
+  numbered section of the pinned CR, every keyword ability and every keyword action, each with
+  the milestone where its rules live and a tier. The tiers and the M9 rule are unchanged; M9
+  becomes "Rules coverage".
+  - The pinned rules have 145 numbered sections outside 701 and 702, 194 keyword abilities
+    (702.2-702.195) and 70 keyword actions (701.2-701.71). The "Keyword coverage" entry below
+    said 71 actions.
+  - Rows the map assigns to a milestone also became checklist items in that milestone's own
+    roadmap section: planeswalkers and loyalty abilities, tokens, emblems, the legend rule,
+    double-faced cards and library search in M4; extra turns, phases and steps in M3.
+- **Decision:** the rows flagged for review were decided against the pinned CR. The user
+  decided:
+  - planeswalkers (306) M4, evergreen;
+  - extra turns and phases (500.7-500.10) M3;
+  - the legend rule (704.5j) M4;
+  - double-faced cards (712) evergreen;
+  - Sagas (714) set mechanic;
+  - text-changing (612) exotic;
+  - Attractions (717) out of scope (Un-only);
+  - subgames (729) in scope, exotic, M9;
+  - 206 in scope, exotic, M9. City in a Bottle, Golgothian Sylex and Apocalypse Chime refer to
+    names "originally printed" in a set; 206.3a-c list those names, so the card data needs
+    nothing more.
+
+  The rest were decided here:
+  - Intimidate, landwalk and fear: evergreen, M3 (retired evergreen, on many cards).
+  - Prowess: evergreen, M5 (common since 2015).
+  - Partner: evergreen, M7 (Commander is the project's format).
+  - Exchange (701.12) evergreen M5; goad (701.15) evergreen M5 (it needs durations); investigate
+    (701.16) evergreen M4.
+  - Phasing: exotic, M5.
+  - Level up: M4. Leveler cards (711): M5, since level symbols are static abilities setting
+    base power and toughness (711.2).
+  - Preparation cards (722): set mechanic, M5.
+  - Shortcuts (732): evergreen, M7.
+  - ∞ (702.186): set mechanic, M5. It is the harness mechanic (701.64), not Un-only.
+  - Paradigm (702.192) set mechanic M5; storied (702.195) set mechanic M7 (a designation);
+    harness (701.64) set mechanic M4.
+  - Heal (701.69) set mechanic M2; recruit (701.70) set mechanic M4; Empower Jace (701.71)
+    exotic M4; learn (701.48) set mechanic M7 (outside the game, 903.11).
+  - Space sculptor (702.158) and visit (702.159): out of scope, Un-set only.
+- **Decision:** the out-of-scope list (in the map) was approved by the user: Un-set rules,
+  casual variants, ante, substitute cards, sections with no game rules, and the multiplayer
+  options and variants Commander doesn't use.
+- **Decision:** a new non-negotiable rule, **12: no hard-coded rule defaults**. The M0/M1 code
+  breaks it (one land per turn, maximum hand size seven, the fixed turn sequence, the affected
+  player always deciding, and the others listed in `docs/plans/m2.md` §5.1), and M2.1 removes
+  every violation. The test-reviewer checks for it. Until M5, each default is tested through a
+  `monkeypatch` seam (CLAUDE.md, "Rule defaults are tested through their seam"); M5 replaces
+  those tests with tests using real effects.
+- **Decision:** a new non-negotiable rule, **13: torture tests**. `docs/torture-tests.md` lists
+  famously difficult cards. Each milestone's plan handles those that touch its systems, and
+  implements those assigned to it. The test-reviewer checks for it.
+- **Decision:** `docs/design.md` §17 holds designs a milestone's plan approved before their code
+  exists. Each is marked provisional: the milestone that builds it may revise it with the user's
+  sign-off, and once built it moves into the section it belongs to. This is an exception to
+  design.md's "same PR as the code" rule.
+- **Decision:** illegal actions are reversed (733) by **restoring a checkpoint** taken when the
+  action began, then applying again the mana abilities the player chose to keep (design.md
+  §17.4). The counters and the RNG are never rewound. The alternative considered, recording an
+  inverse for each change, can't restore exactly the objects M4's costs move.
+- **Decision:** M2 implements, besides its 14 target-deck cards:
+  - eight real keyword example cards, whose only text is the keyword: Ashcoat Bear, Gladecover
+    Scout, Humble Budoka, Darksteel Relic, Darksteel Myr, Repentant Blacksmith, Nacatl Savage,
+    Cancel;
+  - two torture-test cards, Decimate and Cryptic Command.
+
+  They go in the default registry and the fuzz decks, except Repentant Blacksmith, which stays
+  out of the fuzz decks until protection's damage prevention (702.16e) exists in M6.
+- **Decision:** the plan file stays cheap to read. The coverage map and the torture tests live
+  only in their own files, and the plan points to them. Each step's agent reads the plan's "How
+  to use this plan", its own step, the sections that step references, and the handoff notes.
+- **Why:** the user's goal is every non-Un card with no shortcuts. Each change makes sure the
+  systems built now leave room for every rule and the hardest known cards, without implementing
+  them all now.
+- **Rules:** 101.2, 206.3, 500.7-500.11, 601.2, 601.3e, 702, 701, 704.5j, 707.10, 712, 723,
+  733.
+- **Where:** `docs/plans/m2.md`, `CLAUDE.md`, `docs/roadmap.md`, `docs/design.md` §17,
+  `docs/torture-tests.md`, `.claude/agents/test-reviewer.md`, `README.md`.
+
 ### 2026-10-19: Keyword coverage: tiers, M9, and planning for every keyword
+**Superseded in part by 2026-10-19 "The M2 plan, the rules coverage map, torture tests, and rules
+12 and 13"**: the keyword table became the rules coverage map, M9 became rules coverage, and
+CR 701 has 70 keyword actions, not 71.
 - **Decision:** the engine aims to support every keyword ability (CR 702: 194 in the pinned rules)
   and keyword action (CR 701: 71), not only those the target decks use. The roadmap's keyword
   table gives each one the milestone where its rules live and a tier:

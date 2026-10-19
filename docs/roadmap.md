@@ -3,7 +3,8 @@
 Milestones are worked in order. Each milestone ends with every listed item done, tests passing,
 and `pytest`, `ruff` and `pyright` clean in CI. Tick items off in the same PR that completes them.
 
-**Current milestone: M2 (not started). M0 and M1 are complete.**
+**Current milestone: M2, in progress (plan approved: `docs/plans/m2.md`; M2.0 done). M0 and M1
+are complete.**
 
 ---
 
@@ -186,35 +187,51 @@ cards are not included.
 
 ## M2 — Spells and the stack
 
+The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
+
+- [x] The plan, the rules coverage map, the torture tests and rules 12 and 13 (M2.0,
+  documentation).
+- [ ] The coverage-map consistency test, and the rule defaults M0/M1 hard-coded turned into
+  single functions (rule 12, M2.1).
 - [ ] The full casting process (601.2):
-  - announce
-  - choose modes, X, and targets
-  - total the cost
-  - activate mana abilities
-  - pay costs
+  - announce, with **cast variants and permissions** chosen before the card moves, so every
+    layout that changes how a spell is cast fits (split cards and Rooms 709.3, double-faced
+    cards 712.11, adventures 715.3, omens 720.3, prototype 718.3, face-down 708.4, casting from
+    other zones);
+  - choose modes, X, and targets;
+  - total the cost;
+  - activate mana abilities;
+  - pay costs.
 - [ ] Timing rules for sorceries, instants and permanents; flash.
+- [ ] One permission and prohibition system for every legality check, where "can't" beats "can"
+  (101.2).
+- [ ] Reversing an illegal action (733) by checkpoint and restore.
 - [ ] Evergreen keywords whose rules live here: flash (702.8), hexproof (702.11), shroud (702.18),
   indestructible (702.12), and the targeting part of protection (702.16). Design targeting so these
   restrictions fit naturally.
-- [ ] Create the keyword table at the end of this file: every keyword ability (CR 702) and keyword
-  action (CR 701), with its milestone and tier (see "Keyword table").
+- [ ] Evergreen keyword actions whose rules live here: cast (701.5), counter (701.6), destroy
+  (701.8), exile (701.13); and "can't be countered" (113.6g).
+- [x] Create the keyword table: widened into the rules coverage map at the end of this file
+  (M2.0).
 - [ ] Resolution (608), including checking targets again on resolution (608.2b) and partial
-  fizzling.
-- [ ] Mana payment details: generic, colored, hybrid, X costs, cost increases and reductions,
-  including reductions that depend on a count or on the spell's targets (Ghalta, Hamza, Savage
-  Stomp).
-- [ ] Alternative and additional costs (118.9, 601.2b, 601.2f): casting without paying the mana
-  cost, overload (702.96), optional additional costs (offspring, 702.175), "reveal a card or pay
-  {1}" (Thunderherd Migration).
-- [ ] Casting from zones other than the hand: the graveyard (Quilled Greatwurm), exile and the top
-  of the library (Etali, Descendants' Path, discover 701.57, hideaway 702.75); flash granted by an
-  effect (Progenitor's Icon); casting prohibitions (601.3, Kutzil); "can't be countered".
+  fizzling; last known information (608.2h).
+- [ ] Mana payment details and the general cost model: generic, colored, {C}, X and restricted
+  mana (106.6), with slots for hybrid, Phyrexian, snow and non-mana costs; cost increases and
+  reductions in 601.2f's order.
+- [ ] Casting without paying the mana cost, during resolution (608.2g, 118.9; Rishkar's
+  Expertise).
 - [ ] Mana abilities beyond basic lands (605): "any color in your commander's color identity",
-  "any color a land could produce", variable amounts, activation conditions, triggered mana
-  abilities (605.1b, Regal Behemoth), and restricted mana with "when that mana is spent" triggers
-  (Ixalli's Lorekeeper, Path of Ancestry).
-- [ ] The first primitives: damage, destroy, exile, draw, life gain and loss, counter target spell.
-- [ ] Cards: about 10 simple spells and creatures drawn from the target decks.
+  activation conditions, mana costs on mana abilities, creatures' mana abilities and summoning
+  sickness (302.6), restricted mana (Ixalli's Lorekeeper).
+- [ ] The first primitives: damage, destroy, exile, draw, life gain, counter target spell.
+- [ ] Cards: 14 from the target decks, 8 keyword example cards and the torture tests Decimate
+  and Cryptic Command (`docs/plans/m2.md` §7).
+
+Moved out of M2 by the plan: dividing (601.2d), reductions from a count or from targets
+(Ghalta, Hamza, Savage Stomp), overload, casting from the graveyard, exile and the library top,
+triggered mana abilities and "when that mana is spent" → M4; offspring, casting prohibitions
+(Kutzil) → M5; "as though it had flash" (Progenitor's Icon), "any color a land could produce"
+(106.7) → M6; Regal Behemoth → M7; hybrid and Phyrexian payment → M9.
 
 ## M3 — Combat
 
@@ -225,28 +242,55 @@ cards are not included.
   restrictions (Champion of Lambholt).
 - [ ] Creatures put onto the battlefield tapped and attacking (508.4, Ghalta and Mavren).
 - [ ] First strike and double strike damage steps; trample; deathtouch; lifelink; flying and reach;
-  vigilance; menace.
-- [ ] Multiplayer attacks: choosing which player or planeswalker each creature attacks.
+  vigilance; menace. Deathtouch and lifelink apply to noncombat damage too (M2's damage table).
+- [ ] Defender (702.3); the retired evergreen evasion keywords intimidate (702.13), landwalk
+  (702.14) and fear (702.36).
+- [ ] Haste (702.10), including its 302.6 part.
+- [ ] Protection's blocking part (702.16f).
+- [ ] Multiplayer attacks: choosing which player or planeswalker each creature attacks, and
+  leaving room for attacking battles (310). Attack and block declarations use a constrained
+  answer space (`ChooseAssignment`, design.md §6).
+- [ ] Extra turns, phases and steps (500.7–500.10), on M2.1's `TurnState.segments` and
+  `next_turn` (Time Walk, Relentless Assault).
+- [ ] Ending turns and phases (724): the design must allow it; implemented in M9 (exotic).
 
 ## M4 — Activated and triggered abilities
 
 - [ ] Activated abilities (602), including costs like tapping and sacrificing; equip.
+- [ ] Non-mana costs (118): sacrifice, discard, exile, life, counters, tapping other permanents,
+  with reversal (733) by M2's checkpoint.
 - [ ] Triggered abilities (603):
   - APNAP ordering
   - intervening-if conditions (603.4)
-  - looking back in time (603.10)
+  - looking back in time (603.10, 608.2i), with a history derived from the event log
   - delayed triggers
   - "may" choices
 - [ ] Trigger variants: reflexive triggers (603.12), triggering additional times (603.2d, Wayta),
   "do this only once each turn" (Pantlaza), batched "one or more" triggers, and spell-cast and
   ability-activation triggers.
-- [ ] Damage-driven triggers (enrage), fight.
-- [ ] Counters (122) on permanents and on players (energy): putting and removing them, counters as
-  costs, doubling (701.10e) and proliferate (701.34).
+- [ ] Triggered mana abilities (605.1b) and "when that mana is spent" delayed triggers (603.7a).
+- [ ] Damage-driven triggers (enrage), fight (701.14).
+- [ ] Counters (122) on permanents and on players (poison 704.5c, energy): putting and removing
+  them, counters as costs, doubling (701.10e) and proliferate (701.34).
 - [ ] Keyword abilities built on activated and triggered abilities: saddle (702.171) and "attacks
   while saddled", cycling and landcycling (702.29), outlast (702.107), level up (702.87), adapt
   (701.46), evolve (702.100), ward (702.21).
-- [ ] Equipment and auras: attaching, and state-based actions for illegal attachments.
+- [ ] Equipment and auras: attaching (701.3), enchant (702.5), and state-based actions for illegal
+  attachments (704.5m-n); protection's enchant and equip parts (702.16c-d).
+- [ ] Tokens (111, 701.7), including the predefined tokens (111.10) and investigate (701.16).
+- [ ] Planeswalkers (306, 209), loyalty abilities (606), 704.5i and damage to planeswalkers
+  (120.3c); emblems (114).
+- [ ] The legend rule (704.5j).
+- [ ] Double-faced cards (712): transforming (701.27) and casting modal double-faced cards' back
+  faces through M2's cast variants.
+- [ ] Library search and manipulation: search, including failing to find (701.23), reveal
+  (701.20), scry (701.22), surveil (701.25), mill (701.17), with knowledge of library positions.
+- [ ] Linked abilities (607); choosing a card name (201.4) with a constrained answer space.
+- [ ] Casting from zones other than the hand: the graveyard (Quilled Greatwurm), exile and the top
+  of the library (Etali, Descendants' Path, discover 701.57, hideaway 702.75).
+- [ ] Dividing at cast time (601.2d, Biogenic Upgrade); cost reductions that depend on a count or
+  on the spell's targets (Ghalta, Hamza, Savage Stomp; for abilities, Wayta); overload (702.96);
+  "reveal a card or pay {1}" (Thunderherd Migration).
 
 ## M5 — Continuous effects and layers
 
@@ -255,20 +299,37 @@ cards are not included.
 - [ ] Static abilities; counters as power/toughness modifiers; effects that grant abilities.
 - [ ] Characteristic-defining abilities, Gods and devotion, type-changing effects.
 - [ ] Copy effects (707) in layer 1, including copies with exceptions (707.9, Sunfrill Imitator)
-  and token copies (offspring, myriad).
-- [ ] Interaction tests for classic layer puzzles.
+  and token copies (offspring, myriad); copies of spells and abilities (707.10, 704.5e) and
+  changing their targets (115.7).
+- [ ] Text-changing effects (612) over the definitions' typed words.
+- [ ] Durations (611.2): "until end of turn", "this turn", "until your next turn", "for as long
+  as", ended by events.
+- [ ] Permissions and prohibitions from static abilities (101.2), including casting prohibitions
+  (601.3, Kutzil) and players' abilities (hexproof, shroud, protection for players).
+- [ ] Modifiers of the rule defaults (rule 12): land plays (Explore, Wayward Swordtooth), maximum
+  hand size (Reliquary Tower), cards drawn, untapping, mana emptying, losing the game
+  (Platinum Angel), opening-hand actions (103.6). The M2.1 seam tests are replaced with tests
+  using real effects.
+- [ ] Leveler cards (711); exchanges (701.12); goad (701.15).
+- [ ] Interaction tests for classic layer puzzles (the M5 rows of `docs/torture-tests.md`).
 
 ## M6 — Replacement and prevention effects
 
-- [ ] Replacement effects (614), including entering-the-battlefield modifications (614.1c–d, 614.12).
-- [ ] Prevention effects (615), including Undergrowth Champion (prevent, then remove a counter) and
-  Temple Altisaur (prevent all but 1).
+- [ ] Replacement effects (614), including entering-the-battlefield modifications (614.1c–d, 614.12)
+  and choices stored on the permanent as it enters.
+- [ ] Prevention effects (615), including Undergrowth Champion (prevent, then remove a counter),
+  Temple Altisaur (prevent all but 1) and protection's damage prevention (702.16e).
 - [ ] Entering-the-battlefield choices and modifications from other permanents: riot (702.136),
   "creatures your opponents control enter tapped" (Kinjalli's Sunwing).
 - [ ] Multiple replacement effects with the affected player choosing order (616), including
   counter-placement stacking (for example doubling plus "one additional"), on players as well as
   permanents (Lae'zel).
 - [ ] Regeneration (701.19); mana-doubling replacements.
+- [ ] Skipping steps, phases and turns (500.11, 614.10); replacing draws (121.6).
+- [ ] Replacements of where a spell goes as it leaves the stack (flashback-style exile).
+- [ ] "Any color a land could produce" (106.7, Exotic Orchard); "as though it had flash"
+  (601.3b, Progenitor's Icon); restricted mana tied to a chosen type (Secluded Courtyard,
+  Unclaimed Territory).
 
 ## M7 — Multiplayer and Commander
 
@@ -279,11 +340,15 @@ cards are not included.
 - [ ] Myriad (702.116): token copies attacking each other opponent.
 - [ ] The command zone, casting commanders, and commander tax.
 - [ ] Commander damage (903.10a) and the zone-change rules (903.9a/b).
-- [ ] Color identity and deck validation.
+- [ ] Color identity and deck validation; partner variants (702.124).
 - [ ] The scenario builder refuses commanders `validate_deck` would refuse (903.3, 903.5,
   702.124a), and the tests that use the fixtures' non-legendary commanders are updated.
-- [ ] Designations: the monarch, the city's blessing.
-- [ ] Loop guard (104.4b).
+- [ ] Designations: the monarch (Regal Behemoth), the city's blessing; the general system for
+  player and game designations (design.md §4).
+- [ ] Cards outside the game (400.11, 903.11).
+- [ ] Leave room for what players bring to a game besides their deck (implemented in M9): Attraction
+  decks (717.2), sticker sheets (123.2), conspiracy cards (315.2) and playing for ante (407.2).
+- [ ] Loop guard (104.4b); decide how much of shortcuts (732) to implement.
 
 ## M8 — Card coverage
 
@@ -292,34 +357,483 @@ cards are not included.
 - [ ] Both decks pass validation and play complete random-agent games with no crashes or invariant
   violations, plus a ruling-derived test for every card.
 
-## M9 — Keyword coverage
+## M9 — Rules coverage
 
-- [ ] Implement every keyword in the keyword table below whose tier is **set mechanic** or
-  **exotic** and that isn't done yet, each with rules tests and a fixture or excerpt card.
-- [ ] Every keyword ability (CR 702) and keyword action (CR 701) in the pinned rules is either
-  implemented or explicitly listed as deferred, with the reason and the user's approval.
+- [ ] Implement every row of the rules coverage map below whose tier is **set mechanic** or
+  **exotic** and that isn't done yet, in any section (keywords, card layouts, designations,
+  special rules), each with rules tests and a fixture or excerpt card.
+- [ ] Every row of the map is either implemented or out of scope with a reason the user approved.
+- [ ] The torture tests assigned to M9 in `docs/torture-tests.md`.
 
 ---
 
-## Keyword table
+## Rules coverage map
 
-Every keyword ability (CR 702) and keyword action (CR 701) in the pinned rules, the milestone where
-its rules live, and its tier. Created during M2 planning; each milestone's plan checks and corrects
-it (CLAUDE.md, "Planning a milestone").
+Every numbered section of the pinned CR, every keyword ability (702) and every keyword action
+(701): the milestone where its rules live, and its tier. Created during M2 planning; each
+milestone's plan checks and corrects it (CLAUDE.md, "Planning a milestone"). From M2.1 a test
+checks that the map lists every heading of the pinned rules exactly once.
+
+**Milestone** is where a row's rules live: the latest system it needs. "✓" marks parts already
+done, and several milestones are listed when parts of a row land in different ones.
 
 **Tiers and when each is implemented:**
 
-- **Evergreen/common** (flying, trample, flash, ward, scry, mill, and so on): in the milestone
+- **E, evergreen/common** (flying, trample, flash, ward, scry, mill, and so on): in the milestone
   where its rules live.
-- **Set mechanic** (cascade, convoke, kicker, cycling, and so on): in M9, unless a target deck
+- **S, set mechanic** (cascade, convoke, kicker, cycling, and so on): in M9, unless a target deck
   needs it, in which case it's done in the milestone where its rules live.
-- **Exotic** (banding, phasing, mutate, companion, one-card mechanics, and so on): the same as set
-  mechanics.
+- **X, exotic** (banding, phasing, mutate, companion, one-card mechanics, and so on): the same as
+  set mechanics.
+- **Out of scope**: not implemented, for the reason given; the user approved each one.
 
-Whatever the tier, the systems built in earlier milestones must leave room for every keyword in
-this table.
+**D** in the notes marks a row a target deck needs. Whatever the tier, the systems built in
+earlier milestones must leave room for every row in this map.
 
-*The table itself is added during M2 planning.*
+### Numbered sections
+
+| CR | Name | Milestone | Tier | Notes |
+|---|---|---|---|---|
+| 100 | General | M0 ✓ | E |  |
+| 101 | The Magic Golden Rules | M1 ✓ (101.4); 101.2 system M2; 101.1, 101.3 with each effect | E | `allowed` (design.md §11) |
+| 102 | Players | M1 ✓ | E | teams (102.3-102.4): out of scope with the team variants |
+| 103 | Starting the Game | M1 ✓; 103.6 M5; 103.2b M7 | E | `opening_hand_actions` |
+| 104 | Ending the Game | M1 ✓; 104.3c-d M4, M7; 104.4b M7; alternative wins and losses M5 | E | `can_lose_game` |
+| 105 | Colors | M2 | E |  |
+| 106 | Mana | M1 ✓, M2; 106.7 M6 | E |  |
+| 107 | Numbers and Symbols | M2; 107.4e-f, 107.4h M9; 107.14 M4; 107.15, 107.17 M9 | E | hybrid and Phyrexian: M2 builds the announcement stage |
+| 108 | Cards | M0 ✓ | E |  |
+| 109 | Objects | M1 ✓; 109.3 with each layout | E |  |
+| 110 | Permanents | M1 ✓; statuses with their mechanics | E |  |
+| 111 | Tokens | M4 | E | D (Regisaur Alpha, Generous Gift) |
+| 112 | Spells | M2; copies M5 | E |  |
+| 113 | Abilities | M2 (spell abilities, 113.6); M4; M5 | E |  |
+| 114 | Emblems | M4 | E | with planeswalkers |
+| 115 | Targets | M2; 115.7 M5 | E |  |
+| 116 | Special Actions | M1 ✓ (116.2a); the others with their mechanics | E | 116.2i out of scope (Planechase); 116.2j is for conspiracy cards (315) |
+| 117 | Timing and Priority | M1 ✓, M2 | E |  |
+| 118 | Costs | M2 (mana); M4 (other costs, 118.12) | E |  |
+| 119 | Life | M2 | E |  |
+| 120 | Damage | M2 (noncombat), M3 (combat), M4 (120.3b-d, 120.3g) | E |  |
+| 121 | Drawing a Card | M1 ✓; 121.6 M6 | E |  |
+| 122 | Counters | M4 | E | D |
+| 123 | Stickers | M5 (stickers change names, abilities, power and toughness: 123.6-123.8); M7 (sticker sheets chosen before the game, 123.2) | S | Unfinity: 47 cards that use stickers and 48 sticker sheets are Commander-legal |
+| 200 | General | — | — | nothing to implement |
+| 201 | Name | M1 ✓; 201.4 M4 | E |  |
+| 202 | Mana Cost and Color | M2 | E |  |
+| 203 | Illustration | out of scope | — | no game rules |
+| 204 | Color Indicator | M2 | E | colors come from the card data |
+| 205 | Type Line | M1 ✓; type changes M5 | E |  |
+| 206 | Expansion Symbol | M9 | X | 206.3: City in a Bottle, Golgothian Sylex and Apocalypse Chime refer to names "originally printed" in a set; 206.3a-c list those names, so no extra card data is needed |
+| 207 | Text Box | M1 ✓ | E | ability words have no rules meaning (207.2c) |
+| 208 | Power/Toughness | M1 ✓; 208.2 M5 | E |  |
+| 209 | Loyalty | M4 | E | planeswalkers |
+| 210 | Defense | M4 | S | battles |
+| 211 | Hand Modifier | out of scope | — | Vanguard |
+| 212 | Life Modifier | out of scope | — | Vanguard |
+| 213 | Information Below the Text Box | out of scope | — | no game rules |
+| 300 | General | M1 ✓ | E |  |
+| 301 | Artifacts | M2; Equipment M4; Vehicles M5; Fortifications M9 | E |  |
+| 302 | Creatures | M1 ✓, M2 (302.6), M3 | E |  |
+| 303 | Enchantments | M2; Auras M4 | E | Sagas, Classes, Cases and Rooms have their own rows |
+| 304 | Instants | M2 | E |  |
+| 305 | Lands | M1 ✓; 305.2 default M2.1; modifiers M5 | E |  |
+| 306 | Planeswalkers | M4 (attacking them M3) | E |  |
+| 307 | Sorceries | M2 | E |  |
+| 308 | Kindreds | M1 ✓ | E |  |
+| 309 | Dungeons | M7 | S | with venture (701.49) |
+| 310 | Battles | M4 (attacking them M3) | S | M3 leaves room for attacking battles |
+| 311 | Planes | out of scope | — | Planechase |
+| 312 | Phenomena | out of scope | — | Planechase |
+| 313 | Vanguards | out of scope | — | Vanguard |
+| 314 | Schemes | out of scope | — | Archenemy |
+| 315 | Conspiracies | M7 | X | used only in limited play (315.1); 25 conspiracy cards are banned rather than never legal, so they are in scope |
+| 400 | General | M0 ✓; 400.7 exceptions with their mechanics; 400.11 M7 | E |  |
+| 401 | Library | M1 ✓ | E |  |
+| 402 | Hand | M1 ✓; 402.2 default M2.1; modifiers M5 | E | D (Reliquary Tower) |
+| 403 | Battlefield | M1 ✓ | E |  |
+| 404 | Graveyard | M1 ✓ | E |  |
+| 405 | Stack | M2; 405.3 M4 | E |  |
+| 406 | Exile | M2; face-down exile M4 | E |  |
+| 407 | Ante | M7 | X | the 9 ante cards are banned in every format, not never legal; they need an option to play for ante (407.2, 407.3) |
+| 408 | Command | M7; emblems M4 | E |  |
+| 500 | General | M1 ✓; 500.5 default M2.1; 500.7-500.10 M3; 500.11 M6 | E |  |
+| 501 | Beginning Phase | M1 ✓ | E |  |
+| 502 | Untap Step | M1 ✓; 502.3 default M2.1; 502.1 M9; 502.2 M7 | E |  |
+| 503 | Upkeep Step | M1 ✓ | E |  |
+| 504 | Draw Step | M1 ✓; 504.1 default M2.1 | E |  |
+| 505 | Main Phase | M1 ✓; 505.3-505.5 M9 | E |  |
+| 506 | Combat Phase | M3 | E |  |
+| 507 | Beginning of Combat Step | M3 | E |  |
+| 508 | Declare Attackers Step | M3 | E |  |
+| 509 | Declare Blockers Step | M3 | E |  |
+| 510 | Combat Damage Step | M3 | E |  |
+| 511 | End of Combat Step | M3 | E |  |
+| 512 | Ending Phase | M1 ✓ | E |  |
+| 513 | End Step | M1 ✓ | E |  |
+| 514 | Cleanup Step | M1 ✓; 514.2 effects ending M5 | E |  |
+| 600 | General | — | — | nothing to implement |
+| 601 | Casting Spells | M2 | E |  |
+| 602 | Activating Activated Abilities | M4 | E |  |
+| 603 | Handling Triggered Abilities | M4 | E |  |
+| 604 | Handling Static Abilities | M5 (M2: keyword and cost-reduction statics) | E |  |
+| 605 | Mana Abilities | M1 ✓, M2; 605.1b M4 | E |  |
+| 606 | Loyalty Abilities | M4 | E |  |
+| 607 | Linked Abilities | M4 | E | D (hideaway) |
+| 608 | Resolving Spells and Abilities | M2 | E |  |
+| 609 | Effects | M2 | E |  |
+| 610 | One-Shot Effects | M2; 610.3 M4 | E |  |
+| 611 | Continuous Effects | M5 | E |  |
+| 612 | Text-Changing Effects | M5 (typed words from M2) | X |  |
+| 613 | Interaction of Continuous Effects | M5 | E |  |
+| 614 | Replacement Effects | M6 | E |  |
+| 615 | Prevention Effects | M6 | E |  |
+| 616 | Interaction of Replacement and/or Prevention Effects | M6 | E |  |
+| 700 | General | M2 (700.2); the others with their mechanics | E |  |
+| 703 | Turn-Based Actions | M1 ✓, M3 | E |  |
+| 704 | State-Based Actions | M1 ✓ (704.5a, b, f, g); 704.5c, d, i, j, m, n, p, q, r, z M4; 704.5e M5; 704.5h M3; 704.5k, s, t, u, v-y M9 | E | 704.5j is the legend rule; 704.5u is space sculptor |
+| 705 | Flipping a Coin | M2 | S |  |
+| 706 | Rolling a Die | M2 | S |  |
+| 707 | Copying Objects | M5 | E | D (Sunfrill Imitator, offspring, myriad) |
+| 708 | Face-Down Spells and Permanents | M5 (casting room M2) | S | morph, manifest, disguise, cloak |
+| 709 | Split Cards | M5 (casting room M2) | S | split cards and Rooms |
+| 710 | Flip Cards | M5 | X |  |
+| 711 | Leveler Cards | M5 (level up itself, 702.87, M4) | S | D (Joraga Treespeaker): level symbols are static abilities (711.2) |
+| 712 | Double-Faced Cards | M4 (MDFC casting through M2's cast variants) | E | D (Dowsing Dagger) |
+| 713 | Substitute Cards | out of scope | — | substitute cards stand in for physical double-faced cards; the engine tracks faces itself |
+| 714 | Saga Cards | M4 | S |  |
+| 715 | Adventurer Cards | M4 (casting room M2) | S |  |
+| 716 | Class Cards | M5 | S |  |
+| 717 | Attraction Cards | M7 (an Attraction deck in the command zone, 717.2; the junkyard, 717.6) | S | Unfinity: 22 Attractions without the acorn stamp are Commander-legal |
+| 718 | Prototype Cards | M5 (casting room M2) | S |  |
+| 719 | Case Cards | M4 | S |  |
+| 720 | Omen Cards | M2 | S | casting and resolution |
+| 721 | Station Cards | M4 | S |  |
+| 722 | Preparation Cards | M5 | S |  |
+| 723 | Controlling Another Player | M9 (seam M2.1) | X |  |
+| 724 | Ending Turns and Phases | M3 (turn frame M2.1) | X |  |
+| 725 | The Monarch | M7 | S | D (Regal Behemoth) |
+| 726 | The Initiative | M7 | S |  |
+| 727 | Restarting the Game | M7 | X |  |
+| 728 | Rad Counters | M4 | S |  |
+| 729 | Subgames | M7 | X | Shahrazad |
+| 730 | Merging with Permanents | M5 | X | mutate |
+| 731 | Day and Night | M7 | S |  |
+| 732 | Taking Shortcuts | M7 | E | how much of it is worth implementing: design.md §16 |
+| 733 | Handling Illegal Actions | M2 | E |  |
+| 800 | General | M1 ✓ (800.4a, h, j, k); the rest M7 | E |  |
+| 801 | Limited Range of Influence Option | out of scope | — | Commander doesn't use it (903.2) |
+| 802 | Attack Multiple Players Option | M3, M7 | E | Commander's multiplayer default |
+| 803 | Attack Left and Attack Right Options | out of scope | — | a multiplayer option Commander doesn't use |
+| 804 | Deploy Creatures Option | out of scope | — | a team option |
+| 805 | Shared Team Turns Option | out of scope | — | a team option |
+| 806 | Free-for-All Variant | M7 | E | Commander's multiplayer variant |
+| 807 | Grand Melee Variant | out of scope | — | a variant needing range of influence and several turns at once |
+| 808 | Team vs. Team Variant | out of scope | — | a team variant |
+| 809 | Emperor Variant | out of scope | — | a team variant |
+| 810 | Two-Headed Giant Variant | out of scope | — | a team variant |
+| 811 | Alternating Teams Variant | out of scope | — | a team variant |
+| 900 | General | — | — | nothing to implement |
+| 901 | Planechase | out of scope | — | a casual variant |
+| 902 | Vanguard | out of scope | — | a casual variant |
+| 903 | Commander | M7 (903.4 for mana M2); 903.12 Brawl and 903.13 Commander Draft out of scope | E | the project's format |
+| 904 | Archenemy | out of scope | — | a casual variant |
+| 905 | Conspiracy Draft | out of scope | — | the draft itself (905.1-905.2) isn't a game the engine plays; the game's conspiracy rules are 315 and 702.106, which are in scope |
+
+### Keyword abilities (702)
+
+| CR | Name | Milestone | Tier | Notes |
+|---|---|---|---|---|
+| 702.2 | Deathtouch | M3 | E | noncombat damage too (the M2 damage table leaves room) |
+| 702.3 | Defender | M3 | E | D |
+| 702.4 | Double Strike | M3 | E | D |
+| 702.5 | Enchant | M4 | E | Aura spells' targets use M2's targeting |
+| 702.6 | Equip | M4 | E | D |
+| 702.7 | First Strike | M3 | E | D |
+| 702.8 | Flash | M2 | E |  |
+| 702.9 | Flying | M3 | E | D |
+| 702.10 | Haste | M3 | E | D; the 302.6 hook is built in M2 |
+| 702.11 | Hexproof | M2 | E | D; including "hexproof from" |
+| 702.12 | Indestructible | M2 | E | D |
+| 702.13 | Intimidate | M3 | E | retired evergreen |
+| 702.14 | Landwalk | M3 | E | retired evergreen |
+| 702.15 | Lifelink | M3 | E | D; noncombat damage too |
+| 702.16 | Protection | M2 (targeting); M3 (blocking); M4 (enchant, equip); M6 (damage) | E | D |
+| 702.17 | Reach | M3 | E | D |
+| 702.18 | Shroud | M2 | E | D |
+| 702.19 | Trample | M3 | E | D |
+| 702.20 | Vigilance | M3 | E | D |
+| 702.21 | Ward | M4 | E | D; M2 logs the targets chosen |
+| 702.22 | Banding | M3 | X |  |
+| 702.23 | Rampage | M5 | S |  |
+| 702.24 | Cumulative Upkeep | M4 | S |  |
+| 702.25 | Flanking | M5 | S |  |
+| 702.26 | Phasing | M5 | X | affects every system |
+| 702.27 | Buyback | M2 | S |  |
+| 702.28 | Shadow | M3 | S |  |
+| 702.29 | Cycling | M4 | S | D |
+| 702.30 | Echo | M4 | S |  |
+| 702.31 | Horsemanship | M3 | X |  |
+| 702.32 | Fading | M6 | S |  |
+| 702.33 | Kicker | M2 | S |  |
+| 702.34 | Flashback | M6 | S |  |
+| 702.35 | Madness | M6 | S |  |
+| 702.36 | Fear | M3 | E | retired evergreen |
+| 702.37 | Morph | M5 | S |  |
+| 702.38 | Amplify | M6 | X |  |
+| 702.39 | Provoke | M4 | X |  |
+| 702.40 | Storm | M5 | S |  |
+| 702.41 | Affinity | M2 | S |  |
+| 702.42 | Entwine | M2 | S |  |
+| 702.43 | Modular | M6 | S |  |
+| 702.44 | Sunburst | M6 | S |  |
+| 702.45 | Bushido | M5 | S |  |
+| 702.46 | Soulshift | M4 | S |  |
+| 702.47 | Splice | M5 | S | adds text to a spell |
+| 702.48 | Offering | M4 | X |  |
+| 702.49 | Ninjutsu | M4 | S |  |
+| 702.50 | Epic | M5 | X |  |
+| 702.51 | Convoke | M4 | S | a payment alternative |
+| 702.52 | Dredge | M6 | S |  |
+| 702.53 | Transmute | M4 | S |  |
+| 702.54 | Bloodthirst | M6 | S |  |
+| 702.55 | Haunt | M4 | X |  |
+| 702.56 | Replicate | M5 | S |  |
+| 702.57 | Forecast | M4 | X |  |
+| 702.58 | Graft | M6 | S |  |
+| 702.59 | Recover | M4 | X |  |
+| 702.60 | Ripple | M4 | X |  |
+| 702.61 | Split Second | M2 | S | a prohibition while on the stack |
+| 702.62 | Suspend | M4 | S |  |
+| 702.63 | Vanishing | M6 | S |  |
+| 702.64 | Absorb | M6 | X |  |
+| 702.65 | Aura Swap | M4 | X |  |
+| 702.66 | Delve | M4 | S | a payment alternative |
+| 702.67 | Fortify | M4 | X |  |
+| 702.68 | Frenzy | M5 | X |  |
+| 702.69 | Gravestorm | M5 | X |  |
+| 702.70 | Poisonous | M4 | X |  |
+| 702.71 | Transfigure | M4 | X |  |
+| 702.72 | Champion | M4 | S |  |
+| 702.73 | Changeling | M5 | S |  |
+| 702.74 | Evoke | M4 | S |  |
+| 702.75 | Hideaway | M4 | S | D (Mosswort Bridge; the card itself in M6) |
+| 702.76 | Prowl | M3 | S |  |
+| 702.77 | Reinforce | M4 | S |  |
+| 702.78 | Conspire | M5 | S |  |
+| 702.79 | Persist | M4 | S |  |
+| 702.80 | Wither | M4 | S |  |
+| 702.81 | Retrace | M4 | S |  |
+| 702.82 | Devour | M6 | S |  |
+| 702.83 | Exalted | M5 | S |  |
+| 702.84 | Unearth | M6 | S |  |
+| 702.85 | Cascade | M4 | S |  |
+| 702.86 | Annihilator | M4 | S |  |
+| 702.87 | Level Up | M4 | S | D (Joraga Treespeaker; leveler cards, 711, M5) |
+| 702.88 | Rebound | M6 | S |  |
+| 702.89 | Umbra Armor | M6 | S |  |
+| 702.90 | Infect | M4 | S |  |
+| 702.91 | Battle Cry | M5 | S |  |
+| 702.92 | Living Weapon | M4 | S |  |
+| 702.93 | Undying | M4 | S |  |
+| 702.94 | Miracle | M4 | S |  |
+| 702.95 | Soulbond | M5 | S |  |
+| 702.96 | Overload | M4 | S | D (Fangs of Kalonia) |
+| 702.97 | Scavenge | M4 | S |  |
+| 702.98 | Unleash | M6 | S |  |
+| 702.99 | Cipher | M4 | S |  |
+| 702.100 | Evolve | M4 | S | D |
+| 702.101 | Extort | M4 | S | needs hybrid payment |
+| 702.102 | Fuse | M5 | S | split cards |
+| 702.103 | Bestow | M5 | S |  |
+| 702.104 | Tribute | M6 | S |  |
+| 702.105 | Dethrone | M4 | S |  |
+| 702.106 | Hidden Agenda | M7 | X | conspiracy cards (banned; limited play only, 315.1) |
+| 702.107 | Outlast | M4 | S | D |
+| 702.108 | Prowess | M5 | E | very common since 2015 |
+| 702.109 | Dash | M5 | S |  |
+| 702.110 | Exploit | M4 | S |  |
+| 702.111 | Menace | M3 | E |  |
+| 702.112 | Renown | M4 | S |  |
+| 702.113 | Awaken | M5 | S |  |
+| 702.114 | Devoid | M5 | S |  |
+| 702.115 | Ingest | M4 | S |  |
+| 702.116 | Myriad | M7 | S | D |
+| 702.117 | Surge | M2 | S | needs a record of spells cast this turn |
+| 702.118 | Skulk | M3 | S |  |
+| 702.119 | Emerge | M4 | S |  |
+| 702.120 | Escalate | M2 | S |  |
+| 702.121 | Melee | M5 | S |  |
+| 702.122 | Crew | M5 | S |  |
+| 702.123 | Fabricate | M4 | S |  |
+| 702.124 | Partner | M7 | E | Commander deck construction; D (Lae'zel's Choose a Background, no in-game effect) |
+| 702.125 | Undaunted | M2 | S |  |
+| 702.126 | Improvise | M4 | S | a payment alternative |
+| 702.127 | Aftermath | M5 | S | split cards |
+| 702.128 | Embalm | M5 | S |  |
+| 702.129 | Eternalize | M5 | S |  |
+| 702.130 | Afflict | M4 | S |  |
+| 702.131 | Ascend | M7 | S | D |
+| 702.132 | Assist | M4 | X | another player pays |
+| 702.133 | Jump-Start | M6 | S |  |
+| 702.134 | Mentor | M4 | S |  |
+| 702.135 | Afterlife | M4 | S |  |
+| 702.136 | Riot | M6 | S | D |
+| 702.137 | Spectacle | M2 | S | needs a record of life lost this turn |
+| 702.138 | Escape | M4 | S |  |
+| 702.139 | Companion | M7 | X | outside the game |
+| 702.140 | Mutate | M5 | X |  |
+| 702.141 | Encore | M7 | S |  |
+| 702.142 | Boast | M4 | S |  |
+| 702.143 | Foretell | M4 | S |  |
+| 702.144 | Demonstrate | M5 | S |  |
+| 702.145 | Daybound and Nightbound | M7 | S |  |
+| 702.146 | Disturb | M6 | S |  |
+| 702.147 | Decayed | M4 | S |  |
+| 702.148 | Cleave | M5 | S |  |
+| 702.149 | Training | M4 | S |  |
+| 702.150 | Compleated | M6 | S | needs Phyrexian payment |
+| 702.151 | Reconfigure | M5 | S |  |
+| 702.152 | Blitz | M5 | S |  |
+| 702.153 | Casualty | M5 | S |  |
+| 702.154 | Enlist | M5 | S |  |
+| 702.155 | Read Ahead | M4 | S | Sagas |
+| 702.156 | Ravenous | M6 | S |  |
+| 702.157 | Squad | M5 | S |  |
+| 702.158 | Space Sculptor | M7 | X | one card, Space Beleren (Unfinity, Commander-legal) |
+| 702.159 | Visit | M7 | S | the 22 Commander-legal Attractions |
+| 702.160 | Prototype | M5 | S |  |
+| 702.161 | Living Metal | M5 | S |  |
+| 702.162 | More Than Meets the Eye | M5 | X |  |
+| 702.163 | For Mirrodin! | M4 | S |  |
+| 702.164 | Toxic | M4 | S |  |
+| 702.165 | Backup | M5 | S |  |
+| 702.166 | Bargain | M4 | S |  |
+| 702.167 | Craft | M4 | S |  |
+| 702.168 | Disguise | M5 | S |  |
+| 702.169 | Solved | M4 | S | Cases |
+| 702.170 | Plot | M4 | S |  |
+| 702.171 | Saddle | M4 | S | D |
+| 702.172 | Spree | M2 | S |  |
+| 702.173 | Freerunning | M3 | S |  |
+| 702.174 | Gift | M4 | S |  |
+| 702.175 | Offspring | M5 | S | D |
+| 702.176 | Impending | M6 | S |  |
+| 702.177 | Exhaust | M4 | S |  |
+| 702.178 | Max Speed | M7 | S | with speed (702.179) |
+| 702.179 | Start Your Engines! | M7 | S | player speed |
+| 702.180 | Harmonize | M6 | S |  |
+| 702.181 | Mobilize | M4 | S |  |
+| 702.182 | Job Select | M4 | S |  |
+| 702.183 | Tiered | M2 | S |  |
+| 702.184 | Station | M4 | S |  |
+| 702.185 | Warp | M4 | S |  |
+| 702.186 | ∞ (Infinity) | M5 | S | grants an ability while harnessed (701.64) |
+| 702.187 | Mayhem | M4 | S | needs a record of cards discarded this turn |
+| 702.188 | Web-slinging | M4 | S |  |
+| 702.189 | Firebending | M4 | S | mana that doesn't empty (the M2.1 default) |
+| 702.190 | Sneak | M3 | S |  |
+| 702.191 | Increment | M4 | S |  |
+| 702.192 | Paradigm | M5 | S | copies |
+| 702.193 | Power-up | M4 | S |  |
+| 702.194 | Teamwork | M4 | S |  |
+| 702.195 | Storied | M7 | S | a player designation |
+
+### Keyword actions (701)
+
+| CR | Name | Milestone | Tier | Notes |
+|---|---|---|---|---|
+| 701.2 | Activate | M4 | E |  |
+| 701.3 | Attach | M4 | E |  |
+| 701.4 | Behold | M4 | S | a cost |
+| 701.5 | Cast | M2 | E |  |
+| 701.6 | Counter | M2 | E | ward uses it (M4) |
+| 701.7 | Create | M4 | E | D (tokens) |
+| 701.8 | Destroy | M2 | E |  |
+| 701.9 | Discard | M1 ✓ | E |  |
+| 701.10 | Double | M4 (counters), M5 (power and toughness) | E | D |
+| 701.11 | Triple | M5 | S |  |
+| 701.12 | Exchange | M5 | E |  |
+| 701.13 | Exile | M2 | E |  |
+| 701.14 | Fight | M4 | E | D |
+| 701.15 | Goad | M5 | E | common in Commander; needs durations |
+| 701.16 | Investigate | M4 | E | Clue tokens |
+| 701.17 | Mill | M4 | E |  |
+| 701.18 | Play | M1 ✓ (lands), M2 | E |  |
+| 701.19 | Regenerate | M6 | E | D |
+| 701.20 | Reveal | M4 | E | D |
+| 701.21 | Sacrifice | M4 | E | D |
+| 701.22 | Scry | M4 | E | D |
+| 701.23 | Search | M4 | E | D |
+| 701.24 | Shuffle | M1 ✓ | E |  |
+| 701.25 | Surveil | M4 | E |  |
+| 701.26 | Tap and Untap | M1 ✓ | E |  |
+| 701.27 | Transform | M4 | E | D |
+| 701.28 | Convert | M5 | X |  |
+| 701.29 | Fateseal | M4 | X |  |
+| 701.30 | Clash | M4 | X |  |
+| 701.31 | Planeswalk | out of scope | — | Planechase |
+| 701.32 | Set in Motion | out of scope | — | Archenemy |
+| 701.33 | Abandon | out of scope | — | Archenemy |
+| 701.34 | Proliferate | M4 | E | D |
+| 701.35 | Detain | M5 | S |  |
+| 701.36 | Populate | M5 | S |  |
+| 701.37 | Monstrosity | M4 | S |  |
+| 701.38 | Vote | M7 | S |  |
+| 701.39 | Bolster | M4 | S |  |
+| 701.40 | Manifest | M5 | S |  |
+| 701.41 | Support | M4 | S |  |
+| 701.42 | Meld | M5 | X |  |
+| 701.43 | Exert | M4 | S |  |
+| 701.44 | Explore | M4 | S |  |
+| 701.45 | Assemble | M6 | X | Steamflogger Boss (Future Sight) modifies assembling; no tournament-legal card assembles, so it's a replacement that can't apply |
+| 701.46 | Adapt | M4 | S | D |
+| 701.47 | Amass | M4 | S |  |
+| 701.48 | Learn | M7 | S | Lessons from outside the game (903.11) |
+| 701.49 | Venture into the Dungeon | M7 | S |  |
+| 701.50 | Connive | M4 | S |  |
+| 701.51 | Open an Attraction | M7 | S | 20 Commander-legal cards |
+| 701.52 | Roll to Visit Your Attractions | M7 | S | "Lifetime" Pass Holder, Line Cutter, Command Performance; the turn-based action of 717.4 |
+| 701.53 | Incubate | M5 | S |  |
+| 701.54 | The Ring Tempts You | M7 | S |  |
+| 701.55 | Face a Villainous Choice | M4 | S | another player chooses |
+| 701.56 | Time Travel | M4 | S |  |
+| 701.57 | Discover | M4 | S | D |
+| 701.58 | Cloak | M5 | S |  |
+| 701.59 | Collect Evidence | M4 | S |  |
+| 701.60 | Suspect | M5 | S |  |
+| 701.61 | Forage | M4 | S |  |
+| 701.62 | Manifest Dread | M5 | S |  |
+| 701.63 | Endure | M4 | S |  |
+| 701.64 | Harness | M4 | S | an object designation |
+| 701.65 | Airbend | M4 | S |  |
+| 701.66 | Earthbend | M5 | S |  |
+| 701.67 | Waterbend | M4 | S | a payment alternative |
+| 701.68 | Blight | M4 | S |  |
+| 701.69 | Heal | M2 | S | removing marked damage |
+| 701.70 | Recruit | M4 | S |  |
+| 701.71 | Empower Jace | M4 | X | planeswalker tokens |
+
+### Out of scope
+
+**The scope test** (docs/decisions.md, 2026-10-19, "Card scope: tournament legality"):
+
+- A **card is in scope** if Scryfall lists it as legal, restricted or banned in at least one
+  paper format.
+- A card is **out of scope** only if it has never been tournament-legal: acorn-stamped,
+  silver-bordered, a playtest card, memorabilia, or a variant's card such as planes, schemes
+  and vanguards.
+
+**A rule is out of scope** only if no in-scope card and no supported format uses it. Each row
+below was checked against the card data. The user approved the list.
+
+| Rows | Reason |
+|---|---|
+| 211, 212, 311, 312, 313, 314, 701.31, 701.32, 701.33, 116.2i, 901, 902, 904 | Casual variants the project doesn't support: Vanguard, Planechase, Archenemy. Their cards (vanguards, planes, phenomena, schemes) are never tournament-legal. |
+| 905 (the draft, 905.1-905.2) | A draft isn't a game the engine plays. The game rules for conspiracy cards (315, 702.106, 116.2j) are in scope. |
+| 713 | Substitute cards stand in for physical double-faced cards; the engine tracks faces itself. |
+| 203, 213 | No game rules. |
+| 801, 803, 804, 805, 807, 808, 809, 810, 811; 903.12, 903.13 | Multiplayer options and variants Commander doesn't use (903.2: Free-for-All with the attack multiple players option); the Brawl option; Commander Draft. |
 
 ---
 
