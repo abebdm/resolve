@@ -2,7 +2,8 @@
 
 This document records the architecture of the Resolve rules engine and the reasons behind it.
 It is authoritative. Changes require the project owner's sign-off and must be made in the same PR
-as the code that depends on them.
+as the code that depends on them. The one exception is §17: designs a milestone plan approved
+ahead of their code, each marked provisional.
 
 ---
 
@@ -11,6 +12,9 @@ as the code that depends on them.
 **Goals**
 
 - Run complete games of Magic with rules accuracy matching the pinned Comprehensive Rules (CR).
+- Eventually handle every card that isn't from an Un-set, with no shortcuts. The roadmap's rules
+  coverage map gives every numbered CR section and keyword a milestone, and
+  `docs/torture-tests.md` lists the hardest cards each milestone must handle.
 - Formats, in priority order:
   1. Commander multiplayer
   2. 1v1 Commander
@@ -27,7 +31,8 @@ as the code that depends on them.
 **Non-goals (for now)**
 
 - UI, networking and AI. They are built later, against the public API.
-- Implementing every card. Coverage grows toward the target decks in `decks/`.
+- Implementing every card now. Card coverage grows toward the target decks in `decks/` first (M8),
+  then toward every rule in the coverage map (M9).
 - Raw performance. Correctness first; performance is kept *possible* (see §15).
 
 ---
@@ -96,6 +101,9 @@ if the game is over or the player already left.
 
 ## 4. Game state
 
+*Designed ahead (provisional): stack objects and their choices (§17.5), counters and
+designations (§17.15), choices stored on permanents (§17.13).*
+
 `GameState` (`resolve.state.game`) is **pure data**. It contains:
 
 - `config`: the `GameConfig` (format parameters; see §10), and the game's `seed`
@@ -154,6 +162,9 @@ them instead of copying every card's text. Agents only ever receive immutable va
 
 ## 5. Engine loop and tasks
 
+*Designed ahead (provisional): rule-default functions and the turn frame (§17.1), reversing
+illegal actions by checkpoint (§17.4).*
+
 The engine is an explicit **task queue** (a stack of pending tasks stored in the state). This was
 chosen over blocking callbacks and over Python generators because generators can't be copied or
 pickled, which would make AI search and save/restore impossible.
@@ -198,6 +209,9 @@ pickled, which would make AI search and save/restore impossible.
 ---
 
 ## 6. Decisions
+
+*Designed ahead (provisional): who decides, `DecisionRequest.for_player` (§17.1); paying costs and
+`ChooseCounts` (§17.7); the rule for constrained answer spaces (§17.8).*
 
 A `DecisionRequest` contains:
 
@@ -278,6 +292,8 @@ choose…".
 
 ## 8. Object identity and characteristics
 
+*Designed ahead (provisional): last known information and values (§17.9).*
+
 **Identity**
 
 - An object that moves between zones becomes a **new object** with a new `ObjectId` and no memory
@@ -301,6 +317,8 @@ choose…".
 ---
 
 ## 9. Hidden information and knowledge
+
+*Designed ahead (provisional): `knows_identity` as the one visibility check (§17.1).*
 
 - Each object records **which players know its identity**. Examples:
   - a card in hand: its owner
@@ -373,6 +391,10 @@ game that begins with more than two players (903.12g is for Brawl only).
 
 ## 11. Cards
 
+*Designed ahead (provisional): legality (§17.2), cast variants and permissions (§17.3), the cost
+model (§17.6), typed words (§17.10), keywords and targeting (§17.11), resolution destinations
+(§17.12), durations (§17.14), searching (§17.16), subgames and restarting (§17.17).*
+
 **Data**
 
 - Scryfall bulk Oracle data is loaded at startup from the local pinned snapshot. It provides name,
@@ -391,9 +413,9 @@ game that begins with more than two players (903.12g is for Brawl only).
   - **costs, durations, static abilities, replacement effects**
   - a **keyword library** (flying, trample, ward, equip, ...). The goal is every keyword ability
     (CR 702) and keyword action (CR 701), not only those the target decks use. The roadmap's
-    keyword table gives each one a milestone and a tier: evergreen and common keywords are built
-    in the milestone where their rules live, the rest in M9 (keyword coverage). Every system is
-    designed to leave room for all of them.
+    rules coverage map gives each one, and every numbered CR section, a milestone and a tier:
+    evergreen and common rows are built in the milestone where their rules live, the rest in M9
+    (rules coverage). Every system is designed to leave room for all of them (§17).
 - Truly unusual cards may register a **custom** effect or task class under their name. The state
   still holds only data plus registry references.
 - Definitions are declarative wherever possible, so the engine (and later the AI) can inspect them.
@@ -510,3 +532,408 @@ New primitives are engine code and get careful review.
 - How much of 732 (shortcuts) is worth implementing before networked play exists.
 - Undo/takeback support for casual play. It's cheap to do via snapshots, but it's a UI/agent
   concern; the engine needs no changes.
+
+---
+
+## 17. Designs approved ahead of their code
+
+The M2 plan (`docs/plans/m2.md`, approved 2026-10-19) designed the systems below before
+writing the code that needs them. That way every rule and keyword in the roadmap's rules coverage
+map, and every torture test in `docs/torture-tests.md`, has a place to plug in.
+
+**Every subsection here is provisional.** Each one names the milestone that builds it. That
+milestone's plan may revise it, with the user's sign-off. When it's built, the text moves into
+the section above it belongs to, and its provisional marker is removed. This is the one
+exception to "the same PR as the code" at the top of this document (docs/decisions.md,
+2026-10-19).
+
+### 17.1 Rule defaults (rule 12)
+
+*Provisional: designed in M2's plan; built in M2.1. That milestone's plan may revise it, with
+the user's sign-off.*
+
+Every value or procedure a card or effect could change comes from one function that reads the
+state and cites its rule. Each of these functions is a single place to plug effects in:
+
+| Function | CR | Default |
+|---|---|---|
+| `land_plays_allowed(state, player)` | 305.2 | 1 |
+| `land_play_options(state, player)` | 305.1 | lands in the hand, with sorcery timing |
+| `maximum_hand_size(state, player)` | 402.2 | 7; `None` means no maximum |
+| `draw_step_draws(state, player)` | 504.1 | 1 |
+| `turn_structure(state, player)` | 500.1 | `TURN_SEQUENCE`. The turn in progress keeps its remaining segments as data (`TurnState.segments`), so effects can insert phases and steps (500.8-500.10). A turn-frame marker in the task stack lets the rest of a turn be cut (724). |
+| `is_skipped(state, segment)` | 500.11 | 103.8a and 508.8 |
+| `next_turn(state)` | 500.7, 103.1, 800.4k | `GameState.extra_turns` first |
+| `permanents_that_untap(state, player)` | 502.3 | all |
+| `mana_that_empties(state, player)` | 500.5 | all |
+| `can_lose_game(state, player, reason)` | 104.3 | true |
+| `has_sorcery_timing(state, player)`, `may_cast_now(...)` | 117.1a, 307.1 | the CR's timing; flash |
+| `cast_options(state, player)` | 601.3, 903.8 | 17.3 |
+| `opening_hand_actions(state, player)` | 103.6 | none |
+| `mulligan_options(state, player)` | 103.5 | keep, mulligan |
+| `starting_life` and similar readers of `GameConfig` | 103.4, 103.5, 903.10a | the config |
+| `can_tap_for_cost(state, obj)` | 302.6 | the summoning-sickness rule |
+| `player_abilities(state, player)` | 702.11c, 702.18a | none |
+| `deciding_player(state, player)` | 723.5, 723.8, 723.9 | the player themselves |
+| `knows_identity(state, obj, viewer)` | 400.2, 402.3, 708.5, 723.4 | as today's `is_known_to` |
+
+**Who decides.** A task's `NeedDecision` names the player the rules ask. The loop maps that
+player through `deciding_player`, and the `DecisionRequest` carries both:
+
+- `player`: who answers;
+- `for_player`: whose decision it is by the rules (§3, §6).
+
+**Who sees.** `view_for` uses `knows_identity` as its only visibility check (§9).
+
+### 17.2 Legality: permissions and prohibitions (101.2)
+
+*Provisional: designed in M2's plan; built in M2 (M2.1 to M2.8), extended in M3 to M5 and M9.
+Each milestone's plan may revise it, with the user's sign-off.*
+
+Every legality question is an `Action` value: casting, playing a land, activating, targeting,
+countering, destroying; from M3 attacking and blocking; from M4 searching and special actions.
+`allowed(state, action) -> Verdict` works in four steps:
+
+1. It collects **permissions**: the rules' own (117.1a, 305.1, 601.3, 903.8) and those granted
+   by effects.
+2. It requires at least one.
+3. It collects **prohibitions**:
+   - hexproof, shroud and protection, as "can't be the target";
+   - "can't be countered";
+   - indestructible, as "can't be destroyed";
+   - from M5, static abilities ("can't cast spells during your turn");
+   - from M9, split second.
+4. **Any applicable prohibition wins (101.2).** Adding or removing abilities is not a
+   prohibition (101.2a).
+
+601.3a-b's "consider choices made later" is a flag on the check. Event-level prohibitions
+("can't gain life", "your life total can't change") are checked as events are proposed (M4).
+Their order with replacement effects is settled in M6 (614).
+
+### 17.3 Casting: cast variants and permissions (601.2)
+
+*Provisional: designed in M2's plan; built in M2 (M2.3 onward). That milestone's plan may revise
+it, with the user's sign-off.*
+
+Every way of casting that changes a spell's characteristics is chosen **before** the card moves
+to the stack, and castability is checked on the chosen characteristics only (601.3e):
+
+- split cards and Rooms (709.3);
+- modal double-faced cards (712.11b-c);
+- casting transformed or converted (712.11a, d);
+- adventures (715.3);
+- omens (720.3);
+- prototype (718.3);
+- face down (708.4);
+- fuse (702.102).
+
+So a priority option is `CastSpellOption(card, variant, permission)`:
+
+- **`CastVariant`**: normal, a half, fused, back face, an alternative (adventure, omen,
+  prototype), or face down.
+- **`CastPermission`**: the zone, the timing (sorcery, instant, "as though it had flash",
+  "during this resolution", 608.2g), any alternative cost it requires (flashback, "without
+  paying its mana cost", 118.9b), and where the spell goes as it leaves the stack.
+
+On the stack, `characteristics` reads the spell's variant (709.3b, 712.8c, 712.8f, 715.3b,
+720.3b, 718.3b). A permanent spell's choices pass to the permanent it becomes as
+`GameObject.cast_record` (400.7d, 107.3m, 712.13, 718.3b, 709.5d).
+
+`CastSpell` runs 601.2a-i as stages:
+
+1. propose;
+2. alternative and additional costs;
+3. modes;
+4. X;
+5. hybrid and Phyrexian announcements;
+6. targets;
+7. division;
+8. the 601.2e check;
+9. total cost;
+10. pay;
+11. cast.
+
+It never gives priority; its caller does (601.2i, 608.2g).
+
+### 17.4 Reversing illegal actions (733)
+
+*Provisional: designed in M2's plan; built in M2.3. That milestone's plan may revise it, with
+the user's sign-off.*
+
+When an action begins (casting a spell; from M4, activating an ability or taking a special
+action), its task stores a **checkpoint**: a copy of every restorable `GameState` field. It
+leaves out an explicit list:
+
+- the event log;
+- the task stack;
+- `pending`;
+- the ID, timestamp and request counters, which only ever grow;
+- the RNG, which is never rewound, so a reversal can't be used to look at randomness.
+
+If the action can't be completed (601.2, 601.2e, 601.6, 118.3), the reversal goes as follows:
+
+1. The player chooses which of their mana abilities to reverse (733.1). The kept ones must
+   include every ability whose mana a kept ability spent; this isn't asked when none were
+   activated.
+2. The checkpoint is restored.
+3. The kept mana abilities are applied again in their original order, with their recorded
+   choices, so their triggers trigger and the undone action's don't.
+4. Knowledge gained during the attempt is recorded (the card was seen on the stack).
+5. A public `ActionReversed` event is logged.
+
+The player keeps priority, and the passes made before the attempt still count (733.2).
+733.1 forbids reversing library actions. 601.2h pays such costs last, and mana abilities can't
+do them (605.1a), so reversing after one is an `EngineError`.
+
+### 17.5 Spells and abilities on the stack
+
+*Provisional: designed in M2's plan; built in M2.3 (spells), M4 (abilities), M5 (copies). Each
+milestone's plan may revise it, with the user's sign-off.*
+
+A spell is its card's object on the stack, with `GameObject.spell: CastChoices`. That record is
+Immutable and replaced as each choice is made. It holds every decision 707.10 copies:
+
+- the variant and permission;
+- the zone the spell was cast from;
+- the modes, each with its targets per instance of "target";
+- X;
+- divisions;
+- alternative and additional costs;
+- hybrid and Phyrexian announcements;
+- the locked-in total cost and the mana spent.
+
+Room is kept for three more kinds of stack object:
+
+- A copy of a spell (707.10, 112.1a) is a card-less object with an equal record. Nothing may
+  assume a stack object has a card.
+- An ability on the stack (M4) is a card-less object with its source, ability and choices.
+- A face-down spell is visible only to its controller (708.5).
+
+### 17.6 The cost model (118, 601.2f-h)
+
+*Provisional: designed in M2's plan; built in M2 (mana), M4 (other costs), M9 (hybrid,
+Phyrexian, snow, payment alternatives). Each milestone's plan may revise it, with the user's
+sign-off.*
+
+- `ManaCost` holds every symbol of 107.4: colored, {C}, generic, {X}, hybrid, monocolored
+  hybrid, Phyrexian and snow.
+- A `Mana` unit records its type, its source, its restriction (106.6) and, for {S}, whether its
+  source was snow.
+- A total cost is a mana part plus **cost components**: tapping, sacrificing, discarding,
+  exiling, paying life, removing counters, revealing and so on. Each component knows whether
+  it can be paid, the choices it needs, its payment events and its 601.2h ordering class.
+- 601.2f is a pipeline of ordered **cost modifiers**:
+  1. the mana cost or an alternative cost;
+  2. plus additional costs and increases;
+  3. minus reductions, in the order the player chooses where it matters (118.7e, 118.7b-d);
+  4. then effects that directly affect the total;
+  5. then lock-in.
+- Payment alternatives (convoke, improvise, delve, waterbend, assist, harmonize) are extra
+  options in the 601.2g decision. They produce payment units usable only for that payment.
+- "Spend mana as though it were any type" (118.14) modifies the payment check.
+
+### 17.7 Paying costs and the `ChooseCounts` space
+
+*Provisional: designed in M2's plan; built in M2.2 to M2.4. That milestone's plan may revise it,
+with the user's sign-off.*
+
+`PayCosts(payer, cost, paying_for)` pays the costs of spells, of abilities and of effects. Its
+decisions go through `deciding_player`, and it uses only the payer's resources (723.5a).
+
+- **601.2g:** an `ACTIVATE_MANA_ABILITIES` decision offers "pay" and every mana ability the
+  payer can activate (605.3a, 605.3c).
+- **601.2h:** a `PAY_COSTS` decision in the space `ChooseCounts(options, maxima, total)`,
+  answered with `Amounts`: how many units of each class of identical mana to spend. It is not
+  asked when only one answer pays. When none pays, the action is reversed (17.4).
+
+Per-unit options would give two answers for one outcome, breaking §6's canonical answers. That
+is why the space is new.
+
+### 17.8 Constrained answer spaces
+
+*Provisional: designed in M2's plan; `ChooseCounts` built in M2, `ChooseAssignment` in M3,
+`ChooseCardName` in M4. Each milestone's plan may revise it, with the user's sign-off.*
+
+**Rule.** A decision whose enumeration can grow without bound, or combinatorially, uses a
+constrained space, never an enumerated list.
+
+| Decision | Space |
+|---|---|
+| X, life to pay | `ChooseNumber` |
+| targets, searches, proliferate | `ChooseSubset` |
+| division | `Distribute` |
+| orders | `ChooseOrder` |
+| mana payment | `ChooseCounts` |
+| attack and block declarations (each item mapped to one of its choices, with constraints) | `ChooseAssignment` |
+| any card name, validated against the card data (201.4) | `ChooseCardName` |
+
+Mode combinations stay enumerated, because the worst real cases are small.
+
+### 17.9 Last known information and values
+
+*Provisional: designed in M2's plan; built in M2.6, extended in M4 (look-back) and M5
+(continuous values). Each milestone's plan may revise it, with the user's sign-off.*
+
+**Last known information.** `move_object` records a `LastKnown` value for an object leaving the
+battlefield or the stack, in `GameState.last_known`. The value holds the object's
+characteristics, controller, owner, zone, status and damage. Entries are cleared when a player
+is about to receive priority with an empty stack.
+
+**Values.** Values are Immutable expressions: fixed numbers, X, power, toughness, counts, the
+greatest power, arithmetic, and halving with rounding (107.1a). They are evaluated through one
+function, whose context says when:
+
+- on announcement (601.2b, 113.7a);
+- on resolution, once per effect (608.2h, 611.2d);
+- continuously, for static abilities (M5).
+
+An object reference resolves to current information if the object is still where it was
+expected, else to its last known information (608.2h). Negative amounts count as 0 (107.1b).
+
+**Look-back.** From M4, effects that look back in time (603.10, 608.2i: "dealt damage this
+turn", "spells cast this turn") read a history derived from the event log.
+
+### 17.10 Definitions: "this object" and typed words (612)
+
+*Provisional: designed in M2's plan; typed words built in M2.2, rewriting by text-changing
+effects in M5. Each milestone's plan may revise it, with the user's sign-off.*
+
+**Self-reference.** A definition refers to its own object with `ThisObject()`, never by name
+(201.5).
+
+**Typed words.** Every color word, land type and creature or other subtype in a definition is a
+typed word: `ColorWord`, `LandTypeWord` or `SubtypeWord`. Card names are a separate `NameRef`
+that no text change can rewrite (612.2).
+
+**Rewriting.** A text-changing effect (layer 3, M5) applies a mapping of words through a generic
+walk of the definition's Immutable fields (`rewrite_words`). Abilities granted by other effects
+aren't rewritten (612.3).
+
+### 17.11 Keywords, qualities and targeting
+
+*Provisional: designed in M2's plan; built in M2.6 and M2.8. That milestone's plan may revise
+it, with the user's sign-off.*
+
+**Keywords and qualities.**
+
+- Keyword abilities are `Ability` values in `resolve.cards.keywords`, read only through an
+  object's computed characteristics, so granted keywords (M5) need no change.
+- Protection and "hexproof from" take a **quality**: a color, multicolored, monocolored, a card
+  type (702.16a), a subtype, everything (702.16j) or a player (702.16k).
+- "From each color" and "from A and from B" become separate abilities (702.16g-h,
+  702.11f-g).
+
+**Targeting.** `target_problem(state, targeter, spec, candidate)` is the single legality check
+for targets. It is built on `allowed` and used at 601.2c, at 608.2b, by 115.7 and by abilities.
+In order, it checks:
+
+1. the kind and zone (115.2, 115.4; for a player, that they are still in the game);
+2. the target's filter;
+3. that a spell doesn't target itself (115.5);
+4. the prohibitions:
+   - shroud;
+   - hexproof, against opponents;
+   - hexproof from a quality;
+   - protection, from any controller.
+
+The targeter is a spell or an ability, with its controller and the characteristics its
+qualities are judged by: the spell's own, or the ability source's last known information
+(113.7a).
+
+### 17.12 Resolution and where a spell goes
+
+*Provisional: designed in M2's plan; built in M2.3 and M2.6. That milestone's plan may revise it,
+with the user's sign-off.*
+
+**Where it goes.** `resolved_spell_destination(state, spell)` decides where an instant or sorcery
+goes as it resolves (608.2n), and is also used for a countered spell (701.6). The default is its
+owner's graveyard. It is where the other destinations plug in:
+
+- adventures (exile with permission, 715.3d);
+- omens (shuffled into the library, 720.3d);
+- buyback (to the hand, 702.27);
+- flashback-style exile (M6, through the replacement stage).
+
+**Damage.** One 120.3 results table reads the source's characteristics, using last known
+information if the source is gone. Deathtouch, lifelink, infect, wither, toxic and protection's
+prevention plug in there.
+
+### 17.13 Choices stored on permanents
+
+*Provisional: designed in M2's plan; built in M2.3 (`cast_record`), M4 (links), M6 (entry
+choices). Each milestone's plan may revise it, with the user's sign-off.*
+
+A permanent can carry three kinds of stored choice:
+
+- `cast_record`: how its spell was cast (400.7d). Kicked, X (107.3m), the mana spent, prototyped,
+  the face up, a Room half unlocked.
+- `choices`: "as this enters, choose" (614.12, 607.2a). A color, a creature type, a player, a
+  card name.
+- links: the objects its linked abilities refer to (607: "exiled with this").
+
+Which of these are copiable values is decided in M5 (707.2, 707.9).
+
+### 17.14 Durations (611.2)
+
+*Provisional: designed in M2's plan; built in M5. That milestone's plan may revise it, with the
+user's sign-off.*
+
+A continuous effect from a resolving spell or ability has a `Duration` value. Events in the
+pipeline end it:
+
+- the cleanup step (514.2);
+- a player's next turn beginning;
+- an object leaving a zone;
+- the end of combat;
+- a condition becoming false ("for as long as", 611.2b).
+
+Durations are never checked ad hoc.
+
+### 17.15 Counters and designations
+
+*Provisional: designed in M2's plan; built in M4 (counters, object designations) and M7 (player
+and game designations). Each milestone's plan may revise it, with the user's sign-off.*
+
+**Counters.** `GameObject.counters` and `Player.counters` are `dict[CounterKind, int]` (122):
++1/+1, -1/-1, loyalty, poison, energy, experience, rad, ticket and the rest.
+
+**Designations.** A typed dictionary on objects, players and the game holds every designation:
+
+- the monarch, the initiative, the city's blessing;
+- speed, day and night, the Ring-bearer, an enduring story;
+- monstrous, renowned, saddled, suspected, harnessed, solved, prepared;
+- goaded, recording who goaded and for how long;
+- unlocked Room halves;
+- phased out.
+
+### 17.16 Searching hidden zones (701.23)
+
+*Provisional: designed in M2's plan; built in M4. That milestone's plan may revise it, with the
+user's sign-off.*
+
+A `SEARCH` decision shows the searcher the whole zone in their private request. It is a
+`ChooseSubset` whose bounds follow the instruction:
+
+| Instruction | Bounds | Rule |
+|---|---|---|
+| names a quality ("a basic land card") | the searcher may find none | 701.23b |
+| an undefined quality | nothing can be found | 701.23c |
+| a plain quantity ("a card", "three cards") | exactly that many, or as many as there are | 701.23d |
+
+Searches at the same time decide in APNAP order (701.23i). Which cards may be searched comes
+from a rule-default function (701.23f, Aven Mindcensor). What the searcher learns about library
+positions is recorded as knowledge (§9).
+
+### 17.17 Subgames and restarting the game
+
+*Provisional: designed in M2's plan; built in M9. That milestone's plan may revise it, with the
+user's sign-off.*
+
+**Subgames (729).** A subgame is a nested `GameState` held by a task of the main game. Its
+decisions surface as the main game's pending decision.
+
+**Restarting (727).** Restarting builds a new initial state from the cards, keeping those the
+effect names.
+
+Both fit the pure-data state. Nothing in the coverage map was found that the architecture can't
+accommodate.
