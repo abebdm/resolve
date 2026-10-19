@@ -19,6 +19,22 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-19: Agents look up reference docs instead of reading them in full
+- **Decision:** agents read `docs/design.md`, the current milestone's roadmap section and their
+  step of the plan in full. They look up everything else by heading or rule number: the CR,
+  the rest of the roadmap, the torture tests, howto, primitives, decisions and verification.
+  CLAUDE.md's "Current status" holds only the current step, known rule violations and what's
+  next. The per-step list of what was built moved to `docs/roadmap.md`, "What's built". Test
+  runs use `-q`, and only failing tests are re-run while fixing.
+- **Why:** reading every listed doc cost each new agent about 50,000 tokens before it began,
+  and CLAUDE.md is re-sent with every request. Sessions hit usage limits mid-task. The reference
+  docs are logs and catalogs, so one task needs only a few entries, and the heading list shows
+  what else exists. No check or test is skipped.
+- **Rules:** none.
+- **Where:** `CLAUDE.md` ("Read first", "Current status", "Run everything before finishing",
+  "Keep your context small", "Documentation requirements"), `docs/roadmap.md`,
+  `.claude/agents/test-reviewer.md`.
+
 ### 2026-10-19: Card scope: tournament legality
 - **Decision (the user's test):** a card is **in scope** if Scryfall lists it as legal or banned
   in at least one format. It is **out of scope** only if it is acorn-stamped, silver-bordered, or

@@ -8,83 +8,41 @@ the engine's API, so nothing here may depend on them.
 
 ## Read first
 
+**Read in full:**
+
 - `docs/design.md`: the architecture. It is authoritative; follow it.
-- `docs/roadmap.md`: milestones, "done" criteria, and which milestone is current. Its **rules
-  coverage map** gives every numbered CR section, keyword ability and keyword action a milestone
-  and a tier.
-- `docs/plans/m2.md`: the approved plan of the current milestone. Its "How to use this plan" says
-  which parts to read for your step.
+- The current milestone's section of `docs/roadmap.md`: its items and "done" criteria.
+- `docs/plans/m2.md`, the approved plan of the current milestone, but only the parts its "How to
+  use this plan" names for your step.
+
+**Look up; don't read in full.** These are references, and most of each is irrelevant to any one
+task. List a file's headings first (Grep for `^#{2,3} `), then read only the sections your task
+touches. Read more when a section points you to another.
+
+- `docs/rules/MagicCompRules-20260925.txt`: the pinned Comprehensive Rules (CR). Look rules up
+  by number; do not rely on memory. Grep for the rule (`^704\.5`, which also finds its subrules),
+  read the matching lines, then the rules they cross-reference; Grep the glossary for a term.
+  **Never read the whole file:** it is about 250,000 tokens, more than your context.
+- The rest of `docs/roadmap.md`, including its **rules coverage map** (every numbered CR section,
+  keyword ability and keyword action, with a milestone and a tier) and "What's built" (what each
+  completed step added, and its modules). Grep for the rule number or keyword.
 - `docs/torture-tests.md`: famously difficult cards, the rules each stresses and the milestone
-  that must handle it.
-- `docs/rules/MagicCompRules-20260925.txt`: the pinned Comprehensive Rules (CR). Look rules up here
-  by number; do not rely on memory.
-- `docs/howto.md`: step-by-step recipes for recurring tasks. Follow them.
-- `docs/primitives.md`: the catalog of card-building primitives. Check it before writing a new
+  that must handle it. Read the rows that touch the systems you build or change.
+- `docs/howto.md`: step-by-step recipes for recurring tasks. Read the recipe for your task and
+  follow it.
+- `docs/primitives.md`: the catalog of card-building primitives. Search it before writing a new
   one.
-- `docs/decisions.md`: the log of smaller decisions made during implementation.
+- `docs/decisions.md`: the log of smaller decisions, one dated heading each. Read the entries
+  about the systems you touch.
 - `docs/verification.md`: how the user verifies a milestone by hand (the `--thorough` runs).
 
 ## Current status
 
 **Current milestone: M2 (Spells and the stack), in progress: the plan is approved
 (`docs/plans/m2.md`) and its first step, M2.0 (documentation), is done. M0 (Skeleton) and M1
-(Turn structure) are complete.**
+(Turn structure) are complete.** What each completed step built, and where, is in
+`docs/roadmap.md`, "What's built".
 
-- **Done (M0):**
-  - Data and tooling: `resolve.data` (card data loader and decklist parser), the card registry
-    and deck coverage (`resolve.cards.registry`, `resolve.cards.coverage`),
-    `tools/fetch_scryfall.py`, `tools/coverage.py`, `tools/gaps.py` (lists every
-    `NotImplementedRule`), CI, and the coverage audit (the Scryfall snapshot of 2026-10-17 is
-    pinned).
-  - The engine core: state types (`resolve.state`: `GameState`, `Player`, `GameObject`, zones,
-    IDs, `GameConfig`, the engine's own PRNG, invariant and purity checks), the task loop and
-    public API (`resolve.tasks`, `resolve.engine`: `new_game`, `pending_decision`, `view_for`,
-    `submit`, `build_deck`), decision kinds, answer spaces and validation (`resolve.decisions`),
-    events, the event pipeline (with stubbed replacement and trigger stages) and the event log
-    (`resolve.events`), `NotImplementedRule` (`resolve.errors`), and zone moves (`move_object`,
-    400.7).
-  - Agents and test tooling: `resolve.agents` (the `Agent` protocol, the `play` driver,
-    `RandomAgent`, `ScriptedAgent` with replays from the log, and the text renderer and
-    `TextAgent` in `resolve.agents.text`); the scenario builder `tests/scenario.py`;
-    `tools/play_cli.py`; and the fuzz harness `tools/fuzz.py` with `tests/fuzz/`.
-- **Done (M1.1):** drawing (`resolve.engine.drawing.DrawCards`, `CardDrawn`, 121), opening hands
-  and mulligans (`resolve.engine.mulligans.OpeningHands`, 103.5 and 103.5c), events logged as
-  applied, and redacted log entries for other players (design.md §7, §9).
-- **Done (M1.2):** turns, phases and steps (`resolve.state.turn`, `resolve.engine.turns`:
-  `TakeTurn`, `RunStep`, 500-514, the 103.8a draw skip, 508.8), priority
-  (`resolve.engine.priority.PriorityRound`, 117; casting is offered and raises
-  `NotImplementedRule("601.2")` when chosen), the state-based actions 704.5a and 704.5b and the end
-  of two-player games (`resolve.engine.sba`, 104.2a, 104.4a), discarding to hand size in cleanup
-  (514.1) and 514.3a, type-line parsing (`resolve.data.types`, 205), the characteristics entry point
-  without layers (`resolve.effects.characteristics`), turn info in views, and the scenario builder's
-  `at(...)`. Two-player games with any decks play to a decking loss when every player passes.
-- **Done (M1.3):** the five basic lands (`resolve.cards.definitions.basic_lands`), playing
-  lands (305), the first primitives (`TapSelfCost`, `AddMana`, `ActivatedManaAbility`; 305.6
-  intrinsic mana abilities added by `characteristics`), tapped status, the untap step (502.3),
-  mana pools emptying as steps end (500.5), and mana abilities at priority (605.3a). Random
-  agents finish two-player land-only games.
-- **Done (M1.4):** vanilla creatures (`resolve.cards.definitions.vanilla_creatures`), power and
-  toughness in `characteristics`, damage marked on permanents, the state-based actions 704.5f
-  and 704.5g (with the owner ordering cards that reach a graveyard together, 404.3), and damage
-  removal in cleanup (514.2).
-- **Done (M1.5):** concession (`resolve.engine.concede`, 104.3a), leaving the game
-  (`LeaveGame`, 800.4a, 800.4h, 800.4j, 800.4k), multiplayer endings (104.2a, 104.4a), re-entrant
-  asking tasks, and replays of answers and concessions (`resolve.agents.replay`). The fuzz
-  harness concedes at random and random agents finish 2- to 4-player land-only games.
-- **Done (tooling, after M1):** `tools/fuzz.py` plays basic-land decks by default (from the
-  committed excerpt `tools/excerpts/basic_lands.json`, written by `tools/card_excerpt.py`; no
-  snapshot needed), with a quick default run (about 20 seconds) and a `--thorough` preset for
-  the user's milestone verification (`docs/verification.md`), games in parallel (`--jobs`), and
-  a summary of answers, turns, endings, lands and mana.
-- **Done (tooling, CR and card-data updates):** `tools/rules_diff.py` compares two CR text files
-  (changed, renumbered, removed and added rules, with the code and tests that cite them),
-  `tools/card_diff.py` compares two card data snapshots for implemented and deck cards, and a
-  test checks every CR number cited in `src/`, `tools/` and `tests/` against the pinned rules.
-  The recipe is in `docs/howto.md` ("Update to a new Comprehensive Rules version").
-- **Done (M2.0, documentation):** the approved M2 plan (`docs/plans/m2.md`), the rules coverage
-  map and the per-milestone checklists in `docs/roadmap.md`, the torture tests
-  (`docs/torture-tests.md`), rules 12 and 13 below, and the provisional design-ahead sections of
-  `docs/design.md`.
 - **Known violations of rule 12:** the M0/M1 code still hard-codes the rule defaults listed in
   `docs/plans/m2.md` §5.1 (one land per turn, maximum hand size seven, the fixed turn sequence,
   the affected player always deciding, and others). M2.1 removes them.
@@ -250,9 +208,12 @@ Pure infrastructure (tooling, data loading, internal plumbing) may write tests a
 
 **Run everything before finishing**
 
-- Run `uv run pytest`, `uv run ruff check .` and `uv run pyright`, all passing. For an engine
+- Run `uv run pytest -q`, `uv run ruff check .` and `uv run pyright`, all passing. For an engine
   change, also run the quick fuzz run, `uv run python tools/fuzz.py`.
+- While fixing failures, re-run only the failing tests (`uv run pytest -q --tb=short <test ids>`),
+  then the full suite once at the end.
 - State the results in the final message and the PR description: number of tests, and pass/fail.
+  Give counts and the failures, never the whole output.
 - Never claim tests pass without having run them.
 
 **Quick runs for agents, thorough runs for the user's milestone checks**
@@ -303,8 +264,11 @@ below match the code.
 
 **Every PR updates whichever of these it affects:**
 
-- **"Current status" in this file.** Say which milestone is current, what's done, and what's next.
-  It must never describe the repo as it used to be.
+- **"Current status" in this file.** Say which milestone and step are current, any known rule
+  violations, and what's next. It must never describe the repo as it used to be. Keep it short:
+  this file is sent with every request an agent makes, so detail goes in
+  `docs/roadmap.md`, "What's built", where the PR that completes a step adds what it built and
+  its modules.
 - **The "Status" paragraph in `README.md`.** A short, plain-language summary of the same thing for
   a human reader: which milestones are complete, what a game can do now, which cards are
   implemented, and what's next. Update it in the same PR as "Current status"; the two must never
@@ -347,6 +311,17 @@ uv run ruff check .        # lint
 uv run ruff format .       # format
 uv run pyright             # type check
 ```
+
+## Keep your context small
+
+Usage limits stop sessions mid-task, and a full context makes later work worse. None of this
+skips a check; it changes how you find things, not what you verify.
+
+- Read files by line range when you know where to look; Grep before reading a large file.
+- Don't re-read a file you just edited: the edit would have failed if it hadn't applied.
+- Keep command output short: quiet flags (`-q`), filtered output, and only the lines you need.
+- Don't paste long logs, diffs or tool reports into PR descriptions or messages; summarize them
+  and give the numbers.
 
 ## Work in checkpoints
 
