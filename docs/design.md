@@ -12,9 +12,12 @@ ahead of their code, each marked provisional.
 **Goals**
 
 - Run complete games of Magic with rules accuracy matching the pinned Comprehensive Rules (CR).
-- Eventually handle every card that isn't from an Un-set, with no shortcuts. The roadmap's rules
-  coverage map gives every numbered CR section and keyword a milestone, and
-  `docs/torture-tests.md` lists the hardest cards each milestone must handle.
+- Eventually handle every card that has ever been tournament-legal, with no shortcuts. A card
+  is in scope if Scryfall lists it as legal, restricted or banned in at least one paper format.
+  It is out only if it was never tournament-legal (acorn-stamped, silver-bordered, playtest
+  cards, memorabilia, a casual variant's cards; docs/decisions.md, "Card scope: tournament
+  legality"). The roadmap's rules coverage map gives every numbered CR section and keyword a
+  milestone, and `docs/torture-tests.md` lists the hardest cards each milestone must handle.
 - Formats, in priority order:
   1. Commander multiplayer
   2. 1v1 Commander

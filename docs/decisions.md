@@ -19,7 +19,66 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-19: Card scope: tournament legality
+- **Decision (the user's test):** a card is **in scope** if Scryfall lists it as legal or banned
+  in at least one format. It is **out of scope** only if it is acorn-stamped, silver-bordered, or
+  otherwise never tournament-legal. This replaces "appears in an Un set". A rule is out of scope
+  only if no in-scope card and no supported format uses it.
+- **Decision (reading the test):** only **paper formats** count, and "restricted" (Vintage)
+  counts as legal.
+  - Of 38,861 cards in the snapshot, 702 are legal only in MTG Arena formats (alchemy, historic,
+    timeless, gladiator, brawl, standardbrawl, competitivebrawl): 638 Alchemy cards plus
+    digital-only versions.
+  - Sixteen of those are acorn-stamped Mystery Booster Commander cards that Arena lists as
+    legal, so counting every format would put acorn cards in scope, which the test says can't
+    happen.
+  - Alchemy cards also use mechanics the CR doesn't define ("seek", "perpetually"), and the
+    engine follows the CR.
+  - **To confirm with the user.**
+- **Check against the card data:** the pinned snapshot (2026-10-17) can't be downloaded again
+  (2026-10-18 "Snapshot drift"). The check used Scryfall's Oracle-cards file of 2026-10-18
+  (`oracle-cards-20261018210200`), the same one the excerpts came from.
+  - Legal or banned in a paper format: 32,199 cards. **None** is acorn-stamped or
+    silver-bordered, so the test and the stamp and border criteria agree exactly.
+  - Never legal in a paper format: 6,662 cards. 3,863 are tokens, emblems, art cards and
+    variant cards; 129 are acorn-stamped; 458 silver-bordered; 702 legal only on Arena. The
+    other 1,510 are playtest cards, memorabilia and unreleased sets, such as Star Trek (released
+    2026-11-13).
+  - Scryfall gives unreleased cards no legality, so they come into scope when a later snapshot
+    is pinned after their release. Stamps and borders belong to a printing, while legality
+    belongs to the card, so legality decides.
+- **Rows moved into scope** (all were out as "Un-set only" or as a variant):
+
+  | Rows | In-scope cards | Tier, milestone |
+  |---|---|---|
+  | 123 stickers | 47 Unfinity cards that use stickers and 48 sticker sheets, all Commander-legal | set mechanic, M5 (characteristics) and M7 (sheets chosen before the game) |
+  | 717 Attraction cards | 22 Attractions without the acorn stamp, Commander-legal | set mechanic, M7 |
+  | 702.159 visit | the same 22 Attractions | set mechanic, M7 |
+  | 701.51 open an Attraction | 20 Commander-legal cards (Complaints Clerk, Coming Attraction, ...) | set mechanic, M7 |
+  | 701.52 roll to visit your Attractions | "Lifetime" Pass Holder, Line Cutter, Command Performance | set mechanic, M7 |
+  | 702.158 space sculptor, 704.5u | Space Beleren (oval stamp, Commander-legal) | exotic, M7 |
+  | 701.45 assemble | Steamflogger Boss (Future Sight) modifies assembling; no tournament-legal card assembles | exotic, M6 |
+  | 407 ante | 9 ante cards (Contract from Below, Darkpact, Jeweled Bird, ...), banned rather than never legal | exotic, M7 |
+  | 315 conspiracies, 702.106 hidden agenda, 116.2j | 25 conspiracy cards, banned rather than never legal (14 with hidden agenda); used only in limited play (315.1) | exotic, M7 |
+
+  All are set mechanics or exotic, so they're implemented in M9. Their milestones say which
+  systems must leave room. M7's checklist now names what players bring besides their deck
+  (Attraction decks, sticker sheets, conspiracies, ante).
+- **Rows that stay out of scope:** the Vanguard, Planechase and Archenemy rows (none of their 414
+  cards is legal or banned anywhere); 905's draft (the game's conspiracy rules are 315 and
+  702.106); substitute cards; the sections with no game rules; and the multiplayer options and
+  variants Commander doesn't use.
+- **Why:** the user's goal is every card that has ever been tournament-legal. Unfinity's
+  black-bordered cards are legal in Commander, the project's format. Ante cards and conspiracies
+  are banned, not never legal.
+- **Rules:** 123, 315, 407, 701.45, 701.51, 701.52, 702.106, 702.158, 702.159, 704.5u, 717, 905.
+- **Where:** `docs/roadmap.md` (the coverage map and its out-of-scope list, M7), `docs/design.md`
+  §1, `docs/plans/m2.md` (approval notes), `README.md`, `docs/torture-tests.md`.
+
 ### 2026-10-19: The M2 plan, the rules coverage map, torture tests, and rules 12 and 13
+**Superseded in part by 2026-10-19 "Card scope: tournament legality"**: the rows below marked out
+of scope as Un-set only (717, 702.158, 702.159 and the rest) are in scope, and so are ante and
+conspiracy cards.
 - **Decision:** M2 follows an approved plan, `docs/plans/m2.md`, in twelve steps (M2.0 to
   M2.11). M2.0, documentation only, comes first, so every later step starts from the updated
   rules.

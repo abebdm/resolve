@@ -1,7 +1,7 @@
 # Torture tests
 
 Famously difficult real cards, the rules each one stresses, and the milestone that must handle it.
-The engine's goal is every non-Un card with no shortcuts (design.md §1), and these are the cards
+The engine's goal is every tournament-legal card with no shortcuts (design.md §1), and these are the cards
 most likely to expose a design that took one.
 
 **How this list is used** (CLAUDE.md, rule 13):

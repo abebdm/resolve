@@ -346,6 +346,8 @@ triggered mana abilities and "when that mana is spent" → M4; offspring, castin
 - [ ] Designations: the monarch (Regal Behemoth), the city's blessing; the general system for
   player and game designations (design.md §4).
 - [ ] Cards outside the game (400.11, 903.11).
+- [ ] Leave room for what players bring to a game besides their deck (implemented in M9): Attraction
+  decks (717.2), sticker sheets (123.2), conspiracy cards (315.2) and playing for ante (407.2).
 - [ ] Loop guard (104.4b); decide how much of shortcuts (732) to implement.
 
 ## M8 — Card coverage
@@ -399,7 +401,7 @@ earlier milestones must leave room for every row in this map.
 | 104 | Ending the Game | M1 ✓; 104.3c-d M4, M7; 104.4b M7; alternative wins and losses M5 | E | `can_lose_game` |
 | 105 | Colors | M2 | E |  |
 | 106 | Mana | M1 ✓, M2; 106.7 M6 | E |  |
-| 107 | Numbers and Symbols | M2; 107.4e-f, 107.4h M9; 107.14 M4; 107.15 M9 | E | hybrid and Phyrexian: M2 builds the announcement stage |
+| 107 | Numbers and Symbols | M2; 107.4e-f, 107.4h M9; 107.14 M4; 107.15, 107.17 M9 | E | hybrid and Phyrexian: M2 builds the announcement stage |
 | 108 | Cards | M0 ✓ | E |  |
 | 109 | Objects | M1 ✓; 109.3 with each layout | E |  |
 | 110 | Permanents | M1 ✓; statuses with their mechanics | E |  |
@@ -408,14 +410,14 @@ earlier milestones must leave room for every row in this map.
 | 113 | Abilities | M2 (spell abilities, 113.6); M4; M5 | E |  |
 | 114 | Emblems | M4 | E | with planeswalkers |
 | 115 | Targets | M2; 115.7 M5 | E |  |
-| 116 | Special Actions | M1 ✓ (116.2a); the others with their mechanics | E | 116.2i-j out of scope (variants) |
+| 116 | Special Actions | M1 ✓ (116.2a); the others with their mechanics | E | 116.2i out of scope (Planechase); 116.2j is for conspiracy cards (315) |
 | 117 | Timing and Priority | M1 ✓, M2 | E |  |
 | 118 | Costs | M2 (mana); M4 (other costs, 118.12) | E |  |
 | 119 | Life | M2 | E |  |
 | 120 | Damage | M2 (noncombat), M3 (combat), M4 (120.3b-d, 120.3g) | E |  |
 | 121 | Drawing a Card | M1 ✓; 121.6 M6 | E |  |
 | 122 | Counters | M4 | E | D |
-| 123 | Stickers | out of scope | — | Un-set only (stickers) |
+| 123 | Stickers | M5 (stickers change names, abilities, power and toughness: 123.6-123.8); M7 (sticker sheets chosen before the game, 123.2) | S | Unfinity: 47 cards that use stickers and 48 sticker sheets are Commander-legal |
 | 200 | General | — | — | nothing to implement |
 | 201 | Name | M1 ✓; 201.4 M4 | E |  |
 | 202 | Mana Cost and Color | M2 | E |  |
@@ -445,7 +447,7 @@ earlier milestones must leave room for every row in this map.
 | 312 | Phenomena | out of scope | — | Planechase |
 | 313 | Vanguards | out of scope | — | Vanguard |
 | 314 | Schemes | out of scope | — | Archenemy |
-| 315 | Conspiracies | out of scope | — | Conspiracy Draft |
+| 315 | Conspiracies | M7 | X | used only in limited play (315.1); 25 conspiracy cards are banned rather than never legal, so they are in scope |
 | 400 | General | M0 ✓; 400.7 exceptions with their mechanics; 400.11 M7 | E |  |
 | 401 | Library | M1 ✓ | E |  |
 | 402 | Hand | M1 ✓; 402.2 default M2.1; modifiers M5 | E | D (Reliquary Tower) |
@@ -453,7 +455,7 @@ earlier milestones must leave room for every row in this map.
 | 404 | Graveyard | M1 ✓ | E |  |
 | 405 | Stack | M2; 405.3 M4 | E |  |
 | 406 | Exile | M2; face-down exile M4 | E |  |
-| 407 | Ante | out of scope | — | no supported format plays for ante |
+| 407 | Ante | M7 | X | the 9 ante cards are banned in every format, not never legal; they need an option to play for ante (407.2, 407.3) |
 | 408 | Command | M7; emblems M4 | E |  |
 | 500 | General | M1 ✓; 500.5 default M2.1; 500.7-500.10 M3; 500.11 M6 | E |  |
 | 501 | Beginning Phase | M1 ✓ | E |  |
@@ -489,7 +491,7 @@ earlier milestones must leave room for every row in this map.
 | 616 | Interaction of Replacement and/or Prevention Effects | M6 | E |  |
 | 700 | General | M2 (700.2); the others with their mechanics | E |  |
 | 703 | Turn-Based Actions | M1 ✓, M3 | E |  |
-| 704 | State-Based Actions | M1 ✓ (704.5a, b, f, g); 704.5c, d, i, j, m, n, p, q, r, z M4; 704.5e M5; 704.5h M3; 704.5k, s, t, v-y M9; 704.5u out of scope | E | 704.5j is the legend rule |
+| 704 | State-Based Actions | M1 ✓ (704.5a, b, f, g); 704.5c, d, i, j, m, n, p, q, r, z M4; 704.5e M5; 704.5h M3; 704.5k, s, t, u, v-y M9 | E | 704.5j is the legend rule; 704.5u is space sculptor |
 | 705 | Flipping a Coin | M2 | S |  |
 | 706 | Rolling a Die | M2 | S |  |
 | 707 | Copying Objects | M5 | E | D (Sunfrill Imitator, offspring, myriad) |
@@ -502,7 +504,7 @@ earlier milestones must leave room for every row in this map.
 | 714 | Saga Cards | M4 | S |  |
 | 715 | Adventurer Cards | M4 (casting room M2) | S |  |
 | 716 | Class Cards | M5 | S |  |
-| 717 | Attraction Cards | out of scope | — | Un-set only (Attractions) |
+| 717 | Attraction Cards | M7 (an Attraction deck in the command zone, 717.2; the junkyard, 717.6) | S | Unfinity: 22 Attractions without the acorn stamp are Commander-legal |
 | 718 | Prototype Cards | M5 (casting room M2) | S |  |
 | 719 | Case Cards | M4 | S |  |
 | 720 | Omen Cards | M2 | S | casting and resolution |
@@ -536,7 +538,7 @@ earlier milestones must leave room for every row in this map.
 | 902 | Vanguard | out of scope | — | a casual variant |
 | 903 | Commander | M7 (903.4 for mana M2); 903.12 Brawl and 903.13 Commander Draft out of scope | E | the project's format |
 | 904 | Archenemy | out of scope | — | a casual variant |
-| 905 | Conspiracy Draft | out of scope | — | a draft variant |
+| 905 | Conspiracy Draft | out of scope | — | the draft itself (905.1-905.2) isn't a game the engine plays; the game's conspiracy rules are 315 and 702.106, which are in scope |
 
 ### Keyword abilities (702)
 
@@ -646,7 +648,7 @@ earlier milestones must leave room for every row in this map.
 | 702.103 | Bestow | M5 | S |  |
 | 702.104 | Tribute | M6 | S |  |
 | 702.105 | Dethrone | M4 | S |  |
-| 702.106 | Hidden Agenda | out of scope | — | Conspiracy Draft |
+| 702.106 | Hidden Agenda | M7 | X | conspiracy cards (banned; limited play only, 315.1) |
 | 702.107 | Outlast | M4 | S | D |
 | 702.108 | Prowess | M5 | E | very common since 2015 |
 | 702.109 | Dash | M5 | S |  |
@@ -698,8 +700,8 @@ earlier milestones must leave room for every row in this map.
 | 702.155 | Read Ahead | M4 | S | Sagas |
 | 702.156 | Ravenous | M6 | S |  |
 | 702.157 | Squad | M5 | S |  |
-| 702.158 | Space Sculptor | out of scope | — | Un-set only (Space Beleren, Unfinity) |
-| 702.159 | Visit | out of scope | — | Un-set only (Attractions) |
+| 702.158 | Space Sculptor | M7 | X | one card, Space Beleren (Unfinity, Commander-legal) |
+| 702.159 | Visit | M7 | S | the 22 Commander-legal Attractions |
 | 702.160 | Prototype | M5 | S |  |
 | 702.161 | Living Metal | M5 | S |  |
 | 702.162 | More Than Meets the Eye | M5 | X |  |
@@ -784,14 +786,14 @@ earlier milestones must leave room for every row in this map.
 | 701.42 | Meld | M5 | X |  |
 | 701.43 | Exert | M4 | S |  |
 | 701.44 | Explore | M4 | S |  |
-| 701.45 | Assemble | out of scope | — | Un-set only (Contraptions) |
+| 701.45 | Assemble | M6 | X | Steamflogger Boss (Future Sight) modifies assembling; no tournament-legal card assembles, so it's a replacement that can't apply |
 | 701.46 | Adapt | M4 | S | D |
 | 701.47 | Amass | M4 | S |  |
 | 701.48 | Learn | M7 | S | Lessons from outside the game (903.11) |
 | 701.49 | Venture into the Dungeon | M7 | S |  |
 | 701.50 | Connive | M4 | S |  |
-| 701.51 | Open an Attraction | out of scope | — | Un-set only (Attractions) |
-| 701.52 | Roll to Visit Your Attractions | out of scope | — | Un-set only (Attractions) |
+| 701.51 | Open an Attraction | M7 | S | 20 Commander-legal cards |
+| 701.52 | Roll to Visit Your Attractions | M7 | S | "Lifetime" Pass Holder, Line Cutter, Command Performance; the turn-based action of 717.4 |
 | 701.53 | Incubate | M5 | S |  |
 | 701.54 | The Ring Tempts You | M7 | S |  |
 | 701.55 | Face a Villainous Choice | M4 | S | another player chooses |
@@ -814,14 +816,21 @@ earlier milestones must leave room for every row in this map.
 
 ### Out of scope
 
-Approved by the user during M2 planning (2026-10-19). The project's goal is every non-Un card in
-the formats it supports (design.md §1).
+**The scope test** (docs/decisions.md, 2026-10-19, "Card scope: tournament legality"):
+
+- A **card is in scope** if Scryfall lists it as legal, restricted or banned in at least one
+  paper format.
+- A card is **out of scope** only if it has never been tournament-legal: acorn-stamped,
+  silver-bordered, a playtest card, memorabilia, or a variant's card such as planes, schemes
+  and vanguards.
+
+**A rule is out of scope** only if no in-scope card and no supported format uses it. Each row
+below was checked against the card data. The user approved the list.
 
 | Rows | Reason |
 |---|---|
-| 123, 701.45, 701.51, 701.52, 702.158, 702.159, 704.5u, 717 | Un-set rules only: stickers, Contraptions, Attractions, Space Beleren (Unfinity). |
-| 211, 212, 311, 312, 313, 314, 315, 701.31, 701.32, 701.33, 702.106, 116.2i, 116.2j, 901, 902, 904, 905 | Casual variants the project doesn't support: Vanguard, Planechase, Archenemy, Conspiracy Draft. |
-| 407 | Ante: no supported format plays for ante. |
+| 211, 212, 311, 312, 313, 314, 701.31, 701.32, 701.33, 116.2i, 901, 902, 904 | Casual variants the project doesn't support: Vanguard, Planechase, Archenemy. Their cards (vanguards, planes, phenomena, schemes) are never tournament-legal. |
+| 905 (the draft, 905.1-905.2) | A draft isn't a game the engine plays. The game rules for conspiracy cards (315, 702.106, 116.2j) are in scope. |
 | 713 | Substitute cards stand in for physical double-faced cards; the engine tracks faces itself. |
 | 203, 213 | No game rules. |
 | 801, 803, 804, 805, 807, 808, 809, 810, 811; 903.12, 903.13 | Multiplayer options and variants Commander doesn't use (903.2: Free-for-All with the attack multiple players option); the Brawl option; Commander Draft. |
