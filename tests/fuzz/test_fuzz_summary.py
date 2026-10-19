@@ -1,6 +1,6 @@
 """The fuzz command line's defaults, presets and summary (tools/fuzz.py).
 
-The default run plays 40-card decks of basic lands (copied from Scryfall into
+The default run plays decks of basic lands, 40 and 10 cards (copied from Scryfall into
 ``tools/excerpts/basic_lands.json``), so its games play turns: lands are played (305.1) and
 tapped for mana (605.3a) until a player draws from an empty library (704.5b) or concedes
 (104.3a).
@@ -11,6 +11,8 @@ from __future__ import annotations
 import copy
 import io
 import re
+import subprocess
+import sys
 from collections import Counter
 from collections.abc import Sequence
 from contextlib import redirect_stdout
@@ -206,22 +208,26 @@ def numbers(pattern: str, text: str) -> tuple[float, ...]:
 def test_a_default_run_plays_turns_lands_and_mana_and_reports_them(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The default run, cut to its first four games (standard, 2 to 5 players). Each player has
-    40 basic lands, 8 of each; the games reach later turns, players play lands (at most one a
-    turn, 305.2) and tap them for mana, and the summary's numbers are those of the games."""
+    """The default run, cut to its first four games (standard, 2 to 5 players). The seats get
+    40 basic lands (8 of each) and 10 (2 of each) in turn; the games reach later turns, players
+    play lands (at most one a turn, 305.2) and tap them for mana, and the summary's numbers are
+    those of the games."""
     recorder = Recorder()
-    text = run_main(monkeypatch, recorder, "--games", "4")
+    text = run_main(monkeypatch, recorder, "--games", "4", "--jobs", "1")
 
     assert [len(decks) for _, decks, _, _ in recorder.calls] == [2, 3, 4, 5]
     assert [seed for _, _, seed, _ in recorder.calls] == [0, 1, 2, 3]
-    for config, decks, _, options in recorder.calls:
+    for config, decks, seed, options in recorder.calls:
         assert config.commander is None
         assert options == {"concession_chance": 200, "check_every": 10}
-        for player_deck in decks:
+        for seat, player_deck in enumerate(decks):
             names = Counter(card.data.name for card in player_deck.cards)
-            assert names == {"Plains": 8, "Island": 8, "Swamp": 8, "Mountain": 8, "Forest": 8}
-    assert "Run: quick preset; decks: 8 of each basic land (basic_lands.json); " in text
-    assert "concessions: 1 decision in 200; full checks every 10 answers." in text
+            copies = 8 if (seed + seat) % 2 == 0 else 2
+            assert names == dict.fromkeys(fuzz_tool.BASIC_LAND_NAMES, copies)
+    assert (
+        "Run: quick preset; decks: 40 and 10 basic lands (basic_lands.json), cycled among the "
+        "seats; concessions: 1 decision in 200; full checks every 10 answers." in text
+    )
 
     # Each game's numbers, counted here from its final state.
     answers: list[int] = []
@@ -269,59 +275,107 @@ def canned_result() -> FuzzResult:
     return fuzz_game(GameConfig.standard(), [Deck(()), Deck(())], 0)
 
 
-def test_the_default_run_is_quick() -> None:
-    """Ten games: one of each player count (2 to 6) in each format."""
-    assert fuzz_tool.Preset(games=10, concessions=200, check_every=10) == fuzz_tool.QUICK
+def test_the_presets() -> None:
+    """Quick: ten games, one of each player count (2 to 6) in each format, 40- and 10-card
+    decks. Thorough: ten times as many, longer (40- and 20-card decks, rarer concessions), and
+    every check before every decision."""
+    assert (
+        fuzz_tool.Preset(games=10, copies=(8, 2), concessions=200, check_every=10)
+        == fuzz_tool.QUICK
+    )
+    assert (
+        fuzz_tool.Preset(games=100, copies=(8, 4), concessions=500, check_every=1)
+        == fuzz_tool.THOROUGH
+    )
 
 
 def test_the_default_run_cycles_every_player_count_in_both_formats(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     recorder = Recorder(canned_result())
-    text = run_main(monkeypatch, recorder)
+    text = run_main(monkeypatch, recorder, "--jobs", "1")
     shapes = [(len(decks), config.commander is not None) for config, decks, _, _ in recorder.calls]
     assert shapes == [(n, False) for n in range(2, 7)] + [(n, True) for n in range(2, 7)]
     assert "Run: quick preset;" in text
 
 
-def test_thorough_runs_more_games_with_rarer_concessions_and_every_check(
+def test_thorough_runs_more_and_longer_games_with_every_check(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     recorder = Recorder(canned_result())
-    text = run_main(monkeypatch, recorder, "--thorough")
-    thorough = fuzz_tool.THOROUGH
-    assert len(recorder.calls) == thorough.games
-    assert thorough.games >= 10 * fuzz_tool.QUICK.games
-    assert thorough.concessions > fuzz_tool.QUICK.concessions
-    assert thorough.check_every == 1
-    for _, _, _, options in recorder.calls:
-        assert options == {"concession_chance": thorough.concessions, "check_every": 1}
+    text = run_main(monkeypatch, recorder, "--thorough", "--jobs", "1")
+    assert len(recorder.calls) == 100
+    for _, decks, seed, options in recorder.calls:
+        assert options == {"concession_chance": 500, "check_every": 1}
+        sizes = [len(player_deck.cards) for player_deck in decks]
+        assert sizes == [40 if (seed + seat) % 2 == 0 else 20 for seat in range(len(decks))]
     assert (
-        f"Run: thorough preset; decks: 8 of each basic land (basic_lands.json); concessions: "
-        f"1 decision in {thorough.concessions}; full checks every answer." in text
+        "Run: thorough preset; decks: 40 and 20 basic lands (basic_lands.json), cycled among the "
+        "seats; concessions: 1 decision in 500; full checks every answer." in text
     )
-    assert f"{thorough.games} games passed" in text
+    assert "100 games passed" in text
+    # Progress every 10 games, before the summary.
+    progress = [line for line in text.splitlines() if line.endswith("games passed...")]
+    assert progress == [f"{done} of 100 games passed..." for done in range(10, 100, 10)]
+    assert text.splitlines()[0].startswith("Run: thorough preset;")
+    assert text.splitlines()[1:10] == progress
 
 
 def test_explicit_options_override_the_preset(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = Recorder(canned_result())
-    run_main(
+    text = run_main(
         monkeypatch, recorder, "--thorough", "--games", "3", "--check-every", "5",
-        "--concessions", "0",
+        "--concessions", "0", "--copies", "3", "--jobs", "1",
     )  # fmt: skip
     assert len(recorder.calls) == 3
-    assert {str(options) for _, _, _, options in recorder.calls} == {
-        str({"concession_chance": 0, "check_every": 5})
-    }
+    for _, decks, _, options in recorder.calls:
+        assert options == {"concession_chance": 0, "check_every": 5}
+        assert {len(player_deck.cards) for player_deck in decks} == {15}
+    assert "decks: 15 basic lands (basic_lands.json); concessions: never; full checks every 5" in (
+        text
+    )
 
 
-def test_the_reproduce_command_of_a_failure_is_printed(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_a_failure_prints_the_reproduce_message(monkeypatch: pytest.MonkeyPatch) -> None:
     def failing(config: GameConfig, decks: Sequence[Deck], seed: int, **options: Any) -> Any:
         raise fuzz_tool.FuzzFailure(f"game seed {seed}: broken")
 
     monkeypatch.setattr(fuzz_tool, "fuzz_game", failing)
     output = io.StringIO()
     with redirect_stdout(output):
-        status = fuzz_tool.main(["--seed", "7"])
+        status = fuzz_tool.main(["--seed", "7", "--jobs", "1"])
     assert status == 1
-    assert output.getvalue() == "FAILED: game seed 7: broken\n"
+    assert output.getvalue().splitlines()[1:] == ["FAILED: game seed 7: broken"]
+
+
+def test_parallel_jobs_play_the_same_games() -> None:
+    """Games run in worker processes (the "spawn" start method, as on Windows) end exactly as
+    when run one after another: only the timing line differs."""
+    args = ["--games", "20", "--players", "2", "3", "--copies", "2", "--concessions", "50"]
+    outputs: list[list[str]] = []
+    for jobs in ("1", "3"):
+        output = io.StringIO()
+        with redirect_stdout(output):
+            assert fuzz_tool.main([*args, "--jobs", jobs]) == 0
+        outputs.append(output.getvalue().splitlines())
+    assert outputs[0][:-1] == outputs[1][:-1]
+    assert outputs[0][:2] == [
+        "Run: quick preset; decks: 10 basic lands (basic_lands.json); concessions: 1 decision in "
+        "50; full checks every 10 answers.",
+        "10 of 20 games passed...",
+    ]
+    assert outputs[0][-1].endswith("(1 job).") and outputs[1][-1].endswith("(3 jobs).")
+
+
+def test_the_script_runs_games_in_worker_processes() -> None:
+    """Run as a script, as users do: the workers re-import the script itself (``__mp_main__``),
+    the way Windows starts every worker."""
+    completed = subprocess.run(
+        [sys.executable, str(fuzz_tool.__file__), "--games", "2", "--jobs", "2", "--empty-decks"],
+        capture_output=True,
+        check=False,
+        encoding="utf-8",
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "2 games passed: 2 answers accepted, 0 rejected." in completed.stdout
+    assert completed.stdout.rstrip().endswith("(2 jobs).")

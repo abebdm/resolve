@@ -700,7 +700,18 @@ def test_the_command_line_runs_games_and_reports_a_benchmark() -> None:
     output = io.StringIO()
     with redirect_stdout(output):
         status = fuzz_tool.main(
-            ["--games", "10", "--seed", "100", "--players", "2", "4", "--empty-decks"]
+            [
+                "--games",
+                "10",
+                "--seed",
+                "100",
+                "--players",
+                "2",
+                "4",
+                "--empty-decks",
+                "--jobs",
+                "1",
+            ]
         )
     text = output.getvalue()
     assert status == 0
@@ -728,6 +739,11 @@ def test_the_command_line_runs_games_and_reports_a_benchmark() -> None:
         ["--concessions", "-1"],
         ["--empty-decks", "--deck", "deck.txt"],
         ["--thorough", "--games", "0"],
+        ["--jobs", "0"],
+        ["--copies", "-1"],
+        ["--copies"],
+        ["--copies", "8", "--deck", "deck.txt"],
+        ["--copies", "8", "--empty-decks"],
     ],
 )
 def test_the_command_line_refuses_bad_arguments(args: list[str]) -> None:
@@ -750,7 +766,9 @@ def test_the_command_line_plays_the_chosen_formats(args: list[str], formats: str
     are standard, 2-3 Commander, 4-5 standard, 6-7 Commander and 8-9 standard."""
     output = io.StringIO()
     with redirect_stdout(output):
-        status = fuzz_tool.main(["--games", "10", "--players", "2", "3", "--empty-decks", *args])
+        status = fuzz_tool.main(
+            ["--games", "10", "--players", "2", "3", "--empty-decks", "--jobs", "1", *args]
+        )
     assert status == 0
     assert formats in output.getvalue()
 

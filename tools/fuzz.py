@@ -53,11 +53,14 @@ import argparse
 import copy
 import dataclasses
 import io
+import multiprocessing
+import os
 import pickle
 import sys
 import time
 from collections import Counter
 from collections.abc import Callable, Sequence
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -656,7 +659,7 @@ def summary_lines(games: Sequence[GameStats]) -> list[str]:
 # is committed (tools/card_excerpt.py), so no snapshot is needed.
 BASIC_LANDS_EXCERPT = Path(__file__).resolve().parent / "excerpts" / "basic_lands.json"
 BASIC_LAND_NAMES = ("Plains", "Island", "Swamp", "Mountain", "Forest")
-# Copies of each basic land in a default deck: 40 cards.
+# Copies of each basic land in a deck, when none are given: 40 cards.
 DEFAULT_COPIES = 8
 
 
@@ -665,23 +668,28 @@ class Preset:
     """The command line's defaults for a run's length and checks; explicit options override them.
 
     - ``games``: how many games.
-    - ``concessions``: before each decision a player concedes 1 time in this many (104.3a); the
-      fewer concessions, the longer the games and the more of them end by decking (704.5b).
+    - ``copies``: the basic-land decks, as copies of each basic land: one deck per number, cycled
+      among the seats like ``--deck`` files (8 and 4: 40- and 20-card decks).
+    - ``concessions``: before each decision a player concedes 1 time in this many (104.3a). The
+      number of decisions per turn grows with the square of the player count, so in multiplayer
+      games concessions come long before decking (704.5b); the smaller decks deck out first.
     - ``check_every``: the full checks run every this many answers (``fuzz_run``).
     """
 
     games: int
+    copies: tuple[int, ...]
     concessions: int
     check_every: int
 
 
 # The default run: quick, for the checks an agent or a developer runs while working. One game of
-# each player count (2 to 6) in each format, checked every 10 answers.
-QUICK = Preset(games=10, concessions=200, check_every=10)
+# each player count (2 to 6) in each format, checked every 10 answers; 40- and 10-card decks, so
+# that some games end by decking.
+QUICK = Preset(games=10, copies=(8, 2), concessions=200, check_every=10)
 # ``--thorough``: the long run for verifying a milestone by hand. Ten rounds of the player counts
-# and formats, rarer concessions so that many games end by decking, and every check before every
-# decision.
-THOROUGH = Preset(games=100, concessions=500, check_every=1)
+# and formats, rarer concessions so that longer games and more decking happen, and every check
+# before every decision.
+THOROUGH = Preset(games=100, copies=(8, 4), concessions=500, check_every=1)
 
 
 def basic_land_deck(copies: int = DEFAULT_COPIES, excerpt: Path = BASIC_LANDS_EXCERPT) -> Deck:
@@ -700,7 +708,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--thorough",
         action="store_true",
         help=f"the long run for verifying a milestone: {THOROUGH.games} games, concessions 1 in "
-        f"{THOROUGH.concessions}, full checks every {THOROUGH.check_every} answer",
+        f"{THOROUGH.concessions}, full checks before every decision",
     )
     parser.add_argument(
         "--games", type=int, default=None, help=f"number of games (default {QUICK.games})"
@@ -725,7 +733,23 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="decklists to cycle, from the snapshot (default: 40 basic lands each)",
     )
     decks.add_argument("--empty-decks", action="store_true", help="give every player an empty deck")
+    decks.add_argument(
+        "--copies",
+        type=int,
+        nargs="+",
+        default=None,
+        metavar="N",
+        help="basic-land decks of N of each basic land, one per N, cycled among the seats "
+        f"(default {' '.join(map(str, QUICK.copies))})",
+    )
     parser.add_argument("--data-dir", type=Path, default=None, help="card data snapshot directory")
+    parser.add_argument(
+        "--jobs",
+        type=int,
+        default=os.cpu_count() or 1,
+        metavar="N",
+        help="games played at once, in worker processes (default: the number of CPUs)",
+    )
     parser.add_argument(
         "--concessions",
         type=int,
@@ -746,13 +770,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     preset = THOROUGH if args.thorough else QUICK
     run = Preset(
         games=preset.games if args.games is None else args.games,
+        copies=preset.copies if args.copies is None else tuple(args.copies),
         concessions=preset.concessions if args.concessions is None else args.concessions,
         check_every=preset.check_every if args.check_every is None else args.check_every,
     )
+    if min(run.copies) < 0:
+        parser.error("--copies can't be negative")
     if run.games < 1 or not args.players or min(args.players) < 2:
         parser.error("need at least one game and player counts of at least 2 (100.1)")
-    if run.check_every < 1 or run.concessions < 0:
-        parser.error("--check-every must be at least 1 and --concessions at least 0")
+    if run.check_every < 1 or run.concessions < 0 or args.jobs < 1:
+        parser.error("--check-every and --jobs must be at least 1, --concessions at least 0")
 
     fmt = "commander" if args.commander else args.format
     configs = {
@@ -767,44 +794,106 @@ def main(argv: Sequence[str] | None = None) -> int:
             pool = _load_decks(args.deck, args.data_dir)
             deck_names = ", ".join(str(path) for path in args.deck)
         else:
-            pool = [basic_land_deck()]
-            deck_names = f"{DEFAULT_COPIES} of each basic land ({BASIC_LANDS_EXCERPT.name})"
+            pool = [basic_land_deck(copies) for copies in run.copies]
+            sizes = " and ".join(str(copies * len(BASIC_LAND_NAMES)) for copies in run.copies)
+            deck_names = f"{sizes} basic lands ({BASIC_LANDS_EXCERPT.name})"
+            if len(pool) > 1:
+                deck_names += ", cycled among the seats"
     except (CardDataError, DecklistError, DeckError, OSError) as error:
         print(f"error: {error}")
         return 1
 
-    games: list[GameStats] = []
-    formats: Counter[str] = Counter()
-    started = time.perf_counter()
+    specs: list[GameSpec] = []
     for game in range(run.games):
         seed: int = args.seed + game
         players: int = args.players[game % len(args.players)]
         config = configs[(game // len(args.players)) % len(configs)]
-        decks_now = [pool[(seed + seat) % len(pool)] for seat in range(players)]
-        try:
-            result = fuzz_game(
-                config,
-                decks_now,
-                seed,
-                concession_chance=run.concessions,
-                check_every=run.check_every,
-            )
-        except FuzzFailure as failure:
-            print(f"FAILED: {failure}")
-            return 1
-        games.append(GameStats.of(result))
-        formats["commander" if config.commander is not None else "standard"] += 1
-    elapsed = time.perf_counter() - started
+        decks_now = tuple(pool[(seed + seat) % len(pool)] for seat in range(players))
+        specs.append(GameSpec(config, decks_now, seed, run.concessions, run.check_every))
+    jobs = min(args.jobs, len(specs))
+    started = time.perf_counter()
     checks = "every answer" if run.check_every == 1 else f"every {run.check_every} answers"
     concessions = "never" if run.concessions == 0 else f"1 decision in {run.concessions}"
     print(
         f"Run: {'thorough' if args.thorough else 'quick'} preset; decks: {deck_names}; "
-        f"concessions: {concessions}; full checks {checks}."
+        f"concessions: {concessions}; full checks {checks}.",
+        flush=True,
     )
+
+    def progress(done: int) -> None:
+        # Long runs say how far they are (no timing, so the output is the same for any --jobs).
+        if len(specs) > QUICK.games and done % 10 == 0 and done < len(specs):
+            print(f"{done} of {len(specs)} games passed...", flush=True)
+
+    outcomes = _play_all(specs, jobs, progress)
+    failures = [outcome for outcome in outcomes if isinstance(outcome, str)]
+    if failures:
+        print(f"FAILED: {failures[0]}")
+        return 1
+    games = [outcome for outcome in outcomes if isinstance(outcome, GameStats)]
+    formats = Counter(
+        "commander" if spec.config.commander is not None else "standard" for spec in specs
+    )
+    elapsed = time.perf_counter() - started
     print("\n".join(summary_lines(games)))
     print("Formats: " + ", ".join(f"{name} x{count}" for name, count in sorted(formats.items())))
-    print(f"{run.games / elapsed:.2f} games per second, {elapsed:.0f} seconds in all.")
+    print(
+        f"{run.games / elapsed:.2f} games per second, {elapsed:.0f} seconds in all "
+        f"({jobs} {'job' if jobs == 1 else 'jobs'})."
+    )
     return 0
+
+
+@dataclass(frozen=True)
+class GameSpec:
+    """One game of a command-line run, as sent to a worker process."""
+
+    config: GameConfig
+    decks: tuple[Deck, ...]
+    seed: int
+    concessions: int
+    check_every: int
+
+
+def play_spec(spec: GameSpec) -> GameStats | str:
+    """Play and check one game: its statistics, or the failure's message."""
+    try:
+        result = fuzz_game(
+            spec.config,
+            spec.decks,
+            spec.seed,
+            concession_chance=spec.concessions,
+            check_every=spec.check_every,
+        )
+    except FuzzFailure as failure:
+        return str(failure)
+    return GameStats.of(result)
+
+
+def _play_all(
+    specs: Sequence[GameSpec], jobs: int, progress: Callable[[int], None]
+) -> list[GameStats | str]:
+    """Play the games in order, stopping at the first failure; with ``jobs`` > 1, in that many
+    worker processes, which doesn't change any game (each depends only on its spec).
+    ``progress`` is called with the number of games done, in order, after each one."""
+    outcomes: list[GameStats | str] = []
+    if jobs <= 1:
+        for spec in specs:
+            outcomes.append(play_spec(spec))
+            if isinstance(outcomes[-1], str):
+                break
+            progress(len(outcomes))
+        return outcomes
+    # "spawn" is the only start method on Windows; using it everywhere keeps runs alike.
+    context = multiprocessing.get_context("spawn")
+    with ProcessPoolExecutor(max_workers=jobs, mp_context=context) as pool:
+        for outcome in pool.map(play_spec, specs):
+            outcomes.append(outcome)
+            if isinstance(outcome, str):
+                pool.shutdown(wait=False, cancel_futures=True)
+                break
+            progress(len(outcomes))
+    return outcomes
 
 
 def _load_decks(paths: Sequence[Path], data_dir: Path | None) -> list[Deck]:
