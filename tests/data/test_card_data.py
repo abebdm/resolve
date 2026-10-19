@@ -354,3 +354,13 @@ def test_snapshot_info_round_trips_through_json(tmp_path: Path) -> None:
     snapshot = load_snapshot_info(tmp_path)
     (tmp_path / SNAPSHOT_FILE).write_text(json.dumps(snapshot.to_json()), encoding="utf-8")
     assert load_snapshot_info(tmp_path) == snapshot
+
+
+def test_cards_lists_every_card_by_name_and_by_oracle_id_finds_one() -> None:
+    database = CardDatabase(parse_oracle_cards(fx.default_cards()))
+    names = [card.name for card in database.cards()]
+    assert names == sorted(names)
+    assert "Forest" in names and "Soldier" not in names, "tokens are not in the database"
+    forest = database.get("Forest")
+    assert database.by_oracle_id(forest.oracle_id) == forest
+    assert database.by_oracle_id("no-such-id") is None

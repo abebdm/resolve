@@ -840,3 +840,25 @@ matrix; the lockfile and pyright parts stand.
 - **Why:** plain `pyright` downloads Node at run time when none is installed, which can fail
   on restricted networks. Testing the minimum and a current version catches version-specific breakage.
 - **Where:** `pyproject.toml`, `uv.lock`, `.github/workflows/ci.yml`.
+
+### 2026-10-19: Tooling: updating the pinned CR and card data
+- **Decision:**
+  - `tools/rules_diff.py` matches rules by number, then pairs old and new rules under different
+    numbers when their word-level similarity is at least 0.8 and beats the old rule's similarity
+    to whatever now has its number (best pairs first, each rule once). Within a section any
+    leftover pair is a candidate, so a subrule inserted mid-list is reported as renumbered
+    rules plus one added rule; across sections only removed numbers match added numbers.
+    Unnumbered paragraphs belong to the rule before them; the glossary is not compared.
+  - Citations are matched by exact number, in `.py` files and in documents (`docs/**/*.md`
+    except `docs/rules/`, `.claude/agents/*.md`), and separately for the parent of a flagged
+    subrule. `704.5a/b` cites both rules.
+  - A subrule has one or two letters (704.5z is followed by 704.5aa), so `is_rule_reference`
+    accepts `"103.1ab"`; the old test listing it as invalid was wrong for the CR (it is now
+    `"103.1abc"`). The grammar, sort key and parsing live in `resolve.citations` and
+    `resolve.data.rules_text`; the tools and the citation test use them.
+  - `tools/card_diff.py` compares the cards that have definitions plus every card in `decks/`
+    (sideboards included), by Oracle ID when a card was renamed. The citation test scans `src/`,
+    `tools/` and `tests/`, except a short list of files that cite invented numbers as test data.
+- **Why:** CLAUDE.md rules 2 and 3: a CR update must be routine and loud, never silent drift.
+- **Where:** `tools/rules_diff.py`, `tools/card_diff.py`, `src/resolve/citations.py`,
+  `src/resolve/data/rules_text.py`, `tests/tooling/test_rule_citations.py`.
