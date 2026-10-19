@@ -159,22 +159,64 @@ For the engine loop itself, drive it with small tasks.
 
 ### Run the fuzz harness
 
-1. `uv run python tools/fuzz.py` plays 200 random-agent games (2 to 6 players, standard and
-   Commander) with every check on and prints the endings and games per second. Use
-   `--games N --seed S` for more, `--players 4`, `--format commander`, or `--deck` files (cycled
-   among the seats; they need the snapshot and implemented cards).
-2. A failure prints `FAILED:` with the seed and a command that reproduces that one game. Reproduce
-   it, write a failing test (a scenario test, or a `fuzz_game` call in `tests/fuzz/`), then fix
-   the engine.
-3. Players concede at random (`--concessions N`: 1 in N decisions, default 200; 0 turns it
-   off), and every game is replayed from its answers and concessions at the end.
-4. When a milestone changes which gaps games can reach (after M1: 601.2 for casting), update
-   `ALLOWED_GAPS` in `tools/fuzz.py`,
-   the fuzz tests' expectations and the roadmap together. Random agents stop at the first
-   offered gap they pick; the fuzz tests' `PatientAgent` (`tests/engine_support.py`) mostly
-   passes, so its games reach later turns.
-5. When adding a new check to the harness, add a broken test-only task to
+`tools/fuzz.py` plays random-agent games and checks each one (`fuzz_run`'s docstring lists the
+checks). It has two presets (`QUICK` and `THOROUGH` in `tools/fuzz.py`); explicit options
+override either.
+
+| Run | Command (PowerShell and Unix alike) | Games | Decks | Concessions | Full checks | Time |
+|---|---|---|---|---|---|---|
+| Quick (default): agents and day-to-day work | `uv run python tools/fuzz.py` | 10 | 40 and 10 basic lands | 1 decision in 200 | every 10 answers | about 20 s on 4 cores |
+| Thorough: the user's milestone verification | `uv run python tools/fuzz.py --thorough` | 100 | 40 and 20 basic lands | 1 decision in 500 | before every decision | about 1 hour on 8 cores, 2 on 4 |
+
+1. Both presets cycle the player counts 2 to 6, then the formats (standard, then Commander), so
+   10 games are one game of each. The decks are basic lands, the same number of each, from
+   `tools/excerpts/basic_lands.json` (no snapshot needed), one size per seat in turn. Games play
+   turns (lands, mana, priority, cleanup) until players concede or draw from an empty library;
+   the smaller decks make some games end by decking even with several players, where
+   concessions otherwise come first. Games run in parallel worker processes (`--jobs N`,
+   default: the number of CPUs); the results are the same for any `--jobs`.
+2. Options: `--games N`, `--seed S` (of the first game), `--players 2 4`, `--format standard`
+   or `--format commander` (`--commander`), `--concessions N` (0: never), `--check-every N`
+   (1: before every decision), `--jobs N`, and the decks: `--copies 8 4` (basic-land decks of
+   that many of each basic land, one per number), `--deck a.txt --deck b.txt` (cycled among the
+   seats; they need the snapshot and implemented cards) or `--empty-decks` (every game ends in
+   the first upkeep, a draw).
+3. The output: first the preset and settings (`Run:`), then, in runs longer than the quick one,
+   a line every 10 games, then the summary: answers accepted and rejected; answers and turns per
+   game (min, average, max); endings by type (decked, life total, concession, draw, rules gap,
+   then any other, named by the rule of the last loss); lands played and mana abilities
+   activated; formats; games per second.
+4. A failure prints `FAILED:` with the seed and the start of a command that reproduces that one
+   game, then `This run's options:`, the rest of it (decks, concessions, check interval).
+   Reproduce it, write a failing test (a scenario test, or a `fuzz_game` call in `tests/fuzz/`),
+   then fix the engine.
+5. Full checks (the state's purity, every player's view, the deepcopy and pickle copies, invalid
+   answers) cost time that grows with the game; the bookkeeping invariants run before every
+   decision and every game is replayed at the end whatever `--check-every` says. Each full check
+   walks only the log entries added since the last one (`CheckedLog`).
+6. When a milestone changes which gaps games can reach (after M1: 601.2 for casting), update
+   `ALLOWED_GAPS` in `tools/fuzz.py`, the fuzz tests' expectations and the roadmap together.
+   Random agents stop at the first offered gap they pick; the fuzz tests' `PatientAgent`
+   (`tests/engine_support.py`) mostly passes, so its games reach later turns. When implemented
+   cards can make the default decks more varied, change `basic_land_deck` and its tests.
+7. When adding a new check to the harness, add a broken test-only task to
    `tests/engine_support.py` and a test in `tests/fuzz/test_fuzz.py` showing the check catches it.
+
+### Write or check a card data excerpt
+
+A tool that must run without the snapshot (CI, a fresh checkout) uses an excerpt: a few cards
+copied from the snapshot into a committed JSON file. Never write card records by hand.
+
+1. With the snapshot in `data/`, write the excerpt:
+   `uv run python tools/card_excerpt.py tools/excerpts/NAME.json "Card One" "Card Two"`. It keeps
+   only the fields the loader reads (`EXCERPT_CARD_FIELDS`), the cards' rulings, and the
+   snapshot's manifest (`taken_from`).
+2. Load it with `resolve.data.cards.load_card_excerpt(path)`, a `CardDatabase`.
+3. After updating the snapshot, check the excerpts still match it:
+   `uv run python tools/card_excerpt.py tools/excerpts/basic_lands.json --check`; rewrite one
+   that doesn't.
+4. Test what uses the excerpt against the cards' printed characteristics (see
+   `tests/tooling/test_card_excerpt_tool.py`).
 
 ### Play a game in the terminal
 

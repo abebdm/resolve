@@ -35,47 +35,96 @@ _SCALARS = (type(None), bool, int, float, str, Enum)
 _MAX_DEPTH = 100
 
 
-def _dataclass_fields(value: object) -> list[tuple[str, object]]:
-    return [(f.name, getattr(value, f.name)) for f in dataclasses.fields(value)]  # pyright: ignore[reportArgumentType]
+# A path into a value, built only when a problem is reported: the walks below visit every node of
+# the state, event log included, before every fuzz decision, and formatting a path string for
+# each node was most of their cost. A path is the root's name, or (parent, separator, key).
+type _Path = str | tuple[_Path, str, object]
+
+# Field names per dataclass type; ``dataclasses.fields`` is slow to call for every node.
+_FIELD_NAMES: dict[type, tuple[str, ...]] = {}
 
 
-def state_impurities(state: GameState) -> list[str]:
-    """Everything in ``state`` that isn't pure data, or holds an object or player by reference."""
+def _field_names(cls: type) -> tuple[str, ...]:
+    names = _FIELD_NAMES.get(cls)
+    if names is None:
+        names = tuple(field.name for field in dataclasses.fields(cls))
+        _FIELD_NAMES[cls] = names
+    return names
+
+
+def _render(path: _Path) -> str:
+    parts: list[str] = []
+    while isinstance(path, tuple):
+        path, separator, key = path
+        parts.append(f"[{key!r}]" if separator == "[r" else f"{separator}{key}")
+        if separator == "[":
+            parts[-1] += "]"
+    parts.append(path)
+    return "".join(reversed(parts))
+
+
+def state_impurities(state: GameState, *, log_from: int = 0) -> list[str]:
+    """Everything in ``state`` that isn't pure data, or holds an object or player by reference.
+
+    With ``log_from``, the event log's entries before that index aren't walked: the caller
+    (the fuzz harness) has checked them already and checks they haven't changed since.
+    """
     problems: list[str] = []
-    _walk_pure(state, "state", 0, problems)
+    _walk_pure(state, "state", 0, problems, None, log_from)
     return problems
 
 
-def _walk_pure(value: object, path: str, depth: int, problems: list[str]) -> None:
+def _walk_pure(
+    value: object,
+    path: _Path,
+    depth: int,
+    problems: list[str],
+    allowed: type | None,
+    log_from: int = 0,
+) -> None:
+    # ``allowed``: GameObject inside ``state.objects``, Player inside ``state.players``.
     if depth > _MAX_DEPTH:
-        problems.append(f"{path}: nested too deeply (a reference cycle?)")
+        problems.append(f"{_render(path)}: nested too deeply (a reference cycle?)")
         return
     if isinstance(value, _SCALARS):
         return
-    if isinstance(value, GameObject) and not path.startswith("state.objects["):
-        problems.append(f"{path}: holds a GameObject by reference; store its ObjectId")
-    if isinstance(value, Player) and not path.startswith("state.players["):
-        problems.append(f"{path}: holds a Player by reference; store its PlayerId")
+    if isinstance(value, GameObject) and allowed is not GameObject:
+        problems.append(f"{_render(path)}: holds a GameObject by reference; store its ObjectId")
+    if isinstance(value, Player) and allowed is not Player:
+        problems.append(f"{_render(path)}: holds a Player by reference; store its PlayerId")
     if isinstance(value, list | tuple):
         items: list[object] | tuple[object, ...] = value  # pyright: ignore[reportUnknownVariableType]
         for index, item in enumerate(items):
-            _walk_pure(item, f"{path}[{index}]", depth + 1, problems)
+            _walk_pure(item, (path, "[", index), depth + 1, problems, allowed)
     elif isinstance(value, dict):
         mapping: dict[object, object] = value  # pyright: ignore[reportUnknownVariableType]
         for key, item in mapping.items():
             if not isinstance(key, int | str | Enum) or isinstance(key, bool):
-                problems.append(f"{path}: dict key {key!r} isn't an int, str or enum")
-            _walk_pure(item, f"{path}[{key!r}]", depth + 1, problems)
+                problems.append(f"{_render(path)}: dict key {key!r} isn't an int, str or enum")
+            _walk_pure(item, (path, "[r", key), depth + 1, problems, allowed)
     elif dataclasses.is_dataclass(value) and not isinstance(value, type):
-        fields = _dataclass_fields(value)
-        names = [name for name, _ in fields]
-        extra = sorted(name for name in getattr(value, "__dict__", {}) if name not in names)
-        if extra:
-            problems.append(f"{path}: attributes outside the dataclass fields: {extra}")
-        for name, item in fields:
-            _walk_pure(item, f"{path}.{name}", depth + 1, problems)
+        names = _field_names(type(value))
+        attributes = getattr(value, "__dict__", None)
+        if attributes is not None and attributes.keys() - names:
+            extra = sorted(name for name in attributes if name not in names)
+            if extra:
+                problems.append(
+                    f"{_render(path)}: attributes outside the dataclass fields: {extra}"
+                )
+        for name in names:
+            inner = allowed
+            item = getattr(value, name)
+            if depth == 0 and isinstance(value, GameState):
+                inner = {"objects": GameObject, "players": Player}.get(name)
+                if name == "event_log" and log_from and isinstance(item, list):
+                    log: list[object] = item  # pyright: ignore[reportUnknownVariableType]
+                    for index in range(log_from, len(log)):
+                        where = ((path, ".", name), "[", index)
+                        _walk_pure(log[index], where, depth + 2, problems, inner)
+                    continue
+            _walk_pure(item, (path, ".", name), depth + 1, problems, inner)
     else:
-        problems.append(f"{path}: {type(value).__qualname__} isn't pure data")
+        problems.append(f"{_render(path)}: {type(value).__qualname__} isn't pure data")
 
 
 def mutable_parts(value: object, path: str = "value") -> list[str]:
@@ -85,24 +134,25 @@ def mutable_parts(value: object, path: str = "value") -> list[str]:
     return problems
 
 
-def _walk_immutable(value: object, path: str, depth: int, problems: list[str]) -> None:
+def _walk_immutable(value: object, path: _Path, depth: int, problems: list[str]) -> None:
     if depth > _MAX_DEPTH:
-        problems.append(f"{path}: nested too deeply (a reference cycle?)")
+        problems.append(f"{_render(path)}: nested too deeply (a reference cycle?)")
         return
     if isinstance(value, _SCALARS):
         return
     if isinstance(value, tuple):
         items: tuple[object, ...] = value  # pyright: ignore[reportUnknownVariableType]
         for index, item in enumerate(items):
-            _walk_immutable(item, f"{path}[{index}]", depth + 1, problems)
+            _walk_immutable(item, (path, "[", index), depth + 1, problems)
     elif isinstance(value, Immutable):
-        if not dataclasses.is_dataclass(value) or not type(value).__dataclass_params__.frozen:  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
-            problems.append(f"{path}: {type(value).__qualname__} isn't a frozen dataclass")
+        cls = type(value)
+        if not dataclasses.is_dataclass(value) or not cls.__dataclass_params__.frozen:  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
+            problems.append(f"{_render(path)}: {cls.__qualname__} isn't a frozen dataclass")
             return
-        for name, item in _dataclass_fields(value):
-            _walk_immutable(item, f"{path}.{name}", depth + 1, problems)
+        for name in _field_names(cls):
+            _walk_immutable(getattr(value, name), (path, ".", name), depth + 1, problems)
     else:
-        problems.append(f"{path}: {type(value).__qualname__} isn't immutable")
+        problems.append(f"{_render(path)}: {type(value).__qualname__} isn't immutable")
 
 
 def invariant_violations(state: GameState) -> list[str]:

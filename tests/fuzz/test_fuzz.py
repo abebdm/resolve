@@ -43,7 +43,7 @@ from resolve.engine.concede import concede
 from resolve.engine.deck import Deck
 from resolve.engine.view import PlayerView
 from resolve.errors import InvalidAnswer
-from resolve.events.base import AnswerRecord
+from resolve.events.base import AnswerRecord, LogEntry
 from resolve.events.game import Conceded, PlayerLost
 from resolve.state.config import GameConfig
 from resolve.state.game import GameObject, GameState
@@ -71,7 +71,14 @@ from tests.engine_support import (
 from tests.game_fixtures import DAYBREAKER, deck
 from tests.scenario import Scenario, run_script
 from tools import fuzz as fuzz_tool
-from tools.fuzz import FuzzFailure, fuzz_game, fuzz_run, invalid_answers, state_problems
+from tools.fuzz import (
+    CheckedLog,
+    FuzzFailure,
+    fuzz_game,
+    fuzz_run,
+    invalid_answers,
+    state_problems,
+)
 
 PLAYER_COUNTS = [2, 3, 4, 5, 6]
 SEEDS = range(12)
@@ -692,20 +699,53 @@ def test_every_probe_answer_is_invalid(space: AnswerSpace) -> None:
 def test_the_command_line_runs_games_and_reports_a_benchmark() -> None:
     output = io.StringIO()
     with redirect_stdout(output):
-        status = fuzz_tool.main(["--games", "10", "--seed", "100", "--players", "2", "4"])
+        status = fuzz_tool.main(
+            [
+                "--games",
+                "10",
+                "--seed",
+                "100",
+                "--players",
+                "2",
+                "4",
+                "--empty-decks",
+                "--jobs",
+                "1",
+            ]
+        )
     text = output.getvalue()
     assert status == 0
     found = re.search(r"10 games passed: (\d+) answers accepted, (\d+) rejected\.", text)
     assert found is not None
     # The decks are empty, so 103.1 is the only question: a zero-card hand can't mulligan (103.5),
-    # and every player, having drawn from an empty library, loses before the first priority
-    # (704.5b): every game is a draw (104.4a).
+    # and every player, having drawn from an empty library, loses in the first turn's upkeep,
+    # before the first priority (704.5b): every game is a draw (104.4a).
     assert int(found.group(1)) == 10
-    assert "Endings: game over x10" in text
+    assert "Answers per game: min 1, average 1.0, max 1." in text
+    assert "Turns per game: min 1, average 1.0, max 1." in text
+    assert "Endings: decked x0, life total x0, concession x0, draw x10, rules gap x0." in text
+    assert "Played: 0 lands, 0 mana abilities activated." in text
+    assert "decks: empty;" in text
     assert "games per second" in text
 
 
-@pytest.mark.parametrize("args", [["--games", "0"], ["--players", "1"], ["--players"]])
+@pytest.mark.parametrize(
+    "args",
+    [
+        ["--games", "0"],
+        ["--players", "1"],
+        ["--players"],
+        ["--check-every", "0"],
+        ["--concessions", "-1"],
+        ["--empty-decks", "--deck", "deck.txt"],
+        ["--thorough", "--games", "0"],
+        ["--jobs", "0"],
+        ["--copies", "-1"],
+        ["--copies"],
+        ["--copies", "8", "--deck", "deck.txt"],
+        ["--copies", "8", "--empty-decks"],
+    ],
+)
 def test_the_command_line_refuses_bad_arguments(args: list[str]) -> None:
     with pytest.raises(SystemExit) as exit_info, redirect_stdout(io.StringIO()):
         fuzz_tool.main(args)
@@ -726,7 +766,9 @@ def test_the_command_line_plays_the_chosen_formats(args: list[str], formats: str
     are standard, 2-3 Commander, 4-5 standard, 6-7 Commander and 8-9 standard."""
     output = io.StringIO()
     with redirect_stdout(output):
-        status = fuzz_tool.main(["--games", "10", "--players", "2", "3", *args])
+        status = fuzz_tool.main(
+            ["--games", "10", "--players", "2", "3", "--empty-decks", "--jobs", "1", *args]
+        )
     assert status == 0
     assert formats in output.getvalue()
 
@@ -746,7 +788,7 @@ def test_the_command_line_refuses_unimplemented_decks(tmp_path: Path) -> None:
 
 def test_the_command_line_plays_decks_from_the_snapshot(tmp_path: Path) -> None:
     """Two-player Forest decks: random agents play lands and tap them until a player draws from
-    an empty library (704.5b), so every game ends."""
+    an empty library (704.5b) or concedes (104.3a), so every game ends, and only those ways."""
     data = tmp_path / "data"
     fx.write_snapshot(data, cards=[fx.FOREST])
     deck_file = tmp_path / "deck.txt"
@@ -757,8 +799,13 @@ def test_the_command_line_plays_decks_from_the_snapshot(tmp_path: Path) -> None:
             ["--games", "3", "--players", "2", "--format", "standard", "--deck", str(deck_file),
              "--data-dir", str(data)]
         )  # fmt: skip
+    text = output.getvalue()
     assert status == 0
-    assert "Endings: game over x3" in output.getvalue()
+    found = re.search(
+        r"Endings: decked x(\d), life total x0, concession x(\d), draw x0, rules gap x0\.", text
+    )
+    assert found is not None and int(found.group(1)) + int(found.group(2)) == 3
+    assert f"decks: {deck_file};" in text
 
 
 def test_the_reproduce_command_names_the_failing_game() -> None:
@@ -878,3 +925,136 @@ def test_fuzz_games_with_frequent_concessions_pass_every_check() -> None:
     result = fuzz_game(GameConfig.standard(), decks, 3, concession_chance=2, probe_invalid=False)
     assert any(isinstance(e.record, Conceded) for e in result.state.event_log)
     assert result.state.result is not None
+
+
+# --- The check schedule (``check_every``) and incremental log checks ------------------------------
+
+
+def test_check_every_must_be_positive() -> None:
+    with pytest.raises(ValueError, match="check_every"):
+        fuzz_game(GameConfig.standard(), [deck(8, 0), deck(8, 0)], 0, check_every=0)
+
+
+def test_the_check_schedule_doesnt_change_the_game() -> None:
+    """The checks only read the state (and its copies): a game checked every 7 answers ends in
+    the same state as one checked before every decision."""
+    decks = [deck(forests=8 + seat, elves=0) for seat in range(3)]
+    dense = fuzz_game(GameConfig.standard(), decks, 1, concession_chance=40)
+    sparse = fuzz_game(GameConfig.standard(), decks, 1, concession_chance=40, check_every=7)
+    assert dense.answers > 7
+    assert sparse.state == dense.state
+    assert (sparse.answers, sparse.gap) == (dense.answers, dense.gap)
+
+
+def test_full_checks_run_every_n_answers_and_on_the_final_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With ``check_every`` 4 the full checks see the game after 0, 4, 8, ... accepted answers
+    (counted here by the answers in the log), and at its end; the bookkeeping invariants are
+    checked before every decision. No concessions, so the count only moves by answers."""
+    full: list[int] = []
+    cheap: list[int] = []
+    real_problems = fuzz_tool.state_problems
+    real_invariants = fuzz_tool.invariant_violations
+
+    def answers_in(state: GameState) -> int:
+        return sum(isinstance(entry.record, AnswerRecord) for entry in state.event_log)
+
+    def record_full(state: GameState, checked: object = None) -> list[str]:
+        full.append(answers_in(state))
+        return real_problems(state, checked)  # pyright: ignore[reportArgumentType]
+
+    def record_cheap(state: GameState) -> list[str]:
+        cheap.append(answers_in(state))
+        return real_invariants(state)
+
+    monkeypatch.setattr(fuzz_tool, "state_problems", record_full)
+    monkeypatch.setattr(fuzz_tool, "invariant_violations", record_cheap)
+    decks = [deck(9, 0), deck(10, 0)]
+    result = fuzz_game(GameConfig.standard(), decks, 0, check_every=4, probe_invalid=False)
+    assert result.gap is None and result.state.result is not None
+    assert full[-1] == result.answers
+    assert full[:-1] == list(range(0, result.answers, 4))
+    # ``state_problems`` checks the invariants too, so every count up to the end is seen.
+    assert sorted(set(cheap)) == list(range(result.answers + 1))
+
+
+def test_a_bookkeeping_error_between_full_checks_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The invariants run before every decision, whatever the schedule."""
+
+    def broken_after_three_answers(state: GameState) -> list[str]:
+        answered = sum(isinstance(entry.record, AnswerRecord) for entry in state.event_log)
+        return ["object 1 is listed in two zones"] if answered >= 3 else []
+
+    monkeypatch.setattr(fuzz_tool, "invariant_violations", broken_after_three_answers)
+    decks = [deck(9, 0), deck(10, 0)]
+    with pytest.raises(FuzzFailure, match="after 3 answers:\n- object 1 is listed in two zones"):
+        fuzz_game(GameConfig.standard(), decks, 0, check_every=100)
+
+
+def test_incremental_checks_accept_a_growing_log() -> None:
+    state = board()
+    checked = CheckedLog()
+    assert state_problems(state, checked) == []
+    assert checked.entries == state.event_log
+    run_script(state, Step(Number(4)))  # AskTwice's second answer, then the game ends
+    assert len(state.event_log) > len(checked.entries)
+    assert state_problems(state, checked) == []
+    assert state_problems(state, checked) == []  # nothing new
+    assert checked.entries == state.event_log
+
+
+def test_incremental_checks_find_a_wrong_view_of_the_new_entries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After a clean check, the views are still compared with the whole expected log: one that
+    shows everyone the new answer (design.md §7) is caught."""
+    state = board()
+    checked = CheckedLog()
+    assert state_problems(state, checked) == []
+    run_script(state, Step(Number(4)))
+    leaking(monkeypatch, lambda view: dataclasses.replace(view, log=tuple(state.event_log)))
+    assert state_problems(state, checked) == [
+        "player 1's view shows the wrong log entries",
+        "player 2's view shows the wrong log entries",
+    ]
+
+
+def test_incremental_checks_find_a_new_entry_showing_an_answer_to_everyone() -> None:
+    state = board()
+    checked = CheckedLog()
+    assert state_problems(state, checked) == []
+    answer = next(e for e in state.event_log if isinstance(e.record, AnswerRecord))
+    leaked = dataclasses.replace(answer, index=len(state.event_log), visible_to=None)
+    state.event_log.append(leaked)
+    assert f"log entry {leaked.index} shows an answer to other players" in state_problems(
+        state, checked
+    )
+
+
+def test_incremental_checks_find_an_impure_new_entry() -> None:
+    state = board()
+    checked = CheckedLog()
+    assert state_problems(state, checked) == []
+    index = len(state.event_log)
+    state.event_log.append(LogEntry(index, HoldsValue({1}), None))  # pyright: ignore[reportArgumentType]
+    problems = state_problems(state, checked)
+    assert f"state.event_log[{index}].record.value: set isn't pure data" in problems
+    assert any(p.startswith(f"view_for(0).log[{index}].record") for p in problems)
+
+
+@pytest.mark.parametrize("change", ["replace", "remove"])
+def test_a_checked_log_entry_that_changes_is_reported(change: str) -> None:
+    """design.md §7: the log only grows. An entry replaced by an equal copy, or removed, after a
+    check is reported, and the whole log is checked again."""
+    state = board()
+    checked = CheckedLog()
+    assert state_problems(state, checked) == []
+    if change == "replace":
+        state.event_log[0] = dataclasses.replace(state.event_log[0])
+        expected = "state.event_log[0] was replaced or removed after it was logged"
+    else:
+        state.event_log.pop()
+        expected = f"state.event_log[{len(state.event_log)}] was replaced or removed"
+    problems = state_problems(state, checked)
+    assert any(p.startswith(expected) for p in problems)

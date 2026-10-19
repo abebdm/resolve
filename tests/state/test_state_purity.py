@@ -16,6 +16,7 @@ import pytest
 from resolve.decisions.spaces import Number
 from resolve.engine.api import new_game, submit
 from resolve.errors import EngineError
+from resolve.events.base import LogEntry
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
@@ -35,7 +36,14 @@ from tests.engine_support import (
     holds_object,
     running,
 )
-from tests.game_fixtures import DAYBREAKER, answer, choose_starting_player, deck, start
+from tests.game_fixtures import (
+    DAYBREAKER,
+    answer,
+    choose_starting_player,
+    deck,
+    start,
+    started_game,
+)
 
 
 def paused_states() -> dict[str, GameState]:
@@ -174,6 +182,22 @@ def test_attributes_outside_the_dataclass_fields_are_reported() -> None:
     state.tasks.append(task)
     problems = state_impurities(state)
     assert any("attributes outside the dataclass fields: ['callback']" in p for p in problems)
+
+
+def test_log_from_skips_only_the_log_entries_already_checked() -> None:
+    """The fuzz harness walks each log entry once (``log_from``); the rest of the state, and the
+    later entries, are still walked, with their real indices in the paths."""
+    state = started_game(2)
+    count = len(state.event_log)
+    assert count > 1
+    state.event_log.append(LogEntry(count, HoldsValue({1}), None))  # pyright: ignore[reportArgumentType]
+    (problem,) = state_impurities(state, log_from=count)
+    assert problem.startswith(f"state.event_log[{count}].record.value: set isn't pure data")
+    assert state_impurities(state, log_from=count + 1) == []
+    assert len(state_impurities(state)) == 1
+    state.tasks.append(HoldsValue({2}))
+    (problem,) = state_impurities(state, log_from=count + 1)
+    assert problem.startswith(f"state.tasks[{len(state.tasks) - 1}].value: set isn't pure data")
 
 
 # --- The invariant checker catches broken bookkeeping ------------------------------------------
