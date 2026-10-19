@@ -840,3 +840,14 @@ matrix; the lockfile and pyright parts stand.
 - **Why:** plain `pyright` downloads Node at run time when none is installed, which can fail
   on restricted networks. Testing the minimum and a current version catches version-specific breakage.
 - **Where:** `pyproject.toml`, `uv.lock`, `.github/workflows/ci.yml`.
+
+### 2026-10-19: Tooling: updating the pinned CR and card data
+- **Decision:** `tools/rules_diff.py` matches rules by number; a removed number whose word-level
+  text similarity to an added number is at least 0.8 (best pairs first, each rule matched once) is
+  reported as renumbered. Citations are matched by exact number, so a citation of a parent rule
+  isn't flagged when only a subrule changes; the howto says to review dependants by hand.
+  `tools/card_diff.py` compares the cards that have definitions plus every card in `decks/`
+  (sideboards included). The citation test now scans `src/`, `tools/` and `tests/`, except a short
+  list of files that cite invented numbers as test data or sort-order examples.
+- **Why:** CLAUDE.md rule 2 and 3: a CR update must be routine and loud, never silent drift.
+- **Where:** `tools/rules_diff.py`, `tools/card_diff.py`, `tests/tooling/test_rule_citations.py`.

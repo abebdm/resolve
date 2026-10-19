@@ -20,7 +20,8 @@ be built later on top of its API.
 starting player through mulligans, full turns with priority, land drops, mana and cleanup, to a
 win, loss or draw, in 2 to 6 players. The cards implemented so far are the basic lands and three
 vanilla creatures. **Next:** M2 (spells and the stack), starting with casting spells (601.2).
-Details: "Current status" in [`CLAUDE.md`](CLAUDE.md) and [`docs/roadmap.md`](docs/roadmap.md).
+Tools compare a new Comprehensive Rules version or card data snapshot against the pinned ones
+(`tools/rules_diff.py`, `tools/card_diff.py`). Details: "Current status" in [`CLAUDE.md`](CLAUDE.md) and [`docs/roadmap.md`](docs/roadmap.md).
 
 Resolve is unofficial Fan Content permitted under the Wizards of the Coast Fan Content Policy. It
 is not approved or endorsed by Wizards. Portions of the materials used are property of Wizards of

@@ -24,6 +24,7 @@ from resolve.errors import NotImplementedRule
 from resolve.events.base import LogEntry
 from tests.game_fixtures import request_of, start
 from tools.gaps import find_gaps
+from tools.rules_diff import find_citations
 
 REPO = Path(__file__).resolve().parents[2]
 ENGINE = REPO / "src" / "resolve"
@@ -131,3 +132,28 @@ def test_every_rule_cited_during_a_game_exists_in_the_pinned_cr(players: int) ->
     cited.update(rule for entry in entries if entry.redacted for rule in entry.redacted.rules)
     assert {"103.5", "121.2c"} <= cited
     assert sorted(cited - pinned_rules()) == []
+
+
+# Files that cite invented rule numbers on purpose, as test data for the citation tools.
+_SYNTHETIC_CITATIONS = {
+    "tests/tooling/test_rule_citations.py",
+    "tests/tooling/test_rules_diff.py",
+    "tests/tooling/test_gaps_tool.py",
+    "tests/state/test_errors_and_citations.py",
+    "tools/gaps.py",  # the sort-order example in rule_sort_key's docstring
+    "tools/rules_diff.py",  # the same example
+}
+
+
+def test_every_rule_cited_anywhere_in_src_tools_and_tests_exists_in_the_pinned_cr() -> None:
+    """Catches a citation left behind by a CR update, in tests and tools as well as the engine."""
+    files = [
+        path
+        for folder in ("src", "tools", "tests")
+        for path in sorted((REPO / folder).rglob("*.py"))
+        if path.relative_to(REPO).as_posix() not in _SYNTHETIC_CITATIONS
+    ]
+    cited = find_citations(files, relative_to=REPO)
+    assert {"103.1", "704.5g"} <= set(cited), "the scan finds citations"
+    missing = {rule: where for rule, where in cited.items() if rule not in pinned_rules()}
+    assert missing == {}

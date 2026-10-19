@@ -69,6 +69,11 @@ structure) are complete.**
   snapshot needed), with a quick default run (about 20 seconds) and a `--thorough` preset for
   the user's milestone verification (`docs/verification.md`), games in parallel (`--jobs`), and
   a summary of answers, turns, endings, lands and mana.
+- **Done (tooling, CR and card-data updates):** `tools/rules_diff.py` compares two CR text files
+  (changed, renumbered, removed and added rules, with the code and tests that cite them),
+  `tools/card_diff.py` compares two card data snapshots for implemented and deck cards, and a
+  test checks every CR number cited in `src/`, `tools/` and `tests/` against the pinned rules.
+  The recipe is in `docs/howto.md` ("Update to a new Comprehensive Rules version").
 - **Next:** M2 (spells and the stack), starting with the casting process (601.2), which is the
   `NotImplementedRule("601.2")` gap every game with a nonland card can reach.
 
