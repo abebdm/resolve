@@ -345,7 +345,10 @@ def test_a_failure_prints_the_reproduce_message(monkeypatch: pytest.MonkeyPatch)
     with redirect_stdout(output):
         status = fuzz_tool.main(["--seed", "7", "--jobs", "1"])
     assert status == 1
-    assert output.getvalue().splitlines()[1:] == ["FAILED: game seed 7: broken"]
+    assert output.getvalue().splitlines()[1:] == [
+        "FAILED: game seed 7: broken",
+        "This run's options: --copies 8 2 --concessions 200 --check-every 10",
+    ]
 
 
 def test_parallel_jobs_play_the_same_games() -> None:

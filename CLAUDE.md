@@ -64,11 +64,11 @@ structure) are complete.**
   (`LeaveGame`, 800.4a, 800.4h, 800.4j, 800.4k), multiplayer endings (104.2a, 104.4a), re-entrant
   asking tasks, and replays of answers and concessions (`resolve.agents.replay`). The fuzz
   harness concedes at random and random agents finish 2- to 4-player land-only games.
-- **Done (tooling, after M1):** `tools/fuzz.py` plays 40-card basic-land decks by default
-  (from the committed excerpt `tools/excerpts/basic_lands.json`, written by
-  `tools/card_excerpt.py`; no snapshot needed), with a quick default run and a `--thorough`
-  preset for milestone verification (`docs/verification.md`), and a summary of answers, turns,
-  endings, lands and mana.
+- **Done (tooling, after M1):** `tools/fuzz.py` plays basic-land decks by default (from the
+  committed excerpt `tools/excerpts/basic_lands.json`, written by `tools/card_excerpt.py`; no
+  snapshot needed), with a quick default run (about 20 seconds) and a `--thorough` preset for
+  the user's milestone verification (`docs/verification.md`), games in parallel (`--jobs`), and
+  a summary of answers, turns, endings, lands and mana.
 - **Next:** M2 (spells and the stack), starting with the casting process (601.2), which is the
   `NotImplementedRule("601.2")` gap every game with a nonland card can reach.
 

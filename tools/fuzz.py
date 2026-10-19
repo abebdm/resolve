@@ -8,10 +8,11 @@ Usage::
     uv run python tools/fuzz.py --deck a.txt --deck b.txt  # decks from the snapshot, cycled
     uv run python tools/fuzz.py --empty-decks     # every game ends in the first upkeep
 
-Every player gets 40 basic lands, 8 of each (``basic_land_deck``), from the committed excerpt
+The players get decks of basic lands (``basic_land_deck``) from the committed excerpt
 ``tools/excerpts/basic_lands.json``, so no snapshot is needed. The presets (``QUICK``, the
-default, and ``THOROUGH``) set the number of games, the concession rate and how often the full
-checks run (``check_every``); explicit options override them. With ``--deck``, game seed ``s``
+default, and ``THOROUGH``) set the number of games, the deck sizes, the concession rate and how
+often the full checks run (``check_every``); explicit options override them. Games run in
+``--jobs`` worker processes; the output doesn't depend on it, except for the timing. With ``--deck``, game seed ``s``
 gives seat ``i`` deck ``(s + i) % len(decks)``, so a failing game is reproduced by its seed alone.
 
 Each game is played by ``RandomAgent``s. Before every answer (with ``check_every`` N > 1, every
@@ -543,7 +544,7 @@ def fuzz_game(
     describe = (
         f"game seed {seed}, {len(decks)} players{commander} "
         f"(reproduce: uv run python tools/fuzz.py --games 1 --seed {seed} "
-        f"--players {len(decks)}{commander}, with the same deck and --concessions options)"
+        f"--players {len(decks)}{commander} and the run's other options)"
     )
     return fuzz_run(
         lambda: new_game(config, decks, seed),
@@ -730,7 +731,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=Path,
         action="append",
         default=[],
-        help="decklists to cycle, from the snapshot (default: 40 basic lands each)",
+        help="decklists to cycle, from the snapshot (default: basic lands, see --copies)",
     )
     decks.add_argument("--empty-decks", action="store_true", help="give every player an empty deck")
     decks.add_argument(
@@ -789,11 +790,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     }[fmt]
     try:
         if args.empty_decks:
-            pool, deck_names = [Deck(())], "empty"
+            pool, deck_names, deck_options = [Deck(())], "empty", "--empty-decks"
         elif args.deck:
             pool = _load_decks(args.deck, args.data_dir)
             deck_names = ", ".join(str(path) for path in args.deck)
+            deck_options = " ".join(f'--deck "{path}"' for path in args.deck)
         else:
+            deck_options = "--copies " + " ".join(str(copies) for copies in run.copies)
             pool = [basic_land_deck(copies) for copies in run.copies]
             sizes = " and ".join(str(copies * len(BASIC_LAND_NAMES)) for copies in run.copies)
             deck_names = f"{sizes} basic lands ({BASIC_LANDS_EXCERPT.name})"
@@ -829,6 +832,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     failures = [outcome for outcome in outcomes if isinstance(outcome, str)]
     if failures:
         print(f"FAILED: {failures[0]}")
+        print(
+            f"This run's options: {deck_options} --concessions {run.concessions} "
+            f"--check-every {run.check_every}"
+        )
         return 1
     games = [outcome for outcome in outcomes if isinstance(outcome, GameStats)]
     formats = Counter(

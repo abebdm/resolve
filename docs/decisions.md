@@ -20,10 +20,17 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 ---
 
 ### 2026-10-19: Basic-land decks, presets and the summary of the fuzz command line
-- **Decision:** `uv run python tools/fuzz.py` gives every player 40 basic lands, 8 of each, so its
-  games play turns (lands, mana abilities, priority, cleanup, decking, concessions); this
-  supersedes "The CLI defaults to empty decks" in 2026-10-18 "The fuzz harness".
-  `--empty-decks` keeps the old decks, and `--deck` still takes decklists from the snapshot.
+- **Decision:** `uv run python tools/fuzz.py` gives the players decks of basic lands, the same
+  number of each, so its games play turns (lands, mana abilities, priority, cleanup, decking,
+  concessions); this supersedes "The CLI defaults to empty decks" in 2026-10-18 "The fuzz
+  harness". The seats get two deck sizes in turn (40 and 10 cards in the quick run, 40 and 20 in
+  the thorough one; `--copies`). `--empty-decks` keeps the old decks, and `--deck` still takes
+  decklists from the snapshot.
+- **Why:** before each decision a player concedes with a fixed chance, and the number of
+  decisions per turn grows with the square of the player count, so with 40-card decks every
+  multiplayer game ended by concession (20 of 20 measured at 1 in 500). The smaller decks deck
+  out first, so both endings show up (quick: 4 decked, 6 conceded; thorough's first 10 games:
+  4 and 6), and the seats' libraries differ in size.
 - **Decision:** the basic lands' card data is an *excerpt*: their Scryfall records copied by
   `tools/card_excerpt.py` from a snapshot into `tools/excerpts/basic_lands.json` (committed),
   trimmed to the fields `parse_card` reads (`EXCERPT_CARD_FIELDS`), with their rulings (none)
@@ -38,13 +45,19 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   Printing fields (prices, images, sets) are dropped because they change daily.
 - **Decision:** the command line has two presets (`Preset`): the quick default (`QUICK`: 10
   games, one of each player count 2-6 in each format, concessions 1 decision in 200, full checks
-  every 10 answers; under a minute) for agents and day-to-day work, and `--thorough`
-  (`THOROUGH`: THOROUGH_GAMES games, concessions 1 in THOROUGH_CONCESSIONS, full checks
-  THOROUGH_CHECKS_WORDS; THOROUGH_TIME) for the user's verification at the end of a milestone
-  (`docs/verification.md`). Explicit options override either. CLAUDE.md now makes this the rule
-  for every run whose length is a trade-off.
+  every 10 answers; about 20 seconds on 4 cores) for agents and day-to-day work, and
+  `--thorough` (`THOROUGH`: 100 games, concessions 1 in 500, full checks before every decision;
+  about an hour on 8 cores) for the user's verification at the end of a milestone
+  (`docs/verification.md`). Explicit options override either. Games run in worker processes
+  (`--jobs`, default the number of CPUs, "spawn" start method everywhere because Windows has no
+  other); each game depends only on its spec, so the output is the same for any `--jobs` except
+  the timing. Long runs print a line every 10 games, and a failure prints the run's options with
+  the game's reproduce command.
 - **Why:** the user asked for runs that are short when agents test and long when they verify a
-  milestone by hand. THOROUGH_WHY
+  milestone by hand; CLAUDE.md now makes this the rule for every run whose length is a
+  trade-off. Checking every decision costs about 60 to 170 ms per decision in long 2- to
+  6-player games here, so the thorough run needs parallel games to finish in about an hour; 10
+  rounds of the player counts and formats give 100 seeds.
 - **Decision:** `fuzz_run` takes `check_every` (default 1, so the tests' games are checked
   before every decision as before): the full checks (`state_problems`, the copies, the invalid
   answers, and that a rejected answer changed nothing) run when the number of accepted answers

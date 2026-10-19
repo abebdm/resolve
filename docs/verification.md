@@ -31,19 +31,22 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
 2. **Tests, with the encoding check CI uses:** `$env:PYTHONWARNDEFAULTENCODING = "1"; uv run pytest`.
    Every test passes; none is skipped.
 3. **Lint and types:** `uv run ruff check .` and `uv run pyright`. Both report no problems.
-4. **The thorough fuzz run:** `uv run python tools/fuzz.py --thorough`. It takes THOROUGH_TIME;
-   the summary prints at the end. Check that:
-   - the first line says `Run: thorough preset;` and `THOROUGH_GAMES games passed`, and nothing
-     says `FAILED:`;
+4. **The thorough fuzz run:** `uv run python tools/fuzz.py --thorough`. It plays 100 games with
+   every check before every decision, several at once (one per CPU), and takes about an hour on
+   an 8-core machine (about two on 4 cores). It prints its settings first, a line every 10
+   games, and the summary at the end. Check that:
+   - the first line starts `Run: thorough preset;`, the summary says `100 games passed`, and
+     nothing says `FAILED:`;
    - `Endings:` shows both `decked` and `concession` games, `life total x0` and `draw x0`
      (nothing in M1's basic-land decks can change a life total, and a game ends before two
      players can deck out at once), and `rules gap x0` (basic lands never reach a rules gap);
    - `Turns per game:` reaches a maximum above 50, and `Played:` shows thousands of lands and
-     mana abilities.
+     mana abilities;
+   - the last line gives the time; note it if it is much longer than the estimate above.
    The exact numbers depend on the engine and change from milestone to milestone; a run with the
    same code always prints the same numbers, except the timing.
-5. **The quick run** (what agents run): `uv run python tools/fuzz.py`. Under a minute; the same
-   checks as step 4 on 10 games, except that most of its games end by concession.
+5. **The quick run** (what agents run): `uv run python tools/fuzz.py`. Under a minute: 10 games,
+   with the full checks every 10 answers. The same things to check as in step 4, for 10 games.
 6. **Rules gaps:** `uv run python tools/gaps.py` lists every rule the engine doesn't implement
    yet. Check it matches what the milestone left for later (`docs/roadmap.md`).
 
