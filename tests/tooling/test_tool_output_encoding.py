@@ -35,7 +35,14 @@ print("\\u2212", end="")
 
 def test_every_tool_is_probed() -> None:
     names = {path.name for path in TOOLS}
-    assert {"coverage.py", "fetch_scryfall.py", "fuzz.py", "gaps.py", "play_cli.py"} <= names
+    assert {
+        "card_excerpt.py",
+        "coverage.py",
+        "fetch_scryfall.py",
+        "fuzz.py",
+        "gaps.py",
+        "play_cli.py",
+    } <= names
 
 
 @pytest.mark.parametrize("tool", TOOLS, ids=lambda path: path.name)

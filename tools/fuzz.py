@@ -95,10 +95,6 @@ from resolve.state.zones import ZoneKind
 # Gaps that end a fuzz game normally: casting a spell, which a random agent may choose but the
 # engine can't do yet (until M2).
 ALLOWED_GAPS: tuple[str, ...] = ("601.2",)
-# By default, before each decision a player concedes with probability 1 in this (104.3a).
-DEFAULT_CONCESSION_CHANCE = 200
-# The command line's default number of games.
-DEFAULT_GAMES = 200
 # A game that hasn't ended after this many answers is reported as a failure (a runaway game).
 MAX_ANSWERS = 10_000
 
@@ -653,10 +649,32 @@ def summary_lines(games: Sequence[GameStats]) -> list[str]:
 # is committed (tools/card_excerpt.py), so no snapshot is needed.
 BASIC_LANDS_EXCERPT = Path(__file__).resolve().parent / "excerpts" / "basic_lands.json"
 BASIC_LAND_NAMES = ("Plains", "Island", "Swamp", "Mountain", "Forest")
-# Copies of each basic land in a default deck.
+# Copies of each basic land in a default deck: 40 cards.
 DEFAULT_COPIES = 8
-# The command line's default for ``check_every``.
-DEFAULT_CHECK_EVERY = 10
+
+
+@dataclass(frozen=True)
+class Preset:
+    """The command line's defaults for a run's length and checks; explicit options override them.
+
+    - ``games``: how many games.
+    - ``concessions``: before each decision a player concedes 1 time in this many (104.3a); the
+      fewer concessions, the longer the games and the more of them end by decking (704.5b).
+    - ``check_every``: the full checks run every this many answers (``fuzz_run``).
+    """
+
+    games: int
+    concessions: int
+    check_every: int
+
+
+# The default run: quick, for the checks an agent or a developer runs while working. One game of
+# each player count (2 to 6) in each format, checked every 10 answers.
+QUICK = Preset(games=10, concessions=200, check_every=10)
+# ``--thorough``: the long run for verifying a milestone by hand. Ten rounds of the player counts
+# and formats, rarer concessions so that many games end by decking, and every check before every
+# decision.
+THOROUGH = Preset(games=100, concessions=500, check_every=1)
 
 
 def basic_land_deck(copies: int = DEFAULT_COPIES, excerpt: Path = BASIC_LANDS_EXCERPT) -> Deck:
@@ -672,10 +690,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Run the command line; returns the exit status described in the module docstring."""
     parser = argparse.ArgumentParser(description="Fuzz the engine with random-agent games.")
     parser.add_argument(
-        "--games",
-        type=int,
-        default=DEFAULT_GAMES,
-        help=f"number of games (default {DEFAULT_GAMES})",
+        "--thorough",
+        action="store_true",
+        help=f"the long run for verifying a milestone: {THOROUGH.games} games, concessions 1 in "
+        f"{THOROUGH.concessions}, full checks every {THOROUGH.check_every} answer",
+    )
+    parser.add_argument(
+        "--games", type=int, default=None, help=f"number of games (default {QUICK.games})"
     )
     parser.add_argument("--seed", type=int, default=0, help="seed of the first game")
     parser.add_argument(
@@ -701,23 +722,29 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--concessions",
         type=int,
-        default=DEFAULT_CONCESSION_CHANCE,
+        default=None,
         metavar="N",
         help=f"a player concedes before a decision 1 time in N (0: never; default "
-        f"{DEFAULT_CONCESSION_CHANCE})",
+        f"{QUICK.concessions})",
     )
     parser.add_argument(
         "--check-every",
         type=int,
-        default=DEFAULT_CHECK_EVERY,
+        default=None,
         metavar="N",
-        help=f"run the full checks every N answers (1: every decision; default "
-        f"{DEFAULT_CHECK_EVERY})",
+        help=f"run the full checks every N answers (1: before every decision; default "
+        f"{QUICK.check_every})",
     )
     args = parser.parse_args(argv)
-    if args.games < 1 or not args.players or min(args.players) < 2:
+    preset = THOROUGH if args.thorough else QUICK
+    run = Preset(
+        games=preset.games if args.games is None else args.games,
+        concessions=preset.concessions if args.concessions is None else args.concessions,
+        check_every=preset.check_every if args.check_every is None else args.check_every,
+    )
+    if run.games < 1 or not args.players or min(args.players) < 2:
         parser.error("need at least one game and player counts of at least 2 (100.1)")
-    if args.check_every < 1 or args.concessions < 0:
+    if run.check_every < 1 or run.concessions < 0:
         parser.error("--check-every must be at least 1 and --concessions at least 0")
 
     fmt = "commander" if args.commander else args.format
@@ -742,7 +769,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     games: list[GameStats] = []
     formats: Counter[str] = Counter()
     started = time.perf_counter()
-    for game in range(args.games):
+    for game in range(run.games):
         seed: int = args.seed + game
         players: int = args.players[game % len(args.players)]
         config = configs[(game // len(args.players)) % len(configs)]
@@ -752,8 +779,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 config,
                 decks_now,
                 seed,
-                concession_chance=args.concessions,
-                check_every=args.check_every,
+                concession_chance=run.concessions,
+                check_every=run.check_every,
             )
         except FuzzFailure as failure:
             print(f"FAILED: {failure}")
@@ -761,11 +788,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         games.append(GameStats.of(result))
         formats["commander" if config.commander is not None else "standard"] += 1
     elapsed = time.perf_counter() - started
-    print(f"Decks: {deck_names}.")
+    checks = "every answer" if run.check_every == 1 else f"every {run.check_every} answers"
+    concessions = "never" if run.concessions == 0 else f"1 decision in {run.concessions}"
+    print(
+        f"Run: {'thorough' if args.thorough else 'quick'} preset; decks: {deck_names}; "
+        f"concessions: {concessions}; full checks {checks}."
+    )
     print("\n".join(summary_lines(games)))
     print("Formats: " + ", ".join(f"{name} x{count}" for name, count in sorted(formats.items())))
-    checks = "every decision" if args.check_every == 1 else f"every {args.check_every} answers"
-    print(f"{args.games / elapsed:.2f} games per second (full checks {checks}).")
+    print(f"{run.games / elapsed:.2f} games per second, {elapsed:.0f} seconds in all.")
     return 0
 
 
