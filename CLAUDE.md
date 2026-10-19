@@ -260,6 +260,10 @@ below match the code.
 
 - **"Current status" in this file.** Say which milestone is current, what's done, and what's next.
   It must never describe the repo as it used to be.
+- **The "Status" paragraph in `README.md`.** A short, plain-language summary of the same thing for
+  a human reader: which milestones are complete, what a game can do now, which cards are
+  implemented, and what's next. Update it in the same PR as "Current status"; the two must never
+  disagree.
 - **`docs/roadmap.md`:** tick off completed items.
 - **`docs/primitives.md`:** every new or changed primitive, keyword or target filter gets an
   entry. An entry has:
