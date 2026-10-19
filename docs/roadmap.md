@@ -193,6 +193,11 @@ cards are not included.
   - activate mana abilities
   - pay costs
 - [ ] Timing rules for sorceries, instants and permanents; flash.
+- [ ] Evergreen keywords whose rules live here: flash (702.8), hexproof (702.11), shroud (702.18),
+  indestructible (702.12), and the targeting part of protection (702.16). Design targeting so these
+  restrictions fit naturally.
+- [ ] Create the keyword table at the end of this file: every keyword ability (CR 702) and keyword
+  action (CR 701), with its milestone and tier (see "Keyword table").
 - [ ] Resolution (608), including checking targets again on resolution (608.2b) and partial
   fizzling.
 - [ ] Mana payment details: generic, colored, hybrid, X costs, cost increases and reductions,
