@@ -365,10 +365,14 @@ When writing one:
   combat damage must allow first strike, double strike, trample and deathtouch; priority must
   allow split second. Adding a keyword later is cheap; retrofitting a system that wasn't designed
   for it is not.
-- **Follow the roadmap's keyword table.** `docs/roadmap.md` assigns every keyword to the
-  milestone where its rules live. Implement the ones assigned to the current milestone, test
-  them with fixture or excerpt cards where no target-deck card has them, and record each in
-  `docs/primitives.md`. If the plan finds a keyword assigned to the wrong milestone, propose
+- **Follow the roadmap's keyword table.** `docs/roadmap.md` gives every keyword the milestone
+  where its rules live and a tier:
+  - **evergreen/common** keywords are implemented in that milestone;
+  - **set mechanics** and **exotic** keywords are implemented in M9 (keyword coverage), unless a
+    target deck needs one, in which case it's done in its own milestone.
+
+  Test keywords with fixture or excerpt cards where no target-deck card has them, and record each
+  in `docs/primitives.md`. If the plan finds a keyword in the wrong milestone or tier, propose
   moving it.
 - **Save the approved plan** to `docs/plans/<milestone>.md`, with the user's approval notes,
   before writing code, so later agents can resume it; delete it in the milestone's last PR.
