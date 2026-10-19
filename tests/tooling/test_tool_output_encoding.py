@@ -42,6 +42,7 @@ def test_every_tool_is_probed() -> None:
         "fuzz.py",
         "gaps.py",
         "play_cli.py",
+        "rule.py",
         "rules_diff.py",
         "card_diff.py",
     } <= names

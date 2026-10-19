@@ -19,7 +19,7 @@ import pytest
 from resolve.agents.driver import play
 from resolve.agents.random_agent import RandomAgent
 from resolve.citations import cited_rules, is_rule_reference
-from resolve.data.rules_text import parse_rules
+from resolve.data.rules_text import PINNED_RULES_FILE, parse_rules
 from resolve.errors import NotImplementedRule
 from resolve.events.base import LogEntry
 from tests.game_fixtures import request_of, start
@@ -28,7 +28,7 @@ from tools.rules_diff import find_citations
 
 REPO = Path(__file__).resolve().parents[2]
 ENGINE = REPO / "src" / "resolve"
-RULES_FILE = REPO / "docs" / "rules" / "MagicCompRules-20260925.txt"
+RULES_FILE = PINNED_RULES_FILE
 
 
 @cache
@@ -125,6 +125,7 @@ def test_every_rule_cited_during_a_game_exists_in_the_pinned_cr(players: int) ->
 _SYNTHETIC_CITATIONS = {
     "tests/tooling/test_rule_citations.py",
     "tests/tooling/test_rules_diff.py",
+    "tests/tooling/test_rule_tool.py",
     "tests/tooling/test_gaps_tool.py",
     "tests/state/test_errors_and_citations.py",
 }

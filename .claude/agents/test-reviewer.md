@@ -24,9 +24,11 @@ Work in this order. The order matters: form your own expectations before you loo
      file).
    - Identify which rules or cards the change claims to implement.
 2. **Build your own expectations from the sources, before reading the implementation.**
-   - Look up each relevant rule in `docs/rules/MagicCompRules-20260925.txt`. Search by rule number
-     and read the rule, its subrules and the rules it cross-references. Never read the whole
-     file; it is larger than your context.
+   - Look up each relevant rule in `docs/rules/MagicCompRules-20260925.txt` with
+     `uv run python tools/rule.py <number>`, which prints the rule and its subrules and ends with
+     a "See also" line of the rules it cross-references; look those up too. `--glossary "<term>"`
+     prints a glossary entry. Grep by rule number is the fallback. Never read the whole file; it
+     is larger than your context.
    - For cards, read the Oracle text and rulings through the project's card data (see
      `docs/howto.md`).
    - Write down the behaviors that must hold, and the ones that must **not** happen.

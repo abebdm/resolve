@@ -421,6 +421,8 @@ completes a step (CLAUDE.md, "Documentation requirements").
   `tools/card_diff.py` compares two card data snapshots for implemented and deck cards, and a
   test checks every CR number cited in `src/`, `tools/` and `tests/` against the pinned rules.
   The recipe is in `docs/howto.md` ("Update to a new Comprehensive Rules version").
+  `tools/rule.py` prints a rule, a section outline or a glossary entry from the pinned CR, with
+  the rules it cites (`docs/howto.md`, "Look up a rule").
 - **Done (M2.0, documentation):** the approved M2 plan (`docs/plans/m2.md`), the rules coverage
   map and the per-milestone checklists in `docs/roadmap.md`, the torture tests
   (`docs/torture-tests.md`), rules 12 and 13 below, and the provisional design-ahead sections of

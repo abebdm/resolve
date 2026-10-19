@@ -19,6 +19,27 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-19: Tooling: `tools/rule.py` prints CR text by number
+- **Decision:**
+  - Rules print line for line from the file (`rule_blocks` in `resolve.data.rules_text`, which
+    `parse_rules` is now built on), not rebuilt from number and text: two lines of the pinned CR
+    break the usual punctuation (`119.1d.` has a period, `606.5` lacks one).
+  - A rule prints with its subrules; a subrule never takes others (704.5a doesn't include
+    704.5aa). A section number prints an outline (first lines truncated to 100 characters, with
+    subrule counts), never the full section.
+  - "See also" lists dotted numbers (`cited_rules`) plus sections cited as "rule 509" or
+    "section 4", which the CR uses often; `cited_rules` itself still ignores bare section
+    numbers in prose. Numbers printed are left out; for an outline, every number in its section.
+  - The glossary is the text after the last "Glossary" line and before the last "Credits"
+    (`parse_glossary`). Terms match exactly, ignoring case; a miss lists terms containing the
+    text, then the closest spellings, and exits 1 like an unknown rule number.
+  - The pinned file's path is `PINNED_RULES_FILE` in `resolve.data.rules_text`, the one place a
+    CR update changes; the citation test uses it too.
+- **Why:** agents looked rules up with Grep, which misses continuation paragraphs and pulls in
+  704.5aa when asked for 704.5a; a full section can be thousands of lines.
+- **Where:** `tools/rule.py`, `src/resolve/data/rules_text.py`,
+  `tests/tooling/test_rule_tool.py`.
+
 ### 2026-10-19: Agents look up reference docs instead of reading them in full
 - **Decision:** agents read `docs/design.md`, the current milestone's roadmap section and their
   step of the plan in full. They look up everything else by heading or rule number: the CR,

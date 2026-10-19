@@ -20,9 +20,11 @@ task. List a file's headings first (Grep for `^#{2,3} `), then read only the sec
 touches. Read more when a section points you to another.
 
 - `docs/rules/MagicCompRules-20260925.txt`: the pinned Comprehensive Rules (CR). Look rules up
-  by number; do not rely on memory. Grep for the rule (`^704\.5`, which also finds its subrules),
-  read the matching lines, then the rules they cross-reference; Grep the glossary for a term.
-  **Never read the whole file:** it is about 250,000 tokens, more than your context.
+  by number; do not rely on memory. Use `uv run python tools/rule.py <number>` (`704.5` prints
+  the rule with its subrules, `704` a section outline, `--glossary "<term>"` a glossary entry);
+  its "See also" line lists the rules the text cross-references, to look up next. Grep is the
+  fallback (`^704\.5`). **Never read the whole file:** it is about 250,000 tokens, more than
+  your context.
 - The rest of `docs/roadmap.md`, including its **rules coverage map** (every numbered CR section,
   keyword ability and keyword action, with a milestone and a tier) and "What's built" (what each
   completed step added, and its modules). Grep for the rule number or keyword.
