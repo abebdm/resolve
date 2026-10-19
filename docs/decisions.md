@@ -19,6 +19,59 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-19: Basic-land decks, presets and the summary of the fuzz command line
+- **Decision:** `uv run python tools/fuzz.py` gives every player 40 basic lands, 8 of each, so its
+  games play turns (lands, mana abilities, priority, cleanup, decking, concessions); this
+  supersedes "The CLI defaults to empty decks" in 2026-10-18 "The fuzz harness".
+  `--empty-decks` keeps the old decks, and `--deck` still takes decklists from the snapshot.
+- **Decision:** the basic lands' card data is an *excerpt*: their Scryfall records copied by
+  `tools/card_excerpt.py` from a snapshot into `tools/excerpts/basic_lands.json` (committed),
+  trimmed to the fields `parse_card` reads (`EXCERPT_CARD_FIELDS`), with their rulings (none)
+  and the snapshot's manifest (`taken_from`), and loaded by `resolve.data.cards.
+  load_card_excerpt`. `--check` compares an excerpt with the local snapshot. It was taken from
+  the Scryfall snapshot of 2026-10-18, as Scryfall no longer serves the pinned 2026-10-17 one;
+  basic lands' Oracle data doesn't change between snapshots.
+- **Why:** CI and fresh checkouts have no snapshot, tools never invent card data (2026-10-18
+  "The fuzz harness"), and tools can't import `tests/scryfall_fixtures.py`, whose records are
+  hand-written. A copied excerpt is real data, small, and checkable against a snapshot. The
+  loader lives in `resolve.data` because tools run as scripts can't import each other.
+  Printing fields (prices, images, sets) are dropped because they change daily.
+- **Decision:** the command line has two presets (`Preset`): the quick default (`QUICK`: 10
+  games, one of each player count 2-6 in each format, concessions 1 decision in 200, full checks
+  every 10 answers; under a minute) for agents and day-to-day work, and `--thorough`
+  (`THOROUGH`: THOROUGH_GAMES games, concessions 1 in THOROUGH_CONCESSIONS, full checks
+  THOROUGH_CHECKS_WORDS; THOROUGH_TIME) for the user's verification at the end of a milestone
+  (`docs/verification.md`). Explicit options override either. CLAUDE.md now makes this the rule
+  for every run whose length is a trade-off.
+- **Why:** the user asked for runs that are short when agents test and long when they verify a
+  milestone by hand. THOROUGH_WHY
+- **Decision:** `fuzz_run` takes `check_every` (default 1, so the tests' games are checked
+  before every decision as before): the full checks (`state_problems`, the copies, the invalid
+  answers, and that a rejected answer changed nothing) run when the number of accepted answers
+  is a multiple of it and on the final state; `invariant_violations` runs before every decision
+  and the replay after every game. A rejected answer that changed the state between full checks
+  still fails the replay, which never submits it.
+- **Decision:** a full check walks only the log entries added since the previous one
+  (`CheckedLog`, `state_impurities(log_from=...)`): the log only grows and its entries are
+  deeply immutable, so an entry checked once stays checked while the log holds that same
+  object; a checked entry that was replaced or removed is reported. The purity and
+  immutability walks build a path string only for a problem and cache dataclass field names.
+- **Why:** the full checks walk, copy and compare the whole state, and the event log grows with
+  the game, so checking every decision costs time quadratic in its length: a 3-player 40-card
+  game of 500 answers took 90 seconds. The incremental log walk and the cheaper walks halved
+  the quick run's time; the rest (deepcopy, pickling, equality, building views) is inherent to
+  the checks.
+- **Decision:** the summary names a game's ending by how the last player to lose lost
+  (`ending`): decked (704.5b), life total (704.5a), concession (104.3a); a game without a winner
+  is a draw (104.4a) however its players lost; a game stopped at an allowed gap is a rules gap;
+  anything else is "other (<rule>)". It also reports answers and turns per game (min, average,
+  max; turns are the last turn's number) and the lands played and mana abilities activated
+  (`LandPlayed` and `ManaAdded` events).
+- **Rules:** 104.2a, 104.3a, 104.4a, 305.1, 305.2, 605.3a, 704.5a, 704.5b; design.md §7, §14.
+- **Where:** `tools/fuzz.py`, `tools/card_excerpt.py`, `tools/excerpts/basic_lands.json`,
+  `resolve.data.cards`, `resolve.state.invariants`, `tests/fuzz/`, `tests/tooling/
+  test_card_excerpt_tool.py`, `docs/verification.md`.
+
 ### 2026-10-18: Conceding and leaving the game
 - **Decision (plan ★1):** M1 implements leaving the game for everything that can exist in M1:
   `LeaveGame` (`PlayerLeftGame`) removes every object the player owns from every zone and
@@ -383,7 +436,9 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   every decision tests the strongest form of design.md §5 (a state copied mid-task resumes
   exactly as the original) at little cost. Each check has a negative test built from a broken
   test-only task (`tests/engine_support.py`), so a check that silently stops working is noticed.
-  The CLI defaults to empty decks because no card is implemented and tools never invent cards.
+  The CLI defaults to empty decks because no card is implemented and tools never invent cards
+  (**superseded by 2026-10-19** "Basic-land decks, presets and the summary of the fuzz command
+  line": basic-land decks from a copied excerpt).
   Widen `ALLOWED_GAPS` deliberately as milestones change where games stop.
 - **Rules:** 400.2, 401.2, 402.3, 404.2, 406.3; design.md §5, §6, §7, §9, §12.
 - **Where:** `tools/fuzz.py`, `tests/fuzz/test_fuzz.py`, `tests/engine_support.py`.

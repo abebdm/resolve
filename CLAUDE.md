@@ -16,6 +16,7 @@ the engine's API, so nothing here may depend on them.
 - `docs/primitives.md`: the catalog of card-building primitives. Check it before writing a new
   one.
 - `docs/decisions.md`: the log of smaller decisions made during implementation.
+- `docs/verification.md`: how the user verifies a milestone by hand (the `--thorough` runs).
 
 ## Current status
 
@@ -63,6 +64,11 @@ structure) are complete.**
   (`LeaveGame`, 800.4a, 800.4h, 800.4j, 800.4k), multiplayer endings (104.2a, 104.4a), re-entrant
   asking tasks, and replays of answers and concessions (`resolve.agents.replay`). The fuzz
   harness concedes at random and random agents finish 2- to 4-player land-only games.
+- **Done (tooling, after M1):** `tools/fuzz.py` plays 40-card basic-land decks by default
+  (from the committed excerpt `tools/excerpts/basic_lands.json`, written by
+  `tools/card_excerpt.py`; no snapshot needed), with a quick default run and a `--thorough`
+  preset for milestone verification (`docs/verification.md`), and a summary of answers, turns,
+  endings, lands and mana.
 - **Next:** M2 (spells and the stack), starting with the casting process (601.2), which is the
   `NotImplementedRule("601.2")` gap every game with a nonland card can reach.
 
@@ -199,9 +205,26 @@ Pure infrastructure (tooling, data loading, internal plumbing) may write tests a
 
 **Run everything before finishing**
 
-- Run `uv run pytest`, `uv run ruff check .` and `uv run pyright`, all passing.
+- Run `uv run pytest`, `uv run ruff check .` and `uv run pyright`, all passing. For an engine
+  change, also run the quick fuzz run, `uv run python tools/fuzz.py`.
 - State the results in the final message and the PR description: number of tests, and pass/fail.
 - Never claim tests pass without having run them.
+
+**Quick runs for agents, thorough runs for the user's milestone checks**
+
+- Any run whose length is a trade-off (how many games, seeds or iterations; how often an
+  expensive check runs; how large the inputs are) gets two settings:
+  - **a quick default**, for agents and day-to-day work: short (about a minute at most) but
+    still meaningful, exercising what the current milestone implements, never a run that ends
+    before doing anything;
+  - **a `--thorough` preset**, for the user's manual verification at the end of each milestone:
+    err on the side of coverage over speed (tens of minutes to a couple of hours is fine), with
+    every check on wherever that is affordable.
+- Agents run the quick default and run `--thorough` only when asked. Explicit options override
+  either preset.
+- Document both settings in `docs/howto.md`, and list every `--thorough` run, with what to look
+  for in its output, in `docs/verification.md`. Tests check both presets' values and that the
+  default run exercises the code (see `tests/fuzz/test_fuzz_summary.py`).
 
 **Never weaken tests to get green**
 

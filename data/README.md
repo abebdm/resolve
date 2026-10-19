@@ -10,6 +10,10 @@ gzip-compressed JSON Lines (one JSON object per line).
 | `rulings.jsonl.gz` | Scryfall's "Rulings" bulk file. |
 | `snapshot.json` | Manifest written by the fetch tool: each file's publication time, source and SHA-256. The loader refuses files that don't match it. |
 
+A few cards' records are also committed, as excerpts copied from a snapshot, for tools that must
+run without one (CI, a fresh checkout): `tools/excerpts/` holds them and `tools/card_excerpt.py`
+writes and checks them (`docs/howto.md`, "Write or check a card data excerpt").
+
 ## Getting the snapshot
 
 ```bash

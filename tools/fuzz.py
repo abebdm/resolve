@@ -2,14 +2,20 @@
 
 Usage::
 
-    uv run python tools/fuzz.py                       # 200 games, 2 to 6 players, both formats
-    uv run python tools/fuzz.py --games 1000 --seed 5000
+    uv run python tools/fuzz.py                   # quick: 10 games, 2 to 6 players, both formats
+    uv run python tools/fuzz.py --thorough        # the long run for verifying a milestone
+    uv run python tools/fuzz.py --games 50 --seed 5000 --check-every 1
     uv run python tools/fuzz.py --deck a.txt --deck b.txt  # decks from the snapshot, cycled
+    uv run python tools/fuzz.py --empty-decks     # every game ends in the first upkeep
 
-With ``--deck``, game seed ``s`` gives seat ``i`` deck ``(s + i) % len(decks)``, so a failing
-game is reproduced by its seed alone.
+Every player gets 40 basic lands, 8 of each (``basic_land_deck``), from the committed excerpt
+``tools/excerpts/basic_lands.json``, so no snapshot is needed. The presets (``QUICK``, the
+default, and ``THOROUGH``) set the number of games, the concession rate and how often the full
+checks run (``check_every``); explicit options override them. With ``--deck``, game seed ``s``
+gives seat ``i`` deck ``(s + i) % len(decks)``, so a failing game is reproduced by its seed alone.
 
-Each game is played by ``RandomAgent``s. Before every answer the harness checks:
+Each game is played by ``RandomAgent``s. Before every answer (with ``check_every`` N > 1, every
+N answers and at the end; the bookkeeping invariants always) the harness checks:
 
 - the state's bookkeeping invariants and that it is pure data (``resolve.state.invariants``);
 - every player's view, against an oracle written out from the rules rather than the engine's
@@ -34,8 +40,9 @@ recorded inputs (answers and concessions) and must reproduce the identical state
 
 A game ends when it is over or when it reaches a ``NotImplementedRule`` for an allowed rule
 (``ALLOWED_GAPS``). Any other exception, a disallowed gap, or a failed check raises
-``FuzzFailure`` naming the seed. The command line prints games per second as a rough
-benchmark.
+``FuzzFailure`` naming the seed. The command line prints a summary (``summary_lines``: answers
+and turns per game, endings by type, lands played and mana abilities activated) and games per
+second as a rough benchmark.
 
 Exit status: 0 every game passed; 1 a game failed, or the decks couldn't be built.
 """

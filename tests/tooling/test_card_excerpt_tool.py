@@ -125,9 +125,9 @@ def test_a_token_with_the_name_isnt_a_match(tmp_path: Path) -> None:
     fx.write_snapshot(data, [fx.FOREST, fx.token("oid-forest-token", "Forest")])
     path = tmp_path / "excerpt.json"
     assert run(str(path), "Forest", "--data-dir", str(data))[0] == 0
-    assert [card["oracle_id"] for card in json.loads(path.read_text("utf-8"))["cards"]] == [
-        "oid-forest"
-    ]
+    assert [
+        card["oracle_id"] for card in json.loads(path.read_text(encoding="utf-8"))["cards"]
+    ] == ["oid-forest"]
 
 
 def test_without_a_snapshot_the_tool_says_how_to_get_one(tmp_path: Path) -> None:
