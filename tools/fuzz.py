@@ -12,8 +12,9 @@ The players get decks of basic lands (``basic_land_deck``) from the committed ex
 ``tools/excerpts/basic_lands.json``, so no snapshot is needed. The presets (``QUICK``, the
 default, and ``THOROUGH``) set the number of games, the deck sizes, the concession rate and how
 often the full checks run (``check_every``); explicit options override them. Games run in
-``--jobs`` worker processes; the output doesn't depend on it, except for the timing. With ``--deck``, game seed ``s``
-gives seat ``i`` deck ``(s + i) % len(decks)``, so a failing game is reproduced by its seed alone.
+``--jobs`` worker processes; the output doesn't depend on it, except for the timing. Game seed
+``s`` gives seat ``i`` deck ``(s + i) % len(decks)`` of the run's decks (``--deck``, ``--copies``),
+so a failing game is reproduced by its seed and the run's options.
 
 Each game is played by ``RandomAgent``s. Before every answer (with ``check_every`` N > 1, every
 N answers and at the end; the bookkeeping invariants always) the harness checks:
