@@ -44,13 +44,14 @@ from __future__ import annotations
 
 import argparse
 import copy
+import dataclasses
 import io
 import pickle
 import sys
 import time
 from collections import Counter
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from resolve.agents.base import Agent
@@ -164,11 +165,50 @@ def _expected_name(state: GameState, obj_id: ObjectId, viewer: PlayerId) -> str 
     return name
 
 
-def view_problems(state: GameState, viewer: PlayerId) -> list[str]:
-    """Everything ``view_for(state, viewer)`` shows wrongly (design.md §9)."""
+@dataclass
+class CheckedLog:
+    """The event log as a game's last full check verified it, so the next walks only what's new.
+
+    The log only grows (design.md §7) and the full checks verify that each entry is deeply
+    immutable when they first see it, so an entry stays verified while the log still holds that
+    same object. ``entries`` is the log as last checked; ``visible`` is each player's expected
+    view of it. ``state_problems`` updates both, and reports any checked entry that was replaced
+    or removed. Without it, every check walks the whole log, which makes the checks of a long
+    game cost time quadratic in its length.
+    """
+
+    entries: list[LogEntry] = field(default_factory=list["LogEntry"])
+    visible: dict[PlayerId, list[LogEntry]] = field(default_factory=dict[PlayerId, list[LogEntry]])
+
+    def unchanged(self, log: list[LogEntry]) -> int:
+        """How many of the checked entries are still the first entries of ``log``."""
+        count = min(len(self.entries), len(log))
+        for index in range(count):
+            if log[index] is not self.entries[index]:
+                return index
+        return count
+
+
+def view_problems(
+    state: GameState,
+    viewer: PlayerId,
+    *,
+    start: int = 0,
+    visible: list[LogEntry] | None = None,
+) -> list[str]:
+    """Everything ``view_for(state, viewer)`` shows wrongly (design.md §9).
+
+    With ``start``, the event log's first ``start`` entries were checked already and
+    ``visible`` holds the viewer's expected view of them; only the later entries are checked,
+    and ``visible`` is extended with them.
+    """
     view = view_for(state, viewer)
     where = f"player {viewer}'s view"
-    problems = mutable_parts(view, f"view_for({viewer})")
+    if visible is None:
+        visible = []
+    problems = mutable_parts(dataclasses.replace(view, log=()), f"view_for({viewer})")
+    for index in range(len(visible), len(view.log)):
+        problems += mutable_parts(view.log[index], f"view_for({viewer}).log[{index}]")
     request = state.pending
     expected_request = request if request is not None and request.player == viewer else None
     if view.request != expected_request:
@@ -223,8 +263,7 @@ def view_problems(state: GameState, viewer: PlayerId) -> list[str]:
 
     # design.md §7: each entry is shown to the players it names (None: everyone), and an answer
     # only to the player who gave it. Other players see an entry's redacted form, if it has one.
-    visible: list[LogEntry] = []
-    for entry in state.event_log:
+    for entry in state.event_log[start:]:
         if entry.visible_to is None or viewer in entry.visible_to:
             shown = entry
         elif entry.redacted is not None:
@@ -240,18 +279,36 @@ def view_problems(state: GameState, viewer: PlayerId) -> list[str]:
             problems.append(f"log entry {entry.index} shows {where} the bottomed cards")
     if view.log != tuple(visible):
         problems.append(f"{where} shows the wrong log entries")
-    for entry in state.event_log:
+    for entry in state.event_log[start:]:
         record = entry.record
         if isinstance(record, AnswerRecord) and entry.visible_to != (record.player,):
             problems.append(f"log entry {entry.index} shows an answer to other players")
     return problems
 
 
-def state_problems(state: GameState) -> list[str]:
-    """Everything wrong with ``state`` and the views built from it."""
-    problems = invariant_violations(state) + state_impurities(state)
+def state_problems(state: GameState, checked: CheckedLog | None = None) -> list[str]:
+    """Everything wrong with ``state`` and the views built from it.
+
+    With ``checked`` (updated here), log entries an earlier call verified aren't walked again.
+    """
+    problems = invariant_violations(state)
+    start = 0
+    if checked is not None:
+        start = checked.unchanged(state.event_log)
+        if start < len(checked.entries):
+            problems.append(
+                f"state.event_log[{start}] was replaced or removed after it was logged "
+                "(design.md §7: the log only grows)"
+            )
+            start = 0
+    problems += state_impurities(state, log_from=start)
     for player in state.players:
-        problems += view_problems(state, player.id)
+        visible = [] if checked is None or start == 0 else checked.visible[player.id]
+        problems += view_problems(state, player.id, start=start, visible=visible)
+        if checked is not None:
+            checked.visible[player.id] = visible
+    if checked is not None:
+        checked.entries = list(state.event_log)
     return problems
 
 
@@ -338,8 +395,10 @@ def fuzz_run(
     def fail(problem: str) -> FuzzFailure:
         return FuzzFailure(f"{describe}: {problem}")
 
+    checked = CheckedLog()
+
     def check(state: GameState, when: str) -> None:
-        problems = state_problems(state)
+        problems = state_problems(state, checked)
         if problems:
             raise fail(f"{when}:\n" + "\n".join(f"- {p}" for p in problems))
 
@@ -389,11 +448,12 @@ def fuzz_run(
             agent = agent_for(agents, request.player)
             answer = agent.decide(view_for(state, request.player), request)
             if probe_invalid and snapshot is not None:
+                before = pickle.loads(snapshot)
                 for bad in invalid_answers(request, len(state.players), answer.value):
                     outcome = _submit(state, bad)
                     if outcome[0] != "rejected":
                         raise fail(f"the invalid answer {bad} was {outcome[0]}")
-                    if state != pickle.loads(snapshot):
+                    if state != before:
                         raise fail(f"the rejected answer {bad} changed the state")
             copies = [copy.deepcopy(state), _pickled(state)] if copying else []
             outcome = _submit(state, answer)
