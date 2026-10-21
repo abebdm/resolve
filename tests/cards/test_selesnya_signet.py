@@ -51,8 +51,10 @@ from tests.casting_support import (
     answered,
     cast,
     choose_color,
+    counts,
     options,
     pass_,
+    pay,
     records,
     reverse,
 )
@@ -60,7 +62,7 @@ from tests.game_fixtures import answer, request_of
 from tests.scenario import Scenario, run_script
 
 P0, P1 = PlayerId(0), PlayerId(1)
-G, W = ManaType.GREEN, ManaType.WHITE
+G, W, C = ManaType.GREEN, ManaType.WHITE, ManaType.COLORLESS
 EXCERPT = Path(__file__).resolve().parents[2] / "tools" / "excerpts" / "cards.json"
 
 
@@ -237,3 +239,149 @@ def test_733_1_a_kept_ability_must_keep_what_paid_for_it() -> None:
     assert state.player(P0).mana_pool == [Mana(G, forest)]
     (reversed_,) = records(state, ActionReversed)
     assert reversed_.kept == (forest,)
+
+
+def test_733_1_an_ability_kept_from_a_failed_signet_in_a_cast_is_listed_without_it() -> None:
+    """P0 casts Grizzly Bears, activates the Signet and taps Ixalli's Lorekeeper for its {1}; the
+    Lorekeeper's mana can't pay a non-Dinosaur's ability (106.6), so the Signet's activation is
+    reversed and P0 keeps the Lorekeeper's. P0 then taps the Forest, but the cast still fails
+    (the Lorekeeper's mana can't pay for Bears either). The cast's reversal lists the Lorekeeper
+    and the Forest, in the order they began, and not the reversed Signet."""
+    scenario = Scenario(2)
+    (bears,) = scenario.hand(P0, ["Grizzly Bears"])
+    signet, lorekeeper, forest = scenario.battlefield(
+        P0, ["Selesnya Signet", "Ixalli's Lorekeeper", "Forest"]
+    )
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(bears, P0), activate(signet), activate(lorekeeper))
+    run_script(state, choose_color(Color.GREEN), pay())
+    request = request_of(state)
+    assert request.kind is DecisionKind.REVERSE_MANA_ABILITIES and request.source == signet
+    run_script(state, reverse())  # keep the Lorekeeper's ability
+    assert not state.objects[signet].tapped and state.objects[lorekeeper].tapped
+    assert options(state) == (
+        PAY,
+        ActivateAbilityOption(signet, 0),
+        ActivateAbilityOption(forest, 0),
+    )
+    run_script(state, activate(forest), pay())
+    request = request_of(state)
+    # The spell on the stack (a new object, 400.7) is the decision's source.
+    assert request.kind is DecisionKind.REVERSE_MANA_ABILITIES
+    assert request.source == state.stack[-1]
+    lore_option = ManaActivationOption(0, lorekeeper, 0)
+    forest_option = ManaActivationOption(1, forest, 0)
+    assert request.space == ChooseSubset((lore_option, forest_option), 0, 2)
+    run_script(state, reverse(forest_option))
+    assert state.objects[lorekeeper].tapped and not state.objects[forest].tapped
+    assert not state.objects[signet].tapped
+    assert len(state.player(P0).mana_pool) == 1
+    assert state.player(P0).mana_pool[0].source == lorekeeper
+    assert bears in state.player(P0).hand
+
+
+def two_signets_for_a_giant() -> tuple[GameState, ObjectId, ObjectId, ObjectId]:
+    """P0 tries to cast Hill Giant: activates Signet 1; to pay its {1}, activates Signet 2, whose
+    {1} the Forest pays; Signet 2's {G} pays Signet 1's {1} (asked: G or W). {W}{G}{W} can't pay
+    {3}{R}: the reversal is pending, listing Signet 1, Signet 2, the Forest."""
+    scenario = Scenario(2)
+    first, second, forest = scenario.battlefield(
+        P0, ["Selesnya Signet", "Selesnya Signet", "Forest"]
+    )
+    (giant,) = scenario.hand(P0, ["Hill Giant"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(giant, P0), activate(first), activate(second), activate(forest))
+    run_script(state, counts(1, 0))
+    return state, first, second, forest
+
+
+def test_733_1_the_dependency_reaches_through_two_nested_activations() -> None:
+    state, first, second, forest = two_signets_for_a_giant()
+    request = request_of(state)
+    assert request.space == ChooseSubset(
+        (
+            ManaActivationOption(0, first, 0),
+            ManaActivationOption(1, second, 0),
+            ManaActivationOption(2, forest, 0),
+        ),
+        0,
+        3,
+    )
+    # Keeping Signet 1 while reversing Signet 2, whose {G} paid it: refused.
+    with pytest.raises(InvalidAnswer, match=r"733\.1"):
+        submit(state, answer(state, PickMany((1,))))
+    # Keeping both Signets while reversing the Forest, whose {G} paid Signet 2: refused.
+    with pytest.raises(InvalidAnswer, match=r"733\.1"):
+        submit(state, answer(state, PickMany((2,))))
+    # Reversing only Signet 1: Signet 2 and the Forest stay tapped; Signet 2's {G}{W} is back.
+    submit(state, answer(state, PickMany((0,))))
+    assert not state.objects[first].tapped
+    assert state.objects[second].tapped and state.objects[forest].tapped
+    assert state.player(P0).mana_pool == [Mana(G, second), Mana(W, second)]
+
+
+def test_733_1_identical_mana_from_before_the_action_counts_as_what_was_spent() -> None:
+    """{C} from Sol Ring was already in P0's pool. P0 taps Sol Ring again while casting Hill
+    Giant and pays the Signet's {1} with {C}: that unit and the Ring's new ones are identical, so
+    the payment can't tell them apart. Reversing the Ring while keeping the Signet is accepted
+    (the {C} spent counts as the one that was there before, docs/decisions.md); afterwards that
+    {C} is gone and the Signet's {G}{W} stays."""
+    scenario = Scenario(2)
+    ring, signet = scenario.battlefield(P0, ["Sol Ring", "Selesnya Signet"])
+    (giant,) = scenario.hand(P0, ["Hill Giant"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    state.player(P0).mana_pool.append(Mana(C, ring))
+    run_script(state, cast(giant, P0), activate(ring), activate(signet))
+    request = request_of(state)
+    assert request.space == ChooseSubset(
+        (ManaActivationOption(0, ring, 0), ManaActivationOption(1, signet, 0)), 0, 2
+    )
+    run_script(state, reverse(ManaActivationOption(0, ring, 0)))
+    assert not state.objects[ring].tapped and state.objects[signet].tapped
+    assert state.player(P0).mana_pool == [Mana(G, signet), Mana(W, signet)]
+
+
+def test_733_1_identical_mana_already_spent_elsewhere_is_no_excuse() -> None:
+    """The {C} that was there before paid Signet 1; Signet 2's {1} was then paid with {C} the
+    Ring made during the cast. Keeping both Signets while reversing the Ring is refused."""
+    scenario = Scenario(2)
+    ring, first, second = scenario.battlefield(
+        P0, ["Sol Ring", "Selesnya Signet", "Selesnya Signet"]
+    )
+    (giant,) = scenario.hand(P0, ["Hill Giant"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    state.player(P0).mana_pool.append(Mana(C, ring))
+    run_script(state, cast(giant, P0), activate(first), pay())  # the old {C} pays Signet 1
+    run_script(state, activate(ring), activate(second), counts(0, 0, 1))  # a new {C} pays 2
+    request = request_of(state)
+    assert request.kind is DecisionKind.REVERSE_MANA_ABILITIES
+    assert request.space == ChooseSubset(
+        (
+            ManaActivationOption(0, first, 0),
+            ManaActivationOption(1, ring, 0),
+            ManaActivationOption(2, second, 0),
+        ),
+        0,
+        3,
+    )
+    with pytest.raises(InvalidAnswer, match=r"733\.1"):
+        submit(state, answer(state, PickMany((1,))))
+    submit(state, answer(state, PickMany((1, 2))))  # reverse the Ring and Signet 2: accepted
+    assert state.objects[first].tapped and not state.objects[second].tapped
+    assert state.player(P0).mana_pool == [Mana(G, first), Mana(W, first)]
+
+
+def test_117_4_a_completed_activation_starts_passing_over() -> None:
+    """P1 had passed; P0 activates the Signet and pays with a Forest. It completes, so it was an
+    action: P1's pass no longer counts (contrast with the reversed Signet, 733.2)."""
+    scenario, signet, forest = signet_and_forest()
+    scenario.at(Phase.PRECOMBAT_MAIN, passed=[P1], priority=P0)
+    state = scenario.build()
+    run_script(state, activate_with_priority(signet), activate(forest))
+    assert state.turn is not None and state.turn.passed == []
+    run_script(state, pass_(P0))
+    assert request_of(state).player == P1 and state.turn.phase is Phase.PRECOMBAT_MAIN

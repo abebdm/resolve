@@ -367,6 +367,11 @@ def can_tap_for_cost(state: GameState, obj: ObjectId) -> bool:
     before the one their most recent turn began in (``last_turn_began``); before a player's first
     turn none of their creatures can. Anything else that isn't a creature may (302.6). Haste
     (702.10, M3) plugs in here.
+
+    It is for a permanent's own {T} in an ability's cost (``TapSelfCost``); {Q} (M9) needs the
+    same. Tapping creatures for other costs (convoke 702.51, improvise, crew 702.122, "tap an
+    untapped creature you control") ignores summoning sickness and must not call it. M3's attack
+    half of 302.6 shares the "controlled since the turn began" test.
     """
     if not characteristics(state, obj).is_a(CardType.CREATURE):
         return True

@@ -25,7 +25,7 @@ from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import ActivateAbilityOption, PassOption, Pick, PlayLandOption
 from resolve.engine.api import submit
 from resolve.errors import InvalidAnswer
-from resolve.events.spells import PermanentSpellResolved
+from resolve.events.spells import ActionReversed, PermanentSpellResolved
 from resolve.rules import defaults
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
@@ -34,6 +34,7 @@ from resolve.state.turn import Phase, Step
 from tests.casting_support import (
     activate,
     activate_with_priority,
+    answered,
     cast,
     options,
     pass_,
@@ -197,10 +198,15 @@ def test_302_6_goes_through_can_tap_for_cost(monkeypatch: pytest.MonkeyPatch) ->
 
     scenario = Scenario(2)
     (forest,) = scenario.battlefield(P0, ["Forest"])
+    (lions,) = scenario.hand(P0, ["Savannah Lions"])
     scenario.at(Phase.PRECOMBAT_MAIN, number=1)
     patch_object(monkeypatch, "can_tap_for_cost", lambda state, obj: False)
     state = scenario.build()
     assert not offered(state, forest)
+    # Nor while paying: no mana ability is offered, so the cast is reversed at once.
+    run_script(state, cast(lions, P0))
+    assert answered(state, DecisionKind.ACTIVATE_MANA_ABILITIES) == 0
+    assert len(records(state, ActionReversed)) == 1
 
 
 def test_302_6_an_answer_activating_a_sick_creature_is_rejected() -> None:
@@ -212,3 +218,14 @@ def test_302_6_an_answer_activating_a_sick_creature_is_rejected() -> None:
     assert options(state) == (PassOption(),)
     with pytest.raises(InvalidAnswer):
         submit(state, answer(state, Pick(1)))
+
+
+@pytest.mark.parametrize("name", ["Avacyn's Pilgrim", "Ixalli's Lorekeeper"])
+def test_302_6_every_mana_creature_has_summoning_sickness(name: str) -> None:
+    scenario = Scenario(2)
+    (new,) = scenario.battlefield(P0, [name], entered_turn=1)
+    (old,) = scenario.battlefield(P0, [name])
+    scenario.at(Phase.PRECOMBAT_MAIN, number=1)
+    state = scenario.build()
+    assert not offered(state, new)
+    assert offered(state, old)

@@ -188,3 +188,37 @@ def test_500_5_restricted_mana_empties_like_any_other() -> None:
     emptied = records(state, ManaPoolEmptied)
     assert [e.mana for e in emptied] == [(Mana(ManaType.WHITE, lorekeeper, DINOSAUR),)]
     assert state.player(P0).mana_pool == []
+
+
+def test_106_6_a_signets_cost_is_paid_for_the_signet_even_while_casting_a_dinosaur() -> None:
+    """Casting Test Raptor, P0 activates Selesnya Signet and taps the Lorekeeper for its {1}. That
+    payment is for the Signet's ability (602.2b), not for the Dinosaur spell, so the Lorekeeper's
+    mana can't pay it and the Signet's activation is reversed."""
+    scenario = Scenario(2)
+    (raptor,) = scenario.hand(P0, ["Test Raptor"])
+    signet, lorekeeper = scenario.battlefield(P0, ["Selesnya Signet", "Ixalli's Lorekeeper"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(raptor, P0), activate(signet), activate(lorekeeper))
+    run_script(state, choose_color(Color.GREEN))
+    request = request_of(state)
+    assert request.kind is DecisionKind.REVERSE_MANA_ABILITIES
+    assert request.source == signet
+
+
+def test_106_6_restricted_mana_keeps_its_type_and_pays_a_colored_symbol() -> None:
+    """Test Raptor's {G} can only be paid by the Lorekeeper's {G}: Sol Ring's {C}{C} pays {1}
+    (one {C} is left). The restriction doesn't change the mana's type (106.6)."""
+    scenario = Scenario(2)
+    (raptor,) = scenario.hand(P0, ["Test Raptor"])
+    lorekeeper, ring = scenario.battlefield(P0, ["Ixalli's Lorekeeper", "Sol Ring"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(raptor, P0), activate(lorekeeper), choose_color(Color.GREEN))
+    run_script(state, activate(ring))
+    (cast_event,) = records(state, SpellCast)
+    assert cast_event.mana_spent == (
+        Mana(G, lorekeeper, DINOSAUR),
+        Mana(ManaType.COLORLESS, ring),
+    )
+    assert state.player(P0).mana_pool == [Mana(ManaType.COLORLESS, ring)]

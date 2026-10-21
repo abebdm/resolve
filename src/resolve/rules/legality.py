@@ -12,9 +12,9 @@ Every legality question is an ``Action`` value. ``allowed(state, action)`` works
 
 Playing a land and casting a spell exist so far; targeting, countering and destroying join
 them from M2.6 to M2.8, attacking and blocking in M3, and activating abilities in M4 (until then
-a mana ability's own conditions decide: 602.5 in ``ActivatedManaAbility.can_activate``). A function that asks
-the question calls ``legality.allowed`` through the module, so a test or an effect that
-replaces ``permissions`` or ``prohibitions`` is obeyed everywhere.
+a mana ability's own conditions decide: 602.5 in ``ActivatedManaAbility.can_activate``). A
+function that asks the question calls ``legality.allowed`` through the module, so a test or an
+effect that replaces ``permissions`` or ``prohibitions`` is obeyed everywhere.
 """
 
 from __future__ import annotations

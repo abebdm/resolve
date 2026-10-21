@@ -56,8 +56,9 @@ def test_605_3a_it_taps_for_its_mana_with_priority(
     assert state.objects[creature].tapped
 
 
-def test_605_3a_avacyns_pilgrim_and_a_forest_pay_for_a_white_and_green_cost() -> None:
-    """Savannah Lions ({W}) paid by the Pilgrim's {W}."""
+def test_605_3a_avacyns_pilgrims_white_pays_a_white_cost_and_generic_mana() -> None:
+    """Savannah Lions ({W}) paid by the Pilgrim's {W} alone; Grizzly Bears ({1}{G}) paid by a
+    Forest's {G} for {G} and the Pilgrim's {W} for {1} (107.4b)."""
     scenario = Scenario(2)
     (lions,) = scenario.hand(P0, ["Savannah Lions"])
     (pilgrim,) = scenario.battlefield(P0, ["Avacyn's Pilgrim"])
@@ -66,6 +67,15 @@ def test_605_3a_avacyns_pilgrim_and_a_forest_pay_for_a_white_and_green_cost() ->
     run_script(state, cast(lions, P0), activate(pilgrim))
     (cast_event,) = records(state, SpellCast)
     assert cast_event.mana_spent == (Mana(ManaType.WHITE, pilgrim),)
+
+    scenario = Scenario(2)
+    (bears,) = scenario.hand(P0, ["Grizzly Bears"])
+    pilgrim, forest = scenario.battlefield(P0, ["Avacyn's Pilgrim", "Forest"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(bears, P0), activate(pilgrim), activate(forest))
+    (cast_event,) = records(state, SpellCast)
+    assert cast_event.mana_spent == (Mana(ManaType.WHITE, pilgrim), Mana(ManaType.GREEN, forest))
 
 
 def test_the_fixture_decks_use_the_real_llanowar_elves() -> None:
