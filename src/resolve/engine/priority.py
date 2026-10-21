@@ -145,8 +145,11 @@ class PriorityRound(Task):
                 played = LandPlayed(player=player, card=card, rules=("305.1", "116.2a"))
                 return self._acted(turn, player, ApplyEvents((played,)))
             case ActivateAbilityOption(object=source, ability=index):
+                # 117.3c: the player receives priority again; the passes before it stop counting
+                # once the activation completes (ActivateManaAbility clears them; a reversed one
+                # leaves them, 733.2).
                 activation = ActivateManaAbility(player, source, index)
-                return self._acted(turn, player, activation)
+                return self._acted(turn, player, activation, clears_passes=False)
             case CastSpellOption(object=card, variant=variant, permission=permission):
                 # 117.3c, 733.2: the caster receives priority again afterwards; the passes before
                 # it stop counting only once the spell is cast (CastSpell clears them, 601.2i).

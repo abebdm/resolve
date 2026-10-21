@@ -37,6 +37,7 @@ from tests.casting_support import (
     cast,
     options,
     pass_,
+    pay,
     records,
 )
 from tests.game_fixtures import answer, request_of
@@ -59,7 +60,7 @@ def test_302_6_a_creature_cant_tap_for_mana_the_turn_it_arrives() -> None:
     first, second, third = scenario.battlefield(P0, ["Forest", "Forest", "Forest"])
     scenario.at(Phase.PRECOMBAT_MAIN, number=1)
     state = scenario.build()
-    run_script(state, cast(elves_card, P0), activate(first), pass_(P0), pass_(P1))
+    run_script(state, cast(elves_card, P0), activate(first), pay(), pass_(P0), pass_(P1))
     (resolved,) = records(state, PermanentSpellResolved)
     elves = resolved.permanent
     assert elves is not None and elves in state.battlefield

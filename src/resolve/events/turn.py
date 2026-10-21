@@ -35,6 +35,7 @@ class TurnBegan(Event):
         # 500.1: the turn has the phases and steps the rules give it (500.8-500.10 add to them).
         segments = list(defaults.turn_structure(state, self.player))
         state.turn = TurnState(number=self.number, active_player=self.player, segments=segments)
+        state.player(self.player).last_turn_began = self.number  # 302.6
 
 
 @dataclass(frozen=True, kw_only=True)

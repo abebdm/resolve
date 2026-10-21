@@ -142,6 +142,16 @@ drive decisions with a script.
    `counts`. Give mana with lands, or `scenario.mana(player, ...)` (units with no source, which
    form one class each type). `scenario.stack(controller, names)` puts spells on the stack as
    if cast from their owner's hand; when all players pass, the top one resolves.
+   `choose_color(Color.GREEN)` answers "one mana of any color" (asked only with two or more
+   colors). A mana ability with a mana cost (Selesnya Signet) asks its own
+   `ACTIVATE_MANA_ABILITIES` (answer with `activate(...)`/`pay()`) and, if it fails, its own
+   `REVERSE_MANA_ABILITIES`.
+7. **Summoning sickness (302.6).** Permanents the builder puts on the battlefield came under
+   their controller's control before the first turn (`entered_turn=0`), so a creature can tap
+   once its controller's turn has begun; pass `battlefield(..., entered_turn=N)` for one that
+   arrived during turn N. `at(...)` sets each player's most recent turn as if turns had gone
+   around in order up to this one (the active player's is `number`); `at(..., last_turns=
+   {player: n or None})` overrides it.
 
 ### Write an engine test with test-only tasks
 
@@ -198,8 +208,9 @@ override either.
 3. The output: first the preset and settings (`Run:`), then, in runs longer than the quick one,
    a line every 10 games, then the summary: answers accepted and rejected; answers and turns per
    game (min, average, max); endings by type (decked, life total, concession, draw, rules gap,
-   then any other, named by the rule of the last loss); lands played and mana abilities
-   activated; spells cast, resolved and reversed; casts per card; gaps by rule; formats; games
+   then any other, named by the rule of the last loss); lands played, mana abilities activated
+   (counted by the mana they added) and mana ability activations reversed (a mana cost that
+   couldn't be paid); spells cast, resolved and reversed; casts per card; gaps by rule; formats; games
    per second.
 4. A failure prints `FAILED:` with the seed and the start of a command that reproduces that one
    game, then `This run's options:`, the rest of it (decks, concessions, check interval).
@@ -398,7 +409,9 @@ files.
    change the state directly). Base classes that definitions name go in `base.py`, which imports
    nothing from the engine, so `CardDefinition` can refer to them without import cycles.
 3. Raise `NotImplementedRule` for the parts of its rules that aren't supported yet (as
-   `TapSelfCost` does for creatures, 302.6).
+   `Event.redo` does for events a mana ability can't cause yet, 733.1). A primitive that reads
+   the engine (`characteristics`, `resolve.rules.commander`) imports it inside the method, as
+   `ControlsAtLeast.met` does, to avoid import cycles.
 4. Test it on its own (`tests/cards/test_mana_primitives.py` is an example): what it allows,
    what it refuses, the events it produces, and its `text`.
 5. Add its entry to `docs/primitives.md` (name and module, one line, the rules, an example).

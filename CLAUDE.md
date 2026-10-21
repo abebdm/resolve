@@ -41,15 +41,15 @@ touches. Read more when a section points you to another.
 ## Current status
 
 **Current milestone: M2 (Spells and the stack), in progress: the plan is approved
-(`docs/plans/m2.md`); M2.0 to M2.3 are done (documentation, the rule defaults, mana costs and
-characteristics, casting and resolving permanent spells). M0 (Skeleton) and M1 (Turn structure)
-are complete.** What each completed step built, and where, is in `docs/roadmap.md`, "What's
+(`docs/plans/m2.md`); M2.0 to M2.4 are done (documentation, the rule defaults, mana costs and
+characteristics, casting and resolving permanent spells, mana abilities beyond basic lands and
+summoning sickness). M0 (Skeleton) and M1 (Turn structure) are complete.** What each completed step built, and where, is in `docs/roadmap.md`, "What's
 built".
 
 - **Known violations of rule 12:** none. Every default of `docs/plans/m2.md` §5.1 comes from a
   function in `resolve.rules.defaults` (how to add or change one: `docs/howto.md`).
-- **Next:** M2.4 (mana abilities beyond basic lands, and summoning sickness), then M2.5 onward.
-  Resolving an instant or sorcery is the `NotImplementedRule("608.2c")` gap until M2.6.
+- **Next:** M2.5 (the agent-side auto-payer), then M2.6 onward. Resolving an instant or sorcery
+  is the `NotImplementedRule("608.2c")` gap until M2.6.
 
 Do not start a milestone unless the user asks.
 

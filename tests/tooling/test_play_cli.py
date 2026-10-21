@@ -122,12 +122,12 @@ def test_bad_arguments_exit_with_2(args: list[str]) -> None:
 def test_decks_with_unimplemented_cards_are_refused(tmp_path: Path) -> None:
     """Decks with unimplemented cards are refused, never approximated (design.md §11)."""
     data = tmp_path / "data"
-    fx.write_snapshot(data, cards=[fx.FOREST, fx.LLANOWAR_ELVES])
+    fx.write_snapshot(data, cards=[fx.FOREST, fx.TEST_RAPTOR])
     deck = tmp_path / "deck.txt"
-    deck.write_text("Mainboard\n10 Forest\n1 Llanowar Elves\n", encoding="utf-8")
+    deck.write_text("Mainboard\n10 Forest\n1 Test Raptor\n", encoding="utf-8")
     status, text = run_cli(["--deck", str(deck), "--deck", str(deck), "--data-dir", str(data)])
     assert status == EXIT_CANT_START
-    assert "'Llanowar Elves' is not implemented" in text
+    assert "'Test Raptor' is not implemented" in text
 
 
 def test_random_agents_play_a_basic_land_game_to_its_end(tmp_path: Path) -> None:

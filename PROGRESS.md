@@ -15,7 +15,12 @@ https://claude.ai/code/session_012iD3s6Qtv27EbFpricYv19). Built on the unmerged 
 - `GameObject.entered_turn`, `Player.last_turn_began`; scenario `entered_turn=`, `at(last_turns=)`.
 - Tests first, all confirmed failing on the stub gaps (51 tests).
 
-## Next
+## Status
+- Implementation done; targeted tests pass; docs updated (decisions, design, primitives,
+  roadmap, torture tests, howto, verification, CLAUDE.md, README, handoff notes).
+- Running: full suite + pyright + quick fuzz; test-reviewer.
+
+## Next (original list)
 - Implement: can_tap_for_cost, TurnBegan/create_object set the fields, commander identity,
   colors, ControlsAtLeast.met, restriction allows + PayCosts filtering, nested PayCosts in
   ActivateManaAbility with checkpoint and reversal, flattened activations + 733.1 dependency

@@ -47,8 +47,7 @@ class TapSelfCost(Cost):
     """{T}: tap this permanent (107.5). An already tapped permanent can't pay it (118.3).
 
     A creature's {T} ability also needs the creature to have been controlled continuously since
-    its controller's most recent turn began (302.6, 602.5a); ``defaults.can_tap_for_cost`` decides
-    (M2.4 builds it; until then a {T} cost on a creature raises ``NotImplementedRule``).
+    its controller's most recent turn began (302.6, 602.5a); ``defaults.can_tap_for_cost`` decides.
     """
 
     def can_pay(self, state: GameState, source: ObjectId, player: PlayerId) -> bool:

@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from resolve.data.types import Color
-from resolve.errors import NotImplementedRule
 from resolve.events.mana import ManaAdded
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana, ManaRestriction, ManaType
@@ -61,7 +60,11 @@ class AddManaOfAnyColor(Immutable):
 
     def colors(self, state: GameState, source: ObjectId, player: PlayerId) -> tuple[Color, ...]:
         """The colors ``player`` may choose for this mana now (903.4, 903.4f)."""
-        raise NotImplementedRule("903.4: choosing the color of mana (M2.4 stub)")
+        if not self.commander_identity:
+            return tuple(Color)
+        from resolve.rules.commander import commander_color_identity
+
+        return commander_color_identity(state, player) or ()  # 903.4f: undefined, no color
 
     def events(
         self, state: GameState, source: ObjectId, player: PlayerId, color: Color | None
