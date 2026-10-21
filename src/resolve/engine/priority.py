@@ -29,7 +29,6 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from resolve.cards.primitives.abilities import ActivatedManaAbility
-from resolve.data.types import CardType
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import (
     ActivateAbilityOption,
@@ -48,6 +47,7 @@ from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.permanents import LandPlayed
 from resolve.events.pipeline import ApplyEvents
 from resolve.events.turn import PriorityPassed
+from resolve.rules import defaults
 from resolve.state.game import next_in_turn_order, players_in_game
 from resolve.state.ids import PlayerId
 from resolve.state.turn import TurnState
@@ -56,17 +56,6 @@ from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
 if TYPE_CHECKING:
     from resolve.decisions.request import DecisionRequest
     from resolve.state.game import GameState
-
-# Card types of spells (301.1, 302.1, 303.1, 304.1, 306.1, 307.1, 310.1; 308.1 for kindreds).
-SPELL_TYPES = (
-    CardType.ARTIFACT,
-    CardType.BATTLE,
-    CardType.CREATURE,
-    CardType.ENCHANTMENT,
-    CardType.INSTANT,
-    CardType.PLANESWALKER,
-    CardType.SORCERY,
-)
 
 
 def current_turn(state: GameState) -> TurnState:
@@ -77,28 +66,23 @@ def current_turn(state: GameState) -> TurnState:
 
 
 def priority_options(state: GameState, player: PlayerId) -> tuple[Option, ...]:
-    """Everything ``player`` may do with priority right now, pass first (117.1)."""
-    turn = current_turn(state)
-    # 117.1a, 305.1, 116.2a: sorcery-speed actions need the player's own main phase with an
-    # empty stack.
-    sorcery_timing = player == turn.active_player and turn.in_main_phase and not state.stack
+    """Everything ``player`` may do with priority right now, pass first (117.1).
+
+    Land plays and spells come from ``defaults.land_play_options`` and ``defaults.cast_options``;
+    a card in the hand is listed in hand order, other cards (commanders in the command zone)
+    after them.
+    """
+    lands = defaults.land_play_options(state, player)  # 305.1, 116.2a
+    spells = defaults.cast_options(state, player)  # 601.3, 903.8
+    hand = state.player(player).hand
     options: list[Option] = [PassOption()]
-    for obj in state.player(player).hand:
-        types = characteristics(state, obj).card_types
-        if CardType.LAND in types:
-            # 305.1-305.3: one land per turn (305.2a), in the player's own main phase with an
-            # empty stack. 305.9: a land can't be cast, even if it has another card type.
-            if sorcery_timing and turn.lands_played < 1:
-                options.append(PlayLandOption(obj))
-        elif _may_cast(types, sorcery_timing):
+    for obj in hand:
+        if obj in lands:
+            options.append(PlayLandOption(obj))
+        elif obj in spells:
             options.append(CastSpellOption(obj))
-    for obj in state.command:
-        card = state.objects[obj].card
-        # 903.8: a player may cast a commander they own from the command zone.
-        if card is not None and card in state.player(player).commanders:
-            types = characteristics(state, obj).card_types
-            if CardType.LAND not in types and _may_cast(types, sorcery_timing):
-                options.append(CastSpellOption(obj))
+    options += [PlayLandOption(obj) for obj in lands if obj not in hand]
+    options += [CastSpellOption(obj) for obj in spells if obj not in hand]
     for obj in state.battlefield:
         if state.objects[obj].controller != player:
             continue
@@ -109,15 +93,6 @@ def priority_options(state: GameState, player: PlayerId) -> tuple[Option, ...]:
             ):
                 options.append(ActivateAbilityOption(obj, index))
     return tuple(options)
-
-
-def _may_cast(types: tuple[CardType, ...], sorcery_timing: bool) -> bool:
-    """Whether a card of these types may be cast now (117.1a): an instant whenever the player
-    has priority (304.1), any other spell only with sorcery timing (301.1, 302.1, 307.1, ...).
-    """
-    if not any(card_type in SPELL_TYPES for card_type in types):
-        return False
-    return CardType.INSTANT in types or sorcery_timing
 
 
 class Stage(Enum):
@@ -166,7 +141,7 @@ class PriorityRound(Task):
         if not isinstance(request.space, ChooseOne) or not isinstance(answer, Pick):
             raise EngineError(f"PriorityRound can't resume with {answer!r}")
         turn = current_turn(state)
-        player = request.player
+        player = request.for_player
         match request.space.chosen(answer):
             case PassOption():
                 return self._pass(state, turn, player)

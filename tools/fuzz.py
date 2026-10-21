@@ -221,8 +221,14 @@ def view_problems(
     expected_request = request if request is not None and request.player == viewer else None
     if view.request != expected_request:
         problems.append(f"{where} holds the wrong request")
-    expected_waiting = None if request is None else (request.player, request.kind)
-    waiting = None if view.waiting_for is None else (view.waiting_for.player, view.waiting_for.kind)
+    expected_waiting = (
+        None if request is None else (request.player, request.kind, request.for_player)
+    )
+    waiting = (
+        None
+        if view.waiting_for is None
+        else (view.waiting_for.player, view.waiting_for.kind, view.waiting_for.for_player)
+    )
     if waiting != expected_waiting:
         problems.append(f"{where} says it is waiting for {waiting}, not {expected_waiting}")
     if view.result != state.result or view.starting_player != state.starting_player:

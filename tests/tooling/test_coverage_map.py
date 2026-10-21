@@ -248,8 +248,9 @@ def test_an_out_of_scope_row_missing_from_the_list_fails(map_text: str, rules_te
 
 def test_a_citation_of_a_missing_rule_fails(map_text: str, rules_text: str) -> None:
     line = next(line for line in map_text.splitlines() if line.startswith("| 105 |"))
-    broken = break_row(map_text, "105", line.replace("| E |  |", "| E | see 105.99 |"))
-    assert "105 cites 105.99, which isn't in the pinned CR" in map_problems(broken, rules_text)
+    missing = "105." + "99"  # written in pieces: a citation checker reads this file too
+    broken = break_row(map_text, "105", line.replace("| E |  |", f"| E | see {missing} |"))
+    assert f"105 cites {missing}, which isn't in the pinned CR" in map_problems(broken, rules_text)
 
 
 def test_the_out_of_scope_table_naming_a_missing_rule_fails(map_text: str, rules_text: str) -> None:

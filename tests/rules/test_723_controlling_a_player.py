@@ -21,7 +21,7 @@ import pytest
 
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer
-from resolve.decisions.spaces import ChooseOne, PassOption, Pick, PickMany
+from resolve.decisions.spaces import ChooseOne, Order, PassOption, Pick, PickMany
 from resolve.engine import concede
 from resolve.engine.api import submit, view_for
 from resolve.errors import InvalidAnswer
@@ -115,7 +115,10 @@ def test_723_5_a_decision_the_controlled_player_asks_the_controller(
     assert request.kind is DecisionKind.DISCARD
     assert (request.player, request.for_player) == (P1, P0)
     submit(state, DecisionAnswer(request.id, P1, PickMany((0, 1))))
-    assert len(state.player(P0).hand) == 7
+    order = request_of(state)  # the order the discarded cards go into their graveyard (404.3)
+    assert order.kind is DecisionKind.ORDER_CARDS and (order.player, order.for_player) == (P1, P0)
+    submit(state, DecisionAnswer(order.id, P1, Order((0, 1))))
+    assert len(state.player(P0).hand) == 7 and len(state.player(P0).graveyard) == 2
 
 
 def test_723_4_the_controller_sees_what_the_controlled_player_sees(
@@ -182,7 +185,7 @@ def test_723_6_the_controller_cant_concede_for_the_controlled_player(
     scenario = Scenario(3)
     scenario.at(Step.UPKEEP)
     state = scenario.build()
-    with pytest.raises(InvalidAnswer, match="723.6"):
+    with pytest.raises(InvalidAnswer, match=r"723\.6"):
         concede(state, P0, by=P1)
     assert not state.player(P0).left_game and state.pending is not None
     assert invariant_violations(state) == []

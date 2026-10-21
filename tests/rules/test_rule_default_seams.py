@@ -31,9 +31,9 @@ from dataclasses import dataclass
 
 import pytest
 
+from resolve.agents.scripted import choose
 from resolve.cards.primitives.costs import TapSelfCost
 from resolve.decisions.kinds import DecisionKind
-from resolve.agents.scripted import choose
 from resolve.decisions.spaces import (
     ActivateAbilityOption,
     CastSpellOption,
@@ -41,8 +41,8 @@ from resolve.decisions.spaces import (
     ChooseSubset,
     Option,
     PassOption,
-    PlayLandOption,
     Pick,
+    PlayLandOption,
 )
 from resolve.engine.api import new_game, submit
 from resolve.engine.sba import state_based_actions
@@ -64,6 +64,7 @@ from resolve.state.turn import TURN_SEQUENCE, Phase, Segment, Step
 from resolve.tasks import Done, Task, TaskResult
 from tests.game_fixtures import answer, decks, pass_until, request_of
 from tests.scenario import Scenario, run_script
+from tests.seams import patch, patch_card, patch_loss, patch_next_turn, patch_object, patch_skip
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 
@@ -81,15 +82,15 @@ def with_libraries(scenario: Scenario, cards: int = 3) -> Scenario:
     return scenario
 
 
-def began(state: GameState, number: int | None = None) -> list[tuple[Phase, Step | None]]:
-    """Every ``StepBegan`` in the log (of turn ``number``, if given), in order."""
+def began(state: GameState) -> list[tuple[Phase, Step | None]]:
+    """Every ``StepBegan`` of the turn the scenario started in: those logged before the first
+    ``TurnBegan``."""
     steps: list[tuple[Phase, Step | None]] = []
-    current = 0
     for entry in state.event_log:
         record = entry.record
         if isinstance(record, TurnBegan):
-            current = record.number
-        elif isinstance(record, StepBegan) and number in (None, current):
+            break
+        if isinstance(record, StepBegan):
             steps.append((record.phase, record.step))
     return steps
 
@@ -115,7 +116,7 @@ def test_305_2_a_second_land_is_offered_when_two_are_allowed(
     scenario = Scenario(2)
     first, second = scenario.hand(P0, ["Forest", "Forest"])
     scenario.at(Phase.PRECOMBAT_MAIN, lands_played=1)
-    monkeypatch.setattr(defaults, "land_plays_allowed", lambda state, player: 2)
+    patch(monkeypatch, "land_plays_allowed", lambda state, player: 2)
     state = scenario.build()
     assert PlayLandOption(first) in options(state)
     assert PlayLandOption(second) in options(state)
@@ -135,7 +136,7 @@ def test_305_2b_with_no_land_plays_allowed_no_land_is_offered(
     scenario = Scenario(2)
     scenario.hand(P0, ["Forest"])
     scenario.at(Phase.PRECOMBAT_MAIN)
-    monkeypatch.setattr(defaults, "land_plays_allowed", lambda state, player: 0)
+    patch(monkeypatch, "land_plays_allowed", lambda state, player: 0)
     state = scenario.build()
     assert not [o for o in options(state) if isinstance(o, PlayLandOption)]
 
@@ -151,7 +152,7 @@ def test_305_2a_the_limit_is_asked_of_the_player_playing(monkeypatch: pytest.Mon
     scenario = Scenario(2)
     scenario.hand(P0, ["Forest"])
     scenario.at(Phase.PRECOMBAT_MAIN)
-    monkeypatch.setattr(defaults, "land_plays_allowed", plays)
+    patch(monkeypatch, "land_plays_allowed", plays)
     scenario.build()
     assert asked and set(asked) == {P0}
 
@@ -164,7 +165,7 @@ def test_117_1a_sorcery_timing_comes_from_the_function(monkeypatch: pytest.Monke
     scenario = Scenario(2)
     forest, ponder = scenario.hand(P0, ["Forest", "Test Ponder"])
     scenario.at(Step.UPKEEP)
-    monkeypatch.setattr(defaults, "has_sorcery_timing", lambda state, player: True)
+    patch(monkeypatch, "has_sorcery_timing", lambda state, player: True)
     state = scenario.build()
     assert PlayLandOption(forest) in options(state)
     assert CastSpellOption(ponder) in options(state)
@@ -176,7 +177,7 @@ def test_117_1a_without_sorcery_timing_neither_is_offered_in_the_main_phase(
     scenario = Scenario(2)
     shock, forest, ponder = scenario.hand(P0, ["Test Shock", "Forest", "Test Ponder"])
     scenario.at(Phase.PRECOMBAT_MAIN)
-    monkeypatch.setattr(defaults, "has_sorcery_timing", lambda state, player: False)
+    patch(monkeypatch, "has_sorcery_timing", lambda state, player: False)
     state = scenario.build()
     assert PlayLandOption(forest) not in options(state)
     assert CastSpellOption(ponder) not in options(state)
@@ -191,7 +192,7 @@ def test_117_1a_may_cast_now_is_the_one_place_flash_would_plug_in(
     scenario = Scenario(2)
     shock, ponder = scenario.hand(P0, ["Test Shock", "Test Ponder"])
     scenario.at(Step.UPKEEP)
-    monkeypatch.setattr(defaults, "may_cast_now", lambda state, player, obj: obj == ponder)
+    patch_card(monkeypatch, "may_cast_now", lambda state, player, obj: obj == ponder)
     state = scenario.build()
     assert CastSpellOption(ponder) in options(state)
     assert CastSpellOption(shock) not in options(state)
@@ -201,7 +202,7 @@ def test_601_3_the_cast_options_come_from_the_function(monkeypatch: pytest.Monke
     scenario = Scenario(2)
     shock, ponder = scenario.hand(P0, ["Test Shock", "Test Ponder"])
     scenario.at(Phase.PRECOMBAT_MAIN)
-    monkeypatch.setattr(defaults, "cast_options", lambda state, player: (ponder,))
+    patch(monkeypatch, "cast_options", lambda state, player: (ponder,))
     state = scenario.build()
     assert CastSpellOption(ponder) in options(state)
     assert CastSpellOption(shock) not in options(state)
@@ -218,7 +219,7 @@ def test_402_2_no_maximum_hand_size_means_no_cleanup_discard(
     scenario = with_libraries(Scenario(2))
     scenario.hand(P0, NINE)
     scenario.at(Step.CLEANUP)
-    monkeypatch.setattr(defaults, "maximum_hand_size", lambda state, player: None)
+    patch(monkeypatch, "maximum_hand_size", lambda state, player: None)
     state = scenario.build()
     assert len(state.player(P0).hand) == 9
     assert request_of(state).kind is not DecisionKind.DISCARD
@@ -231,7 +232,7 @@ def test_402_2_a_maximum_of_5_discards_4_with_the_prompt_naming_5(
     scenario = with_libraries(Scenario(2))
     scenario.hand(P0, NINE)
     scenario.at(Step.CLEANUP)
-    monkeypatch.setattr(defaults, "maximum_hand_size", lambda state, player: 5)
+    patch(monkeypatch, "maximum_hand_size", lambda state, player: 5)
     state = scenario.build()
     request = request_of(state)
     assert request.kind is DecisionKind.DISCARD and request.player == P0
@@ -253,7 +254,7 @@ def test_402_2_the_maximum_is_the_active_players(monkeypatch: pytest.MonkeyPatch
     scenario.hand(P0, NINE)
     scenario.hand(P1, ["Forest"] * 12)
     scenario.at(Step.CLEANUP)
-    monkeypatch.setattr(defaults, "maximum_hand_size", maximum)
+    patch(monkeypatch, "maximum_hand_size", maximum)
     state = scenario.build()
     assert set(asked) == {P0}
     assert len(state.player(P1).hand) == 12 and len(state.player(P0).hand) == 9
@@ -269,7 +270,7 @@ def test_504_1_the_draw_step_draws_what_the_function_says(
     scenario = Scenario(3)
     scenario.library(P0, ["Forest"] * 5)
     scenario.at(Step.DRAW, begin=True)
-    monkeypatch.setattr(defaults, "draw_step_draws", lambda state, player: count)
+    patch(monkeypatch, "draw_step_draws", lambda state, player: count)
     state = scenario.build()
     assert len(state.player(P0).hand) == count
     drawn = [e.record for e in state.event_log if isinstance(e.record, CardDrawn)]
@@ -287,12 +288,12 @@ def test_500_8_an_inserted_segment_is_run(monkeypatch: pytest.MonkeyPatch) -> No
         (Phase.POSTCOMBAT_MAIN, None),
         *TURN_SEQUENCE[-2:],
     )
-    monkeypatch.setattr(defaults, "turn_structure", lambda state, player: extended)
+    patch(monkeypatch, "turn_structure", lambda state, player: extended)
     scenario = with_libraries(Scenario(2))
     scenario.at(Step.UNTAP, number=2)
     state = scenario.build()
     pass_until(state, until_turn(3))
-    assert began(state, 2) == [
+    assert began(state) == [
         (Phase.BEGINNING, Step.UNTAP),
         (Phase.BEGINNING, Step.UPKEEP),
         (Phase.BEGINNING, Step.DRAW),
@@ -322,7 +323,7 @@ def test_500_8_remaining_segments_are_data_an_effect_can_insert_into() -> None:
     assert invariant_violations(state) == []
     state = copy.deepcopy(state)  # the segments are plain data: a copy keeps them
     pass_until(state, until_turn(3))
-    steps = began(state, 2)
+    steps = began(state)
     assert [s for s in steps if s[0] is Phase.COMBAT] == [
         (Phase.COMBAT, Step.BEGINNING_OF_COMBAT),
         (Phase.COMBAT, Step.DECLARE_ATTACKERS),
@@ -333,14 +334,12 @@ def test_500_8_remaining_segments_are_data_an_effect_can_insert_into() -> None:
 def test_500_11_a_skipped_step_doesnt_begin(monkeypatch: pytest.MonkeyPatch) -> None:
     """The function says the upkeep step is skipped: no ``StepBegan`` for it, the untap step is
     followed directly by the draw step."""
-    monkeypatch.setattr(
-        defaults, "is_skipped", lambda state, segment: segment == (Phase.BEGINNING, Step.UPKEEP)
-    )
+    patch_skip(monkeypatch, lambda state, segment: segment == (Phase.BEGINNING, Step.UPKEEP))
     scenario = with_libraries(Scenario(2))
     scenario.at(Step.UNTAP, number=2)
     state = scenario.build()
     pass_until(state, until_turn(3))
-    steps = began(state, 2)
+    steps = began(state)
     assert (Phase.BEGINNING, Step.UPKEEP) not in steps
     assert steps[:3] == [
         (Phase.BEGINNING, Step.UNTAP),
@@ -360,12 +359,13 @@ def test_500_11_the_skip_question_is_asked_about_each_segment_of_the_turn(
         asked.append(segment)
         return False
 
-    monkeypatch.setattr(defaults, "is_skipped", skipped)
+    patch_skip(monkeypatch, skipped)
     scenario = with_libraries(Scenario(2))
     scenario.at(Step.UNTAP, number=2)
     state = scenario.build()
     pass_until(state, until_turn(3))
-    assert asked[: len(TURN_SEQUENCE)] == list(TURN_SEQUENCE)
+    # The scenario starts at the beginning of the untap step, which is already running.
+    assert asked[: len(TURN_SEQUENCE) - 1] == list(TURN_SEQUENCE[1:])
 
 
 # --- 500.7: extra turns -----------------------------------------------------------------------
@@ -411,7 +411,7 @@ def test_800_4k_an_extra_turn_of_a_player_who_left_doesnt_begin() -> None:
 def test_500_7_the_next_turn_function_is_obeyed(monkeypatch: pytest.MonkeyPatch) -> None:
     """The function names the player of the next turn; here always player 1, even after
     player 1's own turn."""
-    monkeypatch.setattr(defaults, "next_turn", lambda state, after: NextTurn(P1, extra=False))
+    patch_next_turn(monkeypatch, lambda state, after: NextTurn(P1, extra=False))
     scenario = with_libraries(Scenario(3), cards=8)
     scenario.at(Phase.POSTCOMBAT_MAIN, number=3, active=P1)
     state = scenario.build()
@@ -456,7 +456,7 @@ def test_724_the_turn_frame_lets_the_rest_of_a_turn_be_removed() -> None:
     scenario.at(Phase.PRECOMBAT_MAIN, number=2)
     state = scenario.build(CutTheTurn())
     pass_until(state, until_turn(3))
-    assert began(state, 2) == [(Phase.ENDING, Step.CLEANUP)]
+    assert began(state) == [(Phase.ENDING, Step.CLEANUP)]
     assert turn_starts(state) == [(3, P1)]
 
 
@@ -475,7 +475,7 @@ def test_502_3_only_the_returned_permanents_untap(monkeypatch: pytest.MonkeyPatc
     theirs = scenario.battlefield(P1, ["Forest"])[0]
     scenario.tap(first, second, theirs)
     scenario.at(Step.UNTAP, number=2)
-    monkeypatch.setattr(defaults, "permanents_that_untap", lambda state, player: (first,))
+    patch(monkeypatch, "permanents_that_untap", lambda state, player: (first,))
     state = scenario.build()
     assert not state.objects[first].tapped
     assert state.objects[second].tapped and state.objects[theirs].tapped
@@ -488,17 +488,17 @@ def test_502_3_when_none_untap_no_untap_event_happens(monkeypatch: pytest.Monkey
     (forest,) = scenario.battlefield(P0, ["Forest"])
     scenario.tap(forest)
     scenario.at(Step.UNTAP, number=2)
-    monkeypatch.setattr(defaults, "permanents_that_untap", lambda state, player: ())
+    patch(monkeypatch, "permanents_that_untap", lambda state, player: ())
     state = scenario.build()
     assert state.objects[forest].tapped
     assert not [e for e in state.event_log if isinstance(e.record, PermanentsUntapped)]
 
 
 def test_500_5_kept_mana_doesnt_empty(monkeypatch: pytest.MonkeyPatch) -> None:
-    scenario = Scenario(2)
+    scenario = with_libraries(Scenario(2))
     scenario.mana(P0, ManaType.GREEN, ManaType.RED)
     scenario.at(Step.UPKEEP, number=2, priority=P0, passed=[P1])
-    monkeypatch.setattr(defaults, "mana_that_empties", lambda state, player: ())
+    patch(monkeypatch, "mana_that_empties", lambda state, player: ())
     state = scenario.build()
     run_script(state, choose(PassOption(), player=P0))
     assert state.turn is not None and state.turn.step is Step.DRAW  # the upkeep ended
@@ -507,17 +507,21 @@ def test_500_5_kept_mana_doesnt_empty(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_500_5_only_the_returned_mana_empties(monkeypatch: pytest.MonkeyPatch) -> None:
-    scenario = Scenario(2)
+    scenario = with_libraries(Scenario(2))
     scenario.mana(P0, ManaType.GREEN, ManaType.RED, ManaType.GREEN)
     scenario.at(Step.UPKEEP, number=2, priority=P0, passed=[P1])
-    monkeypatch.setattr(
-        defaults, "mana_that_empties", lambda state, player: (Mana(ManaType.GREEN),) * 2
+    patch(
+        monkeypatch,
+        "mana_that_empties",
+        lambda state, player: tuple(
+            u for u in state.player(player).mana_pool if u.type is ManaType.GREEN
+        ),
     )
     state = scenario.build()
     run_script(state, choose(PassOption(), player=P0))
     assert state.player(P0).mana_pool == [Mana(ManaType.RED)]
     (emptied,) = [e.record for e in state.event_log if isinstance(e.record, ManaPoolEmptied)]
-    assert emptied.mana == (Mana(ManaType.GREEN),) * 2
+    assert emptied.mana == (Mana(ManaType.GREEN),) * 2 and emptied.kept == (Mana(ManaType.RED),)
 
 
 # --- 104.3: losing the game -------------------------------------------------------------------
@@ -532,7 +536,7 @@ def test_104_3_a_player_who_cant_lose_stays_in_at_zero_life(
         asked.append((player, reason))
         return player != P1
 
-    monkeypatch.setattr(defaults, "can_lose_game", cant_lose)
+    patch_loss(monkeypatch, cant_lose)
     scenario = Scenario(2)
     scenario.life(P1, 0)
     scenario.at(Step.UPKEEP)
@@ -546,7 +550,7 @@ def test_104_3_a_player_who_cant_lose_stays_in_at_zero_life(
 def test_104_3_a_player_who_can_lose_still_does_at_zero_life_with_the_function_present(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(defaults, "can_lose_game", lambda state, player, reason: player != P0)
+    patch_loss(monkeypatch, lambda state, player, reason: player != P0)
     scenario = Scenario(2)
     scenario.life(P1, 0)
     scenario.at(Step.UPKEEP)
@@ -565,13 +569,13 @@ def test_704_5b_a_player_who_cant_lose_after_drawing_from_an_empty_library_stays
         asked.append(reason)
         return False
 
-    monkeypatch.setattr(defaults, "can_lose_game", cant_lose)
+    patch_loss(monkeypatch, cant_lose)
     scenario = Scenario(2)
     scenario.at(Step.DRAW, begin=True, number=2, active=P1)
     state = scenario.build()
     assert LossReason.EMPTY_LIBRARY in asked
     assert state.result is None and state.player(P1).drew_from_empty_library
-    monkeypatch.setattr(defaults, "can_lose_game", lambda state, player, reason: True)
+    patch_loss(monkeypatch, lambda state, player, reason: True)
     events = state_based_actions(state)
     assert [e.player for e in events if isinstance(e, PlayerLost)] == [P1]
 
@@ -580,7 +584,7 @@ def test_704_5b_a_player_who_cant_lose_after_drawing_from_an_empty_library_stays
 
 
 def test_103_4_starting_life_comes_from_the_function(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(defaults, "starting_life", lambda state, player: 13 + player)
+    patch(monkeypatch, "starting_life", lambda state, player: 13 + player)
     state = new_game(GameConfig.standard(), decks(3), seed=1)
     assert [p.life for p in state.players] == [13, 14, 15]
 
@@ -588,7 +592,7 @@ def test_103_4_starting_life_comes_from_the_function(monkeypatch: pytest.MonkeyP
 def test_103_5_the_opening_hand_size_comes_from_the_function(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(defaults, "starting_hand_size", lambda state, player: 3 + player)
+    patch(monkeypatch, "starting_hand_size", lambda state, player: 3 + player)
     state = new_game(GameConfig.standard(), decks(2), seed=1)
     submit(state, answer(state, Pick(0)))  # the first mulligan question follows the deal
     assert request_of(state).kind is DecisionKind.MULLIGAN
@@ -600,7 +604,7 @@ def test_103_5_a_mulligan_option_that_isnt_offered_isnt_asked(
 ) -> None:
     """With only "keep" on offer no one is asked whether to mulligan (a question with a single
     possible answer isn't asked): the first turn begins at once."""
-    monkeypatch.setattr(defaults, "mulligan_options", lambda state, player: (defaults.KEEP,))
+    patch(monkeypatch, "mulligan_options", lambda state, player: (defaults.KEEP,))
     state = new_game(GameConfig.standard(), decks(2), seed=1)
     submit(state, answer(state, Pick(0)))
     assert state.turn is not None and request_of(state).kind is DecisionKind.PRIORITY_ACTION
@@ -624,13 +628,13 @@ def test_103_6_an_action_from_the_opening_hand_is_a_gap_not_ignored(
     """103.6: once the mulligan process is complete, the starting player and then the others may
     take actions with cards from their opening hand. The engine can't do any yet, so a function
     that offers one stops the game loudly instead of skipping the step."""
-    monkeypatch.setattr(
-        defaults,
+    patch(
+        monkeypatch,
         "opening_hand_actions",
         lambda state, player: (state.player(player).hand[0],) if player == P1 else (),
     )
     state = new_game(GameConfig.standard(), decks(2), seed=1)
-    with pytest.raises(NotImplementedRule, match="103.6"):
+    with pytest.raises(NotImplementedRule, match=r"103\.6"):
         submit(state, answer(state, Pick(0)))
         pass_until(state, lambda s: s.turn is not None)
 
@@ -644,7 +648,7 @@ def test_302_6_a_permanent_that_cant_tap_for_a_cost_offers_no_ability(
     scenario = Scenario(2)
     (forest,) = scenario.battlefield(P0, ["Forest"])
     scenario.at(Phase.PRECOMBAT_MAIN)
-    monkeypatch.setattr(defaults, "can_tap_for_cost", lambda state, obj: False)
+    patch_object(monkeypatch, "can_tap_for_cost", lambda state, obj: False)
     state = scenario.build()
     assert not [o for o in options(state) if isinstance(o, ActivateAbilityOption)]
     assert not TapSelfCost().can_pay(state, forest, P0)
@@ -653,12 +657,14 @@ def test_302_6_a_permanent_that_cant_tap_for_a_cost_offers_no_ability(
 def test_302_6_a_creature_the_function_allows_to_tap_offers_its_ability(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A land creature (305.9) has the intrinsic mana ability of its basic land type (305.6): a
+    {T} cost on a creature."""
     scenario = Scenario(2)
-    (elves,) = scenario.battlefield(P0, ["Llanowar Elves"])
+    (dryad,) = scenario.battlefield(P0, ["Test Land Creature"])
     scenario.at(Phase.PRECOMBAT_MAIN)
-    monkeypatch.setattr(defaults, "can_tap_for_cost", lambda state, obj: True)
+    patch_object(monkeypatch, "can_tap_for_cost", lambda state, obj: True)
     state = scenario.build()
-    assert ActivateAbilityOption(elves, 0) in options(state)
+    assert ActivateAbilityOption(dryad, 0) in options(state)
 
 
 def test_118_3_an_already_tapped_permanent_cant_pay_a_tap_cost_whatever_the_function_says(
@@ -668,6 +674,6 @@ def test_118_3_an_already_tapped_permanent_cant_pay_a_tap_cost_whatever_the_func
     (forest,) = scenario.battlefield(P0, ["Forest"])
     scenario.tap(forest)
     scenario.at(Phase.PRECOMBAT_MAIN)
-    monkeypatch.setattr(defaults, "can_tap_for_cost", lambda state, obj: True)
+    patch_object(monkeypatch, "can_tap_for_cost", lambda state, obj: True)
     state = scenario.build()
     assert not TapSelfCost().can_pay(state, forest, P0)

@@ -37,7 +37,6 @@ from resolve.decisions.spaces import (
     PlayerOption,
 )
 from resolve.engine import loop as engine_loop
-from resolve.engine import view as engine_view
 from resolve.engine.api import new_game, view_for
 from resolve.engine.concede import concede
 from resolve.engine.deck import Deck
@@ -45,6 +44,7 @@ from resolve.engine.view import PlayerView
 from resolve.errors import InvalidAnswer
 from resolve.events.base import AnswerRecord, LogEntry
 from resolve.events.game import Conceded, PlayerLost
+from resolve.rules import defaults
 from resolve.state.config import GameConfig
 from resolve.state.game import GameObject, GameState
 from resolve.state.ids import PlayerId
@@ -550,10 +550,10 @@ def test_state_problems_doesnt_trust_the_engines_knowledge_check(
     """402.3: if the engine showed every hand to everyone, the harness's own oracle notices."""
     state = board()
 
-    def everyone_knows(obj: GameObject, viewer: PlayerId) -> bool:
+    def everyone_knows(state: GameState, obj: GameObject, viewer: PlayerId) -> bool:
         return True
 
-    monkeypatch.setattr(engine_view, "is_known_to", everyone_knows)
+    monkeypatch.setattr(defaults, "knows_identity", everyone_knows)
     assert state_problems(state) == ["player 1's view of object 1 is wrong"]
 
 
@@ -563,10 +563,10 @@ def test_state_problems_finds_a_hand_card_hidden_from_a_player_who_knows_it(
     """400.2: player 2 knows player 0's hand card, so their view names it."""
     state = board()
 
-    def ignores_known_to(obj: GameObject, viewer: PlayerId) -> bool:
+    def ignores_known_to(state: GameState, obj: GameObject, viewer: PlayerId) -> bool:
         return obj.zone.kind.is_public or viewer == obj.owner
 
-    monkeypatch.setattr(engine_view, "is_known_to", ignores_known_to)
+    monkeypatch.setattr(defaults, "knows_identity", ignores_known_to)
     assert state_problems(state) == ["player 2's view of object 1 is wrong"]
 
 

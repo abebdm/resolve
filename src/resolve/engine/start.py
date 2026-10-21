@@ -11,8 +11,9 @@
    opponents is left out: a uniformly random order stays uniformly random.
 4. 103.4: life totals were set by ``initial_state``.
 5. 103.5: opening hands and mulligans (``resolve.engine.mulligans.OpeningHands``).
-6. 103.6: actions from opening hands. No card definition can have such an ability yet, so there
-   is nothing to do.
+6. 103.6: actions from opening hands (``OpeningHandActions``). No card definition can have such
+   an ability yet, so ``defaults.opening_hand_actions`` offers none; if one ever does, the step
+   raises ``NotImplementedRule``.
 7. 103.8: the starting player takes their first turn (``resolve.engine.turns``).
 """
 
@@ -32,6 +33,7 @@ from resolve.events.game import (
     StartingPlayerChosen,
 )
 from resolve.events.pipeline import ApplyEvents
+from resolve.rules import defaults
 from resolve.state.game import next_in_turn_order, players_in_game, turn_order
 from resolve.state.ids import PlayerId
 from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
@@ -39,6 +41,19 @@ from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
 if TYPE_CHECKING:
     from resolve.decisions.request import DecisionRequest
     from resolve.state.game import GameState
+
+
+@dataclass(slots=True)
+class OpeningHandActions(Task):
+    """103.6: once the mulligan process is complete, the starting player and then each other
+    player in turn order may take actions with cards from their opening hand. Nothing offers any
+    (``defaults.opening_hand_actions``); a card that did would be a gap, not skipped."""
+
+    def run(self, state: GameState) -> TaskResult:
+        for player in players_in_game(state):
+            if defaults.opening_hand_actions(state, player):
+                raise NotImplementedRule("103.6: actions from the opening hand (roadmap M5)")
+        return Done()
 
 
 @dataclass(slots=True)
@@ -74,7 +89,12 @@ class StartGame(Task):
         chosen = StartingPlayerChosen(
             chooser=self.chooser, starting_player=option.player, rules=("103.1",)
         )
-        next_steps: tuple[Task, ...] = (ShuffleLibraries(), OpeningHands(), FirstTurn())
+        next_steps: tuple[Task, ...] = (
+            ShuffleLibraries(),
+            OpeningHands(),
+            OpeningHandActions(),
+            FirstTurn(),
+        )
         if state.config.commander is not None:
             next_steps = (PutCommandersIntoCommandZone(), *next_steps)
         return Push((ApplyEvents((chosen,)), *next_steps))

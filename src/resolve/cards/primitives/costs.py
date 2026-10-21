@@ -10,8 +10,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from resolve.data.types import CardType
-from resolve.errors import NotImplementedRule
 from resolve.events.permanents import PermanentTapped
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.zones import ZoneKind
@@ -45,19 +43,17 @@ class TapSelfCost(Cost):
     """{T}: tap this permanent (107.5). An already tapped permanent can't pay it (118.3).
 
     A creature's {T} ability also needs the creature to have been controlled continuously since
-    its controller's most recent turn began (302.6, 602.5a); that isn't tracked yet, so a {T}
-    cost on a creature raises ``NotImplementedRule``.
+    its controller's most recent turn began (302.6, 602.5a); ``defaults.can_tap_for_cost`` decides
+    (M2.4 builds it; until then a {T} cost on a creature raises ``NotImplementedRule``).
     """
 
     def can_pay(self, state: GameState, source: ObjectId, player: PlayerId) -> bool:
-        from resolve.effects.characteristics import characteristics
+        from resolve.rules import defaults
 
         obj = state.object(source)
         if obj.zone.kind is not ZoneKind.BATTLEFIELD or obj.tapped:
             return False
-        if characteristics(state, source).is_a(CardType.CREATURE):
-            raise NotImplementedRule("302.6: the {T} abilities of creatures (summoning sickness)")
-        return True
+        return defaults.can_tap_for_cost(state, source)  # 302.6
 
     def payment(self, state: GameState, source: ObjectId, player: PlayerId) -> tuple[Event, ...]:
         return (PermanentTapped(obj=source, rules=("107.5", "701.26a")),)

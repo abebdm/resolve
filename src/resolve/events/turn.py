@@ -30,7 +30,11 @@ class TurnBegan(Event):
         previous = 0 if state.turn is None else state.turn.number
         if self.number != previous + 1:
             raise EngineError(f"turn {self.number} can't follow turn {previous}")
-        state.turn = TurnState(number=self.number, active_player=self.player)
+        from resolve.rules import defaults
+
+        # 500.1: the turn has the phases and steps the rules give it (500.8-500.10 add to them).
+        segments = list(defaults.turn_structure(state, self.player))
+        state.turn = TurnState(number=self.number, active_player=self.player, segments=segments)
 
 
 @dataclass(frozen=True, kw_only=True)

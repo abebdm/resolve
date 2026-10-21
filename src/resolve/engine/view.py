@@ -6,7 +6,8 @@ Agents only ever see a ``PlayerView``: a frozen snapshot holding what one player
   (shuffling isn't a zone change, 400.7), so showing those IDs would reveal where a once-seen card
   went, and the initial IDs follow decklist order.
 - **Hands** show the owner their cards (402.3). Other players see stable placeholder IDs with no
-  name, and may count them.
+  name, and may count them. ``defaults.knows_identity`` decides who knows what, including that a
+  player's controller knows what they do (723.4).
 - **Public zones** (400.2) show every object.
 - **The turn**: its number, the active player, the phase and step, and who holds priority are
   public (``TurnView``), as is whether each player has lost or left the game, each mana pool
@@ -28,11 +29,11 @@ from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionRequest
 from resolve.errors import NotImplementedRule
 from resolve.events.base import LogEntry
+from resolve.rules import defaults
 from resolve.state.game import GameObject, GameResult, GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana
 from resolve.state.turn import Phase, Step
-from resolve.state.zones import ZoneKind
 from resolve.values import Immutable
 
 
@@ -105,15 +106,6 @@ class PlayerView(Immutable):
     result: GameResult | None
 
 
-def is_known_to(obj: GameObject, viewer: PlayerId) -> bool:
-    """Whether ``viewer`` knows the identity of ``obj`` (400.2, 402.3)."""
-    if obj.zone.kind.is_public:
-        return True
-    if obj.zone.kind is ZoneKind.HAND and obj.owner == viewer:
-        return True
-    return viewer in obj.known_to
-
-
 def view_for(state: GameState, viewer: PlayerId) -> PlayerView:
     """The game as ``viewer`` may see it."""
     state.player(viewer)  # validates the ID
@@ -147,11 +139,25 @@ def view_for(state: GameState, viewer: PlayerId) -> PlayerView:
         if pending is None
         else WaitingFor(pending.player, pending.kind, pending.for_player),
         request=pending if pending is not None and pending.player == viewer else None,
-        log=tuple(
-            shown for entry in state.event_log if (shown := entry.shown_to(viewer)) is not None
-        ),
+        log=tuple(shown for entry in state.event_log if (shown := _shown(state, entry, viewer))),
         result=state.result,
     )
+
+
+def _shown(state: GameState, entry: LogEntry, viewer: PlayerId) -> LogEntry | None:
+    """The log entry as ``viewer`` sees it: in full if it is visible to them or, while they
+    control another player, to that player (723.4); otherwise as ``LogEntry.shown_to`` gives it."""
+    seen = entry.shown_to(viewer)
+    if seen is entry:
+        return seen
+    for other in state.players:
+        if (
+            other.id != viewer
+            and defaults.deciding_player(state, other.id) == viewer
+            and entry.is_visible_to(other.id)
+        ):
+            return entry
+    return seen
 
 
 def _turn_view(state: GameState) -> TurnView | None:
@@ -163,7 +169,7 @@ def _turn_view(state: GameState) -> TurnView | None:
 
 def _object_view(state: GameState, obj: GameObject, viewer: PlayerId) -> ObjectView:
     name: str | None = None
-    if is_known_to(obj, viewer):
+    if defaults.knows_identity(state, obj, viewer):
         if obj.card is None:
             raise NotImplementedRule("111.1: viewing objects not represented by a card")
         name = state.cards[obj.card].data.name

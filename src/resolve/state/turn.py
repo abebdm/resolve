@@ -97,8 +97,9 @@ class TurnState:
     - ``passed``: the players who have passed priority in succession since the last time a
       player took an action, in the order they passed (117.3d, 117.4).
     - ``lands_played``: lands the active player has played this turn (305.2).
-    - ``segments``: the phases and steps still to come this turn, in order (500.1), as data so
-      effects can insert and remove them (500.8-500.10); the current one is not among them.
+    - ``segments``: the phases and steps still to begin this turn, in order (500.1), as data so
+      effects can insert and remove them (500.8-500.10). A turn starts with all of them; the one
+      in progress is not among them.
     """
 
     number: int

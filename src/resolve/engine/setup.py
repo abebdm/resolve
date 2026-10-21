@@ -19,6 +19,7 @@ from collections.abc import Sequence
 
 from resolve.engine.deck import Deck, DeckCard
 from resolve.errors import DeckError
+from resolve.rules import defaults
 from resolve.state.config import GameConfig
 from resolve.state.game import Card, GameState, Player, create_object
 from resolve.state.ids import CardId, PlayerId
@@ -38,8 +39,10 @@ def initial_state(config: GameConfig, decks: Sequence[Deck], seed: int) -> GameS
         config=config,
         seed=seed,
         rng=Rng.from_seed(seed),
-        players=[Player(PlayerId(seat), config.starting_life) for seat in range(len(decks))],
+        players=[Player(PlayerId(seat), 0) for seat in range(len(decks))],
     )
+    for player in state.players:
+        player.life = defaults.starting_life(state, player.id)  # 103.4
     for seat, deck in enumerate(decks):
         owner = PlayerId(seat)
         commanders = [_add_card(state, owner, deck_card) for deck_card in deck.commanders]

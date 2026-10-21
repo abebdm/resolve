@@ -197,14 +197,23 @@ def zone_list(state: GameState, zone: Zone) -> list[ObjectId]:
 def turn_order(state: GameState) -> tuple[PlayerId, ...]:
     """All players in turn order, starting with the starting player (103.1).
 
-    Turn order proceeds clockwise, which is seating order. Players who left the game (800.4)
-    can't exist yet, so every player is included.
+    Turn order proceeds clockwise, which is seating order (103.1); ``GameState.turn_direction``
+    is -1 once something reverses it. Every player is included, those who left the game too.
     """
     if state.starting_player is None:
         raise EngineError("turn order isn't defined before the starting player is chosen (103.1)")
     first = state.starting_player
     count = len(state.players)
-    return tuple(PlayerId((first + offset) % count) for offset in range(count))
+    step = state.turn_direction
+    return tuple(PlayerId((first + step * offset) % count) for offset in range(count))
+
+
+def is_multiplayer(state: GameState) -> bool:
+    """Whether the game began with more than two players (100.1b).
+
+    Seats are never removed, so the number of seats is the number of players the game began with.
+    """
+    return len(state.players) > 2
 
 
 def players_in_game(state: GameState) -> tuple[PlayerId, ...]:
@@ -234,13 +243,13 @@ def apnap_order(state: GameState) -> tuple[PlayerId, ...]:
 
 
 def next_in_turn_order(state: GameState, player: PlayerId) -> PlayerId:
-    """The player after ``player`` in turn order (clockwise, 103.1), among those still in the game.
+    """The player after ``player`` in turn order (103.1), among those still in the game.
 
     ``player`` itself may have left the game; ``EngineError`` if nobody else is still in it.
     """
     count = len(state.players)
     for offset in range(1, count + 1):
-        candidate = PlayerId((player + offset) % count)
+        candidate = PlayerId((player + state.turn_direction * offset) % count)
         if candidate != player and not state.player(candidate).left_game:
             return candidate
     raise EngineError(f"no player after player {player} is still in the game")

@@ -71,9 +71,9 @@ def test_every_rule_default_function_cites_its_rules(name: str, rules: list[str]
     assert all(rule in cited for rule in rules), (name, rules, cited)
 
 
-def main_phase(players: int = 2, **at: int) -> Scenario:
-    scenario = Scenario(players)
-    scenario.at(Phase.PRECOMBAT_MAIN, **at)
+def main_phase(lands_played: int = 0) -> Scenario:
+    scenario = Scenario(2)
+    scenario.at(Phase.PRECOMBAT_MAIN, lands_played=lands_played)
     return scenario
 
 
@@ -261,7 +261,7 @@ def test_302_6_a_tap_cost_on_a_creature_is_still_a_gap_until_m2_4() -> None:
     scenario.battlefield(P0, ["Test Land Creature"])
     state = scenario.build()
     assert defaults.can_tap_for_cost(state, forest)
-    with pytest.raises(NotImplementedRule, match="302.6"):
+    with pytest.raises(NotImplementedRule, match=r"302\.6"):
         defaults.can_tap_for_cost(state, elves)
 
 
@@ -292,7 +292,7 @@ def test_103_5_a_player_with_no_cards_may_only_keep() -> None:
 
 
 def test_103_4_103_5_903_10a_the_game_configuration_is_read_through_accessors() -> None:
-    """103.4: 20 life, 40 in Commander (103.4c); 103.5: seven cards; 903.10a: 21 commander damage."""
+    """103.4: 20 life, 40 in Commander (103.4c); 103.5: seven cards; 903.10a: 21 damage."""
     standard = Scenario(2).build()
     assert (defaults.starting_life(standard, P0), defaults.starting_hand_size(standard, P0)) == (
         20,

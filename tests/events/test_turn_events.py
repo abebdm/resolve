@@ -13,7 +13,7 @@ from resolve.events.game import PlayerLost
 from resolve.events.turn import PriorityPassed, StepBegan, TurnBegan
 from resolve.state.config import GameConfig
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.turn import Phase, Step, TurnState
+from resolve.state.turn import TURN_SEQUENCE, Phase, Step, TurnState
 from resolve.state.zones import Zone
 from tests.scenario import Scenario
 
@@ -24,11 +24,21 @@ def test_500_1_turn_began_starts_the_next_turn_in_its_untap_step() -> None:
     state = Scenario(2).build()
     TurnBegan(player=P1, number=1, rules=("500.1",)).apply(state)
     turn = state.turn
-    assert turn == TurnState(1, P1, Phase.BEGINNING, Step.UNTAP)
+    assert turn == TurnState(
+        1,
+        P1,
+        Phase.BEGINNING,
+        Step.UNTAP,
+        segments=list(TURN_SEQUENCE),  # 500.1: all to come
+    )
     assert turn is not None
     turn.lands_played = 1
     TurnBegan(player=P0, number=2, rules=("500.1",)).apply(state)
-    assert state.turn == TurnState(2, P0)  # a new turn: nothing carries over (305.2)
+    assert state.turn == TurnState(
+        2,
+        P0,
+        segments=list(TURN_SEQUENCE),  # a new turn: nothing carries over (305.2)
+    )
 
 
 @pytest.mark.parametrize("number", [0, 2, 3])

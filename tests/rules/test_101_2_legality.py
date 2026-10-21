@@ -23,10 +23,12 @@ from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import ChooseOne, PlayLandOption
 from resolve.rules import defaults, legality
 from resolve.rules.legality import Action, Permission, PlayLand, Prohibition
+from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.turn import Phase, Step
 from tests.game_fixtures import request_of
 from tests.scenario import Scenario, run_script
+from tests.seams import patch, patch_permissions
 
 P0, P1 = PlayerId(0), PlayerId(1)
 
@@ -89,7 +91,7 @@ def test_101_2_a_prohibition_beats_a_permission(monkeypatch: pytest.MonkeyPatch)
     at priority. The other land, which the prohibition doesn't name, still is."""
     scenario, forest, other = main_with_forests()
 
-    def prohibit(state: object, action: Action) -> tuple[Prohibition, ...]:
+    def prohibit(state: GameState, action: Action) -> tuple[Prohibition, ...]:
         if isinstance(action, PlayLand) and action.card == forest:
             return (Prohibition("101.2", "this land can't be played"),)
         return ()
@@ -108,28 +110,49 @@ def test_101_2_a_prohibition_beats_a_permission(monkeypatch: pytest.MonkeyPatch)
     assert request.kind is DecisionKind.PRIORITY_ACTION
 
 
-def test_101_2_a_permission_from_an_effect_is_allowed_unless_prohibited(
+def test_101_2_an_extra_permission_doesnt_beat_the_limit_of_305_2b(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An effect's permission to play a land after the limit is reached (305.2a), cancelled by a
-    prohibition on the same action: prohibited. Without the prohibition: allowed."""
+    """305.2b says a player *can't* play a land once they've played all they can: a prohibition.
+    An effect's permission to play the land doesn't override it (101.2); an effect that raises
+    the number of lands they can play does lift it (305.2a)."""
     scenario = Scenario(2)
     (forest,) = scenario.hand(P0, ["Forest"])
     scenario.at(Phase.PRECOMBAT_MAIN, priority=P0, lands_played=1)
     state = scenario.build()
     real = legality.permissions
+
+    def grant(state: GameState, action: Action) -> tuple[Permission, ...]:
+        return (*real(state, action), Permission("305.2", "an effect lets them play it"))
+
+    monkeypatch.setattr(legality, "permissions", grant)
+    verdict = legality.allowed(state, PlayLand(P0, forest))
+    assert not verdict.allowed and verdict.rules[:2] == ("101.2", "305.2b")
+    patch(monkeypatch, "land_plays_allowed", lambda state, player: 2)
+    assert legality.allowed(state, PlayLand(P0, forest)).allowed
+
+
+def test_101_2_an_effects_permission_alone_allows_the_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With no rule of its own allowing it (the land is in the graveyard), a permission from an
+    effect is enough; a prohibition on the same action still wins."""
+    scenario = Scenario(2)
+    (forest,) = scenario.graveyard(P0, ["Forest"])
+    scenario.at(Phase.PRECOMBAT_MAIN, priority=P0)
+    state = scenario.build()
     assert not legality.allowed(state, PlayLand(P0, forest)).allowed
 
-    def grant(state: object, action: Action) -> tuple[Permission, ...]:
-        return (*real(state, action), Permission("305.2", "an effect lets them play it"))  # type: ignore[arg-type]
+    def grant(state: GameState, action: Action) -> tuple[Permission, ...]:
+        return (Permission("305.1", "play lands from the graveyard"),)
 
     monkeypatch.setattr(legality, "permissions", grant)
     assert legality.allowed(state, PlayLand(P0, forest)).allowed
-    monkeypatch.setattr(
-        legality,
-        "prohibitions",
-        lambda s, a: (Prohibition("101.2", "never"),),  # type: ignore[arg-type]
-    )
+
+    def forbid(state: GameState, action: Action) -> tuple[Prohibition, ...]:
+        return (Prohibition("101.2", "never"),)
+
+    monkeypatch.setattr(legality, "prohibitions", forbid)
     assert not legality.allowed(state, PlayLand(P0, forest)).allowed
 
 
@@ -137,7 +160,7 @@ def test_101_2_without_any_permission_a_missing_prohibition_isnt_enough(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     scenario, forest, _ = main_with_forests()
-    monkeypatch.setattr(legality, "permissions", lambda s, a: ())
+    patch_permissions(monkeypatch, lambda state, action: ())
     state = scenario.build()
     assert not legality.allowed(state, PlayLand(P0, forest)).allowed
     assert defaults.land_play_options(state, P0) == ()
