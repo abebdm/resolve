@@ -26,6 +26,9 @@ class ManaAdded(Event):
             raise EngineError("ManaAdded needs some mana")
         state.player(self.player).mana_pool.extend(self.mana)
 
+    def redo(self, state: GameState) -> None:
+        self.apply(state)  # the same units again (733.1)
+
 
 @dataclass(frozen=True, kw_only=True)
 class ManaPoolEmptied(Event):

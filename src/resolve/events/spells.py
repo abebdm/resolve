@@ -66,12 +66,13 @@ class SpellCast(Event):
 @dataclass(frozen=True, kw_only=True)
 class ActionReversed(Event):
     """``player``'s action was illegal and has been reversed (733.1): the game is as it was
-    before it, but for the mana abilities the player kept. ``card`` is the card a reversed cast
-    returned to its zone (with its old ID), which every player saw on the stack: they know it now
-    (400.2). Public."""
+    before it, but for the mana abilities the player kept, whose results stand (``kept``: their
+    sources, in activation order). ``card`` is the card a reversed cast returned to its zone (with
+    its old ID), which every player saw on the stack: they know it now (400.2). Public."""
 
     player: PlayerId
     card: ObjectId | None = None
+    kept: tuple[ObjectId, ...] = ()
 
     def apply(self, state: GameState) -> None:
         if self.card is None:

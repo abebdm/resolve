@@ -29,7 +29,7 @@ restrictions (106.6) and non-mana components arrive in M2.4 and M4.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -79,10 +79,16 @@ def mana_ability_options(state: GameState, player: PlayerId) -> tuple[ActivateAb
 
 @dataclass(frozen=True)
 class ManaActivation(Immutable):
-    """A mana ability activated while paying: ability ``ability`` of ``source`` (733.1)."""
+    """A mana ability activated while paying: ability ``ability`` of ``source`` (733.1).
+
+    ``log_from`` and ``log_to`` delimit the event log entries of its activation (``log_to`` is
+    ``None`` until it has finished), so a reversal can keep its results as they happened.
+    """
 
     source: ObjectId
     ability: int
+    log_from: int
+    log_to: int | None = None
 
 
 @dataclass(frozen=True)
@@ -211,6 +217,9 @@ class PayCosts:
 
     def step(self, state: GameState) -> PaymentStep:
         """Ask, activate or finish; safe to call again after it asked (design.md §5)."""
+        if self.activations and self.activations[-1].log_to is None:
+            # The activation pushed last has finished: its log entries end here.
+            self.activations[-1] = replace(self.activations[-1], log_to=len(state.event_log))
         if self.stage is PaymentStage.ACTIVATE:
             abilities = mana_ability_options(state, self.payer)
             if abilities:
@@ -267,7 +276,7 @@ class PayCosts:
                 raise EngineError(f"PayCosts can't resume with {answer!r}")
             match request.space.chosen(answer):
                 case ActivateAbilityOption(object=source, ability=index):
-                    self.activations.append(ManaActivation(source, index))
+                    self.activations.append(ManaActivation(source, index, len(state.event_log)))
                     return Push((ActivateManaAbility(self.payer, source, index),))
                 case _:
                     self.stage = PaymentStage.PAY

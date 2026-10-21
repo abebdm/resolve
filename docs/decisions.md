@@ -19,6 +19,26 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-21: Kept mana abilities' results stand after a reversal (733.1)
+- **Decision (the user: "follow the MTG rulebook"):** after an illegal action is reversed, the
+  mana abilities the player didn't reverse keep their results exactly as they happened. The
+  checkpoint is restored, then each kept activation's logged events are made again as recorded
+  (`Event.redo`, in activation order, not logged again); the ability is not activated again.
+  `ActionReversed.kept` names their sources. **Supersedes** the plan's and design.md §17.4's
+  "re-apply the kept mana abilities with their recorded choices".
+- **Why:** 733.1 lets a player reverse mana abilities; those not reversed simply aren't undone.
+  Activating one again acts on the restored state: "add {G} for each card in your hand" would
+  count the spell back in hand, and Lion's Eye Diamond (M4) would discard it. The test reviewer
+  found the problem.
+- **How:** each `ManaActivation` records the log range of its activation (`log_from`,
+  `log_to`). Events no player's action causes (`Event.outside_actions`: a concession, leaving,
+  the game ending) are skipped: `restore_checkpoint` keeps their consequences. `redo` is
+  implemented for `PermanentTapped` and `ManaAdded`; any other event raises
+  `NotImplementedRule("733.1")` until a mana ability can cause it (M4).
+- **Rules:** 733.1, 605.3a, 800.4a.
+- **Where:** `resolve.engine.casting`, `resolve.engine.payment`, `resolve.events.base`,
+  `resolve.events.mana`, `resolve.events.permanents`, `resolve.events.game`.
+
 ### 2026-10-21: M2.3: casting, paying, reversing and resolving
 - **Decision (casting variants):** `cast_options` offers one option per permission and per
   variant the card's layout gives (a split card's halves, both faces of a modal double-faced

@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, ClassVar
 from resolve.citations import check_rules
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import AnswerValue
+from resolve.errors import NotImplementedRule
 from resolve.state.ids import PlayerId
 from resolve.values import Immutable
 
@@ -45,6 +46,9 @@ class Event(Immutable, ABC):
     # 733.1: an action that moved cards to or from a library, shuffled one or revealed cards from
     # one can't be reversed. Events that do any of those say so.
     library_action: ClassVar[bool] = False
+    # Events that are no player's action, so never part of one being reversed: a concession and
+    # leaving the game (104.3a, 800.4a).
+    outside_actions: ClassVar[bool] = False
 
     def __post_init__(self) -> None:
         check_rules(self.rules)
@@ -56,6 +60,15 @@ class Event(Immutable, ABC):
         Returns the event as applied, when applying it learned something the proposal didn't
         say (such as a new object's ID); ``None`` means the proposal itself is the record.
         """
+
+    def redo(self, state: GameState) -> None:
+        """Make this applied event's change again, exactly as recorded, without logging it: a
+        reversal keeps the results of the mana abilities the player didn't reverse (733.1).
+
+        Events a mana ability can cause override it; any other is a gap until it can be part of a
+        mana ability (M4: sacrificing, discarding, and so on).
+        """
+        raise NotImplementedRule("733.1: keeping the results of a mana ability with this effect")
 
     def visible_to(self, state: GameState) -> tuple[PlayerId, ...] | None:
         """Who may see this event in the log, judged before it is applied; ``None``: everyone."""

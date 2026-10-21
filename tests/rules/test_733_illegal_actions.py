@@ -18,12 +18,21 @@ From the pinned CR:
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
+from resolve.cards.definitions import vanilla_creatures
+from resolve.cards.registry import CardRegistry
+from resolve.data.cards import CardDatabase, parse_oracle_cards
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import ChooseSubset, ManaActivationOption
 from resolve.engine.concede import concede
-from resolve.errors import EngineError
+from resolve.errors import EngineError, NotImplementedRule
+from resolve.events.cards import CardDiscarded
+from resolve.events.game import Conceded, GameEnded, PlayerLeftGame, PlayerLost
+from resolve.events.mana import ManaAdded
+from resolve.events.permanents import PermanentTapped
 from resolve.events.spells import ActionReversed, SpellCast
 from resolve.state.checkpoint import (
     NOT_RESTORED,
@@ -36,6 +45,7 @@ from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana, ManaType
 from resolve.state.turn import Phase, Step
 from resolve.state.zones import Zone
+from tests import scryfall_fixtures as fx
 from tests.casting_support import (
     activate,
     activate_with_priority,
@@ -45,7 +55,7 @@ from tests.casting_support import (
     records,
     reverse,
 )
-from tests.engine_support import ReversesAfterDrawing
+from tests.engine_support import HAND_BLOOM, HAND_BLOOM_RECORD, ReversesAfterDrawing
 from tests.game_fixtures import request_of
 from tests.scenario import Scenario, run_script
 
@@ -219,3 +229,56 @@ def test_733_1_a_player_may_reverse_some_mana_abilities_and_keep_others() -> Non
     assert not state.objects[forest_a].tapped and state.objects[forest_b].tapped
     assert state.player(P0).mana_pool == [Mana(G, forest_b)]
     assert state.player(P0).hand == [giant]
+
+
+def test_733_1_a_kept_mana_ability_s_results_stand_as_they_happened() -> None:
+    """733.1 lets the player reverse mana abilities; the ones not reversed aren't redone, their
+    results simply stand. Test Hand Bloom adds {G} for each card in hand. Casting Hill Giant from
+    a hand of two leaves one card in hand, so it adds {G}. {G} can't pay {3}{R}; the cast is
+    reversed and P0 keeps the Bloom's mana: still one {G}, although Hill Giant is back in hand
+    (activating it again now would add two). Nothing is logged for the kept ability again."""
+    scenario = Scenario(
+        2,
+        database=CardDatabase(
+            parse_oracle_cards(
+                [*map(card_record, ("Hill Giant", "Grizzly Bears")), HAND_BLOOM_RECORD]
+            )
+        ),
+        registry=CardRegistry([*vanilla_creatures.DEFINITIONS, HAND_BLOOM]),
+    )
+    giant, _ = scenario.hand(P0, ["Hill Giant", "Grizzly Bears"])
+    (bloom,) = scenario.battlefield(P0, ["Test Hand Bloom"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(giant, P0), activate(bloom))
+    assert state.player(P0).mana_pool == [Mana(G, bloom)]
+    added_before = len(records(state, ManaAdded))
+    run_script(state, reverse())
+    assert state.player(P0).hand[0] == giant and len(state.player(P0).hand) == 2
+    assert state.objects[bloom].tapped
+    assert state.player(P0).mana_pool == [Mana(G, bloom)]
+    assert len(records(state, ManaAdded)) == added_before
+    (reversed_,) = records(state, ActionReversed)
+    assert reversed_.kept == (bloom,)
+
+
+def card_record(name: str) -> dict[str, Any]:
+    return {"Hill Giant": fx.HILL_GIANT, "Grizzly Bears": fx.GRIZZLY_BEARS}[name]
+
+
+def test_733_1_redo_makes_a_mana_abilitys_events_again_and_refuses_the_others() -> None:
+    """``Event.redo`` (what keeping a mana ability's results uses) makes a tap and an addition of
+    mana again exactly as recorded; any other event is a gap until a mana ability can cause it
+    (M4: sacrifice, discard, ...). A concession and leaving the game are never part of an action."""
+    scenario = Scenario(2)
+    (forest,) = scenario.battlefield(P0, ["Forest"])
+    (card,) = scenario.hand(P0, ["Grizzly Bears"])
+    state = scenario.build()
+    PermanentTapped(obj=forest, rules=("701.26a",)).redo(state)
+    ManaAdded(player=P0, mana=(Mana(G, forest),), rules=("106.4",)).redo(state)
+    assert state.objects[forest].tapped and state.player(P0).mana_pool == [Mana(G, forest)]
+    with pytest.raises(NotImplementedRule) as gap:
+        CardDiscarded(player=P0, card=card, rules=("701.9a",)).redo(state)
+    assert gap.value.rule == "733.1"
+    assert all(kind.outside_actions for kind in (Conceded, PlayerLost, PlayerLeftGame, GameEnded))
+    assert not PermanentTapped.outside_actions and not ManaAdded.outside_actions

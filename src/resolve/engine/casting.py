@@ -25,8 +25,10 @@ before anything moves: 709.3 (split halves), 702.102 (fuse), 712.11a-b (back fac
 118.3), the player chooses which of the mana abilities they activated while paying to reverse
 (``REVERSE_MANA_ABILITIES``, a ``ChooseSubset``; not asked when none were activated). The
 checkpoint is restored: the card is back where it was with its old ID, tapped lands untap, pools
-are as before. The kept mana abilities are activated again, in their original order, so their
-effects (and, from M4, their triggers) happen again while the undone ones' don't. Then a public
+are as before. The kept mana abilities aren't undone: their recorded events are made again
+exactly as they happened (``Event.redo``), in order, without activating them again and without
+logging them twice, so their results stand (a "for each card in your hand" ability keeps what it
+added, although the spell is back in hand). Then a public
 ``ActionReversed`` records that every player saw the card (400.2). The player keeps priority
 (733.2), and passes made before the attempt still count: the priority task clears them only once
 a spell is cast. The dependency rule of 733.1 (an ability whose mana a kept ability spent must be
@@ -46,9 +48,9 @@ from resolve.data.mana_cost import ManaCost, SymbolKind
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import AnswerValue, ChooseSubset, ManaActivationOption, PickMany
 from resolve.effects.characteristics import characteristics
-from resolve.engine.mana import ActivateManaAbility
 from resolve.engine.payment import Paid, PayCosts, PaymentStep, Unpayable
 from resolve.errors import EngineError, NotImplementedRule
+from resolve.events.base import Event
 from resolve.events.mana import ManaSpent
 from resolve.events.pipeline import ApplyEvents
 from resolve.events.spells import ActionReversed, SpellCast, SpellProposed
@@ -269,12 +271,28 @@ class CastSpell(Task):
     def _reverse(self, state: GameState, kept: tuple[ManaActivationOption, ...]) -> TaskResult:
         if self.checkpoint is None:
             raise EngineError("CastSpell is reversing without a checkpoint")
+        activations = [] if self.payment is None else self.payment.activations
+        kept_entries: list[Event] = []
+        for option in kept:
+            activation = activations[option.number]
+            for entry in state.event_log[activation.log_from : activation.log_to]:
+                record = entry.record
+                # A concession during the activation isn't part of it (restore_checkpoint keeps
+                # its consequences, 800.4a).
+                if isinstance(record, Event) and not record.outside_actions:
+                    kept_entries.append(record)
         restore_checkpoint(state, self.checkpoint)
-        again: list[Task] = [
-            ActivateManaAbility(self.player, option.object, option.ability) for option in kept
-        ]
-        reversed_ = ActionReversed(player=self.player, card=self.card, rules=("733.1", "733.2"))
-        return Push((*again, ApplyEvents((reversed_,))))
+        # 733.1: the mana abilities the player doesn't reverse aren't undone: their results stand
+        # exactly as they happened (they aren't activated again).
+        for record in kept_entries:
+            record.redo(state)
+        reversed_ = ActionReversed(
+            player=self.player,
+            card=self.card,
+            kept=tuple(option.object for option in kept),
+            rules=("733.1", "733.2"),
+        )
+        return Push((ApplyEvents((reversed_,)),))
 
     # --- Answers --------------------------------------------------------------------------------
 

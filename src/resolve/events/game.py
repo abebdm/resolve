@@ -69,6 +69,8 @@ class LibraryShuffled(Event):
 class GameEnded(Event):
     """The game ended (104.1) with these winners; none means a draw (104.4a)."""
 
+    outside_actions = True
+
     winners: tuple[PlayerId, ...]
 
     def apply(self, state: GameState) -> None:
@@ -102,6 +104,8 @@ class PlayerLost(Event):
     at draws since the last check).
     """
 
+    outside_actions = True
+
     player: PlayerId
 
     def apply(self, state: GameState) -> None:
@@ -121,6 +125,8 @@ class Conceded(Event):
     (``PlayerLost``) and leaves the game (``PlayerLeftGame``).
     """
 
+    outside_actions = True
+
     player: PlayerId
 
     def apply(self, state: GameState) -> None:
@@ -137,6 +143,8 @@ class PlayerLeftGame(Event):
     Objects they control but don't own, and effects giving them control, can't exist yet:
     ``LeaveGame`` raises ``NotImplementedRule`` before proposing this event if they would.
     """
+
+    outside_actions = True
 
     player: PlayerId
     removed: tuple[ObjectId, ...] = ()

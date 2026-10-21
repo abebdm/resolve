@@ -59,6 +59,9 @@ class PermanentTapped(Event):
             raise EngineError(f"object {self.obj} is already tapped (701.26a)")
         permanent.tapped = True
 
+    def redo(self, state: GameState) -> None:
+        self.apply(state)  # 733.1
+
 
 @dataclass(frozen=True, kw_only=True)
 class PermanentsUntapped(Event):

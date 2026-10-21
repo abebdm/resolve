@@ -22,7 +22,7 @@ most likely to expose a design that took one.
 | Decimate | four instances of "target"; one object chosen for several of them; no cast unless every instance has a legal target; partial fizzling (601.2c, 608.2b) | M2 | | not yet |
 | Cryptic Command | modes; countering; partial fizzling with one target gone; returning a permanent to its owner's hand (700.2, 701.6, 608.2b, 400.3) | M2 | | not yet |
 | Fiery Confluence | the same mode chosen more than once, each with its own target (700.2d) | M2 (target deck) | | not yet |
-| Lion's Eye Diamond | a mana ability with "activate only as an instant", sacrifice and discard costs, activated while casting, after the spell has left the hand (605.3a, 602.5e, 601.2g) | M4 | M2 payment and reversal | not yet |
+| Lion's Eye Diamond | a mana ability with "activate only as an instant", sacrifice and discard costs, activated while casting, after the spell has left the hand (605.3a, 602.5e, 601.2g) | M4 | M2 payment and reversal (M2.3 ✓: a kept mana ability's results stand, `Event.redo`) | not yet |
 | Fact or Fiction | an opponent separates the piles: a decision by a player other than the controller; hidden then revealed cards (608.2d, 101.4) | M4 | M2.1 `deciding_player` | not yet |
 | Panglacial Wurm | casting from the library while searching it, in the middle of a resolution (701.23, 608.2g) | M4 | M2 cast permissions | not yet |
 | Sylvan Library | cards drawn this turn; pay life or put cards back (608.2i, 119) | M4 | look-back history | not yet |

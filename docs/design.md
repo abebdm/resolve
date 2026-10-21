@@ -233,8 +233,14 @@ If the action can't be completed (601.2e, 601.6, 601.2h, 118.3), the reversal go
    (733.1; `REVERSE_MANA_ABILITIES`, not asked when none were). From M2.4 the kept ones must
    include every ability whose mana a kept ability spent.
 2. The checkpoint is restored. A player who left the game meanwhile stays gone (800.4a).
-3. The kept mana abilities are activated again in their original order, so their effects (and,
-   from M4, triggers) happen again and the undone action's don't.
+3. The kept mana abilities aren't undone (733.1): their results stand exactly as they happened.
+   The events each logged during its activation are made again as recorded (`Event.redo`), in
+   order, without activating the ability again or logging the events twice; so an ability whose
+   effect depended on the moment (Lion's Eye Diamond's "discard your hand", while the spell was on
+   the stack) keeps that result. An event a mana ability can't cause yet raises
+   `NotImplementedRule("733.1")` in `redo`. From M4, the triggers of kept abilities stand too
+   (the redo re-establishes them); the undone action's don't. (Changed during M2.3, with the
+   user's sign-off: the plan first replayed the kept abilities.)
 4. Knowledge gained during the attempt is recorded (the card was seen on the stack), and a
    public `ActionReversed` is logged.
 
