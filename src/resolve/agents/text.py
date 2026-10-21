@@ -102,7 +102,9 @@ def describe_option(option: Option, view: PlayerView) -> str:
             return f"play {_named(view, obj)}"
         case CastSpellOption(object=obj, variant=variant, permission=permission):
             how = describe_variant(variant)
-            where = "" if permission.zone is ZoneKind.HAND else f" from the {permission.zone.value}"
+            zone = permission.zone
+            named = "command zone" if zone is ZoneKind.COMMAND else zone.value
+            where = "" if zone is ZoneKind.HAND else f" from the {named}"
             return f"cast {_named(view, obj)}" + (f" ({how})" if how else "") + where
         case ActivateAbilityOption(object=obj, ability=index):
             return f"activate ability {index} of {_named(view, obj)}"

@@ -137,3 +137,17 @@ def test_400_7d_the_permanent_records_how_its_spell_was_cast() -> None:
         total_cost=parse_mana_cost("{1}{G}"),
         mana_spent=(Mana(G, forest_a), Mana(G, forest_b)),
     )
+
+
+def test_608_3a_the_permanent_enters_under_the_spells_controller_not_its_owner() -> None:
+    """A spell P0 controls but P1 owns becomes P0's permanent (608.3a), still owned by P1
+    (108.3)."""
+    scenario = Scenario(3)
+    (spell,) = scenario.stack(P0, ["Grizzly Bears"], owner=P1)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, pass_(P0), pass_(P1), pass_(P2))
+    (permanent,) = state.battlefield
+    obj = state.objects[permanent]
+    assert (obj.controller, obj.owner) == (P0, P1)
+    assert spell not in state.objects

@@ -150,9 +150,12 @@ def cast_permissions(
 
 
 def cast_options(state: GameState, player: PlayerId) -> tuple[CastSpellOption, ...]:
-    """The spells ``player`` may begin to cast now (601.3, 117.1a): the cards in their hand in hand
-    order, then their commanders in the command zone (903.8); for each, every permission
-    (``cast_permissions``) and variant (601.3e) that ``legality.allowed`` permits.
+    """The spells ``player`` may begin to cast now (601.3, 117.1a): for each card in any zone but
+    the stack and the battlefield (their hand first in hand order, then the command zone, the
+    graveyards, exile and the libraries, top first, then the other players' hands), every
+    permission ``cast_permissions`` gives (by default, the hand and their commanders, 903.8) and
+    every variant (601.3e) that ``legality.allowed`` permits. ``cast_permissions`` alone decides
+    which zones count.
 
     The variants come from the card's layout: a half of a split card (709.3), either face of a
     modal double-faced card (712.11b), an omen's normal part or its Omen (720.3), an adventurer
@@ -162,6 +165,12 @@ def cast_options(state: GameState, player: PlayerId) -> tuple[CastSpellOption, .
     from resolve.rules import legality
 
     candidates = [*state.player(player).hand, *state.command]
+    for other in state.players:
+        candidates += [*reversed(other.graveyard)]
+    candidates += state.exile
+    for other in state.players:
+        candidates += [*reversed(other.library)]
+    candidates += [obj for p in state.players if p.id != player for obj in p.hand]
     options: list[CastSpellOption] = []
     for obj in candidates:
         for permission in cast_permissions(state, player, obj):

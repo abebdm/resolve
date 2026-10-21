@@ -57,16 +57,18 @@ from resolve.rules import defaults
 from resolve.rules.defaults import LossReason, NextTurn
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState, next_in_turn_order, players_in_game, turn_order
-from resolve.state.ids import PlayerId
+from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.invariants import invariant_violations
 from resolve.state.mana import Mana, ManaType
-from resolve.state.spell import COMMANDER, FROM_HAND, NORMAL
+from resolve.state.spell import COMMANDER, FROM_HAND, NORMAL, CastPermission
 from resolve.state.turn import TURN_SEQUENCE, Phase, Segment, Step
+from resolve.state.zones import Zone, ZoneKind
 from resolve.tasks import Done, Task, TaskResult
 from tests.game_fixtures import answer, decks, pass_until, request_of
 from tests.scenario import Scenario, run_script
 from tests.seams import (
     patch,
+    patch_card,
     patch_loss,
     patch_may_cast_now,
     patch_next_turn,
@@ -771,3 +773,38 @@ def test_504_1_the_draw_step_asks_about_the_active_player(
     scenario.at(Step.DRAW, begin=True, active=P1, number=2)
     scenario.build()
     assert set(asked) == {P1}
+
+
+# --- 601.3: the zones a player may cast from --------------------------------------------------
+
+
+def test_601_3_cast_permissions_decide_which_zones_cards_are_cast_from(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A permission for a graveyard card ("you may cast spells from your graveyard", M4) makes
+    priority offer it, and casting it takes it from the graveyard; without the hand permission,
+    a card in hand isn't offered. The engine asks no other place which zones count."""
+    graveyard = CastPermission("601.3", ZoneKind.GRAVEYARD)
+    scenario = Scenario(2)
+    (bears,) = scenario.hand(P0, ["Grizzly Bears"])
+    (lions,) = scenario.graveyard(P0, ["Savannah Lions"])
+    scenario.mana(P0, ManaType.WHITE)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+
+    def from_graveyard(
+        state: GameState, player: PlayerId, obj: ObjectId
+    ) -> tuple[CastPermission, ...]:
+        game_object = state.objects[obj]
+        zone = game_object.zone if game_object.spell is None else game_object.spell.cast_from
+        return (graveyard,) if zone == Zone.graveyard(player) else ()
+
+    patch_card(monkeypatch, "cast_permissions", from_graveyard)
+    state = scenario.build()
+    offered = [o for o in options(state) if isinstance(o, CastSpellOption)]
+    assert offered == [CastSpellOption(lions, NORMAL, graveyard)]
+    assert bears not in [o.object for o in offered]
+    run_script(state, choose(CastSpellOption(lions, NORMAL, graveyard), player=P0))
+    (spell,) = state.stack
+    record = state.objects[spell].spell
+    assert record is not None and record.cast_from == Zone.graveyard(P0)
+    assert state.player(P0).graveyard == []

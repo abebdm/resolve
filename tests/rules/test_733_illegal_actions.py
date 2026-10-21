@@ -36,7 +36,15 @@ from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana, ManaType
 from resolve.state.turn import Phase, Step
 from resolve.state.zones import Zone
-from tests.casting_support import activate, answered, cast, pass_, records, reverse
+from tests.casting_support import (
+    activate,
+    activate_with_priority,
+    answered,
+    cast,
+    pass_,
+    records,
+    reverse,
+)
 from tests.engine_support import ReversesAfterDrawing
 from tests.game_fixtures import request_of
 from tests.scenario import Scenario, run_script
@@ -178,3 +186,36 @@ def test_733_1_a_player_who_concedes_during_a_reversed_cast_stays_gone() -> None
     assert state.player(P2).hand == [] and state.player(P2).library == []
     assert state.player(P0).hand == [bears]
     assert state.objects[bears].zone == Zone.hand(P0)
+
+
+def test_733_1_mana_abilities_activated_before_the_cast_stand() -> None:
+    """733.1 lets a player reverse only the mana abilities activated "while making the illegal
+    play". P0 taps a Forest with priority (605.3a), then casts Grizzly Bears with nothing else to
+    tap: the cast is reversed without a question, and the Forest stays tapped with its {G} in the
+    pool."""
+    state, bears, forest = one_forest_and_bears()
+    run_script(state, activate_with_priority(forest), cast(bears, P0))
+    assert answered(state, DecisionKind.REVERSE_MANA_ABILITIES) == 0
+    assert state.objects[forest].tapped
+    assert state.player(P0).mana_pool == [Mana(G, forest)]
+    assert state.player(P0).hand == [bears] and len(records(state, ActionReversed)) == 1
+
+
+def test_733_1_a_player_may_reverse_some_mana_abilities_and_keep_others() -> None:
+    """Two Forests can't pay Hill Giant ({3}{R}). P0 reverses the first activation only: that
+    Forest untaps; the other stays tapped, its {G} in the pool (activated again after the
+    restore, 733.1)."""
+    scenario = Scenario(2)
+    (giant,) = scenario.hand(P0, ["Hill Giant"])
+    forest_a, forest_b = scenario.battlefield(P0, ["Forest", "Forest"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(giant, P0), activate(forest_a), activate(forest_b))
+    request = request_of(state)
+    assert request.space == ChooseSubset(
+        (ManaActivationOption(0, forest_a, 0), ManaActivationOption(1, forest_b, 0)), 0, 2
+    )
+    run_script(state, reverse(ManaActivationOption(0, forest_a, 0)))
+    assert not state.objects[forest_a].tapped and state.objects[forest_b].tapped
+    assert state.player(P0).mana_pool == [Mana(G, forest_b)]
+    assert state.player(P0).hand == [giant]

@@ -32,8 +32,9 @@ from resolve.rules import defaults
 from resolve.state.config import GameConfig
 from resolve.state.ids import PlayerId
 from resolve.state.mana import Mana, ManaType
-from resolve.state.spell import COMMANDER, FROM_HAND, NORMAL
+from resolve.state.spell import COMMANDER, FROM_HAND, NORMAL, CastPermission, CastTiming
 from resolve.state.turn import TURN_SEQUENCE, Phase, Step
+from resolve.state.zones import ZoneKind
 from tests.scenario import Scenario
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
@@ -320,3 +321,59 @@ def test_the_card_types_the_defaults_ask_about_are_the_engines() -> None:
     assert characteristics(state, shock).is_a(CardType.INSTANT)
     assert characteristics(state, ponder).is_a(CardType.SORCERY)
     assert characteristics(state, bears).is_a(CardType.CREATURE)
+
+
+def test_601_3_903_8_the_rules_permissions_to_cast() -> None:
+    """601.3, 601.2a: a card in its owner's hand may be cast from there; 903.8: a commander from
+    the command zone by its owner. Nothing else: not another player's card, not a card in the
+    command zone that isn't the player's commander, not a card in a graveyard or library."""
+    scenario = Scenario(2, config=GameConfig.commander_game())
+    (shock,) = scenario.hand(P0, ["Test Shock"])
+    (theirs,) = scenario.hand(P1, ["Test Shock"])
+    commander = scenario.commander(P0, "Grizzly Bears")
+    their_commander = scenario.commander(P1, "Grizzly Bears")
+    (other,) = scenario.command(P0, ["Test Shock"])
+    (dead,) = scenario.graveyard(P0, ["Test Shock"])
+    (deep,) = scenario.library(P0, ["Test Shock"])
+    state = scenario.build()
+    assert defaults.cast_permissions(state, P0, shock) == (FROM_HAND,)
+    assert defaults.cast_permissions(state, P0, commander) == (COMMANDER,)
+    for obj in (theirs, their_commander, other, dead, deep):
+        assert defaults.cast_permissions(state, P0, obj) == ()
+
+
+def test_601_2e_a_proposed_spell_is_judged_from_the_zone_it_came_from() -> None:
+    """While its proposal is checked (601.2e), a spell on the stack keeps the permission of the
+    zone it was cast from, and it doesn't count against its own sorcery timing."""
+    scenario = Scenario(2)
+    (spell,) = scenario.stack(P0, ["Grizzly Bears"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    assert defaults.cast_permissions(state, P0, spell) == (FROM_HAND,)
+    assert not defaults.has_sorcery_timing(state, P0)
+    assert defaults.has_sorcery_timing(state, P0, ignoring=spell)
+    assert defaults.may_cast_now(state, P0, spell, NORMAL, FROM_HAND)
+
+
+def test_117_1a_ignoring_one_spell_still_counts_the_others() -> None:
+    scenario = Scenario(2)
+    top, below = scenario.stack(P0, ["Grizzly Bears", "Hill Giant"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    assert not defaults.has_sorcery_timing(state, P0, ignoring=top)
+    assert not defaults.has_sorcery_timing(state, P0, ignoring=below)
+
+
+@pytest.mark.parametrize(
+    ("timing", "rule"),
+    [(CastTiming.AS_THOUGH_FLASH, "601.3b"), (CastTiming.DURING_RESOLUTION, "608.2g")],
+)
+def test_601_3b_608_2g_other_cast_timings_are_gaps(timing: CastTiming, rule: str) -> None:
+    scenario = Scenario(2)
+    (bears,) = scenario.hand(P0, ["Grizzly Bears"])
+    scenario.at(Step.UPKEEP)
+    state = scenario.build()
+    permission = CastPermission("601.3", ZoneKind.HAND, timing)
+    with pytest.raises(NotImplementedRule) as gap:
+        defaults.may_cast_now(state, P0, bears, NORMAL, permission)
+    assert gap.value.rule == rule

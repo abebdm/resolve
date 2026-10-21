@@ -32,6 +32,8 @@ from resolve.decisions.spaces import (
     ChooseOrder,
     ChooseSubset,
     Distribute,
+    ManaActivationOption,
+    ManaOption,
     Number,
     ObjectOption,
     Order,
@@ -45,8 +47,16 @@ from resolve.engine.api import view_for
 from resolve.engine.view import PlayerView
 from resolve.state.config import GameConfig
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.mana import ManaType
-from resolve.state.spell import FROM_HAND, NORMAL
+from resolve.state.mana import Mana, ManaType
+from resolve.state.spell import (
+    COMMANDER,
+    FROM_HAND,
+    NORMAL,
+    Alternative,
+    AlternativeKind,
+    Back,
+    Half,
+)
 from resolve.state.turn import Phase
 from resolve.state.turn import Step as TurnStep
 from resolve.state.zones import Zone
@@ -269,6 +279,31 @@ def test_priority_options_are_described_in_words() -> None:
         == f"cast hidden card #{ids['hand']}"
     )
     assert describe_option(PlayLandOption(ids["grave"]), own) == f"play Forest #{ids['grave']}"
+
+
+def test_casting_and_paying_options_are_described_in_words() -> None:
+    """The variant (601.3e) and a zone other than the hand (903.8) are named; a class of mana
+    (601.2h) is its symbol and source; an activation to reverse (733.1) names the ability."""
+    own, _, ids = board()
+    hand, elves, commander = ids["hand"], ids["elves"], ids["commander"]
+    assert describe_option(CastSpellOption(hand, Half(1), FROM_HAND), own) == (
+        f"cast Llanowar Elves #{hand} (right half)"
+    )
+    assert describe_option(CastSpellOption(hand, Back(), FROM_HAND), own) == (
+        f"cast Llanowar Elves #{hand} (back face)"
+    )
+    omen = CastSpellOption(hand, Alternative(AlternativeKind.OMEN), FROM_HAND)
+    assert describe_option(omen, own) == f"cast Llanowar Elves #{hand} (as an Omen)"
+    assert describe_option(CastSpellOption(commander, NORMAL, COMMANDER), own) == (
+        f"cast Test Daybreaker // Test Nightfall #{commander} from the command zone"
+    )
+    assert describe_option(ManaOption(Mana(ManaType.GREEN, elves)), own) == (
+        f"{{G}} from Llanowar Elves #{elves}"
+    )
+    assert describe_option(ManaOption(Mana(ManaType.COLORLESS)), own) == "{C}"
+    assert describe_option(ManaActivationOption(0, elves, 0), own) == (
+        f"reverse ability 0 of Llanowar Elves #{elves}"
+    )
 
 
 def test_render_view_shows_the_turn_and_who_lost() -> None:

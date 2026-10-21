@@ -37,19 +37,24 @@ from resolve.decisions.spaces import (
     Amounts,
     CastSpellOption,
     ChooseCounts,
+    ChooseSubset,
+    ManaActivationOption,
     ManaOption,
+    Option,
 )
 from resolve.effects.characteristics import variant_characteristics
 from resolve.engine.api import submit, view_for
 from resolve.engine.casting import CastSpell
+from resolve.engine.concede import concede
 from resolve.engine.loop import run
 from resolve.engine.payment import PAY
 from resolve.errors import InvalidAnswer, NotImplementedRule
 from resolve.events.base import AnswerRecord
 from resolve.events.mana import ManaSpent
 from resolve.events.spells import ActionReversed, SpellCast, SpellProposed
-from resolve.rules import defaults
+from resolve.rules import defaults, legality
 from resolve.state.config import GameConfig
+from resolve.state.game import GameState
 from resolve.state.ids import PlayerId
 from resolve.state.mana import Mana, ManaType
 from resolve.state.spell import (
@@ -65,7 +70,17 @@ from resolve.state.turn import Phase
 from resolve.state.turn import Step as TurnStep
 from resolve.state.zones import STACK, Zone
 from tests import scryfall_fixtures as fx
-from tests.casting_support import activate, answered, cast, counts, options, pass_, records
+from tests.casting_support import (
+    activate,
+    answered,
+    cast,
+    counts,
+    options,
+    pass_,
+    pay,
+    records,
+    reverse,
+)
 from tests.game_fixtures import request_of, scenario_registry
 from tests.scenario import Scenario, run_script
 
@@ -164,16 +179,19 @@ def test_601_2h_the_player_chooses_which_mana_pays(
     ("pool", "answer"),
     [
         ((G, G, W), (0, 2)),  # outside the space: only one {W}
-        ((W, W, G), (0, 2)),  # in the space, but {G} must be paid with green mana (107.4a)
+        ((G, G, W, W), (0, 2)),  # in the space, but {G} must be paid with green mana (107.4a)
     ],
 )
 def test_601_2h_a_rejected_payment_changes_nothing(
     pool: tuple[ManaType, ...], answer: tuple[int, int]
 ) -> None:
+    """Both pools can pay {1}{G} in two ways ((2 G, 0 W) and (1 G, 1 W)), so the payment is asked.
+    (0 G, 2 W) is refused: by the space's maxima, or by the cast's own check (107.4a)."""
     scenario, bears = pool_scenario(*pool)
     state = scenario.build()
     run_script(state, cast(bears, P0))
     request = request_of(state)
+    assert request.kind is DecisionKind.PAY_COSTS
     before = copy.deepcopy(state)
     with pytest.raises(InvalidAnswer):
         submit(state, DecisionAnswer(request.id, P0, Amounts(answer)))
@@ -430,3 +448,100 @@ def test_903_8_casting_a_commander_is_a_gap_until_m7() -> None:
     with pytest.raises(NotImplementedRule) as gap:
         run_script(state, cast(commander, P0, permission=COMMANDER))
     assert gap.value.rule == "903.8"
+
+
+def test_601_2e_a_proposal_that_became_illegal_is_reversed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """601.2e, 601.6: once proposed, the spell is checked again; an effect that forbids it then
+    (a seam: a prohibition of the spell on the stack, not of the card in hand) makes the cast
+    illegal. It is reversed (733.1): back in hand with its old ID, P0 keeps priority (733.2)."""
+    scenario, bears, _ = bears_with_forests()
+    state = scenario.build()
+    original = legality.prohibitions
+
+    def on_the_stack(state: GameState, action: legality.Action) -> tuple[legality.Prohibition, ...]:
+        if isinstance(action, legality.CastAction) and action.card in state.stack:
+            return (legality.Prohibition("101.2", "a test prohibition"),)
+        return original(state, action)
+
+    monkeypatch.setattr(legality, "prohibitions", on_the_stack)
+    run_script(state, cast(bears, P0))
+    assert state.player(P0).hand == [bears] and state.stack == []
+    assert len(records(state, ActionReversed)) == 1 and records(state, SpellCast) == []
+    assert answered(state, DecisionKind.ACTIVATE_MANA_ABILITIES) == 0  # 601.2g comes later
+    request = request_of(state)
+    assert request.player == P0 and request.kind is DecisionKind.PRIORITY_ACTION
+
+
+def test_601_2g_choosing_pay_too_early_reverses_the_cast() -> None:
+    """118.3c: activating mana abilities isn't mandatory. P0 taps one Forest and pays while the
+    other is still untapped: {G} can't pay {1}{G} (118.3), the cast is reversed, and the Forest
+    tapped during the cast is offered for reversal (733.1)."""
+    scenario, bears, (forest_a, forest_b) = bears_with_forests()
+    state = scenario.build()
+    run_script(state, cast(bears, P0), activate(forest_a), pay())
+    request = request_of(state)
+    assert request.kind is DecisionKind.REVERSE_MANA_ABILITIES
+    assert options_of_subset(state) == (ManaActivationOption(0, forest_a, 0),)
+    run_script(state, reverse(ManaActivationOption(0, forest_a, 0)))
+    assert not state.objects[forest_a].tapped and not state.objects[forest_b].tapped
+    assert state.player(P0).hand == [bears]
+
+
+def options_of_subset(state: GameState) -> tuple[Option, ...]:
+    space = request_of(state).space
+    assert isinstance(space, ChooseSubset)
+    return space.options
+
+
+NO_COST = fx.spell("Test Vision", "", 0.0, "Sorcery", ["U"], "Draw two cards.")
+
+
+def test_118_6_a_spell_with_no_mana_cost_cant_be_cast_by_paying_it() -> None:
+    """118.6, 202.1b: a card with no mana cost has an unpayable cost; it may be begun (601.3 looks
+    only at permissions and timing) but its total cost can't be paid, so the cast is reversed."""
+    scenario = with_cards(NO_COST)
+    (vision,) = scenario.hand(P0, ["Test Vision"])
+    scenario.mana(P0, U, U)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    assert CastSpellOption(vision, NORMAL, FROM_HAND) in options(state)
+    run_script(state, cast(vision, P0))
+    assert state.player(P0).hand == [vision] and state.stack == []
+    assert len(records(state, ActionReversed)) == 1 and records(state, SpellCast) == []
+    assert state.player(P0).mana_pool == [Mana(U), Mana(U)]
+
+
+def test_800_4a_a_caster_who_concedes_takes_their_spell_with_them() -> None:
+    """Three players: P0 concedes while paying for Grizzly Bears. The spell, like everything P0
+    owns, leaves the game (800.4a); the cast just ends, and nothing is reversed."""
+    scenario, bears, _ = bears_with_forests(players=3)
+    state = scenario.build()
+    run_script(state, cast(bears, P0))
+    concede(state, P0)
+    assert state.player(P0).left_game and state.stack == []
+    assert records(state, ActionReversed) == [] and records(state, SpellCast) == []
+    assert state.result is None
+    request = request_of(state)
+    assert request.player == P1 and request.kind is DecisionKind.PRIORITY_ACTION  # 800.4j
+
+
+def test_104_2a_the_opponent_conceding_during_a_cast_ends_a_two_player_game() -> None:
+    scenario, bears, _ = bears_with_forests()
+    state = scenario.build()
+    run_script(state, cast(bears, P0))
+    concede(state, P1)
+    assert state.result is not None and state.result.winners == (P0,)
+    assert state.pending is None
+    assert answered(state, DecisionKind.REVERSE_MANA_ABILITIES) == 0
+
+
+def test_400_2_every_player_sees_how_a_spell_is_being_cast() -> None:
+    """The stack is public (400.2): P1's view shows P0's spell with its record."""
+    scenario, bears, (forest_a, forest_b) = bears_with_forests()
+    state = scenario.build()
+    run_script(state, cast(bears, P0), activate(forest_a), activate(forest_b))
+    (spell,) = state.stack
+    (shown,) = view_for(state, P1).stack
+    assert shown.id == spell and shown.name == "Grizzly Bears"
+    assert shown.spell == state.objects[spell].spell
+    assert shown.spell is not None and shown.spell.total_cost == parse_mana_cost("{1}{G}")

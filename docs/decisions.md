@@ -27,6 +27,11 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   `NORMAL` raises its rule's gap before anything moves (709.3, 712.11b, 720.3, 715.3; 712.11a
   for a transforming card cast transformed, 718.3, 722.3, 708.4, 702.102). A transforming card
   and a preparation card offer only `NORMAL` (712.11, 722.3).
+- **Decision (casting zones, rule 12):** `cast_options` asks `cast_permissions` about every card
+  in every zone but the stack and the battlefield (the player's hand first, then the command
+  zone, graveyards, exile, libraries top first, other hands), so `cast_permissions` alone decides
+  which zones a player may cast from; a seam test grants a graveyard permission. The test
+  reviewer found the first version listed only the hand and the command zone.
 - **Decision (split cards in hand):** a split card's combined characteristics (709.4) are M5,
   so `characteristics` still raises 109.3 for one off the stack, and priority (which asks
   `land_play_options` about every card in hand) reaches that gap first. The 709.3 test asks

@@ -3,7 +3,8 @@
 ``allowed(state, action)`` (design.md §17.2) collects the permissions for an action (the rules'
 own, here 305.1 and 117.1a for playing a land), requires at least one, collects the
 prohibitions, and lets any applicable prohibition win. 101.2a: adding or removing abilities is
-not a prohibition. The first action is playing a land.
+not a prohibition. The actions so far are playing a land and casting a spell (601.3: a player
+may begin to cast a spell only if a rule or effect allows it and none prohibits it).
 
 Expected values are worked from the pinned CR:
 
@@ -20,11 +21,12 @@ import pytest
 
 from resolve.agents.scripted import choose
 from resolve.decisions.kinds import DecisionKind
-from resolve.decisions.spaces import ChooseOne, PlayLandOption
+from resolve.decisions.spaces import CastSpellOption, ChooseOne, PlayLandOption
 from resolve.rules import defaults, legality
-from resolve.rules.legality import Action, Permission, PlayLand, Prohibition
+from resolve.rules.legality import Action, CastAction, Permission, PlayLand, Prohibition
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
+from resolve.state.spell import COMMANDER, FROM_HAND, NORMAL
 from resolve.state.turn import Phase, Step
 from tests.game_fixtures import request_of
 from tests.scenario import Scenario, run_script
@@ -171,3 +173,63 @@ def test_101_2_the_engine_plays_the_land_the_prohibition_leaves() -> None:
     state = scenario.build()
     run_script(state, choose(PlayLandOption(forest), player=P0))
     assert state.turn is not None and state.turn.lands_played == 1
+
+
+# --- Casting (601.3) --------------------------------------------------------------------------
+
+
+def test_601_3_casting_from_the_hand_with_its_timing_is_allowed() -> None:
+    scenario = Scenario(2)
+    (bears,) = scenario.hand(P0, ["Grizzly Bears"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    verdict = legality.allowed(state, CastAction(P0, bears, NORMAL, FROM_HAND))
+    assert verdict.allowed and verdict.rules == ("601.3",)
+    # Another player's card, or this one under a permission for another zone: nothing allows it.
+    assert not legality.allowed(state, CastAction(P1, bears, NORMAL, FROM_HAND)).allowed
+    assert not legality.allowed(state, CastAction(P0, bears, NORMAL, COMMANDER)).allowed
+
+
+def test_101_2_a_prohibition_on_casting_removes_that_spell_from_priority(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A "can't cast" effect (Kutzil's Flanker-style, M5) forbids Grizzly Bears: it isn't
+    offered; Hill Giant, which nothing forbids, still is."""
+    scenario = Scenario(2)
+    bears, giant = scenario.hand(P0, ["Grizzly Bears", "Hill Giant"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    original = legality.prohibitions
+
+    def no_bears(state: GameState, action: Action) -> tuple[Prohibition, ...]:
+        if isinstance(action, CastAction) and action.card == bears:
+            return (Prohibition("101.2", "can't cast it"),)
+        return original(state, action)
+
+    monkeypatch.setattr(legality, "prohibitions", no_bears)
+    state = scenario.build()
+    space = request_of(state).space
+    assert isinstance(space, ChooseOne)
+    assert CastSpellOption(bears, NORMAL, FROM_HAND) not in space.options
+    assert CastSpellOption(giant, NORMAL, FROM_HAND) in space.options
+    verdict = legality.allowed(state, CastAction(P0, bears, NORMAL, FROM_HAND))
+    assert not verdict.allowed and "101.2" in verdict.rules
+
+
+def test_101_2_an_effects_permission_alone_allows_a_cast(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With no permission from the rules (the upkeep: no sorcery timing), an effect's permission
+    (patched in) is enough to offer Grizzly Bears."""
+    scenario = Scenario(2)
+    (bears,) = scenario.hand(P0, ["Grizzly Bears"])
+    scenario.at(Step.UPKEEP, number=2)
+    original = legality.permissions
+
+    def granted(state: GameState, action: Action) -> tuple[Permission, ...]:
+        if isinstance(action, CastAction) and action.card == bears:
+            return (Permission("601.3", "a test effect"),)
+        return original(state, action)
+
+    patch_permissions(monkeypatch, granted)
+    state = scenario.build()
+    space = request_of(state).space
+    assert isinstance(space, ChooseOne)
+    assert CastSpellOption(bears, NORMAL, FROM_HAND) in space.options
