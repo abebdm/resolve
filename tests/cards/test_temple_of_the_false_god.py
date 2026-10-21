@@ -96,3 +96,39 @@ def test_602_5_the_condition_applies_while_paying_too() -> None:
     assert all(ActivateAbilityOption(f, 0) in options(state) for f in forests)
     run_script(state, activate(forests[0]), activate(forests[1]), pay())
     assert len(records(state, SpellCast)) == 1
+
+
+def test_602_5_tapped_lands_and_lands_controlled_but_not_owned_count() -> None:
+    """ "Control" counts every land P0 controls, tapped or not, whoever owns it (108.4): four
+    tapped Forests, or three Forests and one owned by P1 but controlled by P0, plus the Temple."""
+    scenario = Scenario(2)
+    (temple,) = scenario.battlefield(P0, ["Temple of the False God"])
+    forests = scenario.battlefield(P0, ["Forest"] * 4)
+    scenario.tap(*forests)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    assert ActivateAbilityOption(temple, 0) in options(state)
+
+    scenario = Scenario(2)
+    (temple,) = scenario.battlefield(P0, ["Temple of the False God"])
+    scenario.battlefield(P0, ["Forest"] * 3)
+    scenario.battlefield(P0, ["Forest"], owner=P1)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    assert ActivateAbilityOption(temple, 0) in options(state)
+
+
+def test_602_5_tapping_lands_while_paying_doesnt_turn_the_temple_off() -> None:
+    """Five lands: casting Hill Giant, P0 taps a Forest first; the Temple is still offered and
+    adds {C}{C}."""
+    scenario = Scenario(2)
+    (giant,) = scenario.hand(P0, ["Hill Giant"])
+    (temple,) = scenario.battlefield(P0, ["Temple of the False God"])
+    forest, *_ = scenario.battlefield(P0, ["Forest"] * 3)
+    (mountain,) = scenario.battlefield(P0, ["Mountain"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(giant, P0), activate(forest))
+    assert ActivateAbilityOption(temple, 0) in options(state)
+    run_script(state, activate(temple), activate(mountain), pay())
+    assert len(records(state, SpellCast)) == 1

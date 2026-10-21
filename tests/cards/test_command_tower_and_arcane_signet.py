@@ -44,6 +44,7 @@ from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana, ManaType
 from resolve.state.turn import Phase
+from resolve.state.zones import BATTLEFIELD, Zone
 from tests.casting_support import (
     activate,
     activate_with_priority,
@@ -225,3 +226,18 @@ def test_301_1_arcane_signet_is_cast_for_2_and_taps_at_once() -> None:
     (permanent,) = [o for o in state.battlefield if o not in (first, second)]
     run_script(state, activate_with_priority(permanent))
     assert state.player(P0).mana_pool == [Mana(G, permanent)]
+
+
+@pytest.mark.parametrize("zone", [BATTLEFIELD, Zone.graveyard(P0)])
+def test_903_4a_the_commanders_identity_counts_wherever_the_commander_is(zone: Zone) -> None:
+    """A commander on the battlefield or in a graveyard is still the player's commander (903.3),
+    and its color identity was fixed before the game (903.4a)."""
+    scenario = Scenario(2, config=GameConfig.commander_game())
+    scenario.commander(P0, "Avacyn's Pilgrim", zone=zone)
+    (tower,) = scenario.battlefield(P0, ["Command Tower"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, activate_with_priority(tower))
+    assert request_of(state).space == ChooseOne(
+        (ColorOption(Color.WHITE), ColorOption(Color.GREEN))
+    )
