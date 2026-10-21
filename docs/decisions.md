@@ -19,6 +19,47 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-21: M2.1: rule defaults, legality and the turn frame
+- **Decision:**
+  - Every rule default of the M2 plan (§5.1) is a function in `resolve.rules.defaults`. Engine
+    code calls it through the module (`defaults.maximum_hand_size(state, player)`), never
+    `from ... import`, so replacing the function (a `monkeypatch` seam test now, a real effect
+    from M5) is obeyed at every use. `tests/seams.py` has typed helpers for the replacement.
+  - `land_play_options` asks `legality.allowed(state, PlayLand(player, card))` for each land in
+    the hand. The rules' permission is 305.1 (hand, main phase, empty stack; 305.3 follows from
+    sorcery timing). The limit is a **prohibition**, 305.2b ("can't play a land if the number of
+    lands they can play is not greater than the number played"), so an effect's extra permission
+    doesn't lift it (101.2); an effect that raises `land_plays_allowed` does (305.2a). Playing
+    lands from other zones (M5) adds candidates and changes `LandPlayed`, which still takes the
+    card from the hand.
+  - `cast_options` (plan: M2.3) was extracted now, unchanged, so priority has no inline casting
+    timing left. M2.3 replaces its body.
+  - `TakeTurn` stays on the task stack for the whole turn and is the turn frame (724):
+    `turn_frame_index(state)` finds it; removing the tasks above it and the remaining
+    `TurnState.segments` cuts the turn. `segments` holds the phases and steps still to begin
+    (a turn starts with all twelve, `TurnBegan.apply` fills it from `turn_structure`).
+  - Extra turns: `GameState.extra_turns`, the next one last (500.7). `TakeTurn` carries `extra`
+    and `regular`: the turn after an extra turn is the one after the *regular* turn it was added
+    to, not after the extra turn's player. An extra turn of a player who left doesn't begin
+    (800.4k).
+  - `knows_identity(state, obj, viewer)` replaces `view.is_known_to`; the controller of a player
+    knows what that player knows (723.4). The same rule shows the controller the controlled
+    player's private log entries. The fuzz tests that patched `is_known_to` patch it now.
+  - `ManaPoolEmptied` has `kept`: the pool must be exactly `mana` plus `kept`, and `kept` stays
+    (500.5 with an effect that keeps mana). `concede(state, player, by=...)` refuses
+    `by != player` (723.6); a controlled player may still concede (104.3a).
+  - `can_tap_for_cost` keeps M1's behavior: a creature's {T} cost is the 302.6 gap until M2.4.
+    `commander_damage_threshold` and `player_abilities` have no engine consumer yet (M7, M2.8).
+- **Why:** CLAUDE.md rule 12. Alternatives rejected: patching imported names in each engine module
+  (a seam test would pass while another module kept the old function); a separate `TurnFrame`
+  marker task (`TakeTurn` already is one); a `position` index into `TURN_SEQUENCE` (an inserted
+  phase can't be an index).
+- **Rules:** 101.2, 103.4-103.6, 104.3, 117.1a, 302.6, 305.1-305.3, 402.2, 500.5, 500.7-500.11,
+  502.3, 504.1, 514.1, 723.4-723.6, 724.1, 800.4k.
+- **Where:** `src/resolve/rules/`, `src/resolve/engine/` (`turns`, `priority`, `loop`, `sba`,
+  `mana`, `mulligans`, `start`, `view`, `concede`, `setup`), `src/resolve/state/` (`turn`,
+  `game`, `invariants`), `src/resolve/events/` (`turn`, `mana`).
+
 ### 2026-10-19: Tooling: `tools/rule.py` prints CR text by number
 - **Decision:**
   - Rules print line for line from the file (`rule_blocks` in `resolve.data.rules_text`, which

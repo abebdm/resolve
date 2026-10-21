@@ -44,7 +44,7 @@ from resolve.decisions.spaces import (
     Pick,
     PlayLandOption,
 )
-from resolve.engine.api import new_game, submit
+from resolve.engine.api import new_game, submit, view_for
 from resolve.engine.sba import state_based_actions
 from resolve.engine.turns import turn_frame_index
 from resolve.errors import EngineError, NotImplementedRule
@@ -677,3 +677,84 @@ def test_118_3_an_already_tapped_permanent_cant_pay_a_tap_cost_whatever_the_func
     patch_object(monkeypatch, "can_tap_for_cost", lambda state, obj: True)
     state = scenario.build()
     assert not TapSelfCost().can_pay(state, forest, P0)
+
+
+# --- Gaps found by the test review ------------------------------------------------------------
+
+
+def test_400_2_the_view_obeys_knows_identity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """If nobody knows any identity, no view names any object, in any zone (the views take their
+    names only from ``knows_identity``)."""
+    scenario = Scenario(2)
+    scenario.hand(P0, ["Forest"])
+    scenario.battlefield(P1, ["Forest"])
+    scenario.graveyard(P0, ["Test Shock"])
+    scenario.at(Step.UPKEEP)
+    monkeypatch.setattr(defaults, "knows_identity", lambda state, obj, viewer: False)  # type: ignore[reportUnknownLambdaType]
+    state = scenario.build()
+    view = view_for(state, P0)
+    shown = [*view.battlefield, *view.players[0].hand, *view.players[0].graveyard]
+    assert len(shown) == 3 and all(o.name is None for o in shown)
+
+
+def test_500_8_the_structure_is_asked_about_the_player_whose_turn_begins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Player 0's turns skip straight to cleanup; player 1's turns are normal."""
+    cleanup_only = tuple(s for s in TURN_SEQUENCE if s[1] is Step.CLEANUP)
+
+    def structure(state: GameState, player: PlayerId) -> tuple[Segment, ...]:
+        return cleanup_only if player == P0 else TURN_SEQUENCE
+
+    patch(monkeypatch, "turn_structure", structure)
+    scenario = with_libraries(Scenario(2), cards=6)
+    scenario.at(Phase.POSTCOMBAT_MAIN, number=1, active=P1)
+    state = scenario.build()
+    pass_until(state, until_turn(3))
+    turn_two = [
+        (r.phase, r.step) for r in (e.record for e in state.event_log) if isinstance(r, StepBegan)
+    ]
+    assert (Phase.ENDING, Step.CLEANUP) in turn_two
+    assert (Phase.BEGINNING, Step.UNTAP) not in turn_two[
+        : turn_two.index((Phase.ENDING, Step.CLEANUP))
+    ]
+
+
+def test_500_7_the_turn_after_an_extra_turn_follows_the_regular_turn() -> None:
+    """P1's turn 3 gets an extra turn for P0: the turn after it is P2's, the player after P1."""
+    scenario = with_libraries(Scenario(3), cards=8)
+    scenario.at(Phase.POSTCOMBAT_MAIN, number=3, active=P1)
+    state = scenario.build()
+    state.extra_turns.append(P0)
+    pass_until(state, until_turn(5))
+    assert turn_starts(state) == [(4, P0), (5, P2)]
+
+
+def test_903_8_only_the_players_own_commander_is_cast_from_the_command_zone() -> None:
+    scenario = Scenario(2, config=GameConfig.commander_game())
+    mine = scenario.commander(P0, "Grizzly Bears")
+    theirs = scenario.commander(P1, "Grizzly Bears")
+    (other,) = scenario.command(P0, ["Test Shock"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    assert defaults.cast_options(state, P0) == (mine,)
+    assert theirs not in defaults.cast_options(state, P0) and other not in defaults.cast_options(
+        state, P0
+    )
+
+
+def test_504_1_the_draw_step_asks_about_the_active_player(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    asked: list[PlayerId] = []
+
+    def draws(state: GameState, player: PlayerId) -> int:
+        asked.append(player)
+        return 1
+
+    patch(monkeypatch, "draw_step_draws", draws)
+    scenario = Scenario(3)
+    scenario.library(P1, ["Forest"] * 3)
+    scenario.at(Step.DRAW, begin=True, active=P1, number=2)
+    scenario.build()
+    assert set(asked) == {P1}

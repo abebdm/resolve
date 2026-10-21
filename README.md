@@ -23,13 +23,14 @@ win, loss or draw, in 2 to 6 players. The cards implemented so far are the basic
 vanilla creatures. Tools compare a new Comprehensive Rules version or card data snapshot against
 the pinned ones (`tools/rules_diff.py`, `tools/card_diff.py`), and `tools/rule.py` prints any
 rule of the pinned Comprehensive Rules by number. M2 (spells and the stack) is under
-way. Its plan is approved ([`docs/plans/m2.md`](docs/plans/m2.md)), and its first step,
-documentation, is done. That step added the rules coverage map in
-[`docs/roadmap.md`](docs/roadmap.md), which gives every numbered rule and keyword a milestone on
-the way to handling every tournament-legal card, and the list of hardest cards in
-[`docs/torture-tests.md`](docs/torture-tests.md). **Next:** removing the rule defaults the early
-code hard-wired (land plays, hand size, the turn sequence, who decides), then casting spells
-(601.2). Details: "Current status" in [`CLAUDE.md`](CLAUDE.md).
+way. Its plan is approved ([`docs/plans/m2.md`](docs/plans/m2.md)). Its first step,
+documentation, added the rules coverage map in [`docs/roadmap.md`](docs/roadmap.md), which gives
+every numbered rule and keyword a milestone on the way to handling every tournament-legal card,
+and the list of hardest cards in [`docs/torture-tests.md`](docs/torture-tests.md). Its second
+step made the rules the early code hard-wired (land plays, hand size, the turn sequence, who
+decides) into single functions that effects can change later, and added a test that keeps the
+map in step with the Comprehensive Rules; games play exactly as before. **Next:** casting
+spells (601.2). Details: "Current status" in [`CLAUDE.md`](CLAUDE.md).
 
 Resolve is unofficial Fan Content permitted under the Wizards of the Coast Fan Content Policy. It
 is not approved or endorsed by Wizards. Portions of the materials used are property of Wizards of

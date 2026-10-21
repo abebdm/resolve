@@ -255,7 +255,10 @@ class Scenario:
             lands_played=lands_played,
         )
         structure = defaults.turn_structure(state, active)
-        state.turn.segments = list(structure[structure.index(segment) + 1 :])
+        # A structure the effects changed may lack this segment: then nothing remains.
+        state.turn.segments = (
+            list(structure[structure.index(segment) + 1 :]) if segment in structure else []
+        )
         rest = TakeTurn(active, started=True)
         if start:
             self._resume = (RunStep(phase, step), rest)
