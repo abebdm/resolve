@@ -19,6 +19,47 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-21: M2.1: the rule defaults and how the engine uses them
+- **Decision:**
+  - The rule-default functions live in `resolve.engine.defaults`. The engine calls them as
+    `defaults.<name>(...)`, never through a `from` import, so a seam test can replace one with
+    `monkeypatch` (`tests/game_fixtures.patch_function`).
+  - `land_play_options` includes the timing (`has_sorcery_timing`) and the zones, but not the
+    count. The count is 305.2b, a **prohibition** in `legality.prohibitions` (it applies to the
+    active player, the only one whose land plays `TurnState.lands_played` counts), so it beats
+    any permission to play from another zone (101.2).
+  - `permanents_that_untap` returns every permanent the player controls and the untap step
+    keeps the tapped ones; `mana_that_empties` returns the units that empty. A pool that empties
+    completely is a `ManaPoolEmptied` (unchanged: it still refuses a subset); a partly emptying
+    one is a new event, `ManaLost`.
+  - `TurnBegan` carries the turn's `segments` (`defaults.turn_structure`), and `TakeTurn` takes
+    the next one from `TurnState.segments` each time. `TakeTurn` is also the turn frame:
+    `cut_rest_of_turn` removes every task above it, clears any pending decision and leaves only
+    the cleanup step (724.1d). It is a function the ending effect calls (M9 wires it into the
+    resolution), because a task can't remove the tasks above itself.
+  - `next_turn` returns a `NextTurn(player, extra_turns)` and `TakeTurn` stores the remaining
+    extra turns. The last extra turn created is taken first (500.7); one for a player who left
+    is dropped (800.4k). `GameState.turn_direction` (1 or -1) is the cited data point for the
+    direction of turn order (103.1).
+  - The loop maps the rule's player through `deciding_player` into
+    `DecisionRequest.player`, and keeps the rule's player in `for_player`. Tasks that read
+    `request.player` to know whose decision it is read `request.for_player` (723.5). The log's
+    `AnswerRecord.player` is who answered. A deciding player who has left the game decides for
+    nobody: the player decides for themselves (800.4a: control effects end).
+  - `knows_identity(state, obj, viewer)` adds 723.4 to `is_known_to`: a viewer also knows what
+    the players whose decisions they make know. `is_known_to` stays the zone-and-knowledge base.
+  - `can_tap_for_cost` keeps raising `NotImplementedRule("302.6")` for creatures until M2.4.
+  - An opening-hand action reported by `opening_hand_actions` (103.6) raises
+    `NotImplementedRule`, never skipped. A single mulligan option isn't asked.
+  - `cast_options` (plan §5.1) is built in M2.3; until then `priority_options` casts from the
+    hand and the command zone with fixed code, and CLAUDE.md lists that as a known violation.
+- **Why:** rule 12 (one function per default), 101.2 (a "can't" beats a "can"), and keeping the
+  fuzz summary unchanged (the options keep their order).
+- **Rules:** 101.2, 103.1, 103.5, 103.6, 104.3, 117.1a, 305.1, 305.2, 402.2, 500.5, 500.7,
+  500.8, 500.11, 502.3, 504.1, 723.4, 723.5, 724.1d, 800.4a, 800.4k.
+- **Where:** `resolve.engine.defaults`, `resolve.engine.legality`, `resolve.engine.turns`,
+  `resolve.engine.loop`, `resolve.engine.view`, `resolve.events.mana`.
+
 ### 2026-10-19: Tooling: `tools/rule.py` prints CR text by number
 - **Decision:**
   - Rules print line for line from the file (`rule_blocks` in `resolve.data.rules_text`, which

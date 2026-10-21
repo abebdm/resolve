@@ -7,7 +7,7 @@ import pytest
 from resolve.effects.characteristics import characteristics
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.game import PlayerLeftGame
-from resolve.events.mana import ManaAdded, ManaPoolEmptied
+from resolve.events.mana import ManaAdded, ManaLost, ManaPoolEmptied
 from resolve.events.permanents import (
     DamageRemoved,
     LandPlayed,
@@ -212,3 +212,19 @@ def test_invariants_catch_a_player_who_left_but_owns_objects_or_is_asked() -> No
     assert any("owns objects (800.4a)" in p for p in problems)
     assert any("is asked a decision" in p for p in problems)
     assert any("without losing" in p for p in problems)
+
+
+def test_500_5_part_of_a_pool_may_empty_and_the_rest_stays() -> None:
+    state = Scenario(2).build()
+    red = Mana(ManaType.RED)
+    ManaAdded(player=P1, mana=(G, red, G), rules=("106.4",)).apply(state)
+    ManaLost(player=P1, mana=(G, red), rules=("500.5",)).apply(state)
+    assert state.player(P1).mana_pool == [G]
+
+
+def test_500_5_mana_that_isnt_in_the_pool_cant_be_lost() -> None:
+    state = Scenario(2).build()
+    ManaAdded(player=P1, mana=(G,), rules=("106.4",)).apply(state)
+    with pytest.raises(EngineError, match="doesn't hold"):
+        ManaLost(player=P1, mana=(G, G), rules=("500.5",)).apply(state)
+    assert state.player(P1).mana_pool == [G]  # nothing changed

@@ -37,6 +37,7 @@ from resolve.engine.defaults import KEEP, MULLIGAN, LossReason, NextTurn
 from resolve.engine.loop import run
 from resolve.engine.setup import initial_state
 from resolve.engine.turns import TakeTurn, cut_rest_of_turn
+from resolve.engine.view import WaitingFor
 from resolve.errors import InvalidAnswer, NotImplementedRule
 from resolve.events.turn import PriorityPassed, StepBegan, TurnBegan
 from resolve.state.config import GameConfig
@@ -445,6 +446,18 @@ def test_723_5_the_deciding_player_receives_the_request(monkeypatch: pytest.Monk
     assert [p.player for p in passes] == [P0]
     assert request_of(state).for_player == P1 and request_of(state).player == P1
     assert invariant_violations(state) == []
+
+
+def test_723_5_everyone_sees_who_decides_for_whom(monkeypatch: pytest.MonkeyPatch) -> None:
+    control_p0(monkeypatch)
+    scenario = stocked(3)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    for viewer in (P0, P1, P2):
+        waiting = view_for(state, viewer).waiting_for
+        assert waiting == WaitingFor(P1, P0, DecisionKind.PRIORITY_ACTION)
+    assert view_for(state, P1).request == state.pending  # only the decider gets the request
+    assert view_for(state, P0).request is None
 
 
 def test_723_5_decisions_default_to_the_player_themselves() -> None:

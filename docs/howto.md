@@ -321,6 +321,28 @@ files.
 3. Paste the report into the PR as a comment. Ask the implementing session to address it, or
    address it in this session.
 
+### Add or change a rule default
+
+A rule default is a value or procedure that a card or effect could change: counts and limits,
+the turn's structure, who decides and sees, where a card may be played or cast from, the
+default timing (CLAUDE.md, rule 12). Each is one function in `resolve/engine/defaults.py`.
+
+1. Check the rules coverage map (`docs/roadmap.md`) for the cards and rules that change it.
+2. Write a function that reads the state, returns the CR's default and cites its rule in the
+   docstring. It takes `(state, ...)` and never closes over anything.
+3. Call it as `defaults.<name>(...)` from the engine (a `from` import would hide it from the
+   seam test). Never write the default as a literal anywhere else.
+4. Write the **tests first**:
+   - a test in `tests/engine/test_rule_defaults.py` that it returns the CR's default;
+   - a **seam test** in `tests/rules/test_rule_default_seams.py` that replaces it with
+     `patch_function(monkeypatch, defaults, "<name>", ...)` and checks the engine obeys it
+     everywhere (for example two land plays allowed means a second land is offered).
+   Confirm the seam test fails before you wire the function in.
+5. If the default is a "can't" (a prohibition), put it in `legality.prohibitions` and test it
+   through `allowed` (`tests/engine/test_legality.py`).
+6. Mark the coverage map rows "default function in place" and list the function in the docs
+   that name defaults (`docs/design.md`, section "Rule defaults").
+
 ### Add a card
 
 1. Read the card's Oracle text and rulings in the snapshot (`uv run python tools/coverage.py

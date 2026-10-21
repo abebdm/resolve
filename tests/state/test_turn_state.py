@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import dataclasses
 import pickle
 
 import pytest
@@ -171,3 +172,36 @@ def test_101_4_apnap_order_starts_with_the_active_player() -> None:
     assert apnap_order(state) == (P3, P1, P2)
     state.player(P3).left_game = True  # 800.4j: the turn goes on without its active player
     assert apnap_order(state) == (P1, P2)
+
+
+def test_500_1_the_remaining_segments_must_be_steps_of_a_turn() -> None:
+    state = at_upkeep()
+    assert state.turn is not None
+    assert state.turn.segments  # the rest of the turn, as data
+    state.turn.segments.append((Phase.COMBAT, Step.END))
+    assert any("remaining segments" in p for p in invariant_violations(state))
+
+
+def test_500_7_extra_turns_must_name_players() -> None:
+    state = at_upkeep()
+    state.extra_turns = [P1, PlayerId(9)]
+    assert any("extra turns" in p for p in invariant_violations(state))
+
+
+def test_103_1_the_turn_direction_is_one_or_minus_one() -> None:
+    state = at_upkeep()
+    state.turn_direction = -1
+    assert invariant_violations(state) == []
+    state.turn_direction = 2
+    assert any("turn direction" in p for p in invariant_violations(state))
+
+
+def test_723_5_the_player_a_decision_is_for_may_not_have_left_the_game() -> None:
+    state = at_upkeep()
+    assert state.pending is not None
+    state.pending = dataclasses.replace(state.pending, player=P0, for_player=P1)
+    state.player(P1).left_game = True
+    state.player(P1).lost = True
+    assert any(
+        "player 1 left the game but is asked a decision" in p for p in invariant_violations(state)
+    )

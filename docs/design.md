@@ -165,8 +165,7 @@ them instead of copying every card's text. Agents only ever receive immutable va
 
 ## 5. Engine loop and tasks
 
-*Designed ahead (provisional): rule-default functions and the turn frame (§17.1), reversing
-illegal actions by checkpoint (§17.4).*
+*Designed ahead (provisional): reversing illegal actions by checkpoint (§17.4).*
 
 The engine is an explicit **task queue** (a stack of pending tasks stored in the state). This was
 chosen over blocking callbacks and over Python generators because generators can't be copied or
@@ -204,6 +203,34 @@ pickled, which would make AI search and save/restore impossible.
   the middle of casting a spell or paying a cost.
 - **Special actions (116)** use no stack and are offered as priority choices. Examples: playing a
   land, turning a face-down creature face up, and similar.
+- **Rule defaults (rule 12, built in M2.1).** Every value or procedure a card or effect could
+  change is one function in `resolve.engine.defaults` that reads the state and cites its CR rule
+  (recipe: `docs/howto.md`, "Add or change a rule default"). The engine calls them as
+  `defaults.<name>(...)`, so a test can replace one and check the engine obeys it:
+
+  | Function | CR | Default |
+  |---|---|---|
+  | `land_plays_allowed(state, player)` | 305.2 | 1 |
+  | `land_play_options(state, player)` | 305.1 | lands in the hand, with sorcery timing |
+  | `maximum_hand_size(state, player)` | 402.2 | 7; `None` means no maximum |
+  | `draw_step_draws(state, player)` | 504.1 | 1 |
+  | `turn_structure(state, player)` | 500.1 | `TURN_SEQUENCE`; the turn keeps its remaining segments as data (`TurnState.segments`) so effects can insert phases and steps (500.8-500.10) |
+  | `is_skipped(state, segment)` | 500.11 | 103.8a and 508.8 |
+  | `next_turn(state)` | 500.7, 103.1, 800.4k | `GameState.extra_turns` first (the last created first), then the next player in turn order (`GameState.turn_direction`) |
+  | `permanents_that_untap(state, player)` | 502.3 | all |
+  | `mana_that_empties(state, player)` | 500.5 | all |
+  | `can_lose_game(state, player, reason)` | 104.3 | true |
+  | `has_sorcery_timing(state, player)`, `may_cast_now(state, player, obj)` | 117.1a, 307.1 | the CR's timing; flash joins in M2.8 |
+  | `opening_hand_actions(state, player)` | 103.6 | none (a non-empty result is a rules gap) |
+  | `mulligan_options(state, player)` | 103.5 | keep, mulligan |
+  | `starting_life`, `starting_hand_size`, `commander_damage_threshold` | 103.4, 103.5, 903.10a | the `GameConfig` |
+  | `can_tap_for_cost(state, obj)` | 302.6 | the summoning-sickness rule (a gap until M2.4) |
+  | `player_abilities(state, player)` | 702.11c, 702.18a | none |
+  | `deciding_player(state, player)` | 723.5, 723.8, 723.9 | the player themselves |
+
+  `cast_options(state, player)` (601.3, 903.8) is built in M2.3 (§17.3). **The turn frame:**
+  `TakeTurn` stays in the task stack under everything its turn runs, so removing the tasks above
+  it cuts the rest of the turn (`cut_rest_of_turn`, 724.1d).
 - **Priority:** before a player receives priority, the engine performs state-based actions as a
   single event, repeating until none apply. It then puts waiting triggered abilities on the stack,
   APNAP-ordered with each controller choosing order among their own, and repeats both steps until
@@ -213,12 +240,14 @@ pickled, which would make AI search and save/restore impossible.
 
 ## 6. Decisions
 
-*Designed ahead (provisional): who decides, `DecisionRequest.for_player` (§17.1); paying costs and
-`ChooseCounts` (§17.7); the rule for constrained answer spaces (§17.8).*
+*Designed ahead (provisional): paying costs and `ChooseCounts` (§17.7); the rule for constrained
+answer spaces (§17.8).*
 
 A `DecisionRequest` contains:
 
-- the deciding player
+- the deciding player (`player`, who answers) and whose decision it is (`for_player`, 723.5):
+  the task names the player the rules ask, and the loop maps them through
+  `defaults.deciding_player`; only `player` may answer
 - a `kind` (choose action at priority, choose targets, choose modes, choose X, pay costs,
   declare attackers, declare blockers, assign combat damage, order triggers, order
   replacement effects, choose a card name, mulligan, yes/no for "may", etc.)
@@ -321,8 +350,8 @@ choose…".
 
 ## 9. Hidden information and knowledge
 
-*Designed ahead (provisional): `knows_identity` as the one visibility check (§17.1).*
-
+- `engine.view.knows_identity` is the one visibility check of views: it adds 723.4 (a player
+  also sees what the players whose decisions they make see) to the zone-and-knowledge rule.
 - Each object records **which players know its identity**. Examples:
   - a card in hand: its owner
   - a scried card placed on top of the library: its owner
@@ -552,46 +581,14 @@ exception to "the same PR as the code" at the top of this document (docs/decisio
 
 ### 17.1 Rule defaults (rule 12)
 
-*Provisional: designed in M2's plan; built in M2.1. That milestone's plan may revise it, with
-the user's sign-off.*
-
-Every value or procedure a card or effect could change comes from one function that reads the
-state and cites its rule. Each of these functions is a single place to plug effects in:
-
-| Function | CR | Default |
-|---|---|---|
-| `land_plays_allowed(state, player)` | 305.2 | 1 |
-| `land_play_options(state, player)` | 305.1 | lands in the hand, with sorcery timing |
-| `maximum_hand_size(state, player)` | 402.2 | 7; `None` means no maximum |
-| `draw_step_draws(state, player)` | 504.1 | 1 |
-| `turn_structure(state, player)` | 500.1 | `TURN_SEQUENCE`. The turn in progress keeps its remaining segments as data (`TurnState.segments`), so effects can insert phases and steps (500.8-500.10). A turn-frame marker in the task stack lets the rest of a turn be cut (724). |
-| `is_skipped(state, segment)` | 500.11 | 103.8a and 508.8 |
-| `next_turn(state)` | 500.7, 103.1, 800.4k | `GameState.extra_turns` first |
-| `permanents_that_untap(state, player)` | 502.3 | all |
-| `mana_that_empties(state, player)` | 500.5 | all |
-| `can_lose_game(state, player, reason)` | 104.3 | true |
-| `has_sorcery_timing(state, player)`, `may_cast_now(...)` | 117.1a, 307.1 | the CR's timing; flash |
-| `cast_options(state, player)` | 601.3, 903.8 | 17.3 |
-| `opening_hand_actions(state, player)` | 103.6 | none |
-| `mulligan_options(state, player)` | 103.5 | keep, mulligan |
-| `starting_life` and similar readers of `GameConfig` | 103.4, 103.5, 903.10a | the config |
-| `can_tap_for_cost(state, obj)` | 302.6 | the summoning-sickness rule |
-| `player_abilities(state, player)` | 702.11c, 702.18a | none |
-| `deciding_player(state, player)` | 723.5, 723.8, 723.9 | the player themselves |
-| `knows_identity(state, obj, viewer)` | 400.2, 402.3, 708.5, 723.4 | as today's `is_known_to` |
-
-**Who decides.** A task's `NeedDecision` names the player the rules ask. The loop maps that
-player through `deciding_player`, and the `DecisionRequest` carries both:
-
-- `player`: who answers;
-- `for_player`: whose decision it is by the rules (§3, §6).
-
-**Who sees.** `view_for` uses `knows_identity` as its only visibility check (§9).
+Built in M2.1 and moved into §5 ("Rule defaults"), §6 (who decides) and §9 (who sees).
 
 ### 17.2 Legality: permissions and prohibitions (101.2)
 
 *Provisional: designed in M2's plan; built in M2 (M2.1 to M2.8), extended in M3 to M5 and M9.
-Each milestone's plan may revise it, with the user's sign-off.*
+Each milestone's plan may revise it, with the user's sign-off. M2.1 built the skeleton
+(`resolve.engine.legality`: `allowed`, `Verdict`, land plays); the land limit (305.2b) is a
+prohibition.*
 
 Every legality question is an `Action` value: casting, playing a land, activating, targeting,
 countering, destroying; from M3 attacking and blocking; from M4 searching and special actions.
