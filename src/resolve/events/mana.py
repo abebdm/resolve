@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from resolve.errors import EngineError
@@ -42,3 +42,26 @@ class ManaPoolEmptied(Event):
         if sorted(map(repr, pool)) != sorted(map(repr, (*self.mana, *self.kept))):
             raise EngineError(f"player {self.player}'s pool isn't {(*self.mana, *self.kept)}")
         pool[:] = self.kept
+
+
+@dataclass(frozen=True, kw_only=True)
+class ManaSpent(Event):
+    """``player`` spends ``mana`` from their pool to pay a cost (601.2h, 118.3a): it is removed.
+    As applied, ``left`` is the mana still in the pool, which the player announces (118.3a,
+    106.4a)."""
+
+    player: PlayerId
+    mana: tuple[Mana, ...]
+    left: tuple[Mana, ...] | None = None
+
+    def apply(self, state: GameState) -> Event:
+        if self.left is not None:
+            raise EngineError("mana spending is proposed without its outcome")
+        pool = state.player(self.player).mana_pool
+        remaining = list(pool)
+        for unit in self.mana:
+            if unit not in remaining:
+                raise EngineError(f"player {self.player}'s pool has no {unit} to spend")
+            remaining.remove(unit)
+        pool[:] = remaining
+        return replace(self, left=tuple(remaining))

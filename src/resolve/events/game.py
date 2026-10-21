@@ -54,6 +54,8 @@ class LibraryShuffled(Event):
     library is forgotten.
     """
 
+    library_action = True
+
     player: PlayerId
 
     def apply(self, state: GameState) -> None:

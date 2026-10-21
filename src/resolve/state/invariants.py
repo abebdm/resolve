@@ -24,6 +24,7 @@ from enum import Enum
 
 from resolve.decisions.kinds import DecisionKind
 from resolve.errors import EngineError
+from resolve.state.checkpoint import Checkpoint
 from resolve.state.game import GameObject, GameState, Player, zone_list
 from resolve.state.rng import Rng
 from resolve.state.turn import TURN_SEQUENCE, Step, gives_priority
@@ -116,6 +117,10 @@ def _walk_pure(
             item = getattr(value, name)
             if depth == 0 and isinstance(value, GameState):
                 inner = {"objects": GameObject, "players": Player}.get(name)
+            if isinstance(value, Checkpoint) and name == "values":
+                # A checkpoint holds copies of the state's objects and players (733.1).
+                _walk_checkpoint(item, (path, ".", name), depth + 1, problems)
+                continue
                 if name == "event_log" and log_from and isinstance(item, list):
                     log: list[object] = item  # pyright: ignore[reportUnknownVariableType]
                     for index in range(log_from, len(log)):
@@ -125,6 +130,18 @@ def _walk_pure(
             _walk_pure(item, (path, ".", name), depth + 1, problems, inner)
     else:
         problems.append(f"{_render(path)}: {type(value).__qualname__} isn't pure data")
+
+
+def _walk_checkpoint(values: object, path: _Path, depth: int, problems: list[str]) -> None:
+    if not isinstance(values, dict):
+        problems.append(f"{_render(path)}: a checkpoint's values aren't a dict")
+        return
+    mapping: dict[object, object] = values  # pyright: ignore[reportUnknownVariableType]
+    for key, item in mapping.items():
+        inner = (
+            {"objects": GameObject, "players": Player}.get(key) if isinstance(key, str) else None
+        )
+        _walk_pure(item, (path, "[r", key), depth + 1, problems, inner)
 
 
 def mutable_parts(value: object, path: str = "value") -> list[str]:

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 from resolve.citations import check_rules
 from resolve.decisions.kinds import DecisionKind
@@ -41,6 +41,10 @@ class Event(Immutable, ABC):
     """
 
     rules: tuple[str, ...]
+
+    # 733.1: an action that moved cards to or from a library, shuffled one or revealed cards from
+    # one can't be reversed. Events that do any of those say so.
+    library_action: ClassVar[bool] = False
 
     def __post_init__(self) -> None:
         check_rules(self.rules)

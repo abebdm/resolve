@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from resolve.cards.definitions import basic_lands, vanilla_creatures
+from resolve.cards.definitions import basic_lands, mana_rocks, vanilla_creatures
 from resolve.cards.registry import CardDefinition, CardRegistry
 from resolve.data.cards import CardDatabase, parse_card, parse_oracle_cards
 from resolve.decisions.kinds import DecisionKind
@@ -62,8 +62,8 @@ def database() -> CardDatabase:
 
 
 def scenario_registry() -> CardRegistry:
-    """``registry()`` plus the other basic lands, the fixture instant, sorcery, split card and
-    nonbasic Forest: the scenario builder's default."""
+    """``registry()`` plus the other basic lands, the vanilla creatures, Sol Ring, the fixture
+    instant, sorcery, split card and nonbasic Forest: the scenario builder's default."""
     extra = (
         "Test Shock",
         "Test Ponder",
@@ -83,6 +83,7 @@ def scenario_registry() -> CardRegistry:
             *(registry().get(n) for n in registry().names()),
             *lands,
             *creatures,
+            *mana_rocks.DEFINITIONS,
             *map(CardDefinition, extra),
         ]
     )
@@ -92,7 +93,7 @@ def scenario_database() -> CardDatabase:
     """``database()`` plus the cards of ``scenario_registry()``: the scenario builder's default."""
     extra = [fx.INSTANT_CARD, fx.SORCERY_CARD, fx.NONBASIC_FOREST, fx.LAND_CREATURE, fx.DUAL_LAND]
     extra += [fx.GRIZZLY_BEARS, fx.SAVANNAH_LIONS, fx.HILL_GIANT, fx.ZERO_TOUGHNESS]
-    extra += [fx.STAR_CREATURE, fx.VEHICLE]
+    extra += [fx.STAR_CREATURE, fx.VEHICLE, fx.SOL_RING]
     lands = [fx.PLAINS, fx.ISLAND, fx.SWAMP, fx.MOUNTAIN]
     return CardDatabase(parse_oracle_cards([*fx.default_cards(), *lands, *extra]))
 
