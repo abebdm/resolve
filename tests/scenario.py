@@ -254,6 +254,7 @@ class Scenario:
             passed=list(passed),
             lands_played=lands_played,
         )
+        state.regular_turn_player = active
         structure = defaults.turn_structure(state, active)
         state.turn.segments = list(structure[structure.index(segment) + 1 :])
         rest = TakeTurn(active, started=True)

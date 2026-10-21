@@ -59,6 +59,7 @@ class NextTurn:
 
     player: PlayerId
     extra_turns: tuple[PlayerId, ...]
+    extra: bool = False
 
 
 def _turn(state: GameState) -> TurnState:
@@ -151,15 +152,18 @@ def next_turn(state: GameState) -> NextTurn:
     """Who takes the turn after the one in progress (103.1, 500.7, 800.4k).
 
     Extra turns come first, the last one created first (500.7); one for a player who has left
-    the game is not taken (800.4k). Otherwise it is the next player in turn order (103.1), which
-    ``GameState.turn_direction`` can reverse.
+    the game is not taken (800.4k). Otherwise it is the player after the last regular turn's
+    player in turn order (103.1, 500.7), which ``GameState.turn_direction`` can reverse.
     """
     remaining = list(state.extra_turns)
     while remaining:
         candidate = remaining.pop()
         if not state.player(candidate).left_game:
-            return NextTurn(candidate, tuple(remaining))
-    return NextTurn(next_in_turn_order(state, _turn(state).active_player), ())
+            return NextTurn(candidate, tuple(remaining), extra=True)
+    # 500.7: an extra turn doesn't change turn order; the regular turns go on from the last one.
+    last = state.regular_turn_player
+    after = _turn(state).active_player if last is None else last
+    return NextTurn(next_in_turn_order(state, after), ())
 
 
 def permanents_that_untap(state: GameState, player: PlayerId) -> tuple[ObjectId, ...]:

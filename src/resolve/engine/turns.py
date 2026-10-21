@@ -90,6 +90,7 @@ class TakeTurn(Task):
 
     player: PlayerId
     started: bool = False
+    extra: bool = False
 
     def run(self, state: GameState) -> TaskResult:
         if not self.started and state.player(self.player).left_game:
@@ -97,6 +98,8 @@ class TakeTurn(Task):
             return Push((TakeTurn(next_in_turn_order(state, self.player)),))
         if not self.started:
             self.started = True
+            if not self.extra:
+                state.regular_turn_player = self.player
             number = 1 if state.turn is None else state.turn.number + 1
             segments = defaults.turn_structure(state, self.player)
             began = TurnBegan(
@@ -111,7 +114,7 @@ class TakeTurn(Task):
         # The turn is over; the next turn is an extra turn (500.7) or the next player's (103.1).
         following = defaults.next_turn(state)
         state.extra_turns = list(following.extra_turns)
-        return Push((TakeTurn(following.player),))
+        return Push((TakeTurn(following.player, extra=following.extra),))
 
 
 def cut_rest_of_turn(state: GameState) -> None:

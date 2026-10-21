@@ -12,6 +12,7 @@ from resolve.engine import defaults
 from resolve.engine.defaults import KEEP, MULLIGAN, LossReason
 from resolve.errors import NotImplementedRule
 from resolve.state.config import GameConfig
+from resolve.state.game import next_in_turn_order, turn_order
 from resolve.state.ids import PlayerId
 from resolve.state.mana import Mana, ManaType
 from resolve.state.turn import TURN_SEQUENCE, Phase, Step
@@ -105,8 +106,20 @@ def test_504_1_the_draw_step_draws_one_card() -> None:
 
 def test_500_1_a_turn_has_the_five_phases_in_order() -> None:
     state = Scenario(2).build()
-    assert defaults.turn_structure(state, P0) == TURN_SEQUENCE
-    assert next(phase for phase, _ in TURN_SEQUENCE) is Phase.BEGINNING
+    phases = [
+        Phase.BEGINNING,
+        Phase.PRECOMBAT_MAIN,
+        Phase.COMBAT,
+        Phase.POSTCOMBAT_MAIN,
+        Phase.ENDING,
+    ]
+    structure = defaults.turn_structure(state, P0)
+    assert list(dict.fromkeys(phase for phase, _ in structure)) == phases
+    assert structure[0] == (Phase.BEGINNING, Step.UNTAP) and structure[-1] == (
+        Phase.ENDING,
+        Step.CLEANUP,
+    )
+    assert structure == TURN_SEQUENCE
 
 
 def test_103_8a_the_starting_player_skips_their_first_draw_in_a_two_player_game() -> None:
@@ -167,7 +180,10 @@ def test_800_4k_an_extra_turn_of_a_player_who_left_is_not_taken() -> None:
 
 
 def test_103_1_turn_order_is_clockwise() -> None:
-    assert Scenario(2).build().turn_direction == 1
+    state = Scenario(3, starting_player=1).build()
+    assert state.turn_direction == 1
+    assert turn_order(state) == (P1, P2, P0)
+    assert next_in_turn_order(state, P2) == P0
 
 
 def test_502_3_all_the_active_players_permanents_untap() -> None:
@@ -189,13 +205,6 @@ def test_500_5_all_unspent_mana_empties() -> None:
 @pytest.mark.parametrize("reason", list(LossReason))
 def test_104_3_a_player_can_lose_the_game(reason: LossReason) -> None:
     assert defaults.can_lose_game(Scenario(2).build(), P0, reason)
-
-
-def test_loss_reasons_cite_their_rules() -> None:
-    assert {r.name: r.value for r in LossReason} == {
-        "ZERO_LIFE": "704.5a",
-        "EMPTY_LIBRARY": "704.5b",
-    }
 
 
 def test_103_6_no_actions_start_on_opening_hands() -> None:

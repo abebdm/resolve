@@ -128,6 +128,9 @@ class GameState:
     - ``pending``: the decision the engine is waiting for, if any. ``result``: set when the game
       is over.
     - ``extra_turns``: players who will take an extra turn, the one to take it next last (500.7).
+    - ``regular_turn_player``: whose regular (not extra) turn came last; the next regular turn
+      follows it in turn order, because an extra turn doesn't change turn order (500.7).
+      ``None`` before one has begun or when a scenario placed the game mid-turn.
     - ``turn_direction``: 1 when turn order is clockwise (103.1), -1 when it is reversed.
     - ``event_log``: everything that happened, with CR citations.
     """
@@ -148,6 +151,7 @@ class GameState:
     pending: DecisionRequest | None = None
     result: GameResult | None = None
     extra_turns: list[PlayerId] = field(default_factory=list[PlayerId])
+    regular_turn_player: PlayerId | None = None
     turn_direction: int = 1
     event_log: list[LogEntry] = field(default_factory=list["LogEntry"])
     next_object_id: int = 1

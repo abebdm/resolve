@@ -48,6 +48,10 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
     nobody: the player decides for themselves (800.4a: control effects end).
   - `knows_identity(state, obj, viewer)` adds 723.4 to `is_known_to`: a viewer also knows what
     the players whose decisions they make know. `is_known_to` stays the zone-and-knowledge base.
+  - `GameState.regular_turn_player` records whose regular turn came last, so an extra turn doesn't
+    change turn order (500.7): P0's turn, P2's extra turn, then P1's.
+  - Legality prohibitions cover 305.3 and 305.1 as well as 305.2b, so a permission to play a land
+    elsewhere never beats them (101.2).
   - `can_tap_for_cost` keeps raising `NotImplementedRule("302.6")` for creatures until M2.4.
   - An opening-hand action reported by `opening_hand_actions` (103.6) raises
     `NotImplementedRule`, never skipped. A single mulligan option isn't asked.

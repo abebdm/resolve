@@ -18,10 +18,12 @@ from __future__ import annotations
 
 import pytest
 
-from resolve.decisions.spaces import PlayLandOption
+from resolve.decisions.request import DecisionAnswer
+from resolve.decisions.spaces import ChooseOne, PassOption, Pick, PlayLandOption
 from resolve.engine import defaults, legality
+from resolve.engine.api import submit
 from resolve.engine.legality import Ground, PlayLandAction, Verdict, allowed
-from resolve.errors import EngineError
+from resolve.errors import EngineError, InvalidAnswer
 from resolve.state.ids import PlayerId
 from resolve.state.turn import Phase, Step
 from tests.game_fixtures import patch_function, request_of
@@ -47,8 +49,7 @@ def test_305_3_a_land_may_not_be_played_on_another_players_turn() -> None:
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
     verdict = allowed(state, PlayLandAction(P1, forest))
-    assert not verdict.ok and verdict.rules == ()
-    assert verdict.reasons == ("no rule or effect lets the player play this land now",)
+    assert not verdict.ok and verdict.rules == ("305.3",)
 
 
 def test_305_1_a_land_may_not_be_played_with_a_spell_on_the_stack() -> None:
@@ -117,14 +118,58 @@ def test_101_2_the_engine_offers_no_land_a_prohibition_forbids(
 
 
 def test_101_2_all_prohibitions_are_reported() -> None:
+    """In an upkeep after a land play, 305.1 and 305.2b both forbid a land play."""
     scenario = Scenario(2)
     (forest,) = scenario.hand(P0, ["Forest"])
     scenario.at(Step.UPKEEP, lands_played=1)
     verdict = allowed(scenario.build(), PlayLandAction(P0, forest))
-    assert not verdict.ok and verdict.rules == ("305.2b",)  # and no permission either
+    assert not verdict.ok and verdict.rules == ("305.1", "116.2a", "305.2b")
+    assert len(verdict.reasons) == 2
+
+
+def test_305_3_a_permission_to_play_a_land_on_another_turn_doesnt_beat_the_prohibition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scenario = Scenario(2)
+    (forest,) = scenario.hand(P1, ["Forest"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    patch_function(monkeypatch, defaults, "land_play_options", lambda state, player: (forest,))
+    verdict = allowed(state, PlayLandAction(P1, forest))
+    assert not verdict.ok and verdict.rules == ("305.3",)
+
+
+def test_305_1_a_permission_doesnt_allow_a_land_with_a_spell_on_the_stack(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scenario = Scenario(2)
+    (forest,) = scenario.hand(P0, ["Forest"])
+    scenario.stack(P1, ["Test Shock"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    patch_function(monkeypatch, defaults, "land_play_options", lambda state, player: (forest,))
+    verdict = allowed(state, PlayLandAction(P0, forest))
+    assert not verdict.ok and verdict.rules == ("305.1", "116.2a")
 
 
 def test_an_action_that_is_not_a_legality_question_is_an_error() -> None:
     state = Scenario(2).build()
     with pytest.raises(EngineError, match="legality"):
         allowed(state, object())  # pyright: ignore[reportArgumentType]
+
+
+def test_305_2_b_an_answer_for_a_land_that_isnt_offered_is_rejected() -> None:
+    """A second land, with one already played, isn't an option; no answer can name it."""
+    scenario = Scenario(2)
+    scenario.hand(P0, ["Forest"])
+    scenario.library(P0, ["Forest"] * 3)
+    scenario.library(P1, ["Forest"] * 3)
+    scenario.at(Phase.PRECOMBAT_MAIN, lands_played=1)
+    state = scenario.build()
+    request = request_of(state)
+    assert request.space == ChooseOne((PassOption(),))
+    log = len(state.event_log)
+    with pytest.raises(InvalidAnswer):
+        submit(state, DecisionAnswer(request.id, P0, Pick(1)))
+    assert len(state.event_log) == log and state.turn is not None
+    assert state.turn.lands_played == 1

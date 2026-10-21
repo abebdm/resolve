@@ -15,6 +15,7 @@ import pytest
 
 from resolve.agents.scripted import Choose, choose
 from resolve.cards.primitives.abilities import ActivatedManaAbility
+from resolve.cards.primitives.effects import AddMana
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer
 from resolve.decisions.spaces import (
@@ -275,6 +276,17 @@ def test_500_7_an_extra_turn_comes_first() -> None:
     assert state.extra_turns == []
 
 
+def test_500_7_an_extra_turn_doesnt_change_turn_order() -> None:
+    """P2 takes an extra turn during P0's turn: P0, P2, then P1 (not P0 again)."""
+    scenario = stocked(3)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    state.extra_turns = [P2]
+    pass_until(state, lambda s: s.turn is not None and s.turn.number == 4)
+    turns = [r.player for e in state.event_log if isinstance(r := e.record, TurnBegan)]
+    assert turns == [P2, P1, P2]
+
+
 def test_500_7_the_next_turn_comes_from_the_function(monkeypatch: pytest.MonkeyPatch) -> None:
     patch_function(monkeypatch, defaults, "next_turn", lambda state: NextTurn(P2, ()))
     scenario = stocked(3)
@@ -282,6 +294,15 @@ def test_500_7_the_next_turn_comes_from_the_function(monkeypatch: pytest.MonkeyP
     state = scenario.build()
     pass_until(state, lambda s: s.turn is not None and s.turn.number == 2)
     assert state.turn is not None and state.turn.active_player == P2
+
+
+def test_702_a_players_abilities_come_from_the_function(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``player_abilities`` has no consumer until hexproof and shroud (M2.8); it is a seam."""
+    state = stocked().build()
+    assert defaults.player_abilities(state, P0) == ()
+    marker = ActivatedManaAbility((), AddMana((ManaType.GREEN,)))
+    patch_function(monkeypatch, defaults, "player_abilities", lambda state, player: (marker,))
+    assert defaults.player_abilities(state, P0) == (marker,)
 
 
 def test_103_1_reversed_turn_order_goes_to_the_previous_seat() -> None:

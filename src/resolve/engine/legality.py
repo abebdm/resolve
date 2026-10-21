@@ -6,8 +6,8 @@ works in four steps:
 1. it collects the **permissions**: the rules' own (117.1a, 305.1, 601.3, 903.8) and those
    granted by effects;
 2. it requires at least one;
-3. it collects the **prohibitions** (305.2b; later hexproof, shroud, protection, "can't be
-   countered", and static abilities);
+3. it collects the **prohibitions** (305.1, 305.2b, 305.3; later hexproof, shroud, protection,
+   "can't be countered", and static abilities);
 4. any applicable prohibition wins (101.2). Adding or removing abilities is not a prohibition
    (101.2a).
 
@@ -79,15 +79,22 @@ def prohibitions(state: GameState, action: Action) -> tuple[Ground, ...]:
     match action:
         case PlayLandAction(player=player):
             turn = state.turn
-            if (
-                turn is not None
-                and player == turn.active_player
-                and turn.lands_played >= defaults.land_plays_allowed(state, player)
+            found: list[Ground] = []
+            if turn is None:
+                return ()
+            if player != turn.active_player:
+                # 305.3: a player can't play a land, for any reason, during another player's turn.
+                found.append(Ground(("305.3",), "it isn't the player's turn"))
+            elif not turn.in_main_phase or state.stack:
+                # 305.1, 116.2a: only during a main phase of their turn with an empty stack.
+                found.append(Ground(("305.1", "116.2a"), "not a main phase with an empty stack"))
+            if player == turn.active_player and turn.lands_played >= defaults.land_plays_allowed(
+                state, player
             ):
                 # 305.2b: a player can't play a land, for any reason, once the lands they have
                 # played reach the number they can play.
-                return (Ground(("305.2b",), "the player has played all the lands they can"),)
-            return ()
+                found.append(Ground(("305.2b",), "the player has played all the lands they can"))
+            return tuple(found)
     raise EngineError(f"{action!r} isn't a legality question")
 
 
