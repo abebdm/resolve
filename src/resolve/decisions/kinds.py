@@ -27,7 +27,9 @@ class DecisionKind(Enum):
     CHOOSE_X = "choose_x"  # 107.3a
     CHOOSE_TARGETS = "choose_targets"  # 601.2c
     DIVIDE = "divide"  # 601.2d
+    ACTIVATE_MANA_ABILITIES = "activate_mana_abilities"  # 601.2g, 605.3a
     PAY_COSTS = "pay_costs"  # 601.2h
+    REVERSE_MANA_ABILITIES = "reverse_mana_abilities"  # 733.1
     DECLARE_ATTACKERS = "declare_attackers"  # 508.1
     DECLARE_BLOCKERS = "declare_blockers"  # 509.1
     ASSIGN_COMBAT_DAMAGE = "assign_combat_damage"  # 510.1

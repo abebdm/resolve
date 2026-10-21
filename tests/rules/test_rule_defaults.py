@@ -26,11 +26,13 @@ import pytest
 
 from resolve.citations import cited_rules
 from resolve.data.types import CardType
+from resolve.decisions.spaces import CastSpellOption
 from resolve.errors import NotImplementedRule
 from resolve.rules import defaults
 from resolve.state.config import GameConfig
 from resolve.state.ids import PlayerId
 from resolve.state.mana import Mana, ManaType
+from resolve.state.spell import COMMANDER, FROM_HAND, NORMAL
 from resolve.state.turn import TURN_SEQUENCE, Phase, Step
 from tests.scenario import Scenario
 
@@ -40,9 +42,11 @@ P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 CITATIONS = {
     "land_plays_allowed": ["305.2"],
     "land_play_options": ["305.1"],
-    "cast_options": ["601.3", "903.8"],
+    "cast_permissions": ["601.3", "903.8"],
+    "cast_options": ["601.3", "117.1a"],
     "has_sorcery_timing": ["117.1a", "307.1"],
     "may_cast_now": ["117.1a"],
+    "resolved_spell_destination": ["608.2n"],
     "maximum_hand_size": ["402.2"],
     "draw_step_draws": ["504.1"],
     "turn_structure": ["500.1"],
@@ -162,10 +166,13 @@ def test_601_3_cast_options_are_the_spells_in_hand_then_commanders_in_the_comman
     (other,) = scenario.command(P0, ["Test Shock"])
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
-    assert defaults.cast_options(state, P0) == (shock, ponder, commander)
-    assert forest not in defaults.cast_options(state, P0) and other not in defaults.cast_options(
-        state, P0
+    assert defaults.cast_options(state, P0) == (
+        CastSpellOption(shock, NORMAL, FROM_HAND),
+        CastSpellOption(ponder, NORMAL, FROM_HAND),
+        CastSpellOption(commander, NORMAL, COMMANDER),
     )
+    offered = [option.object for option in defaults.cast_options(state, P0)]
+    assert forest not in offered and other not in offered
     assert defaults.cast_options(state, P1) == ()  # not their turn: nothing has sorcery timing
 
 

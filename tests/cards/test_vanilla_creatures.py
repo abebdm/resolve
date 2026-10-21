@@ -21,6 +21,7 @@ from resolve.data.types import CardType, Color
 from resolve.decisions.spaces import CastSpellOption, ChooseOne, PassOption
 from resolve.effects.characteristics import characteristics
 from resolve.state.ids import PlayerId
+from resolve.state.spell import FROM_HAND, NORMAL
 from resolve.state.turn import Phase, Step
 from tests import scryfall_fixtures as fx
 from tests.game_fixtures import request_of
@@ -67,7 +68,11 @@ def test_302_1_cast_only_in_the_main_phase(
         scenario.at(where)
         request = request_of(scenario.build())
         assert isinstance(request.space, ChooseOne)
-        expected = (PassOption(), CastSpellOption(card)) if castable else (PassOption(),)
+        expected = (
+            (PassOption(), CastSpellOption(card, NORMAL, FROM_HAND))
+            if castable
+            else (PassOption(),)
+        )
         assert request.space.options == expected
 
 

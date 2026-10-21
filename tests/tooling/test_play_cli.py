@@ -10,6 +10,7 @@ import pytest
 from resolve.agents.scripted import ScriptedAgent, choose
 from resolve.decisions.spaces import CastSpellOption
 from resolve.state.ids import PlayerId
+from resolve.state.spell import FROM_HAND, NORMAL
 from resolve.state.turn import Phase
 from tests import scryfall_fixtures as fx
 from tests.scenario import Scenario
@@ -42,7 +43,7 @@ def test_a_game_that_reaches_a_gap_exits_with_3() -> None:
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
     output = io.StringIO()
-    agent = ScriptedAgent([choose(CastSpellOption(elves))])
+    agent = ScriptedAgent([choose(CastSpellOption(elves, NORMAL, FROM_HAND))])
     status = play_game(state, [agent, agent], output, viewer=PlayerId(0))
     assert status == EXIT_GAP
     assert "Stopped: the engine doesn't implement 601.2: casting a spell" in output.getvalue()

@@ -60,11 +60,12 @@ from resolve.state.game import GameState, next_in_turn_order, players_in_game, t
 from resolve.state.ids import PlayerId
 from resolve.state.invariants import invariant_violations
 from resolve.state.mana import Mana, ManaType
+from resolve.state.spell import COMMANDER, FROM_HAND, NORMAL
 from resolve.state.turn import TURN_SEQUENCE, Phase, Segment, Step
 from resolve.tasks import Done, Task, TaskResult
 from tests.game_fixtures import answer, decks, pass_until, request_of
 from tests.scenario import Scenario, run_script
-from tests.seams import patch, patch_card, patch_loss, patch_next_turn, patch_object, patch_skip
+from tests.seams import patch, patch_loss, patch_next_turn, patch_object, patch_skip
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 
@@ -168,7 +169,7 @@ def test_117_1a_sorcery_timing_comes_from_the_function(monkeypatch: pytest.Monke
     patch(monkeypatch, "has_sorcery_timing", lambda state, player: True)
     state = scenario.build()
     assert PlayLandOption(forest) in options(state)
-    assert CastSpellOption(ponder) in options(state)
+    assert CastSpellOption(ponder, NORMAL, FROM_HAND) in options(state)
 
 
 def test_117_1a_without_sorcery_timing_neither_is_offered_in_the_main_phase(
@@ -180,8 +181,10 @@ def test_117_1a_without_sorcery_timing_neither_is_offered_in_the_main_phase(
     patch(monkeypatch, "has_sorcery_timing", lambda state, player: False)
     state = scenario.build()
     assert PlayLandOption(forest) not in options(state)
-    assert CastSpellOption(ponder) not in options(state)
-    assert CastSpellOption(shock) in options(state)  # an instant needs no sorcery timing
+    assert CastSpellOption(ponder, NORMAL, FROM_HAND) not in options(state)
+    assert CastSpellOption(shock, NORMAL, FROM_HAND) in options(
+        state
+    )  # an instant needs no sorcery timing
 
 
 def test_117_1a_may_cast_now_is_the_one_place_flash_would_plug_in(
@@ -192,20 +195,24 @@ def test_117_1a_may_cast_now_is_the_one_place_flash_would_plug_in(
     scenario = Scenario(2)
     shock, ponder = scenario.hand(P0, ["Test Shock", "Test Ponder"])
     scenario.at(Step.UPKEEP)
-    patch_card(monkeypatch, "may_cast_now", lambda state, player, obj: obj == ponder)
+    monkeypatch.setattr(defaults, "may_cast_now", lambda state, player, obj, *_: obj == ponder)
     state = scenario.build()
-    assert CastSpellOption(ponder) in options(state)
-    assert CastSpellOption(shock) not in options(state)
+    assert CastSpellOption(ponder, NORMAL, FROM_HAND) in options(state)
+    assert CastSpellOption(shock, NORMAL, FROM_HAND) not in options(state)
 
 
 def test_601_3_the_cast_options_come_from_the_function(monkeypatch: pytest.MonkeyPatch) -> None:
     scenario = Scenario(2)
     shock, ponder = scenario.hand(P0, ["Test Shock", "Test Ponder"])
     scenario.at(Phase.PRECOMBAT_MAIN)
-    patch(monkeypatch, "cast_options", lambda state, player: (ponder,))
+    patch(
+        monkeypatch,
+        "cast_options",
+        lambda state, player: (CastSpellOption(ponder, NORMAL, FROM_HAND),),
+    )
     state = scenario.build()
-    assert CastSpellOption(ponder) in options(state)
-    assert CastSpellOption(shock) not in options(state)
+    assert CastSpellOption(ponder, NORMAL, FROM_HAND) in options(state)
+    assert CastSpellOption(shock, NORMAL, FROM_HAND) not in options(state)
 
 
 # --- 402.2, 514.1: maximum hand size ----------------------------------------------------------
@@ -737,10 +744,9 @@ def test_903_8_only_the_players_own_commander_is_cast_from_the_command_zone() ->
     (other,) = scenario.command(P0, ["Test Shock"])
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
-    assert defaults.cast_options(state, P0) == (mine,)
-    assert theirs not in defaults.cast_options(state, P0) and other not in defaults.cast_options(
-        state, P0
-    )
+    assert defaults.cast_options(state, P0) == (CastSpellOption(mine, NORMAL, COMMANDER),)
+    offered = [option.object for option in defaults.cast_options(state, P0)]
+    assert theirs not in offered and other not in offered
 
 
 def test_504_1_the_draw_step_asks_about_the_active_player(

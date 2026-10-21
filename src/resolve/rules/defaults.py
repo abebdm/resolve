@@ -12,9 +12,11 @@ The functions and their defaults:
 |----------------------------------|----------------------|--------------------------------------|
 | ``land_plays_allowed``           | 305.2                | one land per turn                    |
 | ``land_play_options``            | 305.1                | lands in the hand, sorcery timing    |
-| ``cast_options``                 | 601.3, 903.8         | spells in the hand, commanders       |
+| ``cast_permissions``             | 601.3, 903.8         | from the hand; commanders            |
+| ``cast_options``                 | 601.3, 117.1a        | each permission and layout variant   |
 | ``has_sorcery_timing``           | 117.1a, 307.1        | own main phase, empty stack          |
 | ``may_cast_now``                 | 117.1a               | instants any time, others sorcery    |
+| ``resolved_spell_destination``   | 608.2n               | the owner's graveyard                |
 | ``maximum_hand_size``            | 402.2                | seven                                |
 | ``draw_step_draws``              | 504.1                | one card                             |
 | ``turn_structure``               | 500.1                | the twelve segments of a turn        |
@@ -39,14 +41,26 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from resolve.data.types import CardType
-from resolve.decisions.spaces import NamedOption
-from resolve.effects.characteristics import characteristics
+from resolve.decisions.spaces import CastSpellOption, NamedOption
+from resolve.effects.characteristics import characteristics, is_omen, variant_characteristics
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.state.game import is_multiplayer, next_in_turn_order
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana
+from resolve.state.spell import (
+    COMMANDER,
+    FROM_HAND,
+    NORMAL,
+    Alternative,
+    AlternativeKind,
+    Back,
+    CastPermission,
+    CastTiming,
+    CastVariant,
+    Half,
+)
 from resolve.state.turn import TURN_SEQUENCE, Segment, Step
-from resolve.state.zones import Zone
+from resolve.state.zones import Zone, ZoneKind
 from resolve.values import Immutable
 
 if TYPE_CHECKING:
@@ -115,46 +129,121 @@ def land_play_options(state: GameState, player: PlayerId) -> tuple[ObjectId, ...
     return tuple(options)
 
 
-def cast_options(state: GameState, player: PlayerId) -> tuple[ObjectId, ...]:
-    """The spells ``player`` may cast now: cards in their hand in hand order (601.3), then their
-    commanders in the command zone (903.8), those that ``may_cast_now`` allows.
+def cast_permissions(
+    state: GameState, player: PlayerId, obj: ObjectId
+) -> tuple[CastPermission, ...]:
+    """The rules' permissions for ``player`` to cast the card ``obj`` from where it is (601.3):
+    from their hand (``FROM_HAND``; 601.2a), and a commander they own from the command zone
+    (``COMMANDER``; 903.8). Effects that allow casting from other zones (M2.10, M4) add theirs.
 
-    Casting from other zones and the rest of 601.3's permissions arrive with the casting
-    process (M2.3, M2.10, M4, M6).
+    A spell whose proposal is being checked (601.2e) is judged from the zone it was cast from.
     """
-    options = [obj for obj in state.player(player).hand if may_cast_now(state, player, obj)]
-    for obj in state.command:
-        card = state.objects[obj].card
-        # 903.8: a player may cast a commander they own from the command zone.
-        if (
-            card is not None
-            and card in state.player(player).commanders
-            and may_cast_now(state, player, obj)
-        ):
-            options.append(obj)
+    game_object = state.objects[obj]
+    zone = game_object.zone if game_object.spell is None else game_object.spell.cast_from
+    if game_object.owner != player:
+        return ()
+    if zone == Zone.hand(player):
+        return (FROM_HAND,)
+    if zone.kind is ZoneKind.COMMAND and game_object.card in state.player(player).commanders:
+        return (COMMANDER,)
+    return ()
+
+
+def cast_options(state: GameState, player: PlayerId) -> tuple[CastSpellOption, ...]:
+    """The spells ``player`` may begin to cast now (601.3, 117.1a): the cards in their hand in hand
+    order, then their commanders in the command zone (903.8); for each, every permission
+    (``cast_permissions``) and variant (601.3e) that ``legality.allowed`` permits.
+
+    The variants come from the card's layout: a half of a split card (709.3), either face of a
+    modal double-faced card (712.11b), an omen's normal part or its Omen (720.3), an adventurer
+    or its Adventure (715.3); every other card is cast normally. Each is checked on its own
+    characteristics (601.3e). The cost isn't checked: an unpayable cast is reversed (733).
+    """
+    from resolve.rules import legality
+
+    candidates = [*state.player(player).hand, *state.command]
+    options: list[CastSpellOption] = []
+    for obj in candidates:
+        for permission in cast_permissions(state, player, obj):
+            for variant in _layout_variants(state, obj):
+                action = legality.CastAction(player, obj, variant, permission)
+                if legality.allowed(state, action).allowed:
+                    options.append(CastSpellOption(obj, variant, permission))
     return tuple(options)
 
 
-def has_sorcery_timing(state: GameState, player: PlayerId) -> bool:
+def _layout_variants(state: GameState, obj: ObjectId) -> tuple[CastVariant, ...]:
+    """The ways the card's layout lets it be cast (709.3, 712.11, 715.3, 720.3, 722.3)."""
+    data = state.card_of(state.objects[obj]).data
+    if data.layout == "split":
+        return (Half(0), Half(1))  # 709.3: a half is chosen; fuse (702.102) is M9
+    if data.layout == "modal_dfc":
+        return (NORMAL, Back())  # 712.11b
+    if is_omen(data) and data.is_multi_faced:
+        return (NORMAL, Alternative(AlternativeKind.OMEN))  # 720.3
+    if data.layout == "adventure" and data.is_multi_faced:
+        return (NORMAL, Alternative(AlternativeKind.ADVENTURE))  # 715.3
+    # 712.11: a transforming double-faced card is cast front face up; 722.3: a preparation card
+    # can't be cast with its inset characteristics.
+    return (NORMAL,)
+
+
+def has_sorcery_timing(
+    state: GameState, player: PlayerId, ignoring: ObjectId | None = None
+) -> bool:
     """Whether ``player`` has sorcery timing (117.1a, 307.1, 116.2a): it is their own turn, a main
     phase, and the stack is empty. Flash (702.8) and effects that allow actions at other times
-    change what can be done without it, not this question."""
-    turn = state.turn
-    return (
-        turn is not None and player == turn.active_player and turn.in_main_phase and not state.stack
-    )
+    change what can be done without it, not this question.
 
-
-def may_cast_now(state: GameState, player: PlayerId, obj: ObjectId) -> bool:
-    """Whether the card ``obj`` may be cast at this time (117.1a): an instant whenever the
-    player has priority (304.1), any other spell only with sorcery timing (301.1, 302.1, 307.1).
-
-    A land is never cast (305.9). Flash (702.8) and "as though it had flash" plug in here.
+    ``ignoring`` is a spell whose own proposal is being checked (601.2e): it doesn't count as being
+    on the stack.
     """
-    types = characteristics(state, obj).card_types
+    turn = state.turn
+    stack = [obj for obj in state.stack if obj != ignoring]
+    return turn is not None and player == turn.active_player and turn.in_main_phase and not stack
+
+
+def may_cast_now(
+    state: GameState,
+    player: PlayerId,
+    obj: ObjectId,
+    variant: CastVariant = NORMAL,
+    permission: CastPermission = FROM_HAND,
+) -> bool:
+    """Whether the card ``obj`` may be cast as ``variant`` under ``permission`` at this time
+    (117.1a): judged on the variant's characteristics (601.3e). With the normal timing, an instant
+    whenever the player has priority (304.1), any other spell only with sorcery timing (301.1,
+    302.1, 307.1).
+
+    A land is never cast (305.9). Flash (702.8) plugs in here; "as though it had flash" (601.3b,
+    M6) and "during this resolution" (608.2g, M2.10) are permissions' timings.
+    """
+    types = variant_characteristics(state, obj, variant).card_types
     if CardType.LAND in types or not any(card_type in SPELL_TYPES for card_type in types):
         return False
-    return CardType.INSTANT in types or has_sorcery_timing(state, player)
+    match permission.timing:
+        case CastTiming.NORMAL:
+            # 601.2e: a spell whose proposal is checked again doesn't stand in its own way.
+            proposed = obj if state.objects[obj].spell is not None else None
+            if CardType.INSTANT in types:
+                return True
+            if proposed is None:
+                return has_sorcery_timing(state, player)
+            return has_sorcery_timing(state, player, ignoring=proposed)
+        case CastTiming.AS_THOUGH_FLASH:
+            raise NotImplementedRule("601.3b: casting a spell as though it had flash")
+        case CastTiming.DURING_RESOLUTION:
+            raise NotImplementedRule("608.2g: casting a spell during a resolution")
+
+
+def resolved_spell_destination(state: GameState, spell: ObjectId) -> Zone:
+    """Where an instant or sorcery spell goes as the final part of its resolution (608.2n), and a
+    countered spell (701.6): its owner's graveyard.
+
+    Adventures (715.3d), Omens (720.3d), buyback (702.27) and flashback-style replacements (M6)
+    change it.
+    """
+    return Zone.graveyard(state.object(spell).owner)
 
 
 # --- The turn ----------------------------------------------------------------------------------

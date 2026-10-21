@@ -79,10 +79,9 @@ def priority_options(state: GameState, player: PlayerId) -> tuple[Option, ...]:
     for obj in hand:
         if obj in lands:
             options.append(PlayLandOption(obj))
-        elif obj in spells:
-            options.append(CastSpellOption(obj))
+        options += [spell for spell in spells if spell.object == obj]
     options += [PlayLandOption(obj) for obj in lands if obj not in hand]
-    options += [CastSpellOption(obj) for obj in spells if obj not in hand]
+    options += [spell for spell in spells if spell.object not in hand]
     for obj in state.battlefield:
         if state.objects[obj].controller != player:
             continue

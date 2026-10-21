@@ -46,6 +46,7 @@ from resolve.engine.view import PlayerView
 from resolve.state.config import GameConfig
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import ManaType
+from resolve.state.spell import FROM_HAND, NORMAL
 from resolve.state.turn import Phase
 from resolve.state.turn import Step as TurnStep
 from resolve.state.zones import Zone
@@ -260,11 +261,12 @@ def test_a_hidden_library_card_never_appears_in_any_view() -> None:
 def test_priority_options_are_described_in_words() -> None:
     own, other, ids = board()
     assert describe_option(PassOption(), own) == "pass priority"
-    assert describe_option(CastSpellOption(ids["hand"]), own) == (
+    assert describe_option(CastSpellOption(ids["hand"], NORMAL, FROM_HAND), own) == (
         f"cast Llanowar Elves #{ids['hand']}"
     )
     assert (
-        describe_option(CastSpellOption(ids["hand"]), other) == f"cast hidden card #{ids['hand']}"
+        describe_option(CastSpellOption(ids["hand"], NORMAL, FROM_HAND), other)
+        == f"cast hidden card #{ids['hand']}"
     )
     assert describe_option(PlayLandOption(ids["grave"]), own) == f"play Forest #{ids['grave']}"
 

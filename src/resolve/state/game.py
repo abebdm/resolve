@@ -24,6 +24,7 @@ from resolve.state.config import GameConfig
 from resolve.state.ids import CardId, ObjectId, PlayerId
 from resolve.state.mana import Mana
 from resolve.state.rng import Rng
+from resolve.state.spell import CastChoices
 from resolve.state.turn import TurnState
 from resolve.state.zones import Zone, ZoneKind
 from resolve.values import Immutable
@@ -64,6 +65,9 @@ class GameObject:
       untapped (110.5b).
     - ``damage``: damage marked on it (120.3, 120.6); only permanents have any, and a new object
       has none (400.7).
+    - ``spell``: how it is being (or was) cast, for a spell on the stack (601.2, design.md §17.5);
+      ``None`` everywhere else.
+    - ``cast_record``: for a permanent that was a spell, how that spell was cast (400.7d).
     """
 
     id: ObjectId
@@ -75,6 +79,8 @@ class GameObject:
     known_to: tuple[PlayerId, ...] = ()
     tapped: bool = False
     damage: int = 0
+    spell: CastChoices | None = None
+    cast_record: CastChoices | None = None
 
 
 @dataclass(slots=True)

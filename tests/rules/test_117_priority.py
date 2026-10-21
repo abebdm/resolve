@@ -39,6 +39,7 @@ from resolve.events.turn import PriorityPassed
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState
 from resolve.state.ids import PlayerId
+from resolve.state.spell import COMMANDER, FROM_HAND, NORMAL
 from resolve.state.turn import Phase, Step
 from tests.game_fixtures import request_of
 from tests.scenario import Scenario, run_script
@@ -144,9 +145,9 @@ def test_117_1a_noninstant_spells_and_lands_need_the_players_own_main_phase() ->
     assert options(state) == (
         PassOption(),
         PlayLandOption(forest),
-        CastSpellOption(elves),
-        CastSpellOption(shock),
-        CastSpellOption(ponder),
+        CastSpellOption(elves, NORMAL, FROM_HAND),
+        CastSpellOption(shock, NORMAL, FROM_HAND),
+        CastSpellOption(ponder, NORMAL, FROM_HAND),
     )
 
 
@@ -156,7 +157,7 @@ def test_117_1a_only_instants_outside_the_main_phase() -> None:
     (shock,) = scenario.hand(P0, ["Test Shock"])
     scenario.at(Step.UPKEEP)
     state = scenario.build()
-    assert options(state) == (PassOption(), CastSpellOption(shock))
+    assert options(state) == (PassOption(), CastSpellOption(shock, NORMAL, FROM_HAND))
 
 
 def test_117_1a_305_3_only_instants_on_another_players_turn() -> None:
@@ -167,7 +168,7 @@ def test_117_1a_305_3_only_instants_on_another_players_turn() -> None:
     scenario.at(Phase.PRECOMBAT_MAIN, priority=P1, passed=[P0])
     state = scenario.build()
     assert request_of(state).player == P1
-    assert options(state) == (PassOption(), CastSpellOption(shock))
+    assert options(state) == (PassOption(), CastSpellOption(shock, NORMAL, FROM_HAND))
 
 
 def test_117_1a_305_1_nothing_but_instants_with_an_object_on_the_stack() -> None:
@@ -177,7 +178,7 @@ def test_117_1a_305_1_nothing_but_instants_with_an_object_on_the_stack() -> None
     scenario.stack(P1, ["Test Ponder"])
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
-    assert options(state) == (PassOption(), CastSpellOption(shock))
+    assert options(state) == (PassOption(), CastSpellOption(shock, NORMAL, FROM_HAND))
 
 
 def test_305_2_no_second_land_in_a_turn() -> None:
@@ -186,7 +187,7 @@ def test_305_2_no_second_land_in_a_turn() -> None:
     (elves,) = scenario.hand(P0, ["Llanowar Elves"])
     scenario.at(Phase.POSTCOMBAT_MAIN, lands_played=1)
     state = scenario.build()
-    assert options(state) == (PassOption(), CastSpellOption(elves))
+    assert options(state) == (PassOption(), CastSpellOption(elves, NORMAL, FROM_HAND))
 
 
 def test_903_8_a_commander_may_be_cast_from_the_command_zone_by_its_owner() -> None:
@@ -195,7 +196,7 @@ def test_903_8_a_commander_may_be_cast_from_the_command_zone_by_its_owner() -> N
     scenario.commander(P1, "Test Daybreaker")
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
-    assert options(state) == (PassOption(), CastSpellOption(mine))
+    assert options(state) == (PassOption(), CastSpellOption(mine, NORMAL, COMMANDER))
 
 
 def test_903_8_a_commander_is_cast_with_the_timing_of_its_type() -> None:
@@ -213,7 +214,7 @@ def test_601_2_choosing_to_cast_a_spell_is_a_gap() -> None:
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
     with pytest.raises(NotImplementedRule) as gap:
-        run_script(state, choose(CastSpellOption(elves), player=P0))
+        run_script(state, choose(CastSpellOption(elves, NORMAL, FROM_HAND), player=P0))
     assert gap.value.rule == "601.2"
 
 
