@@ -29,7 +29,8 @@ from typing import TYPE_CHECKING
 
 from resolve.cards.primitives.abilities import BASIC_LAND_MANA, Ability, intrinsic_mana_ability
 from resolve.data.cards import CardData
-from resolve.data.types import CardType, Supertype
+from resolve.data.mana_cost import ManaCost
+from resolve.data.types import CardType, Color, Supertype
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.state.ids import ObjectId
 from resolve.state.zones import ZoneKind
@@ -53,6 +54,9 @@ class Characteristics(Immutable):
     abilities: tuple[Ability, ...] = ()
     power_text: str | None = None
     toughness_text: str | None = None
+    mana_cost: ManaCost | None = None
+    colors: tuple[Color, ...] = ()
+    mana_value: int = 0
 
     def is_a(self, card_type: CardType) -> bool:
         """Whether the object has this card type (205.2)."""

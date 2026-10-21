@@ -1,0 +1,84 @@
+{
+  "format": 1,
+  "taken_from": {
+    "format": 1,
+    "files": {
+      "oracle_cards": {
+        "type": "oracle_cards",
+        "file": "oracle-cards.jsonl.gz",
+        "updated_at": "2026-10-21T09:01:59.312+00:00",
+        "size": 25068270,
+        "sha256": "4f0593ac82360766842eefc8c754137f86a70c0f5eb2a0b9bd8fe378a028aaf6",
+        "source": "https://data.scryfall.io/oracle-cards/oracle-cards-20261021090159.jsonl.gz"
+      },
+      "rulings": {
+        "type": "rulings",
+        "file": "rulings.jsonl.gz",
+        "updated_at": "2026-10-21T09:00:33.096+00:00",
+        "size": 5422271,
+        "sha256": "dbdd208a470e2da8832ac8d7fae8196b20a73572a7d836b87b030fa715d4fe96",
+        "source": "https://data.scryfall.io/rulings/rulings-20261021090033.jsonl.gz"
+      }
+    }
+  },
+  "cards": [
+    {
+      "object": "card",
+      "oracle_id": "14c8f55d-d177-4c25-a931-ebeb9e6062a0",
+      "name": "Grizzly Bears",
+      "layout": "normal",
+      "mana_cost": "{1}{G}",
+      "cmc": 2.0,
+      "type_line": "Creature — Bear",
+      "oracle_text": "",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "power": "2",
+      "toughness": "2"
+    },
+    {
+      "object": "card",
+      "oracle_id": "60ba93eb-39e6-4af2-9c66-cd38f72daff2",
+      "name": "Savannah Lions",
+      "layout": "normal",
+      "mana_cost": "{W}",
+      "cmc": 1.0,
+      "type_line": "Creature — Cat",
+      "oracle_text": "",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": [],
+      "power": "2",
+      "toughness": "1"
+    },
+    {
+      "object": "card",
+      "oracle_id": "342199e0-15b6-4824-83da-25caef2592b3",
+      "name": "Hill Giant",
+      "layout": "normal",
+      "mana_cost": "{3}{R}",
+      "cmc": 4.0,
+      "type_line": "Creature — Giant",
+      "oracle_text": "",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [],
+      "power": "3",
+      "toughness": "3"
+    }
+  ],
+  "rulings": []
+}

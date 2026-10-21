@@ -25,6 +25,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import cast
 
+from resolve.data.mana_cost import ManaCost
 from resolve.data.types import TypeLine, TypeLineError, parse_type_line, try_parse_type_line
 from resolve.values import Immutable
 
@@ -132,11 +133,18 @@ class CardFace(Immutable):
     loyalty: str | None = None
     defense: str | None = None
     types: TypeLine | None = field(init=False)
+    cost: ManaCost | None = field(init=False)
 
     def __post_init__(self) -> None:
+        object.__setattr__(self, "cost", None)  # STUB
         # Derived from ``type_line``; ``None`` when it doesn't follow 205 (an Un-set joke type).
         # Such a card loads, but can't be played (DeckCard, coverage).
         object.__setattr__(self, "types", try_parse_type_line(self.type_line))
+
+    @property
+    def mana_cost_problem(self) -> str | None:
+        """STUB."""
+        return None
 
     @property
     def type_line_problem(self) -> str | None:
@@ -187,6 +195,11 @@ class CardData(Immutable):
             for face in self.faces
             if (problem := face.type_line_problem) is not None
         )
+
+    @property
+    def mana_cost_problems(self) -> tuple[str, ...]:
+        """STUB."""
+        return ()
 
     @property
     def face_names(self) -> tuple[str, ...]:

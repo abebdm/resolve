@@ -241,6 +241,53 @@ SORCERY_CARD: dict[str, Any] = {
 }
 
 
+def spell(
+    name: str, cost: str, cmc: float, type_line: str, colors: list[str], text: str = ""
+) -> dict[str, Any]:
+    """A single-faced card with a mana cost, no power or toughness."""
+    return {
+        "object": "card",
+        "oracle_id": "oid-" + name.lower().replace(" ", "-").replace("'", ""),
+        "name": name,
+        "layout": "normal",
+        "mana_cost": cost,
+        "cmc": cmc,
+        "type_line": type_line,
+        "oracle_text": text,
+        "colors": colors,
+        "color_identity": colors,
+        "keywords": [],
+    }
+
+
+# Real cards whose mana costs and colors M2.2 reads (202, 105.2).
+SOL_RING = spell("Sol Ring", "{1}", 1.0, "Artifact", [], "{T}: Add {C}{C}.")
+SELESNYA_SIGNET = spell("Selesnya Signet", "{2}", 2.0, "Artifact", [], "{1}, {T}: Add {G}{W}.")
+FIERY_CONFLUENCE = spell(
+    "Fiery Confluence",
+    "{2}{R}{R}",
+    4.0,
+    "Sorcery",
+    ["R"],
+    "Choose three. You may choose the same mode more than once.",
+)
+RISHKARS_EXPERTISE = spell(
+    "Rishkar's Expertise", "{4}{G}{G}", 6.0, "Sorcery", ["G"],
+    "Draw cards equal to the greatest power among creatures you control.",
+)  # fmt: skip
+
+# Invented cards for the other kinds of mana symbol (107.4).
+TEST_MOX = spell("Test Mox", "{0}", 0.0, "Artifact", [], "")
+TEST_GOLD = spell("Test Gold", "{W}{B}", 2.0, "Sorcery", ["W", "B"])
+TEST_GROWTH = spell("Test Growth", "{X}{G}", 1.0, "Sorcery", ["G"])
+TEST_HYBRID = spell("Test Hybrid", "{2/W}{2/W}", 4.0, "Sorcery", ["W"])
+TEST_TWO_TONE = spell("Test Two-Tone", "{1}{W/U}{W/U}", 3.0, "Sorcery", ["W", "U"])
+TEST_PHYREXIAN = spell("Test Phyrexian", "{1}{W/P}{W/P}", 3.0, "Sorcery", ["W"])
+TEST_SNOW = spell("Test Snow", "{S}{S}", 2.0, "Snow Artifact", [])
+# Mana costs that don't follow 107.4 (an Un-set half-mana symbol): loads, but can't be played.
+TEST_HALF = spell("Test Half", "{HW}", 0.5, "Creature — Elf", ["W"])
+
+
 def token(oracle_id: str, name: str = "Soldier") -> dict[str, Any]:
     """A token object (layout ``token``), which the name index must ignore."""
     return {

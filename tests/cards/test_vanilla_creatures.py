@@ -8,15 +8,20 @@ an empty stack (302.1); casting itself is a gap until M2 (601.2).
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from resolve.cards.definitions import vanilla_creatures
 from resolve.cards.registry import default_registry
-from resolve.data.types import CardType
+from resolve.data.cards import load_card_excerpt, parse_card
+from resolve.data.mana_cost import parse_mana_cost
+from resolve.data.types import CardType, Color
 from resolve.decisions.spaces import CastSpellOption, ChooseOne, PassOption
 from resolve.effects.characteristics import characteristics
 from resolve.state.ids import PlayerId
 from resolve.state.turn import Phase, Step
+from tests import scryfall_fixtures as fx
 from tests.game_fixtures import request_of
 from tests.scenario import Scenario
 
@@ -63,3 +68,45 @@ def test_302_1_cast_only_in_the_main_phase(
         assert isinstance(request.space, ChooseOne)
         expected = (PassOption(), CastSpellOption(card)) if castable else (PassOption(),)
         assert request.space.options == expected
+
+
+# --- Mana cost, colors and mana value (202), against real Scryfall data -----------------------
+
+EXCERPT = Path(__file__).resolve().parents[2] / "tools" / "excerpts" / "cards.json"
+COSTS = [
+    ("Grizzly Bears", "{1}{G}", (Color.GREEN,), 2, fx.GRIZZLY_BEARS),
+    ("Savannah Lions", "{W}", (Color.WHITE,), 1, fx.SAVANNAH_LIONS),
+    ("Hill Giant", "{3}{R}", (Color.RED,), 4, fx.HILL_GIANT),
+]
+
+
+def test_the_excerpt_holds_the_vanilla_creatures() -> None:
+    """``tools/excerpts/cards.json`` is copied from the Scryfall snapshot, never hand-written
+    (``tools/card_excerpt.py``, which also checks it against a local snapshot)."""
+    database = load_card_excerpt(EXCERPT)
+    assert {card.name for card in database.cards()} == {name for name, *_ in COSTS}
+
+
+@pytest.mark.parametrize(("name", "text", "colors", "value", "record"), COSTS)
+def test_202_the_real_cost_colors_and_mana_value(
+    name: str, text: str, colors: tuple[Color, ...], value: int, record: dict[str, object]
+) -> None:
+    card = load_card_excerpt(EXCERPT).get(name)
+    face = card.faces[0]
+    assert face.cost == parse_mana_cost(text)
+    assert face.cost is not None and face.cost.colors == colors  # 202.2
+    assert face.cost.mana_value() == value == card.mana_value  # 202.3, as Scryfall reports it
+    assert card.mana_cost_problems == ()
+    # The fixture the engine tests use is the same card.
+    assert parse_card(record) == card
+
+
+@pytest.mark.parametrize(("name", "text", "colors", "value", "record"), COSTS)
+def test_202_characteristics_have_the_cost_colors_and_mana_value(
+    name: str, text: str, colors: tuple[Color, ...], value: int, record: dict[str, object]
+) -> None:
+    scenario = Scenario(2)
+    (card,) = scenario.hand(P0, [name])
+    chars = characteristics(scenario.build(), card)
+    assert chars.mana_cost == parse_mana_cost(text)
+    assert (chars.colors, chars.mana_value) == (colors, value)

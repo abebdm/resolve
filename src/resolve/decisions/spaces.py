@@ -29,7 +29,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from itertools import pairwise
 
-from resolve.errors import InvalidAnswer
+from resolve.errors import InvalidAnswer, NotImplementedRule
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.values import Immutable
 
@@ -283,3 +283,15 @@ class Distribute(AnswerSpace):
             raise InvalidAnswer(f"each recipient must get at least {self.minimum_each}")
         if sum(amounts) != self.total:
             raise InvalidAnswer(f"the amounts must add up to {self.total}, not {sum(amounts)}")
+
+
+@dataclass(frozen=True)
+class ChooseCounts(AnswerSpace):
+    """STUB: M2.2 tests-first checkpoint."""
+
+    options: tuple[Option, ...]
+    maxima: tuple[int, ...]
+    total: int
+
+    def validate(self, answer: AnswerValue) -> None:
+        raise NotImplementedRule("601.2h: ChooseCounts.validate")

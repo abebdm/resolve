@@ -42,6 +42,16 @@ class Supertype(Enum):
     WORLD = "World"
 
 
+class Color(Enum):
+    """The five colors (105.1, 202.2a), by their mana symbols, in the order 105.1 lists them."""
+
+    WHITE = "W"
+    BLUE = "U"
+    BLACK = "B"
+    RED = "R"
+    GREEN = "G"
+
+
 class CardType(Enum):
     """The card types (205.2a)."""
 
