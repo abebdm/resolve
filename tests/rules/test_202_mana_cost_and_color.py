@@ -9,8 +9,9 @@ From the pinned CR:
   mana add no color. 204.2: a color indicator adds colors; the card data's colors include it.
 - 202.3, 202.3e-g: mana value is the total amount of mana in the cost; {X} is 0 off the stack,
   hybrid symbols count their largest half, Phyrexian symbols 1.
-- 109.3: characteristics include mana cost and color; the omen and preparation layouts have two
-  parts, each with its own characteristics, which the engine doesn't compute yet.
+- 109.3: characteristics include mana cost and color. Omen and preparation cards have only their
+  normal characteristics outside an Omen spell on the stack (720.4, 722.4); the engine still
+  raises a gap for them, deliberately (M2 plan, 6 item 16), until 720.3 and 722 are built.
 """
 
 from __future__ import annotations
@@ -167,10 +168,27 @@ def _two_part(layout: str, faces: int) -> dict[str, Any]:
 @pytest.mark.parametrize("layout", ["prepare", "omen"])
 @pytest.mark.parametrize("faces", [1, 2])
 def test_109_3_omen_and_preparation_layouts_are_a_gap(layout: str, faces: int) -> None:
-    """720 (omen) and 722 (preparation) cards have two parts with their own characteristics.
-    Their data may arrive as one face (a trimmed excerpt) or two; neither is read as a plain
-    single-faced card."""
+    """Deliberately conservative gap (M2 plan, 6 item 16): 720.4 and 722.4 would let the front
+    face answer outside an Omen spell, but 720.3 and 722 aren't built. The data may have one
+    face (a trimmed excerpt) or two; neither is read as a plain single-faced card."""
     record = _two_part(layout, faces)
     with pytest.raises(NotImplementedRule) as gap:
         chars_of(record)
     assert gap.value.rule == "109.3"
+
+
+# --- Review additions ---------------------------------------------------------------------------
+
+
+def test_202_2_colors_come_from_the_card_data_not_from_the_cost_alone() -> None:
+    """A characteristic-defining ability (devoid) makes a card colorless whatever its cost, and
+    a color indicator (204.2) colors a card whose cost has none."""
+    devoid = fx.spell("Test Devoid", "{2}{R}", 3.0, "Creature — Eldrazi", [])
+    indicated = fx.spell("Test Indicated Cost", "{2}", 2.0, "Creature — Spirit", ["U"])
+    assert one(devoid).colors == ()
+    assert one(indicated).colors == (U,)
+
+
+def test_202_3_a_transform_card_reads_the_front_faces_cost() -> None:
+    chars = one(fx.TRANSFORM_CARD)
+    assert chars.mana_cost == parse_mana_cost("{1}{G}") and chars.mana_value == 2

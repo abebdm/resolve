@@ -53,8 +53,7 @@ if TYPE_CHECKING:
 
 # Scryfall layouts of double-faced cards whose front face gives the characteristics (712.8a).
 FRONT_FACE_LAYOUTS = ("transform", "modal_dfc")
-# Layouts of cards with two parts, each with its own characteristics (720.3, 722), whatever the
-# number of faces in the data.
+# Layouts of omen and preparation cards (720, 722), whatever the number of faces in the data.
 TWO_PART_LAYOUTS = ("omen", "prepare")
 
 
@@ -132,6 +131,9 @@ def characteristics(state: GameState, obj: ObjectId) -> Characteristics:
 
 def _face_index(data: CardData) -> int:
     if data.layout in TWO_PART_LAYOUTS:
+        # 720.4, 722.4: outside an Omen spell on the stack these cards have only their normal
+        # characteristics, so this is a deliberately conservative gap (M2 plan, 6 item 16) until
+        # 720.3 and 722 are built; the user is asked whether to read the front face instead.
         raise NotImplementedRule("109.3: the characteristics of omen and preparation cards")
     if not data.is_multi_faced:
         return 0

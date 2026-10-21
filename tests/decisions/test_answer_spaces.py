@@ -224,3 +224,18 @@ def test_choose_counts_has_one_valid_answer_per_outcome() -> None:
         if accepts(space, Amounts((a, b, c)))
     ]  # fmt: skip
     assert len(valid) == len(set(valid)) == 7  # compositions of 3 into 3 parts each at most 2
+
+
+def test_choose_counts_rejects_an_amount_for_an_option_with_maximum_zero() -> None:
+    space = ChooseCounts(THREE[:2], maxima=(0, 2), total=1)
+    assert accepts(space, Amounts((0, 1)))
+    assert not accepts(space, Amounts((1, 0)))
+
+
+def test_choose_counts_survives_copy_and_pickle() -> None:
+    import copy
+    import pickle
+
+    space = ChooseCounts(THREE[:2], maxima=(2, 1), total=2)
+    assert pickle.loads(pickle.dumps(space)) == space
+    assert copy.deepcopy(space) == space

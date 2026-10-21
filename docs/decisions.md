@@ -41,8 +41,11 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
     X when M2.3/M2.7 build the stack object. The 202.3b back-face rule needs nothing yet, because
     `characteristics` reads only the front face (712.8d).
   - `characteristics` raises `NotImplementedRule("109.3: ...")` for the layouts `omen` and
-    `prepare` by layout name, whatever the number of faces the data has: a trimmed excerpt may
-    carry one face, and 720 and 722 give each part its own characteristics.
+    `prepare` by layout name, whatever the number of faces the data has (a trimmed excerpt may
+    carry one). This is a deliberately conservative gap, as the M2 plan (§6 item 16) asks: the
+    test-reviewer pointed out that 720.4 and 722.4 give these cards only their normal
+    (front-face) characteristics outside an Omen spell on the stack, so the front face could be
+    read now. Left for the user to decide; M2.3 (720.3) replaces it for omen either way.
   - `rewrite_words` refuses a mapping from one kind of word to another (613.1c: a color word
     changes into a color word), and walks only `init` fields, so derived fields such as
     `CardFace.types` are recomputed by `__post_init__`.

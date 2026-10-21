@@ -92,6 +92,7 @@ def test_107_4_every_listed_symbol_parses_and_prints_back(text: str) -> None:
         "{Q}", "{HW}", "{D}", "{}", "{ 1}", "{-1}", "{01}", "{1.5}",  # not 107.4 symbols
         "{U/W}", "{W/W}", "{2/2}", "{X/W}", "{P}", "{W/P/P}", "{W/U/B}",  # not listed in 107.4
         "{1", "1}", "1", "R", "{1}{R", "{1} {R}", "{1}garbage", "{1}{R} // {1}{U}",
+        "{3/W}", "{C/P}", "{C/C}", "{C/W/P}", "{2/W/P}", "{W/U/B/P}",
         "{w}", "{x}", "{s}",  # symbols are upper case
     ],
 )  # fmt: skip
