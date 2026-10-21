@@ -20,6 +20,7 @@ from resolve.events.base import Event, append_log
 from resolve.events.cards import CardDrawn, CardsPutOnBottom
 from resolve.events.game import GameEnded
 from resolve.events.pipeline import ApplyEvents
+from resolve.state.checkpoint import Checkpoint, restore_checkpoint, take_checkpoint
 from resolve.state.config import GameConfig
 from resolve.state.game import GameObject, GameState
 from resolve.state.ids import ObjectId, PlayerId
@@ -425,3 +426,19 @@ class PatientAgent:
                 request.id, request.player, Pick(space.options.index(PassOption()))
             )
         return self.random.decide(view, request)
+
+
+@dataclass(slots=True)
+class ReversesAfterDrawing(Task):
+    """Takes a checkpoint, draws a card for ``player`` (121.1, an action involving a library),
+    then tries to reverse back to the checkpoint (733.1 forbids it)."""
+
+    player: PlayerId
+    checkpoint: Checkpoint | None = None
+
+    def run(self, state: GameState) -> TaskResult:
+        if self.checkpoint is None:
+            self.checkpoint = take_checkpoint(state)
+            return Push((ApplyEvents((CardDrawn(player=self.player, rules=("121.1",)),)), self))
+        restore_checkpoint(state, self.checkpoint)
+        return Done()

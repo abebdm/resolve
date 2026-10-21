@@ -14,7 +14,8 @@ What a scenario can set:
 - the number of players, the ``GameConfig`` and the seed of the game's RNG;
 - each player's life total (any integer: 0 and negative totals are states the game can reach);
 - cards in any zone: libraries, hands and graveyards (added on top, listed top first), the
-  battlefield and the stack (with a controller), exile and the command zone;
+  battlefield and the stack (with a controller; on the stack, spells cast from the hand), exile
+  and the command zone;
 - which players know a hidden card (``known_to``, 400.2);
 - which permanents are tapped (``tap``, 110.5), the damage marked on them (``damage``, 120.6)
   and the mana in each pool (``mana``, 106.4);
@@ -55,6 +56,7 @@ from resolve.state.game import Card, GameState, create_object, zone_list
 from resolve.state.ids import CardId, ObjectId, PlayerId
 from resolve.state.invariants import check_invariants, check_pure_data
 from resolve.state.mana import Mana, ManaType
+from resolve.state.spell import FROM_HAND, NORMAL, CastChoices
 from resolve.state.turn import Phase, Step, TurnState, gives_priority, segment_of
 from resolve.state.zones import BATTLEFIELD, COMMAND, EXILE, STACK, Zone, ZoneKind
 from resolve.tasks import Task
@@ -151,12 +153,22 @@ class Scenario:
     def stack(
         self, controller: PlayerId, names: Sequence[str], *, owner: PlayerId | None = None
     ) -> list[ObjectId]:
-        """Put cards on the stack under ``controller``, listed top first (405.2)."""
+        """Put spells on the stack under ``controller``, listed top first (405.2).
+
+        Each is a spell cast normally from its owner's hand (601.2a), its total cost its mana cost
+        and nothing spent: its record is ``CastChoices(NORMAL, FROM_HAND, hand)``.
+        """
         owner = controller if owner is None else owner
         ids = [
             self.add(name, owner=owner, zone=STACK, controller=controller)
             for name in reversed(names)
         ]
+        state = self._state
+        for obj in ids:
+            cost = state.card_of(state.objects[obj]).data.faces[0].cost
+            state.objects[obj].spell = CastChoices(
+                NORMAL, FROM_HAND, Zone.hand(owner), total_cost=cost
+            )
         return ids[::-1]
 
     def exile(self, owner: PlayerId, names: Sequence[str]) -> list[ObjectId]:
