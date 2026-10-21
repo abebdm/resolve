@@ -21,7 +21,8 @@ be built later on top of its API.
 starting player through mulligans, full turns with priority, land drops, mana and cleanup, to a
 win, loss or draw, in 2 to 6 players. The cards implemented so far are the basic lands and three
 vanilla creatures. Tools compare a new Comprehensive Rules version or card data snapshot against
-the pinned ones (`tools/rules_diff.py`, `tools/card_diff.py`). M2 (spells and the stack) is under
+the pinned ones (`tools/rules_diff.py`, `tools/card_diff.py`), and `tools/rule.py` prints any
+rule of the pinned Comprehensive Rules by number. M2 (spells and the stack) is under
 way. Its plan is approved ([`docs/plans/m2.md`](docs/plans/m2.md)), and its first step,
 documentation, is done. That step added the rules coverage map in
 [`docs/roadmap.md`](docs/roadmap.md), which gives every numbered rule and keyword a milestone on

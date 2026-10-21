@@ -274,6 +274,27 @@ all six pass. Before pushing:
 3. The asking task returns `NeedDecision(...)`, rejects rules-illegal answers in `check_answer`
    (without changing anything), and continues in `resume`.
 
+### Look up a rule
+
+Never open the CR file in full (it is larger than an agent's context). All commands work in
+PowerShell:
+
+- `uv run python tools/rule.py 704.5` prints rule 704.5 with all its subrules (704.5a to
+  704.5aa), examples and continuation paragraphs, line for line as in the file.
+- `uv run python tools/rule.py 704.5aa` prints one subrule; `uv run python tools/rule.py 702.19
+  613.7` prints several, in that order.
+- `uv run python tools/rule.py 704` prints a section's outline: each rule's number and first
+  line, truncated, with its count of subrules. Pick the rule you need from it.
+- `uv run python tools/rule.py --glossary "mana value"` prints a glossary entry (case doesn't
+  matter); a term with no exact match lists the closest entries.
+- The last line, "See also: ...", lists the other rule numbers the printed text cites. Look up
+  the ones that matter.
+- An unknown number exits with status 1 and names the nearest existing numbers.
+- `--rules docs/rules/MagicCompRules-OTHER.txt` reads another version, to compare.
+
+The default file is `PINNED_RULES_FILE` in `src/resolve/data/rules_text.py`. If the tool can't
+help, Grep the file for the number (`^704\.5`).
+
 ### List the rules the engine doesn't implement
 
 Run `uv run python tools/gaps.py`. It lists every `NotImplementedRule` in `src/resolve` by CR
@@ -364,7 +385,8 @@ update (above) in the same change if you are moving both pins. All commands are 
    `docs/primitives.md`, the torture tests, the test-reviewer agent).
 5. **Update the code** to make the tests pass; raise `NotImplementedRule` for new rules that
    we need but haven't built. Add a `docs/decisions.md` entry for each judgment call.
-6. **Move the pin:** point `RULES_FILE` in `tests/tooling/test_rule_citations.py` and the
+6. **Move the pin:** point `PINNED_RULES_FILE` in `src/resolve/data/rules_text.py` (which
+   `tools/rule.py` and `tests/tooling/test_rule_citations.py` use) and the
    references in CLAUDE.md, `.claude/agents/test-reviewer.md` and `docs/decisions.md` at the new
    file; `git rm` the old file; in `docs/rules/README.md` update the table and add a changelog
    row. Check with `git grep MagicCompRules` that nothing names the old file.
