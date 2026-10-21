@@ -16,6 +16,7 @@ import pytest
 from resolve.rules import defaults, legality
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
+from resolve.state.spell import CastPermission, CastVariant
 from resolve.state.turn import Segment
 
 
@@ -70,3 +71,11 @@ def patch_permissions(
 ) -> None:
     """Replace ``legality.permissions``."""
     monkeypatch.setattr(legality, "permissions", function)
+
+
+def patch_may_cast_now(
+    monkeypatch: pytest.MonkeyPatch,
+    function: Callable[[GameState, PlayerId, ObjectId, CastVariant, CastPermission], bool],
+) -> None:
+    """Replace ``defaults.may_cast_now``."""
+    monkeypatch.setattr(defaults, "may_cast_now", function)

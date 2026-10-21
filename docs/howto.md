@@ -133,6 +133,15 @@ drive decisions with a script.
    reaches a gap.
 5. Put the test in `tests/rules/test_<section>_<topic>.py` (or `tests/cards/`,
    `tests/interactions/`), named and documented with the CR rule it checks.
+6. **Casting.** `tests/casting_support.py` has the script steps: `cast(obj)` (with priority),
+   `activate(obj)` (601.2g, while paying), `pay()`, `counts(...)` (601.2h, when more than one
+   payment exists), `reverse(*activations)` (733.1, `ManaActivationOption(number, object,
+   ability)`), `pass_()`, plus `options(state)`, `records(state, EventType)` and
+   `answered(state, kind)`. Questions with one possible answer aren't asked, so a script lists
+   only the decisions that really come: tapping the only lands that pay asks no `pay()` and no
+   `counts`. Give mana with lands, or `scenario.mana(player, ...)` (units with no source, which
+   form one class each type). `scenario.stack(controller, names)` puts spells on the stack as
+   if cast from their owner's hand; when all players pass, the top one resolves.
 
 ### Write an engine test with test-only tasks
 
@@ -166,27 +175,32 @@ override either.
 
 | Run | Command (PowerShell and Unix alike) | Games | Decks | Concessions | Full checks | Time |
 |---|---|---|---|---|---|---|
-| Quick (default): agents and day-to-day work | `uv run python tools/fuzz.py` | 10 | 40 and 10 basic lands | 1 decision in 200 | every 10 answers | about 20 s on 4 cores |
-| Thorough: the user's milestone verification | `uv run python tools/fuzz.py --thorough` | 100 | 40 and 20 basic lands | 1 decision in 500 | before every decision | about 1 hour on 8 cores, 2 on 4 |
+| Quick (default): agents and day-to-day work | `uv run python tools/fuzz.py` | 10 | both recipes, 8 and 2 of each basic land | 1 decision in 200 | every 10 answers | about 20 s on 4 cores |
+| Thorough: the user's milestone verification | `uv run python tools/fuzz.py --thorough` | 100 | both recipes, 8 and 4 of each basic land | 1 decision in 500 | before every decision | about 1 hour on 8 cores, 2 on 4 (measured before M2.3's spells; M2.11 measures it again) |
 
 1. Both presets cycle the player counts 2 to 6, then the formats (standard, then Commander), so
-   10 games are one game of each. The decks are basic lands, the same number of each, from
-   `tools/excerpts/basic_lands.json` (no snapshot needed), one size per seat in turn. Games play
-   turns (lands, mana, priority, cleanup) until players concede or draw from an empty library;
-   the smaller decks make some games end by decking even with several players, where
-   concessions otherwise come first. Games run in parallel worker processes (`--jobs N`,
+   10 games are one game of each. The decks come from two recipes (`recipe_deck`): the same
+   number of each basic land (`tools/excerpts/basic_lands.json`) plus half as many (at least
+   one) of each card of `tools/excerpts/cards.json`: its noncreature cards (`spells`: long
+   games) or all of them but `FUZZ_EXCLUSIONS` (`creatures`: these end at the 508.1 gap once a
+   creature's controller reaches combat). Each `--copies` number gives both recipes, cycled
+   among the seats; every other Commander game (odd seeds) gives each seat one of the excerpt's
+   creatures as its commander (casting one is the 903.8 gap). No snapshot is needed. Games play
+   turns (lands, mana, casting, resolving, cleanup) until players concede, draw from an empty
+   library or reach an allowed gap. Games run in parallel worker processes (`--jobs N`,
    default: the number of CPUs); the results are the same for any `--jobs`.
 2. Options: `--games N`, `--seed S` (of the first game), `--players 2 4`, `--format standard`
    or `--format commander` (`--commander`), `--concessions N` (0: never), `--check-every N`
-   (1: before every decision), `--jobs N`, and the decks: `--copies 8 4` (basic-land decks of
-   that many of each basic land, one per number), `--deck a.txt --deck b.txt` (cycled among the
+   (1: before every decision), `--jobs N`, and the decks: `--copies 8 4` (recipe decks with
+   that many of each basic land, both recipes per number), `--deck a.txt --deck b.txt` (cycled among the
    seats; they need the snapshot and implemented cards) or `--empty-decks` (every game ends in
    the first upkeep, a draw).
 3. The output: first the preset and settings (`Run:`), then, in runs longer than the quick one,
    a line every 10 games, then the summary: answers accepted and rejected; answers and turns per
    game (min, average, max); endings by type (decked, life total, concession, draw, rules gap,
    then any other, named by the rule of the last loss); lands played and mana abilities
-   activated; formats; games per second.
+   activated; spells cast, resolved and reversed; casts per card; gaps by rule; formats; games
+   per second.
 4. A failure prints `FAILED:` with the seed and the start of a command that reproduces that one
    game, then `This run's options:`, the rest of it (decks, concessions, check interval).
    Reproduce it, write a failing test (a scenario test, or a `fuzz_game` call in `tests/fuzz/`),
@@ -195,11 +209,13 @@ override either.
    answers) cost time that grows with the game; the bookkeeping invariants run before every
    decision and every game is replayed at the end whatever `--check-every` says. Each full check
    walks only the log entries added since the last one (`CheckedLog`).
-6. When a milestone changes which gaps games can reach (after M1: 601.2 for casting), update
+6. When a milestone changes which gaps games can reach (after M2.3: 508.1 and 903.8), update
    `ALLOWED_GAPS` in `tools/fuzz.py`, the fuzz tests' expectations and the roadmap together.
    Random agents stop at the first offered gap they pick; the fuzz tests' `PatientAgent`
-   (`tests/engine_support.py`) mostly passes, so its games reach later turns. When implemented
-   cards can make the default decks more varied, change `basic_land_deck` and its tests.
+   (`tests/engine_support.py`) mostly passes, so its games reach later turns. A new registered
+   card goes into `tools/excerpts/cards.json` (a test checks that every registered card but the
+   basics is there), and so into the recipes; a card the fuzz games can't use yet goes into
+   `FUZZ_EXCLUSIONS` with the reason.
 7. When adding a new check to the harness, add a broken test-only task to
    `tests/engine_support.py` and a test in `tests/fuzz/test_fuzz.py` showing the check catches it.
 
@@ -215,7 +231,8 @@ copied from the snapshot into a committed JSON file. Never write card records by
 2. Load it with `resolve.data.cards.load_card_excerpt(path)`, a `CardDatabase`.
 3. After updating the snapshot, check the excerpts still match it:
    `uv run python tools/card_excerpt.py tools/excerpts/basic_lands.json --check` (and
-   `cards.json`, the vanilla creatures); rewrite one that doesn't.
+   `cards.json`, every other registered card); rewrite one that doesn't. Adding a card to
+   `cards.json` means listing all its cards again: the tool writes exactly the names given.
 4. Test what uses the excerpt against the cards' printed characteristics (see
    `tests/tooling/test_card_excerpt_tool.py`).
 
@@ -276,6 +293,8 @@ all six pass. Before pushing:
    in `tools/fuzz.py` (answers the space must reject), each with tests.
 3. The asking task returns `NeedDecision(...)`, rejects rules-illegal answers in `check_answer`
    (without changing anything), and continues in `resume`.
+4. A new option type joins the `Option` union in `spaces.py` and gets a case in
+   `resolve.agents.text.describe_option` (pyright checks the match is exhaustive).
 
 ### Add or change a rule default
 

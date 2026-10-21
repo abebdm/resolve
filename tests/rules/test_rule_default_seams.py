@@ -57,14 +57,24 @@ from resolve.rules import defaults
 from resolve.rules.defaults import LossReason, NextTurn
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState, next_in_turn_order, players_in_game, turn_order
-from resolve.state.ids import PlayerId
+from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.invariants import invariant_violations
 from resolve.state.mana import Mana, ManaType
+from resolve.state.spell import COMMANDER, FROM_HAND, NORMAL, CastPermission
 from resolve.state.turn import TURN_SEQUENCE, Phase, Segment, Step
+from resolve.state.zones import Zone, ZoneKind
 from resolve.tasks import Done, Task, TaskResult
 from tests.game_fixtures import answer, decks, pass_until, request_of
 from tests.scenario import Scenario, run_script
-from tests.seams import patch, patch_card, patch_loss, patch_next_turn, patch_object, patch_skip
+from tests.seams import (
+    patch,
+    patch_card,
+    patch_loss,
+    patch_may_cast_now,
+    patch_next_turn,
+    patch_object,
+    patch_skip,
+)
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 
@@ -168,7 +178,7 @@ def test_117_1a_sorcery_timing_comes_from_the_function(monkeypatch: pytest.Monke
     patch(monkeypatch, "has_sorcery_timing", lambda state, player: True)
     state = scenario.build()
     assert PlayLandOption(forest) in options(state)
-    assert CastSpellOption(ponder) in options(state)
+    assert CastSpellOption(ponder, NORMAL, FROM_HAND) in options(state)
 
 
 def test_117_1a_without_sorcery_timing_neither_is_offered_in_the_main_phase(
@@ -180,8 +190,10 @@ def test_117_1a_without_sorcery_timing_neither_is_offered_in_the_main_phase(
     patch(monkeypatch, "has_sorcery_timing", lambda state, player: False)
     state = scenario.build()
     assert PlayLandOption(forest) not in options(state)
-    assert CastSpellOption(ponder) not in options(state)
-    assert CastSpellOption(shock) in options(state)  # an instant needs no sorcery timing
+    assert CastSpellOption(ponder, NORMAL, FROM_HAND) not in options(state)
+    assert CastSpellOption(shock, NORMAL, FROM_HAND) in options(
+        state
+    )  # an instant needs no sorcery timing
 
 
 def test_117_1a_may_cast_now_is_the_one_place_flash_would_plug_in(
@@ -192,20 +204,24 @@ def test_117_1a_may_cast_now_is_the_one_place_flash_would_plug_in(
     scenario = Scenario(2)
     shock, ponder = scenario.hand(P0, ["Test Shock", "Test Ponder"])
     scenario.at(Step.UPKEEP)
-    patch_card(monkeypatch, "may_cast_now", lambda state, player, obj: obj == ponder)
+    patch_may_cast_now(monkeypatch, lambda state, player, obj, variant, permission: obj == ponder)
     state = scenario.build()
-    assert CastSpellOption(ponder) in options(state)
-    assert CastSpellOption(shock) not in options(state)
+    assert CastSpellOption(ponder, NORMAL, FROM_HAND) in options(state)
+    assert CastSpellOption(shock, NORMAL, FROM_HAND) not in options(state)
 
 
 def test_601_3_the_cast_options_come_from_the_function(monkeypatch: pytest.MonkeyPatch) -> None:
     scenario = Scenario(2)
     shock, ponder = scenario.hand(P0, ["Test Shock", "Test Ponder"])
     scenario.at(Phase.PRECOMBAT_MAIN)
-    patch(monkeypatch, "cast_options", lambda state, player: (ponder,))
+    patch(
+        monkeypatch,
+        "cast_options",
+        lambda state, player: (CastSpellOption(ponder, NORMAL, FROM_HAND),),
+    )
     state = scenario.build()
-    assert CastSpellOption(ponder) in options(state)
-    assert CastSpellOption(shock) not in options(state)
+    assert CastSpellOption(ponder, NORMAL, FROM_HAND) in options(state)
+    assert CastSpellOption(shock, NORMAL, FROM_HAND) not in options(state)
 
 
 # --- 402.2, 514.1: maximum hand size ----------------------------------------------------------
@@ -737,10 +753,9 @@ def test_903_8_only_the_players_own_commander_is_cast_from_the_command_zone() ->
     (other,) = scenario.command(P0, ["Test Shock"])
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
-    assert defaults.cast_options(state, P0) == (mine,)
-    assert theirs not in defaults.cast_options(state, P0) and other not in defaults.cast_options(
-        state, P0
-    )
+    assert defaults.cast_options(state, P0) == (CastSpellOption(mine, NORMAL, COMMANDER),)
+    offered = [option.object for option in defaults.cast_options(state, P0)]
+    assert theirs not in offered and other not in offered
 
 
 def test_504_1_the_draw_step_asks_about_the_active_player(
@@ -758,3 +773,38 @@ def test_504_1_the_draw_step_asks_about_the_active_player(
     scenario.at(Step.DRAW, begin=True, active=P1, number=2)
     scenario.build()
     assert set(asked) == {P1}
+
+
+# --- 601.3: the zones a player may cast from --------------------------------------------------
+
+
+def test_601_3_cast_permissions_decide_which_zones_cards_are_cast_from(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A permission for a graveyard card ("you may cast spells from your graveyard", M4) makes
+    priority offer it, and casting it takes it from the graveyard; without the hand permission,
+    a card in hand isn't offered. The engine asks no other place which zones count."""
+    graveyard = CastPermission("601.3", ZoneKind.GRAVEYARD)
+    scenario = Scenario(2)
+    (bears,) = scenario.hand(P0, ["Grizzly Bears"])
+    (lions,) = scenario.graveyard(P0, ["Savannah Lions"])
+    scenario.mana(P0, ManaType.WHITE)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+
+    def from_graveyard(
+        state: GameState, player: PlayerId, obj: ObjectId
+    ) -> tuple[CastPermission, ...]:
+        game_object = state.objects[obj]
+        zone = game_object.zone if game_object.spell is None else game_object.spell.cast_from
+        return (graveyard,) if zone == Zone.graveyard(player) else ()
+
+    patch_card(monkeypatch, "cast_permissions", from_graveyard)
+    state = scenario.build()
+    offered = [o for o in options(state) if isinstance(o, CastSpellOption)]
+    assert offered == [CastSpellOption(lions, NORMAL, graveyard)]
+    assert bears not in [o.object for o in offered]
+    run_script(state, choose(CastSpellOption(lions, NORMAL, graveyard), player=P0))
+    (spell,) = state.stack
+    record = state.objects[spell].spell
+    assert record is not None and record.cast_from == Zone.graveyard(P0)
+    assert state.player(P0).graveyard == []

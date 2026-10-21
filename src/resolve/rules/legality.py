@@ -10,10 +10,10 @@ Every legality question is an ``Action`` value. ``allowed(state, action)`` works
 4. Any applicable prohibition wins (101.2). Adding or removing abilities is not a prohibition
    (101.2a).
 
-Only playing a land exists so far; casting, activating, targeting, countering and destroying join
-it from M2.3 to M2.8, and attacking and blocking in M3. A function that asks the question calls
-``legality.allowed`` through the module, so a test or an effect that replaces ``permissions`` or
-``prohibitions`` is obeyed everywhere.
+Playing a land and casting a spell exist so far; activating, targeting, countering and
+destroying join them from M2.4 to M2.8, and attacking and blocking in M3. A function that asks
+the question calls ``legality.allowed`` through the module, so a test or an effect that
+replaces ``permissions`` or ``prohibitions`` is obeyed everywhere.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ from resolve.effects.characteristics import characteristics
 from resolve.errors import EngineError
 from resolve.rules import defaults
 from resolve.state.ids import ObjectId, PlayerId
+from resolve.state.spell import CastPermission, CastVariant
 from resolve.state.zones import Zone
 from resolve.values import Immutable
 
@@ -45,6 +46,20 @@ class PlayLand(Action):
     """``player`` plays the land card ``card`` (305.1), a special action (116.2a)."""
 
     card: ObjectId
+
+
+@dataclass(frozen=True)
+class CastAction(Action):
+    """``player`` casts the card ``card`` as ``variant`` under ``permission`` (601.3, 601.3e).
+
+    Asked before the card moves (601.3: whether they may begin), and again for the spell on the
+    stack once its proposal is complete (601.2e, 601.6), judged as if it were still in the zone it
+    came from.
+    """
+
+    card: ObjectId
+    variant: CastVariant
+    permission: CastPermission
 
 
 @dataclass(frozen=True)
@@ -77,6 +92,8 @@ def permissions(state: GameState, action: Action) -> tuple[Permission, ...]:
     """Everything that allows ``action`` now."""
     if isinstance(action, PlayLand):
         return _land_play_permissions(state, action)
+    if isinstance(action, CastAction):
+        return _cast_permissions(state, action)
     raise EngineError(f"no rule of legality covers {action!r}")
 
 
@@ -84,6 +101,9 @@ def prohibitions(state: GameState, action: Action) -> tuple[Prohibition, ...]:
     """Everything that forbids ``action`` now."""
     if isinstance(action, PlayLand):
         return _land_play_prohibitions(state, action)
+    if isinstance(action, CastAction):
+        # 101.2: "can't cast" effects (Kutzil's Flanker, M5; split second, M9) forbid it here.
+        return ()
     raise EngineError(f"no rule of legality covers {action!r}")
 
 
@@ -105,6 +125,8 @@ def _basis(action: Action) -> tuple[str, ...]:
     """The rules that would allow ``action``, cited when nothing does."""
     if isinstance(action, PlayLand):
         return ("305.1", "116.2a")
+    if isinstance(action, CastAction):
+        return ("601.3", "117.1a")
     return ("101.2",)
 
 
@@ -131,3 +153,20 @@ def _land_play_prohibitions(state: GameState, action: PlayLand) -> tuple[Prohibi
     if played >= defaults.land_plays_allowed(state, action.player):
         return (Prohibition("305.2b", "they have played all the lands they can this turn"),)
     return ()
+
+
+def _cast_permissions(state: GameState, action: CastAction) -> tuple[Permission, ...]:
+    # 601.3: a rule or effect allows the cast: the permission applies to the card where it is
+    # (``defaults.cast_permissions``) and its timing allows casting the variant now (117.1a,
+    # 601.3e: judged on the variant's characteristics).
+    if action.card not in state.objects:
+        return ()
+    if action.permission not in defaults.cast_permissions(state, action.player, action.card):
+        return ()
+    if not defaults.may_cast_now(
+        state, action.player, action.card, action.variant, action.permission
+    ):
+        return ()
+    return (
+        Permission(action.permission.rule, f"cast a spell from the {action.permission.zone.value}"),
+    )

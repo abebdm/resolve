@@ -15,6 +15,7 @@ import pytest
 
 from resolve.decisions.spaces import Number
 from resolve.engine.api import new_game, submit
+from resolve.engine.casting import CastSpell
 from resolve.errors import EngineError
 from resolve.events.base import LogEntry
 from resolve.state.config import GameConfig
@@ -26,7 +27,9 @@ from resolve.state.invariants import (
     invariant_violations,
     state_impurities,
 )
+from resolve.state.turn import Phase
 from resolve.state.zones import EXILE, Zone
+from tests.casting_support import cast
 from tests.engine_support import (
     AskTwice,
     HoldsValue,
@@ -44,6 +47,7 @@ from tests.game_fixtures import (
     start,
     started_game,
 )
+from tests.scenario import Scenario, run_script
 
 
 def paused_states() -> dict[str, GameState]:
@@ -254,3 +258,49 @@ def test_a_consistent_state_with_an_exiled_object_passes() -> None:
     obj.zone = EXILE
     state.exile.append(obj.id)
     assert invariant_violations(state) == []
+
+
+# --- Spells, cast records and checkpoints (M2.3) -----------------------------------------------
+
+
+def test_a_spell_record_off_the_stack_is_reported() -> None:
+    """112.1: a spell is a card on the stack; only stack objects carry a spell record, and every
+    stack object (a spell, until abilities exist, M4) carries one."""
+    scenario = Scenario(2)
+    (bears,) = scenario.hand(PlayerId(0), ["Grizzly Bears"])
+    (spell,) = scenario.stack(PlayerId(0), ["Hill Giant"])
+    state = scenario.build()
+    assert invariant_violations(state) == []
+    record = state.objects[spell].spell
+    state.objects[bears].spell = record
+    assert any(f"object {bears}" in p and "spell exactly on the stack" in p
+               for p in invariant_violations(state))  # fmt: skip
+    state.objects[bears].spell = None
+    state.objects[spell].spell = None
+    assert any(f"object {spell}" in p for p in invariant_violations(state))
+
+
+def test_a_cast_record_off_the_battlefield_is_reported() -> None:
+    """400.7d: only a permanent remembers how its spell was cast."""
+    scenario = Scenario(2)
+    (bears,) = scenario.graveyard(PlayerId(0), ["Grizzly Bears"])
+    (spell,) = scenario.stack(PlayerId(0), ["Hill Giant"])
+    state = scenario.build()
+    state.objects[bears].cast_record = state.objects[spell].spell
+    assert any(f"object {bears} has a cast record" in p for p in invariant_violations(state))
+
+
+def test_a_paused_cast_with_its_checkpoint_is_pure_data() -> None:
+    """A cast paused at a decision holds a checkpoint: copies of the state's objects and players,
+    which the purity check accepts there (733.1) and still refuses anywhere else."""
+    scenario = Scenario(2)
+    (bears,) = scenario.hand(PlayerId(0), ["Grizzly Bears"])
+    scenario.battlefield(PlayerId(0), ["Forest", "Forest"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(bears, PlayerId(0)))
+    assert isinstance(state.tasks[-1], CastSpell) and state.tasks[-1].checkpoint is not None
+    assert state_impurities(state) == []
+    assert copy.deepcopy(state) == state and pickle.loads(pickle.dumps(state)) == state
+    state.tasks.insert(0, HoldsValue(holds_object(state)))  # a reference outside a checkpoint
+    assert state_impurities(state)

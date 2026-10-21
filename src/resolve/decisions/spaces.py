@@ -33,6 +33,8 @@ from itertools import pairwise
 
 from resolve.errors import InvalidAnswer
 from resolve.state.ids import ObjectId, PlayerId
+from resolve.state.mana import Mana
+from resolve.state.spell import CastPermission, CastVariant
 from resolve.values import Immutable
 
 # --- Options -----------------------------------------------------------------------------------
@@ -73,9 +75,12 @@ class PlayLandOption(Immutable):
 
 @dataclass(frozen=True)
 class CastSpellOption(Immutable):
-    """Cast the card ``object`` as a spell (117.1a, 601.2)."""
+    """Cast the card ``object`` as a spell (117.1a, 601.2): as ``variant`` (601.3e: chosen before
+    the card moves), under ``permission`` (601.3)."""
 
     object: ObjectId
+    variant: CastVariant
+    permission: CastPermission
 
 
 @dataclass(frozen=True)
@@ -83,6 +88,24 @@ class ActivateAbilityOption(Immutable):
     """Activate ability number ``ability`` (from 0, in the order of the object's computed
     abilities) of ``object`` (117.1b, 602; mana abilities 605.3a)."""
 
+    object: ObjectId
+    ability: int
+
+
+@dataclass(frozen=True)
+class ManaOption(Immutable):
+    """One class of identical units of mana in a pool: every unit equal to ``mana`` (106.4,
+    601.2h). The option of a ``ChooseCounts`` payment."""
+
+    mana: Mana
+
+
+@dataclass(frozen=True)
+class ManaActivationOption(Immutable):
+    """A mana ability activated during an action: the ``number``-th activation (from 0), of
+    ability ``ability`` of ``object`` (733.1: which to reverse)."""
+
+    number: int
     object: ObjectId
     ability: int
 
@@ -95,6 +118,8 @@ Option = (
     | PlayLandOption
     | CastSpellOption
     | ActivateAbilityOption
+    | ManaOption
+    | ManaActivationOption
 )
 
 # --- Answer values -----------------------------------------------------------------------------

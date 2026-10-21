@@ -20,7 +20,7 @@ from resolve.cards.registry import (
     collect_definitions,
     default_registry,
 )
-from resolve.data.cards import parse_card
+from resolve.data.cards import load_card_excerpt, parse_card
 from tests import scryfall_fixtures as fx
 
 
@@ -171,3 +171,14 @@ def test_same_card_defined_in_two_modules_is_an_error(
     prepend_sys_path(monkeypatch, tmp_path)
     with pytest.raises(DuplicateDefinitionError):
         CardRegistry(collect_definitions("defs_duplicate"))
+
+
+def test_every_registered_nonbasic_card_is_in_the_committed_excerpt() -> None:
+    """The fuzz decks are built from ``tools/excerpts/cards.json`` (no snapshot needed), so every
+    registered card but the basic lands (``basic_lands.json``) must be in it, and nothing else."""
+    root = Path(__file__).resolve().parents[2] / "tools" / "excerpts"
+    registry = default_registry()
+    basics = {card.name for card in load_card_excerpt(root / "basic_lands.json").cards()}
+    excerpt = load_card_excerpt(root / "cards.json")
+    names = {name for card in excerpt.cards() for name in card.face_names}
+    assert names == set(registry.names()) - basics

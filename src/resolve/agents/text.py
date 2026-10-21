@@ -38,6 +38,8 @@ from resolve.decisions.spaces import (
     ChooseOrder,
     ChooseSubset,
     Distribute,
+    ManaActivationOption,
+    ManaOption,
     NamedOption,
     Number,
     ObjectOption,
@@ -53,6 +55,8 @@ from resolve.engine.view import ObjectView, PlayerView
 from resolve.events.base import AnswerRecord, LogEntry
 from resolve.state.ids import ObjectId
 from resolve.state.mana import describe_mana
+from resolve.state.spell import describe_variant
+from resolve.state.zones import ZoneKind
 
 # How many of the newest log entries ``render_view`` shows.
 RECENT_LOG = 8
@@ -96,10 +100,19 @@ def describe_option(option: Option, view: PlayerView) -> str:
             return "pass priority"
         case PlayLandOption(object=obj):
             return f"play {_named(view, obj)}"
-        case CastSpellOption(object=obj):
-            return f"cast {_named(view, obj)}"
+        case CastSpellOption(object=obj, variant=variant, permission=permission):
+            how = describe_variant(variant)
+            zone = permission.zone
+            named = "command zone" if zone is ZoneKind.COMMAND else zone.value
+            where = "" if zone is ZoneKind.HAND else f" from the {named}"
+            return f"cast {_named(view, obj)}" + (f" ({how})" if how else "") + where
         case ActivateAbilityOption(object=obj, ability=index):
             return f"activate ability {index} of {_named(view, obj)}"
+        case ManaOption(mana=mana):
+            source = "" if mana.source is None else f" from {_named(view, mana.source)}"
+            return mana.type.symbol + source
+        case ManaActivationOption(object=obj, ability=index):
+            return f"reverse ability {index} of {_named(view, obj)}"
 
 
 def _named(view: PlayerView, obj: ObjectId) -> str:

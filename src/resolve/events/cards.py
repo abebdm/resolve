@@ -32,6 +32,8 @@ class CardDrawn(Event):
     library object (design.md §9), so they can count the hand but learn nothing else.
     """
 
+    library_action = True
+
     player: PlayerId
     drawn_from: ObjectId | None = None
     drawn: ObjectId | None = None
@@ -67,6 +69,8 @@ class HandShuffledIntoLibrary(Event):
     knows where any library card is afterwards.
     """
 
+    library_action = True
+
     player: PlayerId
     cards: tuple[ObjectId, ...]
 
@@ -90,6 +94,8 @@ class CardsPutOnBottom(Event):
     players see only how many cards went to the bottom (``count``), since the order of a library
     is hidden (401.2).
     """
+
+    library_action = True
 
     player: PlayerId
     cards: tuple[ObjectId, ...]

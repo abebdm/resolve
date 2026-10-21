@@ -37,11 +37,14 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
    games, and the summary at the end. Check that:
    - the first line starts `Run: thorough preset;`, the summary says `100 games passed`, and
      nothing says `FAILED:`;
-   - `Endings:` shows both `decked` and `concession` games, `life total x0` and `draw x0`
-     (nothing in M1's basic-land decks can change a life total, and a game ends before two
-     players can deck out at once), and `rules gap x0` (basic lands never reach a rules gap);
-   - `Turns per game:` reaches a maximum above 50, and `Played:` shows thousands of lands and
-     mana abilities;
+   - `Endings:` shows `concession` games and many `rules gap` games, with `life total x0` and
+     `draw x0` (nothing in M2.3's decks can change a life total); `decked` may be 0, since most
+     games stop at the 508.1 gap once a creature resolves (M2.11 settles the final
+     expectations);
+   - `Spells:` shows casts, resolutions and reversals above zero; `Casts per card:` lists Sol Ring
+     and the vanilla creatures; `Gaps:` lists only `508.1` and `903.8`;
+   - `Turns per game:` reaches a maximum of several tens of turns, and `Played:` shows
+     thousands of lands and mana abilities;
    - the last line gives the time; note it if it is much longer than the estimate above.
    The exact numbers depend on the engine and change from milestone to milestone; a run with the
    same code always prints the same numbers, except the timing.
@@ -55,7 +58,7 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
 With the Scryfall snapshot in `data/` (`docs/howto.md`, "Fetch or update the card data
 snapshot"):
 
-- `uv run python tools/card_excerpt.py tools/excerpts/basic_lands.json --check`: the committed
-  basic lands still match the snapshot.
+- `uv run python tools/card_excerpt.py tools/excerpts/basic_lands.json --check` and the same
+  for `tools/excerpts/cards.json`: the committed excerpts still match the snapshot.
 - `uv run python tools/coverage.py`: which cards of the target decks in `decks/` are
   implemented.

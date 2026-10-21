@@ -30,8 +30,9 @@ The base class of every ability a definition lists; it has a `text`.
 An activated mana ability: pay `cost`, then `effect` adds mana; it doesn't use the stack.
 - **Rules:** 605.1a, 605.3a, 605.3b, 602.2 (only the controller activates), 118.3.
 - **Parameters:** `cost: tuple[Cost, ...]`, `effect: AddMana`.
-- **Example:** Llanowar Elves (not implemented yet):
-  `ActivatedManaAbility((TapSelfCost(),), AddMana((ManaType.GREEN,)))`.
+- **Example:** Sol Ring (`resolve.cards.definitions.mana_rocks`):
+  `ActivatedManaAbility((TapSelfCost(),), AddMana((ManaType.COLORLESS, ManaType.COLORLESS)))`.
+  It can be activated while its controller pays a cost (601.2g, `resolve.engine.payment`).
 
 ### `intrinsic_mana_ability(land_type)` (`resolve.cards.primitives.abilities`)
 The "{T}: Add [mana symbol]" a land has for each basic land type. Never put it in a definition:
@@ -46,7 +47,8 @@ The "{T}: Add [mana symbol]" a land has for each basic land type. Never put it i
 "Add [mana]": the controller adds these mana units, with the ability's object as their source.
 - **Rules:** 106.3, 106.4.
 - **Parameters:** `mana: tuple[ManaType, ...]` (at least one).
-- **Example:** `AddMana((ManaType.GREEN,))` in the Forest's intrinsic ability.
+- **Example:** `AddMana((ManaType.GREEN,))` in the Forest's intrinsic ability;
+  `AddMana((ManaType.COLORLESS, ManaType.COLORLESS))` in Sol Ring's.
 
 ## Typed words (`resolve.cards.primitives.words`)
 

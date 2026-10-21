@@ -19,8 +19,9 @@ be built later on top of its API.
 
 **Status:** M0 (skeleton) and M1 (turn structure) are complete. Games run from choosing the
 starting player through mulligans, full turns with priority, land drops, mana and cleanup, to a
-win, loss or draw, in 2 to 6 players. The cards implemented so far are the basic lands and three
-vanilla creatures. Tools compare a new Comprehensive Rules version or card data snapshot against
+win, loss or draw, in 2 to 6 players. Creature and artifact spells can now be cast, paid for
+with mana and resolved onto the battlefield; a cast that can't be paid is undone. The cards
+implemented so far are the basic lands, three vanilla creatures and Sol Ring. Tools compare a new Comprehensive Rules version or card data snapshot against
 the pinned ones (`tools/rules_diff.py`, `tools/card_diff.py`), and `tools/rule.py` prints any
 rule of the pinned Comprehensive Rules by number. M2 (spells and the stack) is under
 way. Its plan is approved ([`docs/plans/m2.md`](docs/plans/m2.md)). Its first step,
@@ -32,7 +33,9 @@ decides) into single functions that effects can change later, and added a test t
 map in step with the Comprehensive Rules; games play exactly as before. Its third step taught
 the engine to read mana costs (every kind of mana symbol), and so a card's colors and mana value,
 added the typed words a text-changing effect will need and an answer space for paying mana; games
-still play exactly as before. **Next:** casting spells (601.2). Details: "Current status" in [`CLAUDE.md`](CLAUDE.md).
+still play exactly as before. Its fourth step added casting (choosing how to cast, paying mana,
+undoing an illegal cast) and resolving permanent spells. **Next:** more mana abilities and
+summoning sickness (M2.4). Details: "Current status" in [`CLAUDE.md`](CLAUDE.md).
 
 Resolve is unofficial Fan Content permitted under the Wizards of the Coast Fan Content Policy. It
 is not approved or endorsed by Wizards. Portions of the materials used are property of Wizards of

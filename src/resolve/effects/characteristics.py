@@ -51,11 +51,21 @@ from resolve.data.mana_cost import ManaCost
 from resolve.data.types import CardType, Color, Supertype
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.state.ids import ObjectId
+from resolve.state.spell import (
+    Alternative,
+    AlternativeKind,
+    Back,
+    CastVariant,
+    FaceDown,
+    Fused,
+    Half,
+    Normal,
+)
 from resolve.state.zones import ZoneKind
 from resolve.values import Immutable
 
 if TYPE_CHECKING:
-    from resolve.state.game import GameState
+    from resolve.state.game import GameObject, GameState
 
 # Scryfall layouts of double-faced cards whose front face gives the characteristics (712.8a).
 FRONT_FACE_LAYOUTS = ("transform", "modal_dfc")
@@ -106,10 +116,65 @@ def _number(text: str | None) -> int | None:
 
 
 def characteristics(state: GameState, obj: ObjectId) -> Characteristics:
-    """The current characteristics of ``obj`` (109.3; layers arrive in M5)."""
+    """The current characteristics of ``obj`` (109.3; layers arrive in M5).
+
+    A spell on the stack has the characteristics of the variant it is cast as (709.3b, 712.8c,
+    715.3b, 720.3b, 718.3b; ``variant_characteristics``).
+    """
+    game_object = state.object(obj)
+    if game_object.spell is not None:
+        return variant_characteristics(state, obj, game_object.spell.variant)
+    card = state.card_of(game_object)
+    return _face_characteristics(state, game_object, _face_index(card.data))
+
+
+def variant_characteristics(
+    state: GameState, obj: ObjectId, variant: CastVariant
+) -> Characteristics:
+    """The characteristics ``obj`` has if cast as ``variant``, which decide whether it can be cast
+    that way (601.3e) and which it has on the stack.
+
+    - ``NORMAL``: its normal characteristics (as ``characteristics`` computes them off the stack).
+    - ``Half(i)``: only that half of a split card (709.3a-b).
+    - ``Back``: the back face of a double-faced card (712.11a-c).
+    - ``Alternative(OMEN)`` and ``Alternative(ADVENTURE)``: the inset part (720.3a-b, 715.3a-b).
+    - A preparation card's inset part is never cast from the card (722.3); its copies (722.3c) are
+      M5. Prototype (718.3), fuse (702.102) and face-down (708.4) characteristics are later
+      milestones'. Each raises ``NotImplementedRule``.
+    """
     game_object = state.object(obj)
     card = state.card_of(game_object)
-    index = _face_index(card.data)
+    data = card.data
+    match variant:
+        case Normal():
+            return _face_characteristics(state, game_object, _face_index(data))
+        case Half(index=index) if data.layout == "split" and index in (0, 1):
+            return _face_characteristics(state, game_object, index)
+        case Back() if data.layout in FRONT_FACE_LAYOUTS:
+            return _face_characteristics(state, game_object, 1)
+        case Alternative(kind=AlternativeKind.PREPARE):
+            raise NotImplementedRule(
+                "722.3: the characteristics of a prepare spell (only its copies are cast, 722.3c)"
+            )
+        case Alternative(kind=AlternativeKind.OMEN) if is_omen(data) and data.is_multi_faced:
+            return _face_characteristics(state, game_object, 1)
+        case Alternative(kind=AlternativeKind.ADVENTURE) if (
+            data.layout == "adventure" and not is_omen(data) and data.is_multi_faced
+        ):
+            return _face_characteristics(state, game_object, 1)
+        case Alternative(kind=AlternativeKind.PROTOTYPE):
+            raise NotImplementedRule("718.3: the characteristics of a prototyped spell")
+        case Fused():
+            raise NotImplementedRule("702.102: the characteristics of a fused split spell")
+        case FaceDown():
+            raise NotImplementedRule("708.4: the characteristics of a face-down spell")
+        case _:
+            raise EngineError(f"{data.name!r} can't be cast as {variant!r}")
+
+
+def _face_characteristics(state: GameState, game_object: GameObject, index: int) -> Characteristics:
+    """The characteristics of face (or part) ``index`` of the object's card."""
+    card = state.card_of(game_object)
     face = card.data.faces[index]
     types = face.types
     if types is None or face.mana_cost_problem is not None:
@@ -138,7 +203,7 @@ def characteristics(state: GameState, obj: ObjectId) -> Characteristics:
 
 
 def _face_index(data: CardData) -> int:
-    if data.layout in NORMAL_FACE_LAYOUTS or _is_omen(data):
+    if data.layout in NORMAL_FACE_LAYOUTS or is_omen(data):
         return 0  # 720.4, 722.4
     if not data.is_multi_faced:
         return 0
@@ -149,7 +214,7 @@ def _face_index(data: CardData) -> int:
     )
 
 
-def _is_omen(data: CardData) -> bool:
+def is_omen(data: CardData) -> bool:
     """Whether the card is an omen card (720.1): its second part has the Omen subtype."""
     return any(
         face.types is not None and OMEN_SUBTYPE in face.types.subtypes for face in data.faces[1:]

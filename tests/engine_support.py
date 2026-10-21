@@ -7,8 +7,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field, replace
+from typing import Any
 
 from resolve.agents.random_agent import RandomAgent
+from resolve.cards.primitives.abilities import ActivatedManaAbility
+from resolve.cards.primitives.costs import TapSelfCost
+from resolve.cards.primitives.effects import AddMana
+from resolve.cards.registry import CardDefinition
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer, DecisionRequest
 from resolve.decisions.spaces import AnswerValue, ChooseNumber, ChooseOne, Number, PassOption, Pick
@@ -19,10 +24,13 @@ from resolve.errors import EngineError, InvalidAnswer, NotImplementedRule
 from resolve.events.base import Event, append_log
 from resolve.events.cards import CardDrawn, CardsPutOnBottom
 from resolve.events.game import GameEnded
+from resolve.events.mana import ManaAdded
 from resolve.events.pipeline import ApplyEvents
+from resolve.state.checkpoint import Checkpoint, restore_checkpoint, take_checkpoint
 from resolve.state.config import GameConfig
 from resolve.state.game import GameObject, GameState
 from resolve.state.ids import ObjectId, PlayerId
+from resolve.state.mana import Mana, ManaType
 from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
 from tests.game_fixtures import decks
 
@@ -425,3 +433,55 @@ class PatientAgent:
                 request.id, request.player, Pick(space.options.index(PassOption()))
             )
         return self.random.decide(view, request)
+
+
+@dataclass(slots=True)
+class ReversesAfterDrawing(Task):
+    """Takes a checkpoint, draws a card for ``player`` (121.1, an action involving a library),
+    then tries to reverse back to the checkpoint (733.1 forbids it)."""
+
+    player: PlayerId
+    checkpoint: Checkpoint | None = None
+
+    def run(self, state: GameState) -> TaskResult:
+        if self.checkpoint is None:
+            self.checkpoint = take_checkpoint(state)
+            return Push((ApplyEvents((CardDrawn(player=self.player, rules=("121.1",)),)), self))
+        restore_checkpoint(state, self.checkpoint)
+        return Done()
+
+
+@dataclass(frozen=True)
+class AddManaPerCardInHand(AddMana):
+    """Test-only: "Add one [mana] for each card in your hand", so what it adds depends on the
+    moment it is activated (like Lion's Eye Diamond's "discard your hand", M4)."""
+
+    def events(self, state: GameState, source: ObjectId, player: PlayerId) -> tuple[Event, ...]:
+        count = len(state.player(player).hand)
+        if count == 0:
+            return ()
+        added = tuple(Mana(self.mana[0], source) for _ in range(count))
+        return (ManaAdded(player=player, mana=added, rules=("106.3", "106.4")),)
+
+    @property
+    def text(self) -> str:
+        return f"Add {self.mana[0].symbol} for each card in your hand."
+
+
+HAND_BLOOM_RECORD: dict[str, Any] = {
+    "object": "card",
+    "oracle_id": "oid-test-hand-bloom",
+    "name": "Test Hand Bloom",
+    "layout": "normal",
+    "mana_cost": "{2}",
+    "cmc": 2.0,
+    "type_line": "Artifact",
+    "oracle_text": "{T}: Add {G} for each card in your hand.",
+    "colors": [],
+    "color_identity": [],
+    "keywords": [],
+}
+HAND_BLOOM = CardDefinition(
+    "Test Hand Bloom",
+    (ActivatedManaAbility((TapSelfCost(),), AddManaPerCardInHand((ManaType.GREEN,))),),
+)
