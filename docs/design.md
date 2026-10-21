@@ -170,8 +170,6 @@ them instead of copying every card's text. Agents only ever receive immutable va
 
 ## 5. Engine loop and tasks
 
-*Designed ahead (provisional): reversing illegal actions by checkpoint (§17.4).*
-
 The engine is an explicit **task queue** (a stack of pending tasks stored in the state). This was
 chosen over blocking callbacks and over Python generators because generators can't be copied or
 pickled, which would make AI search and save/restore impossible.
@@ -184,8 +182,8 @@ pickled, which would make AI search and save/restore impossible.
     `Push((child, self))`, having recorded its progress in its own fields.
   - `NeedDecision(player, kind, space, prompt, rules, source)`: the engine pauses. The task stays
     on top; the engine assigns the request id and stores the `DecisionRequest` in `pending`.
-- Examples: `TakeTurn`, `RunStep`, `PriorityRound`, `CheckStateBasedActions`, `ApplyEvents`;
-  later `CastSpell` (the 601.2 sequence), `ResolveTopOfStack`, `PutTriggersOnStack`,
+- Examples: `TakeTurn`, `RunStep`, `PriorityRound`, `CheckStateBasedActions`, `ApplyEvents`,
+  `CastSpell` (the 601.2 sequence), `ResolveTopOfStack`; later `PutTriggersOnStack`,
   `DeclareAttackers`.
 - **Resuming.** `submit()` validates the answer (§6), including the paused task's
   `check_answer(state, request, answer)`, which must change nothing. Only then does it log the
@@ -217,6 +215,37 @@ pickled, which would make AI search and save/restore impossible.
   tasks and the remaining `TurnState.segments` and goes to the cleanup step; the effect itself is
   built in M9.
 
+**Reversing illegal actions (733)**
+
+When an action begins (casting a spell; from M4, activating an ability or taking a special
+action), its task stores a **checkpoint** (`resolve.state.checkpoint`): a copy of every
+restorable `GameState` field. It leaves out an explicit list (`NOT_RESTORED`):
+
+- the event log;
+- the task stack;
+- `pending`;
+- the ID, timestamp and request counters, which only ever grow;
+- the RNG, which is never rewound, so a reversal can't be used to look at randomness.
+
+If the action can't be completed (601.2e, 601.6, 601.2h, 118.3), the reversal goes as follows:
+
+1. The player chooses which of the mana abilities they activated during the action to reverse
+   (733.1; `REVERSE_MANA_ABILITIES`, not asked when none were). From M2.4 the kept ones must
+   include every ability whose mana a kept ability spent.
+2. The checkpoint is restored. A player who left the game meanwhile stays gone (800.4a).
+3. The kept mana abilities are activated again in their original order, so their effects (and,
+   from M4, triggers) happen again and the undone action's don't.
+4. Knowledge gained during the attempt is recorded (the card was seen on the stack), and a
+   public `ActionReversed` is logged.
+
+The player keeps priority, and the passes made before the attempt still count (733.2): the
+priority task doesn't clear them when a cast begins; the cast clears them as it completes
+(601.2i). 733.1 forbids reversing library actions; 601.2h pays such costs last, and mana
+abilities can't do them (605.1a), so finding one since the checkpoint is an `EngineError`.
+
+The action's task holds its payment (`PayCosts`, §17.7) in a field rather than as a separate
+task, because the reversal needs the mana abilities activated while paying.
+
 **Rule defaults (rule 12)**
 
 Every value or procedure a card or effect could change comes from one function in
@@ -230,9 +259,10 @@ module's docstring; the recipe is in `docs/howto.md` ("Add or change a rule defa
 - `knows_identity(state, obj, viewer)` (400.2, 402.3, 723.4): the one visibility check (§9);
 - `turn_structure`, `is_skipped`, `next_turn` (500.1, 500.7, 500.11, 103.1, 800.4k), with
   `TurnState.segments` and `GameState.extra_turns` as data;
-- `land_plays_allowed`, `land_play_options`, `cast_options`, `has_sorcery_timing`,
-  `may_cast_now` (305.2, 305.1, 601.3, 903.8, 117.1a), with legality questions asked through
-  `resolve.rules.legality.allowed` (§17.2).
+- `land_plays_allowed`, `land_play_options`, `cast_permissions`, `cast_options`,
+  `has_sorcery_timing`, `may_cast_now` (305.2, 305.1, 601.3, 903.8, 117.1a), with legality
+  questions asked through `resolve.rules.legality.allowed` (§17.2);
+- `resolved_spell_destination` (608.2n).
 
 ---
 
@@ -612,7 +642,10 @@ Their order with replacement effects is settled in M6 (614).
 ### 17.3 Casting: cast variants and permissions (601.2)
 
 *Provisional: designed in M2's plan; built in M2 (M2.3 onward). That milestone's plan may revise
-it, with the user's sign-off.*
+it, with the user's sign-off. M2.3 built the variants, the permissions `FROM_HAND` and
+`COMMANDER`, `cast_options`, `variant_characteristics` and `CastSpell` (601.2a, 601.2e-i);
+variants other than normal raise their rules' gaps, and the announcement stages (modes, X,
+targets, division, hybrid) arrive in M2.6, M2.7, M4 and M9.*
 
 Every way of casting that changes a spell's characteristics is chosen **before** the card moves
 to the stack, and castability is checked on the chosen characteristics only (601.3e):
@@ -656,38 +689,14 @@ It never gives priority; its caller does (601.2i, 608.2g).
 
 ### 17.4 Reversing illegal actions (733)
 
-*Provisional: designed in M2's plan; built in M2.3. That milestone's plan may revise it, with
-the user's sign-off.*
-
-When an action begins (casting a spell; from M4, activating an ability or taking a special
-action), its task stores a **checkpoint**: a copy of every restorable `GameState` field. It
-leaves out an explicit list:
-
-- the event log;
-- the task stack;
-- `pending`;
-- the ID, timestamp and request counters, which only ever grow;
-- the RNG, which is never rewound, so a reversal can't be used to look at randomness.
-
-If the action can't be completed (601.2, 601.2e, 601.6, 118.3), the reversal goes as follows:
-
-1. The player chooses which of their mana abilities to reverse (733.1). The kept ones must
-   include every ability whose mana a kept ability spent; this isn't asked when none were
-   activated.
-2. The checkpoint is restored.
-3. The kept mana abilities are applied again in their original order, with their recorded
-   choices, so their triggers trigger and the undone action's don't.
-4. Knowledge gained during the attempt is recorded (the card was seen on the stack).
-5. A public `ActionReversed` event is logged.
-
-The player keeps priority, and the passes made before the attempt still count (733.2).
-733.1 forbids reversing library actions. 601.2h pays such costs last, and mana abilities can't
-do them (605.1a), so reversing after one is an `EngineError`.
+Built in M2.3, and moved to §5 ("Reversing illegal actions").
 
 ### 17.5 Spells and abilities on the stack
 
 *Provisional: designed in M2's plan; built in M2.3 (spells), M4 (abilities), M5 (copies). Each
-milestone's plan may revise it, with the user's sign-off.*
+milestone's plan may revise it, with the user's sign-off. M2.3 built `GameObject.spell` and
+`CastChoices` (variant, permission, the zone cast from, total cost, mana spent) and
+`ObjectView.spell`; modes, X and targets join the record in M2.6 and M2.7.*
 
 A spell is its card's object on the stack, with `GameObject.spell: CastChoices`. That record is
 Immutable and replaced as each choice is made. It holds every decision 707.10 copies:
@@ -734,7 +743,8 @@ sign-off.*
 ### 17.7 Paying costs and the `ChooseCounts` space
 
 *Provisional: designed in M2's plan; built in M2.2 to M2.4. That milestone's plan may revise it,
-with the user's sign-off.*
+with the user's sign-off. M2.3 built `PayCosts` (`resolve.engine.payment`) for generic, colored
+and {C} mana; the action being paid for holds it in a field (§5, "Reversing illegal actions").*
 
 `PayCosts(payer, cost, paying_for)` pays the costs of spells, of abilities and of effects. Its
 decisions go through `deciding_player`, and it uses only the payer's resources (723.5a).
@@ -842,7 +852,8 @@ qualities are judged by: the spell's own, or the ability source's last known inf
 ### 17.12 Resolution and where a spell goes
 
 *Provisional: designed in M2's plan; built in M2.3 and M2.6. That milestone's plan may revise it,
-with the user's sign-off.*
+with the user's sign-off. M2.3 built `resolved_spell_destination` and the resolution of
+permanent spells (608.3a); instants and sorceries resolve from M2.6.*
 
 **Where it goes.** `resolved_spell_destination(state, spell)` decides where an instant or sorcery
 goes as it resolves (608.2n), and is also used for a countered spell (701.6). The default is its
@@ -859,8 +870,8 @@ prevention plug in there.
 
 ### 17.13 Choices stored on permanents
 
-*Provisional: designed in M2's plan; built in M2.3 (`cast_record`), M4 (links), M6 (entry
-choices). Each milestone's plan may revise it, with the user's sign-off.*
+*Provisional: designed in M2's plan; built in M2.3 (`cast_record`, built), M4 (links), M6
+(entry choices). Each milestone's plan may revise it, with the user's sign-off.*
 
 A permanent can carry three kinds of stored choice:
 

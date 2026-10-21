@@ -1,4 +1,4 @@
-"""Casting spells (601.2, design.md §17.3) and reversing illegal casts (733, §17.4).
+"""Casting spells (601.2, design.md §17.3) and reversing illegal casts (733, design.md §5).
 
 ``CastSpell(player, card, variant, permission)`` casts the card ``card`` as ``variant`` under
 ``permission``, which priority offered (``defaults.cast_options``). It runs 601.2's steps as
