@@ -92,7 +92,8 @@ def decks_for(players: int, commander: bool, seed: int) -> list[Deck]:
     (a deck of 6 or fewer would make every player draw from an empty library during 103.5 and
     lose at the first state-based-action check, 704.5b). Every deck holds two elves, so random
     agents soon cast one, and the game stops at the 508.1 gap once its controller's combat comes
-    (or at 903.8, casting a commander); long games are the patient and land-only tests' job. Seat 1's deck is empty in one game of four.
+    (or at 903.8, casting a commander); long games are the patient and land-only tests' job.
+    Seat 1's deck is empty in one game of four.
     """
     commanders = [DAYBREAKER] if commander else []
     return [

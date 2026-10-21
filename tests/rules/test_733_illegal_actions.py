@@ -136,7 +136,7 @@ def test_733_1_a_checkpoint_leaves_out_the_log_counters_and_rng() -> None:
 def test_733_1_reversal_after_a_library_action_is_an_engine_error() -> None:
     scenario = Scenario(2)
     scenario.library(P0, ["Forest"])
-    with pytest.raises(EngineError, match="733.1"):
+    with pytest.raises(EngineError, match=r"733\.1"):
         scenario.build(ReversesAfterDrawing(P0))
 
 

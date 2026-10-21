@@ -19,6 +19,59 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-21: M2.3: casting, paying, reversing and resolving
+- **Decision (casting variants):** `cast_options` offers one option per permission and per
+  variant the card's layout gives (a split card's halves, both faces of a modal double-faced
+  card, an omen's normal part and its Omen, an adventurer and its Adventure), each judged on its
+  own characteristics (601.3e, `variant_characteristics`). Choosing a variant other than
+  `NORMAL` raises its rule's gap before anything moves (709.3, 712.11b, 720.3, 715.3; 712.11a
+  for a transforming card cast transformed, 718.3, 722.3, 708.4, 702.102). A transforming card
+  and a preparation card offer only `NORMAL` (712.11, 722.3).
+- **Decision (split cards in hand):** a split card's combined characteristics (709.4) are M5,
+  so `characteristics` still raises 109.3 for one off the stack, and priority (which asks
+  `land_play_options` about every card in hand) reaches that gap first. The 709.3 test asks
+  `cast_options` directly. **Why:** implementing 709.4 (two names, combined costs) belongs with
+  the split-card row (M5); the halves themselves are read from their own faces.
+- **Decision (`PayCosts` is embedded):** `PayCosts` is a procedure object the action's task
+  holds in a field (`CastSpell.payment`) and calls (`step`, `check_answer`, `resume`), not a
+  task of its own on the task stack. **Why:** reversing a cast (733.1) needs the mana abilities
+  activated while paying, and tasks can't read each other; a separate task would have to pass
+  them through the game state. M2.4's mana abilities with mana costs and M4's activated
+  abilities embed it the same way.
+- **Decision (passes and reversal, 733.2):** the priority task no longer clears `passed` when
+  a cast begins; `CastSpell` clears it as the spell becomes cast (601.2i). A reversed attempt
+  restores the turn from the checkpoint, so earlier passes still count. Nobody holds priority
+  while a spell is being cast (`TurnState.priority` is `None`, as during any action).
+- **Decision (601.2e):** the check after the proposal asks `legality.allowed` again for the
+  spell on the stack, judged from the zone it came from (`cast_permissions` reads
+  `spell.cast_from`) and with sorcery timing ignoring the spell itself
+  (`has_sorcery_timing(..., ignoring=)`). **Why:** the proposal can't stand in its own way;
+  ignoring it everywhere would wrongly allow sorcery-speed actions during casting.
+- **Decision (unique answers):** a payment decision isn't asked when exactly one choice of
+  counts pays; mana classes are equal `Mana` values (type and source), so two {G} from different
+  Forests are different classes. "Pay" alone isn't asked either. A card with no mana cost
+  (118.6) can be begun and is reversed at 601.2f.
+- **Decision (reversal and leaving):** a player who leaves the game during an attempt (a
+  concession) stays gone after the reversal: their current record replaces the restored one and
+  their restored objects are removed again (800.4a). A caster who leaves ends the cast silently:
+  their spell left with them. The fuzz harness found the first case.
+- **Decision (knowledge after reversal):** `ActionReversed` adds every player still in the game
+  to the returned card's `known_to` (400.2: they saw it on the stack).
+- **Decision (deferred fields):** `CastPermission` has no alternative-cost or destination field
+  yet (M2.10, M4); `CastChoices` has no modes, X or targets yet (M2.6, M2.7). `SpellCast`
+  records the spell's name as applied, for the log and the fuzz summary.
+- **Decision (fuzz decks):** the default run cycles the `spells` (basic lands and every
+  noncreature card of the excerpt) and `creatures` (every excerpt card but `FUZZ_EXCLUSIONS`)
+  recipes, with `copies` of each basic land and `copies // 2` (at least one) of each card;
+  every other Commander game (odd seeds) gives each seat one of the excerpt's creatures as a
+  commander. The allowed gaps are 508.1 and 903.8. Reversals far outnumber casts with random
+  agents (they often pay before tapping enough), until the auto-payer seats of M2.5.
+- **Rules:** 601.2a-i, 601.3, 601.3e, 601.6, 605.3a, 107.4a-c, 118.3, 118.6, 117.3b-c, 117.4,
+  405.5, 608.1, 608.3a, 608.2n, 733.1, 733.2, 800.4a, 903.8.
+- **Where:** `resolve.state.spell`, `resolve.state.checkpoint`, `resolve.engine.casting`,
+  `resolve.engine.payment`, `resolve.engine.resolution`, `resolve.engine.priority`,
+  `resolve.rules.defaults`, `resolve.rules.legality`, `resolve.events.spells`, `tools/fuzz.py`.
+
 ### 2026-10-21: M2.2: mana costs, colors, 109.3 layouts and `ChooseCounts`
 - **Decision:**
   - A `ManaSymbol` has a `kind`, its `colors` and a `number`. 107.4 lists `{C/W}` ... `{C/G}`

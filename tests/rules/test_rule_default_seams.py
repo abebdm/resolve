@@ -65,7 +65,14 @@ from resolve.state.turn import TURN_SEQUENCE, Phase, Segment, Step
 from resolve.tasks import Done, Task, TaskResult
 from tests.game_fixtures import answer, decks, pass_until, request_of
 from tests.scenario import Scenario, run_script
-from tests.seams import patch, patch_loss, patch_next_turn, patch_object, patch_skip
+from tests.seams import (
+    patch,
+    patch_loss,
+    patch_may_cast_now,
+    patch_next_turn,
+    patch_object,
+    patch_skip,
+)
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 
@@ -195,7 +202,7 @@ def test_117_1a_may_cast_now_is_the_one_place_flash_would_plug_in(
     scenario = Scenario(2)
     shock, ponder = scenario.hand(P0, ["Test Shock", "Test Ponder"])
     scenario.at(Step.UPKEEP)
-    monkeypatch.setattr(defaults, "may_cast_now", lambda state, player, obj, *_: obj == ponder)
+    patch_may_cast_now(monkeypatch, lambda state, player, obj, variant, permission: obj == ponder)
     state = scenario.build()
     assert CastSpellOption(ponder, NORMAL, FROM_HAND) in options(state)
     assert CastSpellOption(shock, NORMAL, FROM_HAND) not in options(state)

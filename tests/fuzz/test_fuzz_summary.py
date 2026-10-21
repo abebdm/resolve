@@ -1,9 +1,11 @@
 """The fuzz command line's defaults, presets and summary (tools/fuzz.py).
 
-The default run plays decks of basic lands, 40 and 10 cards (copied from Scryfall into
-``tools/excerpts/basic_lands.json``), so its games play turns: lands are played (305.1) and
-tapped for mana (605.3a) until a player draws from an empty library (704.5b) or concedes
-(104.3a).
+The default run plays decks from two recipes: basic lands (8 or 2 of each, copied from Scryfall
+into ``tools/excerpts/basic_lands.json``) plus the cards of ``tools/excerpts/cards.json``: its
+noncreature cards (``spells``) or all of them (``creatures``). Its games play turns: lands are
+played (305.1) and tapped for mana (605.3a), spells are cast (601.2), resolve (608) or are
+reversed (733.1), until a player draws from an empty library (704.5b), concedes (104.3a), or the
+game reaches an allowed gap (508.1, 903.8).
 """
 
 from __future__ import annotations
@@ -28,11 +30,14 @@ from resolve.events.base import LogEntry
 from resolve.events.game import PlayerLost
 from resolve.events.mana import ManaAdded
 from resolve.events.permanents import LandPlayed
+from resolve.events.spells import ActionReversed, PermanentSpellResolved, SpellCast
 from resolve.state.config import GameConfig
 from resolve.state.ids import PlayerId
 from resolve.state.turn import Phase
+from tests.casting_support import activate, cast, pass_, reverse
 from tests.engine_support import EndGame, running
 from tests.game_fixtures import answer, deck, pass_until, request_of, started_game
+from tests.scenario import Scenario, run_script
 from tools import fuzz as fuzz_tool
 from tools.fuzz import (
     CONCESSION,
@@ -159,7 +164,41 @@ def test_the_summary_lines() -> None:
         "Endings: decked x1, life total x0, concession x1, draw x0, rules gap x0, "
         "other (704.5c) x1.",
         "Played: 5 lands, 9 mana abilities activated.",
+        "Spells: 0 cast, 0 resolved, 0 reversed.",
+        "Casts per card: none.",
+        "Gaps: none.",
     ]
+
+
+def test_the_summary_counts_spells_casts_per_card_and_gaps() -> None:
+    games = [
+        GameStats(10, 0, 3, RULES_GAP, 2, 5, (("Sol Ring", 2),), 2, 4, "508.1"),
+        GameStats(
+            20, 0, 5, RULES_GAP, 3, 4, (("Grizzly Bears", 1), ("Sol Ring", 1)), 1, 0, "903.8"
+        ),
+        GameStats(5, 0, 1, RULES_GAP, 0, 0, (), 0, 1, "508.1"),
+    ]
+    assert summary_lines(games)[5:] == [
+        "Spells: 4 cast, 3 resolved, 5 reversed.",
+        "Casts per card: Grizzly Bears x1, Sol Ring x3.",
+        "Gaps: 508.1 x2, 903.8 x1.",
+    ]
+
+
+def test_game_stats_count_casts_resolutions_reversals_and_the_gap() -> None:
+    """A scripted game: P0 casts Sol Ring with a Forest (it resolves), then tries Grizzly Bears
+    with only Sol Ring's {C}{C}, which is reversed (107.4a, 733.1)."""
+    scenario = Scenario(2)
+    ring, bears = scenario.hand(PlayerId(0), ["Sol Ring", "Grizzly Bears"])
+    (forest,) = scenario.battlefield(PlayerId(0), ["Forest"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(ring), activate(forest), pass_(), pass_())
+    (permanent,) = [o for o in state.battlefield if o != forest]
+    run_script(state, cast(bears), activate(permanent), reverse())
+    stats = GameStats.of(FuzzResult(9, 0, "508.1: declaring attackers", state))
+    assert stats.casts == (("Sol Ring", 1),)
+    assert (stats.resolved, stats.reversed, stats.gap) == (1, 1, "508.1")
 
 
 def test_the_summary_of_one_game() -> None:
@@ -205,16 +244,41 @@ def numbers(pattern: str, text: str) -> tuple[float, ...]:
     return tuple(float(group) for group in found.groups())
 
 
-def test_a_default_run_plays_turns_lands_and_mana_and_reports_them(
+def expected_deck(recipe: str, copies: int) -> Counter[str]:
+    """A recipe's deck, worked out by hand: ``copies`` of each basic land and ``copies // 2``
+    (at least one) of each recipe card: Sol Ring for ``spells``, every excerpt card for
+    ``creatures``."""
+    cards = ["Sol Ring"] if recipe == "spells" else [
+        "Grizzly Bears", "Hill Giant", "Savannah Lions", "Sol Ring"
+    ]  # fmt: skip
+    deck: Counter[str] = Counter({name: copies for name in fuzz_tool.BASIC_LAND_NAMES})
+    deck.update({name: max(1, copies // 2) for name in cards})
+    return deck
+
+
+def test_the_recipes_hold_the_excerpt_minus_the_exclusions() -> None:
+    assert fuzz_tool.recipe_cards("spells") == ("Sol Ring",)
+    assert fuzz_tool.recipe_cards("creatures") == (
+        "Grizzly Bears", "Hill Giant", "Savannah Lions", "Sol Ring"
+    )  # fmt: skip
+    assert fuzz_tool.FUZZ_EXCLUSIONS == {}
+    for recipe in fuzz_tool.RECIPES:
+        for copies in (8, 2):
+            deck = fuzz_tool.recipe_deck(recipe, copies)
+            assert Counter(card.data.name for card in deck.cards) == expected_deck(recipe, copies)
+
+
+def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The default run, cut to its first four games (standard, 2 to 5 players). The seats get
-    40 basic lands (8 of each) and 10 (2 of each) in turn; the games reach later turns, players
-    play lands (at most one a turn, 305.2) and tap them for mana, and the summary's numbers are
-    those of the games."""
+    """The default run, cut to its first four games (standard, 2 to 5 players). The seats get the
+    spells and creatures recipes with 8 and then 2 of each basic land, in turn. The games reach
+    later turns; players play lands (at most one a turn, 305.2), tap them for mana, cast spells,
+    which resolve or are reversed; and the summary's numbers are those of the games."""
     recorder = Recorder()
     text = run_main(monkeypatch, recorder, "--games", "4", "--jobs", "1")
 
+    pool = [("spells", 8), ("creatures", 8), ("spells", 2), ("creatures", 2)]
     assert [len(decks) for _, decks, _, _ in recorder.calls] == [2, 3, 4, 5]
     assert [seed for _, _, seed, _ in recorder.calls] == [0, 1, 2, 3]
     for config, decks, seed, options in recorder.calls:
@@ -222,32 +286,48 @@ def test_a_default_run_plays_turns_lands_and_mana_and_reports_them(
         assert options == {"concession_chance": 200, "check_every": 10}
         for seat, player_deck in enumerate(decks):
             names = Counter(card.data.name for card in player_deck.cards)
-            copies = 8 if (seed + seat) % 2 == 0 else 2
-            assert names == dict.fromkeys(fuzz_tool.BASIC_LAND_NAMES, copies)
+            assert names == expected_deck(*pool[(seed + seat) % len(pool)])
+            assert player_deck.commanders == ()
     assert (
-        "Run: quick preset; decks: 40 and 10 basic lands (basic_lands.json), cycled among the "
-        "seats; concessions: 1 decision in 200; full checks every 10 answers." in text
+        "Run: quick preset; decks: the spells and creatures recipes with 8 and 2 of each basic "
+        "land (basic_lands.json, cards.json), cycled among the seats; concessions: 1 decision "
+        "in 200; full checks every 10 answers." in text
     )
 
     # Each game's numbers, counted here from its final state.
     answers: list[int] = []
     turns: list[int] = []
-    lands = mana = 0
+    lands = mana = cast = resolved = reversed_ = 0
+    casts: Counter[str] = Counter()
+    gaps: Counter[str] = Counter()
     endings: Counter[str] = Counter()
     for result in recorder.results:
         state = result.state
-        assert result.gap is None and state.result is not None and state.turn is not None
+        assert state.turn is not None
         answers.append(result.answers)
         turns.append(state.turn.number)
         records = [entry.record for entry in state.event_log]
         played = sum(1 for record in records if isinstance(record, LandPlayed))
-        assert 0 < played <= state.turn.number  # 305.2: one land per turn
+        assert played <= state.turn.number  # 305.2: one land per turn
         lands += played
         mana += sum(1 for record in records if isinstance(record, ManaAdded))
+        for record in records:
+            if isinstance(record, SpellCast):
+                cast += 1
+                casts[record.name or "?"] += 1
+        resolved += sum(1 for record in records if isinstance(record, PermanentSpellResolved))
+        reversed_ += sum(1 for record in records if isinstance(record, ActionReversed))
+        if result.gap is not None:
+            endings["rules gap"] += 1
+            gaps[result.gap.split(": ")[0]] += 1
+            continue
+        assert state.result is not None
         last_loss = [record for record in records if isinstance(record, PlayerLost)][-1]
         endings[{"704.5b": "decked", "104.3a": "concession"}[last_loss.rules[0]]] += 1
     assert max(turns) >= 10, "some game reaches a later turn"
-    assert mana > 0
+    assert lands > 0 and mana > 0
+    assert cast > 0 and resolved > 0 and reversed_ > 0, "spells are cast, resolve and are reversed"
+    assert set(gaps) <= set(fuzz_tool.ALLOWED_GAPS)
 
     total = sum(answers)
     assert numbers(r"4 games passed: (\d+) answers accepted, (\d+) rejected\.", text) == (total, 0)
@@ -265,9 +345,36 @@ def test_a_default_run_plays_turns_lands_and_mana_and_reports_them(
         r"Endings: decked x(\d+), life total x(\d+), concession x(\d+), draw x(\d+), "
         r"rules gap x(\d+)\.",
         text,
-    ) == (endings["decked"], 0, endings["concession"], 0, 0)
+    ) == (endings["decked"], 0, endings["concession"], 0, endings["rules gap"])
     assert numbers(r"Played: (\d+) lands, (\d+) mana abilities activated\.", text) == (lands, mana)
+    assert numbers(r"Spells: (\d+) cast, (\d+) resolved, (\d+) reversed\.", text) == (
+        cast,
+        resolved,
+        reversed_,
+    )
+    per_card = ", ".join(f"{name} x{casts[name]}" for name in sorted(casts))
+    assert f"Casts per card: {per_card}." in text
+    per_gap = ", ".join(f"{rule} x{gaps[rule]}" for rule in sorted(gaps)) or "none"
+    assert f"Gaps: {per_gap}." in text
     assert "Formats: standard x4" in text
+
+
+def test_every_other_commander_game_gives_the_seats_commanders(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Commander games with an odd seed: each seat's deck has one of the excerpt's creatures as
+    its commander (903.3), cycled; with an even seed, none."""
+    recorder = Recorder(canned_result())
+    run_main(monkeypatch, recorder, "--format", "commander", "--games", "4", "--jobs", "1")
+    creatures = ["Grizzly Bears", "Hill Giant", "Savannah Lions"]
+    for config, decks, seed, _ in recorder.calls:
+        assert config.commander is not None
+        for player_deck in decks:
+            commanders = [card.data.name for card in player_deck.commanders]
+            if seed % 2:
+                assert len(commanders) == 1 and commanders[0] in creatures
+            else:
+                assert commanders == []
 
 
 def canned_result() -> FuzzResult:
@@ -307,11 +414,14 @@ def test_thorough_runs_more_and_longer_games_with_every_check(
     assert len(recorder.calls) == 100
     for _, decks, seed, options in recorder.calls:
         assert options == {"concession_chance": 500, "check_every": 1}
-        sizes = [len(player_deck.cards) for player_deck in decks]
-        assert sizes == [40 if (seed + seat) % 2 == 0 else 20 for seat in range(len(decks))]
+        pool = [("spells", 8), ("creatures", 8), ("spells", 4), ("creatures", 4)]
+        for seat, player_deck in enumerate(decks):
+            names = Counter(card.data.name for card in player_deck.cards)
+            assert names == expected_deck(*pool[(seed + seat) % len(pool)])
     assert (
-        "Run: thorough preset; decks: 40 and 20 basic lands (basic_lands.json), cycled among the "
-        "seats; concessions: 1 decision in 500; full checks every answer." in text
+        "Run: thorough preset; decks: the spells and creatures recipes with 8 and 4 of each basic "
+        "land (basic_lands.json, cards.json), cycled among the seats; concessions: 1 decision in "
+        "500; full checks every answer." in text
     )
     assert "100 games passed" in text
     # Progress every 10 games, before the summary.
@@ -330,9 +440,12 @@ def test_explicit_options_override_the_preset(monkeypatch: pytest.MonkeyPatch) -
     assert len(recorder.calls) == 3
     for _, decks, _, options in recorder.calls:
         assert options == {"concession_chance": 0, "check_every": 5}
-        assert {len(player_deck.cards) for player_deck in decks} == {15}
-    assert "decks: 15 basic lands (basic_lands.json); concessions: never; full checks every 5" in (
-        text
+        for player_deck in decks:
+            names = Counter(card.data.name for card in player_deck.cards)
+            assert names in (expected_deck("spells", 3), expected_deck("creatures", 3))
+    assert (
+        "decks: the spells and creatures recipes with 3 of each basic land (basic_lands.json, "
+        "cards.json), cycled among the seats; concessions: never; full checks every 5" in text
     )
 
 
@@ -363,8 +476,9 @@ def test_parallel_jobs_play_the_same_games() -> None:
         outputs.append(output.getvalue().splitlines())
     assert outputs[0][:-1] == outputs[1][:-1]
     assert outputs[0][:2] == [
-        "Run: quick preset; decks: 10 basic lands (basic_lands.json); concessions: 1 decision in "
-        "50; full checks every 10 answers.",
+        "Run: quick preset; decks: the spells and creatures recipes with 2 of each basic land "
+        "(basic_lands.json, cards.json), cycled among the seats; concessions: 1 decision in 50; "
+        "full checks every 10 answers.",
         "10 of 20 games passed...",
     ]
     assert outputs[0][-1].endswith("(1 job).") and outputs[1][-1].endswith("(3 jobs).")

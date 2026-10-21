@@ -207,7 +207,8 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
 - [ ] Timing rules for sorceries, instants and permanents; flash.
 - [ ] One permission and prohibition system for every legality check, where "can't" beats "can"
   (101.2).
-- [ ] Reversing an illegal action (733) by checkpoint and restore.
+- [x] Reversing an illegal action (733) by checkpoint and restore (M2.3; the dependency check
+  between kept mana abilities arrives with mana costs on mana abilities, M2.4).
 - [ ] Evergreen keywords whose rules live here: flash (702.8), hexproof (702.11), shroud (702.18),
   indestructible (702.12), and the targeting part of protection (702.16). Design targeting so these
   restrictions fit naturally.
@@ -446,6 +447,23 @@ completes a step (CLAUDE.md, "Documentation requirements").
   `rewrite_words`); `ChooseCounts` (601.2h) with random-agent, text-agent and fuzz-probe support;
   `Color` in `resolve.data.types`; `tools/excerpts/cards.json` (the three vanilla creatures).
   No behavior change: the quick fuzz summary is identical to M2.1's.
+- **Done (M2.3, casting and resolving permanent spells):** `resolve.state.spell` (cast variants,
+  `CastPermission` with `FROM_HAND` and `COMMANDER`, `CastChoices`), `GameObject.spell` and
+  `cast_record` (400.7d); `CastSpellOption(object, variant, permission)`, `ManaOption`,
+  `ManaActivationOption`, and the decision kinds `ACTIVATE_MANA_ABILITIES` and
+  `REVERSE_MANA_ABILITIES`; `variant_characteristics` (601.3e; a spell on the stack has its
+  variant's); the rule defaults `cast_permissions`, `cast_options` (per permission and layout
+  variant), `may_cast_now(..., variant, permission)`, `has_sorcery_timing(..., ignoring=)` and
+  `resolved_spell_destination` (608.2n); `legality.CastAction`; `resolve.engine.casting.CastSpell`
+  (601.2a-i; other variants and commanders raise their gaps), `resolve.engine.payment.PayCosts`
+  (601.2g-h, embedded in the casting task), `resolve.state.checkpoint` (733.1 reversal; players
+  who leave meanwhile stay gone), `resolve.engine.resolution.ResolveTopOfStack` (608.1, 608.3a;
+  instants and sorceries are the 608.2c gap until M2.6); the priority fixes 117.3b, 117.3c and
+  733.2; events `SpellProposed`, `SpellCast`, `ManaSpent`, `ActionReversed`,
+  `PermanentSpellResolved`; `ObjectView.spell`; Sol Ring
+  (`resolve.cards.definitions.mana_rocks`, in the excerpt). The fuzz harness plays the
+  `spells` and `creatures` deck recipes with commanders in every other Commander game, allows
+  the 508.1 and 903.8 gaps, and reports casts, resolutions, reversals, casts per card and gaps.
 
 ---
 
@@ -477,24 +495,24 @@ earlier milestones must leave room for every row in this map.
 | CR | Name | Milestone | Tier | Notes |
 |---|---|---|---|---|
 | 100 | General | M0 ✓ | E |  |
-| 101 | The Magic Golden Rules | M1 ✓ (101.4); 101.2 system M2 (skeleton M2.1 ✓); 101.1, 101.3 with each effect | E | `allowed` (design.md §17.2); land plays are its first action |
+| 101 | The Magic Golden Rules | M1 ✓ (101.4); 101.2 system M2 (skeleton M2.1 ✓, casting M2.3 ✓); 101.1, 101.3 with each effect | E | `allowed` (design.md §17.2); land plays are its first action |
 | 102 | Players | M1 ✓ | E | teams (102.3-102.4): out of scope with the team variants |
 | 103 | Starting the Game | M1 ✓; 103.6 M5; 103.2b M7 | E | `opening_hand_actions`, `mulligan_options`, `starting_life`, `starting_hand_size`: default functions in place (M2.1 ✓) |
 | 104 | Ending the Game | M1 ✓; 104.3c-d M4, M7; 104.4b M7; alternative wins and losses M5 | E | `can_lose_game`: default function in place (M2.1 ✓) |
 | 105 | Colors | M2 | E |  |
-| 106 | Mana | M1 ✓, M2; 106.7 M6 | E |  |
+| 106 | Mana | M1 ✓, M2 (spending mana, 106.4a: M2.3 ✓; restrictions 106.6 M2.4); 106.7 M6 | E |  |
 | 107 | Numbers and Symbols | M2 (107.4 symbols parsed: M2.2 ✓); 107.4e-f, 107.4h M9; 107.14 M4; 107.15, 107.17 M9 | E | hybrid and Phyrexian: M2 builds the announcement stage |
 | 108 | Cards | M0 ✓ | E |  |
 | 109 | Objects | M1 ✓; 109.3 with each layout (omen and preparation read as their normal part: M2.2 ✓; 720.4, 722.4) | E |  |
 | 110 | Permanents | M1 ✓; statuses with their mechanics | E |  |
 | 111 | Tokens | M4 | E | D (Regisaur Alpha, Generous Gift) |
-| 112 | Spells | M2; copies M5 | E |  |
+| 112 | Spells | M2 (spells on the stack with their record: M2.3 ✓); copies M5 | E |  |
 | 113 | Abilities | M2 (spell abilities, 113.6); M4; M5 | E |  |
 | 114 | Emblems | M4 | E | with planeswalkers |
 | 115 | Targets | M2; 115.7 M5 | E |  |
 | 116 | Special Actions | M1 ✓ (116.2a); the others with their mechanics | E | 116.2i out of scope (Planechase); 116.2j is for conspiracy cards (315) |
-| 117 | Timing and Priority | M1 ✓, M2 | E |  |
-| 118 | Costs | M2 (mana); M4 (other costs, 118.12) | E |  |
+| 117 | Timing and Priority | M1 ✓, M2 (117.1a casting, 117.3b-c, 117.4 with the stack: M2.3 ✓; flash M2.8) | E |  |
+| 118 | Costs | M2 (mana: paying generic, colored and {C} mana M2.3 ✓; X M2.7; reductions M2.9); M4 (other costs, 118.12) | E |  |
 | 119 | Life | M2 | E |  |
 | 120 | Damage | M2 (noncombat), M3 (combat), M4 (120.3b-d, 120.3g) | E |  |
 | 121 | Drawing a Card | M1 ✓; 121.6 M6 | E |  |
@@ -515,7 +533,7 @@ earlier milestones must leave room for every row in this map.
 | 212 | Life Modifier | out of scope | — | Vanguard |
 | 213 | Information Below the Text Box | out of scope | — | no game rules |
 | 300 | General | M1 ✓ | E |  |
-| 301 | Artifacts | M2; Equipment M4; Vehicles M5; Fortifications M9 | E |  |
+| 301 | Artifacts | M2 (casting artifact spells: M2.3 ✓); Equipment M4; Vehicles M5; Fortifications M9 | E |  |
 | 302 | Creatures | M1 ✓, M2 (302.6), M3 | E |  |
 | 303 | Enchantments | M2; Auras M4 | E | Sagas, Classes, Cases and Rooms have their own rows |
 | 304 | Instants | M2 | E |  |
@@ -535,7 +553,7 @@ earlier milestones must leave room for every row in this map.
 | 402 | Hand | M1 ✓; modifiers M5 | E | D (Reliquary Tower); `maximum_hand_size`: default function in place (M2.1 ✓) |
 | 403 | Battlefield | M1 ✓ | E |  |
 | 404 | Graveyard | M1 ✓ | E |  |
-| 405 | Stack | M2; 405.3 M4 | E |  |
+| 405 | Stack | M2 (405.1-405.2, 405.5: M2.3 ✓); 405.3 M4 | E |  |
 | 406 | Exile | M2; face-down exile M4 | E |  |
 | 407 | Ante | M7 | X | the 9 ante cards are banned in every format, not never legal; they need an option to play for ante (407.2, 407.3) |
 | 408 | Command | M7; emblems M4 | E |  |
@@ -555,14 +573,14 @@ earlier milestones must leave room for every row in this map.
 | 513 | End Step | M1 ✓ | E |  |
 | 514 | Cleanup Step | M1 ✓; 514.2 effects ending M5 | E |  |
 | 600 | General | — | — | nothing to implement |
-| 601 | Casting Spells | M2 | E |  |
+| 601 | Casting Spells | M2 (M2.3 ✓: 601.2a, 601.2e-i, 601.3, 601.3e variants and permissions, 601.6; 601.2b-c M2.6-M2.7; 601.2d M4; 601.3b M6) | E | gaps per variant: 709.3, 712.11a-b, 715.3, 718.3, 720.3, 722.3, 708.4, 702.102; 903.8 |
 | 602 | Activating Activated Abilities | M4 | E |  |
 | 603 | Handling Triggered Abilities | M4 | E |  |
 | 604 | Handling Static Abilities | M5 (M2: keyword and cost-reduction statics) | E |  |
-| 605 | Mana Abilities | M1 ✓, M2; 605.1b M4 | E |  |
+| 605 | Mana Abilities | M1 ✓, M2 (605.3a while casting: M2.3 ✓); 605.1b M4 | E |  |
 | 606 | Loyalty Abilities | M4 | E |  |
 | 607 | Linked Abilities | M4 | E | D (hideaway) |
-| 608 | Resolving Spells and Abilities | M2 | E |  |
+| 608 | Resolving Spells and Abilities | M2 (608.1, 608.3a: M2.3 ✓; 608.2 M2.6) | E | `resolved_spell_destination` (608.2n) in place (M2.3 ✓) |
 | 609 | Effects | M2 | E |  |
 | 610 | One-Shot Effects | M2; 610.3 M4 | E |  |
 | 611 | Continuous Effects | M5 | E |  |
@@ -577,21 +595,21 @@ earlier milestones must leave room for every row in this map.
 | 705 | Flipping a Coin | M2 | S |  |
 | 706 | Rolling a Die | M2 | S |  |
 | 707 | Copying Objects | M5 | E | D (Sunfrill Imitator, offspring, myriad) |
-| 708 | Face-Down Spells and Permanents | M5 (casting room M2) | S | morph, manifest, disguise, cloak |
-| 709 | Split Cards | M5 (casting room M2) | S | split cards and Rooms |
+| 708 | Face-Down Spells and Permanents | M5 (casting room M2: `FaceDown` variant, M2.3 ✓) | S | morph, manifest, disguise, cloak |
+| 709 | Split Cards | M5 (casting room M2: halves offered, 709.3 gap, M2.3 ✓) | S | split cards and Rooms |
 | 710 | Flip Cards | M5 | X |  |
 | 711 | Leveler Cards | M5 (level up itself, 702.87, M4) | S | D (Joraga Treespeaker): level symbols are static abilities (711.2) |
-| 712 | Double-Faced Cards | M4 (MDFC casting through M2's cast variants) | E | D (Dowsing Dagger) |
+| 712 | Double-Faced Cards | M4 (MDFC casting through M2's cast variants: back face offered, 712.11b gap, M2.3 ✓) | E | D (Dowsing Dagger) |
 | 713 | Substitute Cards | out of scope | — | substitute cards stand in for physical double-faced cards; the engine tracks faces itself |
 | 714 | Saga Cards | M4 | S |  |
-| 715 | Adventurer Cards | M4 (casting room M2) | S |  |
+| 715 | Adventurer Cards | M4 (casting room M2: `Alternative(ADVENTURE)`, M2.3 ✓) | S |  |
 | 716 | Class Cards | M5 | S |  |
 | 717 | Attraction Cards | M7 (an Attraction deck in the command zone, 717.2; the junkyard, 717.6) | S | Unfinity: 22 Attractions without the acorn stamp are Commander-legal |
-| 718 | Prototype Cards | M5 (casting room M2) | S |  |
+| 718 | Prototype Cards | M5 (casting room M2: `Alternative(PROTOTYPE)`, M2.3 ✓) | S |  |
 | 719 | Case Cards | M4 | S |  |
-| 720 | Omen Cards | M2 | S | casting and resolution; 720.4 normal characteristics M2.2 ✓ (plan corrected: not a 109.3 gap); 720.3 variant gap M2.3 |
+| 720 | Omen Cards | M2 | S | casting and resolution; 720.4 normal characteristics M2.2 ✓ (plan corrected: not a 109.3 gap); 720.3 variant gap M2.3 ✓ |
 | 721 | Station Cards | M4 | S |  |
-| 722 | Preparation Cards | M5 | S | 722.4 normal characteristics M2.2 ✓ (plan corrected); 722.3 variant gap M2.3 |
+| 722 | Preparation Cards | M5 | S | 722.4 normal characteristics M2.2 ✓ (plan corrected); 722.3 variant gap M2.3 ✓ |
 | 723 | Controlling Another Player | M9 (seam M2.1 ✓) | X | `deciding_player`, `DecisionRequest.for_player`, `knows_identity`, `concede(by=)`: seams in place |
 | 724 | Ending Turns and Phases | M3 (turn frame M2.1 ✓) | X | the turn frame is `TakeTurn` on the task stack (`turn_frame_index`) |
 | 725 | The Monarch | M7 | S | D (Regal Behemoth) |
@@ -602,7 +620,7 @@ earlier milestones must leave room for every row in this map.
 | 730 | Merging with Permanents | M5 | X | mutate |
 | 731 | Day and Night | M7 | S |  |
 | 732 | Taking Shortcuts | M7 | E | how much of it is worth implementing: design.md §16 |
-| 733 | Handling Illegal Actions | M2 | E |  |
+| 733 | Handling Illegal Actions | M2 (M2.3 ✓; the kept-abilities dependency check of 733.1 with M2.4's mana costs) | E | checkpoint and restore (`resolve.state.checkpoint`) |
 | 800 | General | M1 ✓ (800.4a, h, j, k); the rest M7 | E |  |
 | 801 | Limited Range of Influence Option | out of scope | — | Commander doesn't use it (903.2) |
 | 802 | Attack Multiple Players Option | M3, M7 | E | Commander's multiplayer default |
@@ -618,7 +636,7 @@ earlier milestones must leave room for every row in this map.
 | 900 | General | — | — | nothing to implement |
 | 901 | Planechase | out of scope | — | a casual variant |
 | 902 | Vanguard | out of scope | — | a casual variant |
-| 903 | Commander | M7 (903.4 for mana M2); 903.12 Brawl and 903.13 Commander Draft out of scope | E | the project's format |
+| 903 | Commander | M7 (903.4 for mana M2; 903.8 cast gap M2.3 ✓); 903.12 Brawl and 903.13 Commander Draft out of scope | E | the project's format |
 | 904 | Archenemy | out of scope | — | a casual variant |
 | 905 | Conspiracy Draft | out of scope | — | the draft itself (905.1-905.2) isn't a game the engine plays; the game's conspiracy rules are 315 and 702.106, which are in scope |
 

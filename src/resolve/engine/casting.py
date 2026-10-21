@@ -314,13 +314,17 @@ def _variant_gap(state: GameState, card: ObjectId, variant: CastVariant) -> None
             if layout == "modal_dfc":
                 raise NotImplementedRule("712.11b: casting a modal double-faced card's back face")
             raise NotImplementedRule("712.11a: casting a double-faced card transformed")
-        case Alternative(kind=AlternativeKind.ADVENTURE):
-            raise NotImplementedRule("715.3: casting an adventurer card as an Adventure")
-        case Alternative(kind=AlternativeKind.OMEN):
-            raise NotImplementedRule("720.3: casting an omen card as an Omen")
-        case Alternative(kind=AlternativeKind.PROTOTYPE):
-            raise NotImplementedRule("718.3: casting a prototype card prototyped")
-        case Alternative(kind=AlternativeKind.PREPARE):
-            raise NotImplementedRule("722.3: casting a prepare spell (only its copies are cast)")
+        case Alternative(kind=kind):
+            match kind:
+                case AlternativeKind.ADVENTURE:
+                    raise NotImplementedRule("715.3: casting an adventurer card as an Adventure")
+                case AlternativeKind.OMEN:
+                    raise NotImplementedRule("720.3: casting an omen card as an Omen")
+                case AlternativeKind.PROTOTYPE:
+                    raise NotImplementedRule("718.3: casting a prototype card prototyped")
+                case AlternativeKind.PREPARE:
+                    raise NotImplementedRule(
+                        "722.3: casting a prepare spell (only its copies are cast)"
+                    )
         case FaceDown():
             raise NotImplementedRule("708.4: casting a card face down")
