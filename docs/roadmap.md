@@ -249,6 +249,12 @@ triggered mana abilities and "when that mana is spent" → M4; offspring, castin
 - [ ] Defender (702.3); the retired evergreen evasion keywords intimidate (702.13), landwalk
   (702.14) and fear (702.36).
 - [ ] Haste (702.10), including its 302.6 part.
+- [ ] Summoning sickness for attacking (302.6), sharing M2.4's "controlled since the turn
+  began" test. `defaults.can_tap_for_cost` covers only a creature's own {T}/{Q} abilities
+  (302.6, 602.5a): the tap costs of convoke (702.51), improvise (702.126), crew (702.122) and
+  "tap an untapped creature you control" ignore summoning sickness and must not use it.
+  Consider renaming it here (for example a shared `summoning_sick(state, obj)` predicate for
+  {T} costs and attacking; docs/decisions.md, 2026-10-21 "Deferred from M2.4").
 - [ ] Protection's blocking part (702.16f).
 - [ ] Multiplayer attacks: choosing which player or planeswalker each creature attacks, and
   leaving room for attacking battles (310). Attack and block declarations use a constrained
@@ -260,8 +266,16 @@ triggered mana abilities and "when that mana is spent" → M4; offspring, castin
 ## M4 — Activated and triggered abilities
 
 - [ ] Activated abilities (602), including costs like tapping and sacrificing; equip.
+- [ ] Mana-ability activation goes through `legality.allowed` (101.2), like other activations:
+  an `Action` with the rules' permissions (602.2, 605.3a) and the prohibitions effects add
+  ("can't activate"; split second 702.61, M9, which spares mana abilities, 702.61b). Deferred
+  from M2 (the M2 plan listed the action, but no M2 step built it; until then
+  `ActivatedManaAbility.can_activate` decides, with 602.5 conditions in `activate_only_if`;
+  docs/decisions.md, 2026-10-21 "Deferred from M2.4").
 - [ ] Non-mana costs (118): sacrifice, discard, exile, life, counters, tapping other permanents,
-  with reversal (733) by M2's checkpoint.
+  with reversal (733) by M2's checkpoint. Tapping an untapped creature for a cost ignores
+  summoning sickness: not through `can_tap_for_cost` (302.6 covers only a creature's own
+  {T}/{Q} abilities).
 - [ ] Triggered abilities (603):
   - APNAP ordering
   - intervening-if conditions (603.4)
@@ -667,7 +681,7 @@ earlier milestones must leave room for every row in this map.
 | 702.7 | First Strike | M3 | E | D |
 | 702.8 | Flash | M2 | E |  |
 | 702.9 | Flying | M3 | E | D |
-| 702.10 | Haste | M3 | E | D; the 302.6 hook is built in M2 |
+| 702.10 | Haste | M3 | E | D; the 302.6 hook is `defaults.can_tap_for_cost` (M2.4 ✓); the attack half shares its test |
 | 702.11 | Hexproof | M2 | E | D; including "hexproof from" |
 | 702.12 | Indestructible | M2 | E | D |
 | 702.13 | Intimidate | M3 | E | retired evergreen |
@@ -708,7 +722,7 @@ earlier milestones must leave room for every row in this map.
 | 702.48 | Offering | M4 | X |  |
 | 702.49 | Ninjutsu | M4 | S |  |
 | 702.50 | Epic | M5 | X |  |
-| 702.51 | Convoke | M4 | S | a payment alternative |
+| 702.51 | Convoke | M4 | S | a payment alternative; tapping a creature for convoke ignores summoning sickness: must not use `can_tap_for_cost` (302.6 covers only a creature's own {T}/{Q} abilities) |
 | 702.52 | Dredge | M6 | S |  |
 | 702.53 | Transmute | M4 | S |  |
 | 702.54 | Bloodthirst | M6 | S |  |
@@ -779,11 +793,11 @@ earlier milestones must leave room for every row in this map.
 | 702.119 | Emerge | M4 | S |  |
 | 702.120 | Escalate | M2 | S |  |
 | 702.121 | Melee | M5 | S |  |
-| 702.122 | Crew | M5 | S |  |
+| 702.122 | Crew | M5 | S | tapping creatures to crew ignores summoning sickness: must not use `can_tap_for_cost` (302.6 covers only a creature's own {T}/{Q} abilities) |
 | 702.123 | Fabricate | M4 | S |  |
 | 702.124 | Partner | M7 | E | Commander deck construction; D (Lae'zel's Choose a Background, no in-game effect) |
 | 702.125 | Undaunted | M2 | S |  |
-| 702.126 | Improvise | M4 | S | a payment alternative |
+| 702.126 | Improvise | M4 | S | a payment alternative; must not use `can_tap_for_cost` (302.6 is about creatures' own {T}/{Q} abilities) |
 | 702.127 | Aftermath | M5 | S | split cards |
 | 702.128 | Embalm | M5 | S |  |
 | 702.129 | Eternalize | M5 | S |  |
