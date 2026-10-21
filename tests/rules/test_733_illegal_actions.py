@@ -146,7 +146,7 @@ def test_733_2_passes_before_a_reversed_cast_still_count() -> None:
     scenario = Scenario(2)
     scenario.library(P0, ["Forest"])
     (shock,) = scenario.hand(P1, ["Test Shock"])
-    scenario.at(Step.UPKEEP)
+    scenario.at(Step.UPKEEP, number=3)
     state = scenario.build()
     run_script(state, pass_(P0), cast(shock, P1))
     request = request_of(state)
@@ -154,7 +154,8 @@ def test_733_2_passes_before_a_reversed_cast_still_count() -> None:
     turn = state.turn
     assert turn is not None and turn.passed == [P0]
     run_script(state, pass_(P1))
-    assert turn is state.turn and turn.step is Step.DRAW
+    turn = state.turn
+    assert turn is not None and turn.step is Step.DRAW
 
 
 def test_733_1_a_player_who_concedes_during_a_reversed_cast_stays_gone() -> None:
@@ -164,12 +165,16 @@ def test_733_1_a_player_who_concedes_during_a_reversed_cast_stays_gone() -> None
     (bears,) = scenario.hand(P0, ["Grizzly Bears"])
     (forest,) = scenario.battlefield(P0, ["Forest"])
     (theirs,) = scenario.battlefield(P2, ["Forest"])
+    (in_hand,) = scenario.hand(P2, ["Forest"])
+    (in_library,) = scenario.library(P2, ["Forest"])
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
     run_script(state, cast(bears, P0), activate(forest))
     concede(state, P2)
     assert request_of(state).kind is DecisionKind.REVERSE_MANA_ABILITIES
     run_script(state, reverse(ManaActivationOption(0, forest, 0)))
-    assert state.player(P2).left_game and theirs not in state.objects
+    assert state.player(P2).left_game
+    assert all(obj not in state.objects for obj in (theirs, in_hand, in_library))
+    assert state.player(P2).hand == [] and state.player(P2).library == []
     assert state.player(P0).hand == [bears]
     assert state.objects[bears].zone == Zone.hand(P0)

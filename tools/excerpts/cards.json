@@ -78,6 +78,19 @@
       "keywords": [],
       "power": "3",
       "toughness": "3"
+    },
+    {
+      "object": "card",
+      "oracle_id": "6ad8011d-3471-4369-9d68-b264cc027487",
+      "name": "Sol Ring",
+      "layout": "normal",
+      "mana_cost": "{1}",
+      "cmc": 1.0,
+      "type_line": "Artifact",
+      "oracle_text": "{T}: Add {C}{C}.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": []
     }
   ],
   "rulings": []

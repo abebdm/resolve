@@ -1,4 +1,4 @@
-"""Priority (117): who may act, what they may do, and when a step ends.
+"""Priority (117): who may act, what they may do, when the stack resolves and when a step ends.
 
 ``PriorityRound`` runs one round of priority in a step: the active player receives priority
 first (117.3a); a player who passes gives priority to the next player in turn order (117.3d);
@@ -18,8 +18,11 @@ abilities of the permanents the player controls, in battlefield order and abilit
 - After either, the same player receives priority again (117.3c), and the passes before it no
   longer count toward ending the step (117.4).
 
-Casting a spell is offered too, so the set of legal actions is never silently smaller than the
-rules allow; choosing it raises ``NotImplementedRule("601.2")`` until M2 (docs/decisions.md).
+- Casting a spell (601.2) runs ``CastSpell``. Its caster receives priority again (117.3c); the
+  passes before it stop counting once the spell is cast (117.4), but not if the attempt was
+  illegal and reversed (733.2).
+- When all players pass in succession with objects on the stack, the top one resolves
+  (``ResolveTopOfStack``, 405.5, 608.1), and then the active player receives priority (117.3b).
 """
 
 from __future__ import annotations
@@ -28,7 +31,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from resolve.cards.primitives.abilities import ActivatedManaAbility
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import (
     ActivateAbilityOption,
@@ -40,10 +42,12 @@ from resolve.decisions.spaces import (
     Pick,
     PlayLandOption,
 )
-from resolve.effects.characteristics import characteristics
+from resolve.engine.casting import CastSpell
 from resolve.engine.mana import ActivateManaAbility
+from resolve.engine.payment import mana_ability_options
+from resolve.engine.resolution import ResolveTopOfStack
 from resolve.engine.sba import CheckStateBasedActions
-from resolve.errors import EngineError, NotImplementedRule
+from resolve.errors import EngineError
 from resolve.events.permanents import LandPlayed
 from resolve.events.pipeline import ApplyEvents
 from resolve.events.turn import PriorityPassed
@@ -82,15 +86,8 @@ def priority_options(state: GameState, player: PlayerId) -> tuple[Option, ...]:
         options += [spell for spell in spells if spell.object == obj]
     options += [PlayLandOption(obj) for obj in lands if obj not in hand]
     options += [spell for spell in spells if spell.object not in hand]
-    for obj in state.battlefield:
-        if state.objects[obj].controller != player:
-            continue
-        for index, ability in enumerate(characteristics(state, obj).abilities):
-            # 605.3a: a mana ability whenever the player has priority; 602.2, 118.3.
-            if isinstance(ability, ActivatedManaAbility) and ability.can_activate(
-                state, obj, player
-            ):
-                options.append(ActivateAbilityOption(obj, index))
+    # 605.3a: a mana ability whenever the player has priority; 602.2, 118.3.
+    options += mana_ability_options(state, player)
     return tuple(options)
 
 
@@ -150,22 +147,35 @@ class PriorityRound(Task):
             case ActivateAbilityOption(object=source, ability=index):
                 activation = ActivateManaAbility(player, source, index)
                 return self._acted(turn, player, activation)
-            case CastSpellOption():
-                raise NotImplementedRule("601.2: casting a spell (roadmap M2)")
+            case CastSpellOption(object=card, variant=variant, permission=permission):
+                # 117.3c, 733.2: the caster receives priority again afterwards; the passes before
+                # it stop counting only once the spell is cast (CastSpell clears them, 601.2i).
+                cast = CastSpell(player, card, variant, permission)
+                return self._acted(turn, player, cast, clears_passes=False)
             case option:
                 raise EngineError(f"unexpected priority option {option!r}")
 
     def _all_passed(self, state: GameState) -> TaskResult:
-        """117.4: all players passed in succession. With an empty stack the step ends."""
-        if state.stack:
-            raise NotImplementedRule("608.1: resolving the top object of the stack (roadmap M2)")
-        return Done()
+        """117.4: all players passed in succession. With an empty stack the step ends; otherwise
+        the top object resolves (405.5, 608.1), then the active player receives priority (117.3b)
+        and passing starts over."""
+        if not state.stack:
+            return Done()
+        turn = current_turn(state)
+        turn.priority = None
+        turn.passed.clear()
+        self.next_player = None
+        self.stage = Stage.CHECK
+        return Push((ResolveTopOfStack(), self))
 
-    def _acted(self, turn: TurnState, player: PlayerId, action: Task) -> TaskResult:
+    def _acted(
+        self, turn: TurnState, player: PlayerId, action: Task, *, clears_passes: bool = True
+    ) -> TaskResult:
         # 117.3c: the player who acted receives priority again; 117.4: passing in succession
         # starts over.
         turn.priority = None
-        turn.passed.clear()
+        if clears_passes:
+            turn.passed.clear()
         self.next_player = player
         self.stage = Stage.CHECK
         return Push((action, self))

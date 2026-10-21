@@ -1,8 +1,7 @@
 """Sol Ring: {1}, Artifact. "{T}: Add {C}{C}."
 
-Oracle text checked against the Scryfall snapshot of 2026-10-21 (``tools/excerpts/cards.json``).
-Its rulings (2004-10-04 onward) are about its legality and about colorless mana not being a
-color, which these tests cover: {C} pays generic mana (107.4b), never a colored symbol (107.4a).
+Oracle text checked against the Scryfall snapshot of 2026-10-21 (``tools/excerpts/cards.json``),
+which has no rulings for it. {C} pays generic mana (107.4b), never a colored symbol (107.4a).
 
 From the pinned CR: an artifact spell is cast with sorcery timing (301.1, 117.1a); 302.6
 (summoning sickness) applies only to creatures, so Sol Ring can tap the turn it enters (605.3a).

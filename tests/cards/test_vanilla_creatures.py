@@ -3,7 +3,7 @@
 Oracle data (Scryfall): Grizzly Bears {1}{G}, Creature — Bear, 2/2; Savannah Lions {W},
 Creature — Cat, 2/1; Hill Giant {3}{R}, Creature — Giant, 3/3; no Oracle text. Their rulings
 don't change any of this. A creature spell may be cast only in its controller's main phase with
-an empty stack (302.1); casting itself is a gap until M2 (601.2).
+an empty stack (302.1).
 """
 
 from __future__ import annotations
@@ -90,7 +90,7 @@ def test_the_excerpt_holds_the_vanilla_creatures() -> None:
     """``tools/excerpts/cards.json`` is copied from the Scryfall snapshot, never hand-written
     (``tools/card_excerpt.py``, which also checks it against a local snapshot)."""
     database = load_card_excerpt(EXCERPT)
-    assert {card.name for card in database.cards()} == {name for name, *_ in COSTS}
+    assert {name for name, *_ in COSTS} <= {card.name for card in database.cards()}
 
 
 @pytest.mark.parametrize(("name", "text", "colors", "value", "record"), COSTS)

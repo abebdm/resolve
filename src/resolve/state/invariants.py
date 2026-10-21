@@ -10,8 +10,9 @@ Tests call these, and the fuzz harness (``tools/fuzz.py``) calls them before eve
   and events must store IDs, not references.
 - ``mutable_parts``: anything inside a value that would break ``Immutable``'s promise. Deeply
   immutable means scalars, enums, tuples and frozen ``Immutable`` dataclasses only.
-- ``invariant_violations``: zone bookkeeping and counters (400.1, 400.3, 109.4, 613.7d), and the
-  turn and priority bookkeeping (500.1, 117.3, 117.4).
+- ``invariant_violations``: zone bookkeeping and counters (400.1, 400.3, 109.4, 613.7d), spells
+  only on the stack and cast records only on permanents (112.1, 400.7d), and the turn and
+  priority bookkeeping (500.1, 117.3, 117.4).
 
 Each returns a list of problems, each naming where it is (``state.tasks[0].events``); empty means
 fine. The ``check_*`` functions raise ``EngineError`` listing them.
@@ -115,12 +116,12 @@ def _walk_pure(
         for name in names:
             inner = allowed
             item = getattr(value, name)
-            if depth == 0 and isinstance(value, GameState):
-                inner = {"objects": GameObject, "players": Player}.get(name)
             if isinstance(value, Checkpoint) and name == "values":
                 # A checkpoint holds copies of the state's objects and players (733.1).
                 _walk_checkpoint(item, (path, ".", name), depth + 1, problems)
                 continue
+            if depth == 0 and isinstance(value, GameState):
+                inner = {"objects": GameObject, "players": Player}.get(name)
                 if name == "event_log" and log_from and isinstance(item, list):
                     log: list[object] = item  # pyright: ignore[reportUnknownVariableType]
                     for index in range(log_from, len(log)):
@@ -229,6 +230,15 @@ def invariant_violations(state: GameState) -> list[str]:
             problems.append(f"{where} has damage in the {obj.zone}: only permanents (120.6)")
         if obj.tapped and obj.zone.kind is not ZoneKind.BATTLEFIELD:
             problems.append(f"{where} is tapped in the {obj.zone}: only permanents (110.5d)")
+        if (obj.spell is not None) != (obj.zone.kind is ZoneKind.STACK):
+            # Abilities on the stack (M4) will carry their own record.
+            problems.append(
+                f"{where} in the {obj.zone} must be a spell exactly on the stack (112.1)"
+            )
+        if obj.cast_record is not None and obj.zone.kind is not ZoneKind.BATTLEFIELD:
+            problems.append(
+                f"{where} has a cast record in the {obj.zone}: only permanents (400.7d)"
+            )
     for player in state.players:
         if player.left_game:
             if any(obj.owner == player.id for obj in state.objects.values()):

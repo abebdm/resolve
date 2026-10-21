@@ -9,8 +9,9 @@ import pytest
 
 from resolve.agents.scripted import ScriptedAgent, choose
 from resolve.decisions.spaces import CastSpellOption
+from resolve.state.config import GameConfig
 from resolve.state.ids import PlayerId
-from resolve.state.spell import FROM_HAND, NORMAL
+from resolve.state.spell import COMMANDER, NORMAL
 from resolve.state.turn import Phase
 from tests import scryfall_fixtures as fx
 from tests.scenario import Scenario
@@ -37,17 +38,19 @@ def test_a_game_of_random_agents_with_empty_decks_ends_in_a_draw() -> None:
 
 
 def test_a_game_that_reaches_a_gap_exits_with_3() -> None:
-    """Choosing an action the engine can't take yet stops the game (601.2 until M2)."""
-    scenario = Scenario(2)
-    (elves,) = scenario.hand(PlayerId(0), ["Llanowar Elves"])
+    """Choosing an action the engine can't take yet stops the game (903.8: casting a commander
+    from the command zone, until M7)."""
+    scenario = Scenario(2, config=GameConfig.commander_game())
+    commander = scenario.commander(PlayerId(0), "Grizzly Bears")
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
     output = io.StringIO()
-    agent = ScriptedAgent([choose(CastSpellOption(elves, NORMAL, FROM_HAND))])
+    agent = ScriptedAgent([choose(CastSpellOption(commander, NORMAL, COMMANDER))])
     status = play_game(state, [agent, agent], output, viewer=PlayerId(0))
     assert status == EXIT_GAP
-    assert "Stopped: the engine doesn't implement 601.2: casting a spell" in output.getvalue()
-    assert "Turn 1, player 0's turn: precombat main phase; player 0 has priority." in (
+    assert "Stopped: the engine doesn't implement 903.8: casting a commander" in output.getvalue()
+    # Nobody holds priority while a spell is being cast (117.3c).
+    assert "Turn 1, player 0's turn: precombat main phase; nobody has priority." in (
         output.getvalue()
     )
 

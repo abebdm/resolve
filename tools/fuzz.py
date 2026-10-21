@@ -8,12 +8,16 @@ Usage::
     uv run python tools/fuzz.py --deck a.txt --deck b.txt  # decks from the snapshot, cycled
     uv run python tools/fuzz.py --empty-decks     # every game ends in the first upkeep
 
-The players get decks of basic lands (``basic_land_deck``) from the committed excerpt
-``tools/excerpts/basic_lands.json``, so no snapshot is needed. The presets (``QUICK``, the
+The players get decks built from two deck recipes (``recipe_deck``): basic lands from the
+committed excerpt ``tools/excerpts/basic_lands.json`` plus the cards of
+``tools/excerpts/cards.json`` (every registered card but the basics): its noncreature cards
+(``spells``) or all of them (``creatures``), so no snapshot is needed. Every other Commander game
+gives the seats commanders. The presets (``QUICK``, the
 default, and ``THOROUGH``) set the number of games, the deck sizes, the concession rate and how
 often the full checks run (``check_every``); explicit options override them. Games run in
 ``--jobs`` worker processes; the output doesn't depend on it, except for the timing. Game seed
-``s`` gives seat ``i`` deck ``(s + i) % len(decks)`` of the run's decks (``--deck``, ``--copies``),
+``s`` gives seat ``i`` deck ``(s + i) % len(decks)`` of the run's decks (``--deck``, or each
+``--copies`` with each recipe),
 so a failing game is reproduced by its seed and the run's options.
 
 Each game is played by ``RandomAgent``s. Before every answer (with ``check_every`` N > 1, every
@@ -71,8 +75,9 @@ from resolve.agents.driver import MAX_ATTEMPTS, agent_for
 from resolve.agents.random_agent import RandomAgent
 from resolve.agents.replay import ReplayDiverged, replay
 from resolve.cards.registry import default_registry
-from resolve.data.cards import CardDataError, load_card_database, load_card_excerpt
+from resolve.data.cards import CardDatabase, CardDataError, load_card_database, load_card_excerpt
 from resolve.data.decklist import DeckEntry, Decklist, DecklistError, load_decklist
+from resolve.data.types import CardType
 from resolve.decisions.request import DecisionAnswer, DecisionRequest
 from resolve.decisions.spaces import (
     Amounts,
@@ -98,6 +103,7 @@ from resolve.events.cards import CardDrawn, CardsPutOnBottom
 from resolve.events.game import PlayerLost
 from resolve.events.mana import ManaAdded
 from resolve.events.permanents import LandPlayed
+from resolve.events.spells import ActionReversed, PermanentSpellResolved, SpellCast
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState, players_in_game
 from resolve.state.ids import ObjectId, PlayerId
@@ -105,9 +111,9 @@ from resolve.state.invariants import invariant_violations, mutable_parts, state_
 from resolve.state.rng import Rng
 from resolve.state.zones import ZoneKind
 
-# Gaps that end a fuzz game normally: casting a spell, which a random agent may choose but the
-# engine can't do yet (until M2).
-ALLOWED_GAPS: tuple[str, ...] = ("601.2",)
+# Gaps that end a fuzz game normally: declaring attackers once the active player controls a
+# creature (M3), and casting a commander from the command zone (the commander tax, M7).
+ALLOWED_GAPS: tuple[str, ...] = ("508.1", "903.8")
 # A game that hasn't ended after this many answers is reported as a failure (a runaway game).
 MAX_ANSWERS = 10_000
 
@@ -257,6 +263,8 @@ def view_problems(
                 problems.append(f"{where} misreports whether object {obj.id} is tapped")
             if obj.damage != state.objects[obj.id].damage:  # 120.6: marked damage is public
                 problems.append(f"{where} misreports the damage on object {obj.id}")
+            if obj.spell != state.objects[obj.id].spell:  # 400.2: the stack is public
+                problems.append(f"{where} misreports how spell {obj.id} is being cast")
 
     if [summary.id for summary in view.players] != [player.id for player in state.players]:
         problems.append(f"{where} lists the wrong players")
@@ -621,6 +629,10 @@ class GameStats:
     - ``lands_played``: lands played (``LandPlayed``, 305.1).
     - ``mana_abilities``: mana abilities activated, counted by the mana they added
       (``ManaAdded``, 605.3a, 106.4).
+    - ``casts``: spells cast (``SpellCast``, 601.2i), per card name, sorted by name.
+    - ``resolved``: spells resolved (``PermanentSpellResolved``, 608.3a); ``reversed``: illegal
+      casts reversed (``ActionReversed``, 733.1).
+    - ``gap``: the rule of the gap the game stopped at, if any.
     """
 
     answers: int
@@ -629,6 +641,10 @@ class GameStats:
     ending: str
     lands_played: int
     mana_abilities: int
+    casts: tuple[tuple[str, int], ...] = ()
+    resolved: int = 0
+    reversed: int = 0
+    gap: str | None = None
 
     @staticmethod
     def of(result: FuzzResult) -> GameStats:
@@ -642,6 +658,16 @@ class GameStats:
             ending=ending(result),
             lands_played=sum(isinstance(record, LandPlayed) for record in records),
             mana_abilities=sum(isinstance(record, ManaAdded) for record in records),
+            casts=tuple(
+                sorted(
+                    Counter(
+                        record.name or "?" for record in records if isinstance(record, SpellCast)
+                    ).items()
+                )
+            ),
+            resolved=sum(isinstance(record, PermanentSpellResolved) for record in records),
+            reversed=sum(isinstance(record, ActionReversed) for record in records),
+            gap=None if result.gap is None else result.gap.split(": ", 1)[0],
         )
 
 
@@ -653,9 +679,14 @@ def summary_lines(games: Sequence[GameStats]) -> list[str]:
     """The summary of a fuzz run, one line per item; there must be at least one game.
 
     Every ending in ``ENDINGS`` is listed, in that order, even if no game ended that way; other
-    endings follow, sorted.
+    endings follow, sorted. Casts per card and gaps are sorted by name (``none`` if there are
+    none).
     """
     endings = Counter(game.ending for game in games)
+    casts: Counter[str] = Counter()
+    for game in games:
+        casts.update(dict(game.casts))
+    gaps = Counter(game.gap for game in games if game.gap is not None)
     names = [*ENDINGS, *sorted(name for name in endings if name not in ENDINGS)]
     answers = [game.answers for game in games]
     return [
@@ -666,7 +697,15 @@ def summary_lines(games: Sequence[GameStats]) -> list[str]:
         "Endings: " + ", ".join(f"{name} x{endings[name]}" for name in names) + ".",
         f"Played: {sum(game.lands_played for game in games)} lands, "
         f"{sum(game.mana_abilities for game in games)} mana abilities activated.",
+        f"Spells: {sum(casts.values())} cast, {sum(game.resolved for game in games)} resolved, "
+        f"{sum(game.reversed for game in games)} reversed.",
+        "Casts per card: " + _counted(casts) + ".",
+        "Gaps: " + _counted(gaps) + ".",
     ]
+
+
+def _counted(counts: Counter[str]) -> str:
+    return ", ".join(f"{name} x{counts[name]}" for name in sorted(counts)) or "none"
 
 
 # --- The command line --------------------------------------------------------------------------
@@ -706,6 +745,54 @@ QUICK = Preset(games=10, copies=(8, 2), concessions=200, check_every=10)
 # and formats, rarer concessions so that longer games and more decking happen, and every check
 # before every decision.
 THOROUGH = Preset(games=100, copies=(8, 4), concessions=500, check_every=1)
+
+
+# The other registered cards, copied from the snapshot the same way; a test checks it holds every
+# registered card but the basic lands.
+CARDS_EXCERPT = Path(__file__).resolve().parent / "excerpts" / "cards.json"
+# The deck recipes, cycled among the seats with the run's copies (``recipe_deck``).
+SPELLS = "spells"
+CREATURES = "creatures"
+RECIPES = (SPELLS, CREATURES)
+# Cards kept out of the fuzz decks, with the reason (none yet; Repentant Blacksmith joins in M2.8
+# until M6, for the 702.16e gap).
+FUZZ_EXCLUSIONS: dict[str, str] = {}
+
+
+def recipe_cards(recipe: str, excerpt: Path = CARDS_EXCERPT) -> tuple[str, ...]:
+    """The excerpt's cards a recipe adds to the basic lands, sorted by name: every noncreature
+    card (``SPELLS``: long games), or every card but ``FUZZ_EXCLUSIONS`` (``CREATURES``: these end
+    at the 508.1 gap once a creature's controller reaches combat)."""
+    cards = sorted(load_card_excerpt(excerpt).cards(), key=lambda card: card.name)
+    if recipe == SPELLS:
+        return tuple(
+            card.name
+            for card in cards
+            if not any(face.types is not None and CardType.CREATURE in face.types.card_types
+                       for face in card.faces)
+        )  # fmt: skip
+    if recipe == CREATURES:
+        return tuple(card.name for card in cards if card.name not in FUZZ_EXCLUSIONS)
+    raise ValueError(f"no deck recipe {recipe!r}")
+
+
+def recipe_deck(recipe: str, copies: int, *, commander: str | None = None) -> Deck:
+    """``copies`` of each basic land, plus ``copies // 2`` (at least one) of each card of the
+    recipe (``recipe_cards``), and ``commander`` as the deck's commander if given (903.3; the
+    engine doesn't check that it may be one, M7)."""
+    database = CardDatabase(
+        [*load_card_excerpt(BASIC_LANDS_EXCERPT).cards(), *load_card_excerpt(CARDS_EXCERPT).cards()]
+    )
+    each = max(1, copies // 2)
+    decklist = Decklist(
+        mainboard=(
+            *(DeckEntry(copies, name) for name in BASIC_LAND_NAMES),
+            *(DeckEntry(each, name) for name in recipe_cards(recipe)),
+        ),
+        commander=() if commander is None else (DeckEntry(1, commander),),
+        name=f"{recipe} ({copies} of each basic land)",
+    )
+    return build_deck(decklist, database, default_registry())
 
 
 def basic_land_deck(copies: int = DEFAULT_COPIES, excerpt: Path = BASIC_LANDS_EXCERPT) -> Deck:
@@ -803,6 +890,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "standard": [GameConfig.standard()],
         "commander": [GameConfig.commander_game()],
     }[fmt]
+    commander_pool: list[Deck] = []
     try:
         if args.empty_decks:
             pool, deck_names, deck_options = [Deck(())], "empty", "--empty-decks"
@@ -812,11 +900,23 @@ def main(argv: Sequence[str] | None = None) -> int:
             deck_options = " ".join(f'--deck "{path}"' for path in args.deck)
         else:
             deck_options = "--copies " + " ".join(str(copies) for copies in run.copies)
-            pool = [basic_land_deck(copies) for copies in run.copies]
-            sizes = " and ".join(str(copies * len(BASIC_LAND_NAMES)) for copies in run.copies)
-            deck_names = f"{sizes} basic lands ({BASIC_LANDS_EXCERPT.name})"
-            if len(pool) > 1:
-                deck_names += ", cycled among the seats"
+            pool = [recipe_deck(recipe, copies) for copies in run.copies for recipe in RECIPES]
+            # Every other Commander game gives the seats commanders: the excerpt's creatures,
+            # cycled (casting one is the 903.8 gap until M7).
+            creatures = [
+                name for name in recipe_cards(CREATURES) if name not in recipe_cards(SPELLS)
+            ]
+            commander_pool = [
+                recipe_deck(recipe, copies, commander=creatures[index % len(creatures)])
+                for index, (copies, recipe) in enumerate(
+                    (copies, recipe) for copies in run.copies for recipe in RECIPES
+                )
+            ]
+            each = " and ".join(str(copies) for copies in run.copies)
+            deck_names = (
+                f"the {' and '.join(RECIPES)} recipes with {each} of each basic land "
+                f"({BASIC_LANDS_EXCERPT.name}, {CARDS_EXCERPT.name}), cycled among the seats"
+            )
     except (CardDataError, DecklistError, DeckError, OSError) as error:
         print(f"error: {error}")
         return 1
@@ -826,7 +926,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         seed: int = args.seed + game
         players: int = args.players[game % len(args.players)]
         config = configs[(game // len(args.players)) % len(configs)]
-        decks_now = tuple(pool[(seed + seat) % len(pool)] for seat in range(players))
+        decks_from = commander_pool if config.commander is not None and seed % 2 else pool
+        decks_from = decks_from or pool
+        decks_now = tuple(decks_from[(seed + seat) % len(decks_from)] for seat in range(players))
         specs.append(GameSpec(config, decks_now, seed, run.concessions, run.check_every))
     jobs = min(args.jobs, len(specs))
     started = time.perf_counter()

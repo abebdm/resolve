@@ -84,9 +84,8 @@ def restore_checkpoint(state: GameState, checkpoint: Checkpoint) -> None:
         if not current.left_game or state.player(current.id).left_game:
             continue
         # 800.4a: the player left during the attempt; they and their objects stay gone.
-        state.players[current.id] = current
-        for obj in [
-            o for o, game_object in state.objects.items() if game_object.owner == current.id
-        ]:
+        owned = [o for o, game_object in state.objects.items() if game_object.owner == current.id]
+        for obj in owned:
             zone_list(state, state.objects[obj].zone).remove(obj)
             del state.objects[obj]
+        state.players[current.id] = current

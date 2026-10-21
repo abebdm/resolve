@@ -6,14 +6,13 @@ Expected behavior, from the pinned CR:
   after its turn-based actions.
 - 117.3d: a player who passes gives priority to the next player in turn order.
 - 117.4, 500.2: when all players pass in succession with the stack empty, the step or phase
-  ends; with an object on the stack, it resolves (608.1, not implemented until M2).
+  ends; with an object on the stack, it resolves (608.1: test_608_resolving.py).
 - 117.1a: an instant may be cast whenever its player has priority; any other spell only in its
   player's main phase with an empty stack (301.1, 302.1, 307.1). 903.8: a commander may be cast
   from the command zone. 305.1, 305.2, 305.3, 116.2a: a land may be played in its player's own
   main phase with an empty stack, once per turn; 305.9: a land is never cast.
-- Actions the engine can't take yet are offered and raise ``NotImplementedRule`` when chosen:
-  casting (601.2, until M2). docs/decisions.md. Playing lands and mana abilities are tested in
-  test_305_lands.py and test_605_mana_abilities.py.
+- Casting is tested in test_601_casting.py, playing lands and mana abilities in test_305_lands.py
+  and test_605_mana_abilities.py.
 """
 
 from __future__ import annotations
@@ -123,17 +122,6 @@ def test_117_4_players_who_passed_before_the_scenario_count_toward_the_successio
     assert where(state) == (Phase.ENDING, Step.END)
 
 
-def test_117_4_608_1_all_passing_with_an_object_on_the_stack_resolves_it_a_gap() -> None:
-    scenario = Scenario(2)
-    scenario.stack(P1, ["Llanowar Elves"])
-    scenario.at(Step.UPKEEP)
-    state = scenario.build()
-    run_script(state, pass_(P0))
-    with pytest.raises(NotImplementedRule) as gap:
-        run_script(state, pass_(P1))
-    assert gap.value.rule == "608.1"
-
-
 def test_117_1a_noninstant_spells_and_lands_need_the_players_own_main_phase() -> None:
     scenario = Scenario(2)
     forest, elves, shock, ponder = scenario.hand(
@@ -206,16 +194,6 @@ def test_903_8_a_commander_is_cast_with_the_timing_of_its_type() -> None:
     scenario.at(Step.UPKEEP)
     state = scenario.build()
     assert options(state) == (PassOption(),)
-
-
-def test_601_2_choosing_to_cast_a_spell_is_a_gap() -> None:
-    scenario = Scenario(2)
-    (elves,) = scenario.hand(P0, ["Llanowar Elves"])
-    scenario.at(Phase.PRECOMBAT_MAIN)
-    state = scenario.build()
-    with pytest.raises(NotImplementedRule) as gap:
-        run_script(state, choose(CastSpellOption(elves, NORMAL, FROM_HAND), player=P0))
-    assert gap.value.rule == "601.2"
 
 
 def test_109_3_a_split_card_in_hand_is_a_gap() -> None:

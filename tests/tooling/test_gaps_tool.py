@@ -85,13 +85,13 @@ def test_main_prints_the_report_and_fails_on_unlistable_gaps(
     assert "Gaps that can't be listed: 1" in capsys.readouterr().out
 
 
-def test_the_engine_gaps_are_all_listable_and_include_601_2(
+def test_the_engine_gaps_are_all_listable_and_include_608_2c(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert gaps_tool.main([]) == 0
     out = capsys.readouterr().out
-    assert "601.2     casting a spell" in out
-    assert "src/resolve/engine/priority.py:" in out
+    assert "608.2c    following an instant or sorcery spell's instructions" in out
+    assert "src/resolve/engine/resolution.py:" in out
 
 
 def test_reads_sources_the_way_python_does(tmp_path: Path) -> None:

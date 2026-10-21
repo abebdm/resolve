@@ -8,7 +8,7 @@ Agents only ever see a ``PlayerView``: a frozen snapshot holding what one player
 - **Hands** show the owner their cards (402.3). Other players see stable placeholder IDs with no
   name, and may count them. ``defaults.knows_identity`` decides who knows what, including that a
   player's controller knows what they do (723.4).
-- **Public zones** (400.2) show every object.
+- **Public zones** (400.2) show every object, and each spell's record on the stack (601.2).
 - **The turn**: its number, the active player, the phase and step, and who holds priority are
   public (``TurnView``), as is whether each player has lost or left the game, each mana pool
   (announced when its player passes, 106.4b) and which permanents are tapped.
@@ -33,6 +33,7 @@ from resolve.rules import defaults
 from resolve.state.game import GameObject, GameResult, GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana
+from resolve.state.spell import CastChoices
 from resolve.state.turn import Phase, Step
 from resolve.values import Immutable
 
@@ -42,7 +43,9 @@ class ObjectView(Immutable):
     """An object as one player sees it; ``name`` is ``None`` when its identity is hidden.
 
     ``tapped`` is a permanent's status (110.5) and ``damage`` the damage marked on it (120.6),
-    which everyone sees; ``False`` and 0 off the battlefield.
+    which everyone sees; ``False`` and 0 off the battlefield. ``spell`` is a spell's record on
+    the stack: how it is being cast (601.2), public like the stack itself (400.2). Face-down
+    spells, whose record only their controller may see (708.5), arrive in M5.
     """
 
     id: ObjectId
@@ -51,6 +54,7 @@ class ObjectView(Immutable):
     controller: PlayerId | None
     tapped: bool = False
     damage: int = 0
+    spell: CastChoices | None = None
 
 
 @dataclass(frozen=True)
@@ -173,4 +177,4 @@ def _object_view(state: GameState, obj: GameObject, viewer: PlayerId) -> ObjectV
         if obj.card is None:
             raise NotImplementedRule("111.1: viewing objects not represented by a card")
         name = state.cards[obj.card].data.name
-    return ObjectView(obj.id, name, obj.owner, obj.controller, obj.tapped, obj.damage)
+    return ObjectView(obj.id, name, obj.owner, obj.controller, obj.tapped, obj.damage, obj.spell)

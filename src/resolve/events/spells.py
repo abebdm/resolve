@@ -6,6 +6,7 @@ from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
 from resolve.data.mana_cost import ManaCost
+from resolve.effects.characteristics import characteristics
 from resolve.errors import EngineError
 from resolve.events.base import Event
 from resolve.state.game import move_object, players_in_game
@@ -45,18 +46,21 @@ class SpellProposed(Event):
 @dataclass(frozen=True, kw_only=True)
 class SpellCast(Event):
     """The spell ``spell`` becomes cast (601.2i), with its locked-in ``total_cost`` (601.2f) and
-    the ``mana_spent`` to pay it (601.2h), which its record keeps (400.7d)."""
+    the ``mana_spent`` to pay it (601.2h), which its record keeps (400.7d). As applied, ``name``
+    is the spell's name as it became cast (public: it is on the stack, 400.2)."""
 
     player: PlayerId
     spell: ObjectId
     total_cost: ManaCost
     mana_spent: tuple[Mana, ...]
+    name: str | None = None
 
-    def apply(self, state: GameState) -> None:
+    def apply(self, state: GameState) -> Event:
         obj = state.object(self.spell)
         if obj.spell is None or obj.zone.kind is not ZoneKind.STACK:
             raise EngineError(f"object {self.spell} isn't a spell being cast")
         obj.spell = replace(obj.spell, total_cost=self.total_cost, mana_spent=self.mana_spent)
+        return replace(self, name=characteristics(state, self.spell).name)
 
 
 @dataclass(frozen=True, kw_only=True)
