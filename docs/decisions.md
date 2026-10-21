@@ -40,12 +40,16 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   - `Characteristics.mana_value` takes {X} as 0 (202.3e). An object on the stack gets the chosen
     X when M2.3/M2.7 build the stack object. The 202.3b back-face rule needs nothing yet, because
     `characteristics` reads only the front face (712.8d).
-  - `characteristics` raises `NotImplementedRule("109.3: ...")` for the layouts `omen` and
-    `prepare` by layout name, whatever the number of faces the data has (a trimmed excerpt may
-    carry one). This is a deliberately conservative gap, as the M2 plan (§6 item 16) asks: the
-    test-reviewer pointed out that 720.4 and 722.4 give these cards only their normal
-    (front-face) characteristics outside an Omen spell on the stack, so the front face could be
-    read now. Left for the user to decide; M2.3 (720.3) replaces it for omen either way.
+  - **The plan was corrected on 109.3 (user, 2026-10-21).** The plan (§6 item 16) said
+    `characteristics` should raise a 109.3 gap for omen and preparation cards. The test-reviewer
+    showed that 720.4 and 722.4 give these cards only their normal characteristics outside an
+    Omen spell on the stack (preparation: in every zone), so the gap blocked cards the rules
+    let us read. `characteristics` now returns the front part, whether the data has one face or
+    two, for layouts `omen`, `prepare` and Scryfall's `adventure` layout when the second part has
+    the Omen subtype (the data files real omens that way). A plain adventure card stays a 109.3
+    gap (715.4 would allow the same, but adventures are M4). The gaps that matter are the cast
+    variants: casting as an Omen (720.3) and a preparation card's alternative part (722.3) must
+    raise `NotImplementedRule` in M2.3; the plan's M2.3 tests list them.
   - `rewrite_words` refuses a mapping from one kind of word to another (613.1c: a color word
     changes into a color word), and walks only `init` fields, so derived fields such as
     `CardFace.types` are recomputed by `__post_init__`.

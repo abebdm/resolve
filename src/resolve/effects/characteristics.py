@@ -20,7 +20,13 @@ Which face counts:
   front face up (712.8c), and nothing can turn a permanent's back face up yet (712.8d);
 - other multi-faced cards (split, flip, adventurer, meld, ...): ``NotImplementedRule``, since
   each has its own rules for combined or alternative characteristics (709.4, 710.1, 715.4,
-  712.4). So are the omen and preparation layouts (720, 722), even when their data has one face.
+  712.4).
+- omen and preparation cards: their front part (720.4, 722.4: outside an Omen spell on the stack
+  an omen card has only its normal characteristics, and a preparation card has them in every
+  zone). The layouts are ``omen``, ``prepare``, and Scryfall's ``adventure`` layout when the
+  second face is an Omen (the data files omens that way), and the data may carry one face or
+  two. Casting an omen card as an Omen (720.3) and casting a preparation card's alternative
+  part (722.3) are cast variants, whose gaps M2.3 raises.
 
 Mana cost, colors and mana value (202):
 
@@ -54,7 +60,9 @@ if TYPE_CHECKING:
 # Scryfall layouts of double-faced cards whose front face gives the characteristics (712.8a).
 FRONT_FACE_LAYOUTS = ("transform", "modal_dfc")
 # Layouts of omen and preparation cards (720, 722), whatever the number of faces in the data.
-TWO_PART_LAYOUTS = ("omen", "prepare")
+NORMAL_FACE_LAYOUTS = ("omen", "prepare")
+# 205.3: the subtype of an omen's inset part; Scryfall's "adventure" layout also holds omens.
+OMEN_SUBTYPE = "Omen"
 
 
 @dataclass(frozen=True)
@@ -130,15 +138,19 @@ def characteristics(state: GameState, obj: ObjectId) -> Characteristics:
 
 
 def _face_index(data: CardData) -> int:
-    if data.layout in TWO_PART_LAYOUTS:
-        # 720.4, 722.4: outside an Omen spell on the stack these cards have only their normal
-        # characteristics, so this is a deliberately conservative gap (M2 plan, 6 item 16) until
-        # 720.3 and 722 are built; the user is asked whether to read the front face instead.
-        raise NotImplementedRule("109.3: the characteristics of omen and preparation cards")
+    if data.layout in NORMAL_FACE_LAYOUTS or _is_omen(data):
+        return 0  # 720.4, 722.4
     if not data.is_multi_faced:
         return 0
     if data.layout in FRONT_FACE_LAYOUTS:
         return 0  # 712.8a, 712.8c, 712.8d
     raise NotImplementedRule(
         "109.3: the characteristics of multi-faced cards other than double-faced cards"
+    )
+
+
+def _is_omen(data: CardData) -> bool:
+    """Whether the card is an omen card (720.1): its second part has the Omen subtype."""
+    return any(
+        face.types is not None and OMEN_SUBTYPE in face.types.subtypes for face in data.faces[1:]
     )

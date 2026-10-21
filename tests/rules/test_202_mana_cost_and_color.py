@@ -10,8 +10,8 @@ From the pinned CR:
 - 202.3, 202.3e-g: mana value is the total amount of mana in the cost; {X} is 0 off the stack,
   hybrid symbols count their largest half, Phyrexian symbols 1.
 - 109.3: characteristics include mana cost and color. Omen and preparation cards have only their
-  normal characteristics outside an Omen spell on the stack (720.4, 722.4); the engine still
-  raises a gap for them, deliberately (M2 plan, 6 item 16), until 720.3 and 722 are built.
+  normal characteristics outside an Omen spell on the stack (720.4, 722.4), which is where the
+  engine reads them until casting an omen as an Omen (720.3, M2.3's variant gaps) exists.
 """
 
 from __future__ import annotations
@@ -147,34 +147,75 @@ def test_105_2_colors_are_listed_in_the_order_white_blue_black_red_green() -> No
     assert one(data_order).colors == (W, G)
 
 
-# --- 109.3: the omen and preparation layouts --------------------------------------------------
+# --- 720.4, 722.4: omen and preparation cards -------------------------------------------------
 
 
-def _two_part(layout: str, faces: int) -> dict[str, Any]:
+def _front_and_inset(layout: str, faces: int, inset_type: str) -> dict[str, Any]:
     """A card of ``layout`` whose data has one face (trimmed) or two."""
     front = fx.spell(f"Test Front {layout}", "{1}{G}", 2.0, "Creature — Elf", ["G"])
     front["power"], front["toughness"] = "2", "2"
     front["layout"] = layout
     if faces == 1:
         return front
-    back = fx.spell(f"Test Back {layout}", "{G}", 1.0, "Sorcery", ["G"])
+    inset = fx.spell(f"Test Inset {layout}", "{R}", 1.0, inset_type, ["R"])
     return {
         **front,
-        "name": f"{front['name']} // {back['name']}",
-        "card_faces": [{**front, "object": "card_face"}, {**back, "object": "card_face"}],
+        "name": f"{front['name']} // {inset['name']}",
+        "card_faces": [{**front, "object": "card_face"}, {**inset, "object": "card_face"}],
     }
 
 
-@pytest.mark.parametrize("layout", ["prepare", "omen"])
+@pytest.mark.parametrize(
+    ("layout", "inset_type"),
+    [
+        ("prepare", "Sorcery"),  # 722.4: in every zone
+        ("omen", "Instant — Omen"),
+        ("adventure", "Instant — Omen"),  # how the card data files real omens (720.1)
+    ],
+)
 @pytest.mark.parametrize("faces", [1, 2])
-def test_109_3_omen_and_preparation_layouts_are_a_gap(layout: str, faces: int) -> None:
-    """Deliberately conservative gap (M2 plan, 6 item 16): 720.4 and 722.4 would let the front
-    face answer outside an Omen spell, but 720.3 and 722 aren't built. The data may have one
-    face (a trimmed excerpt) or two; neither is read as a plain single-faced card."""
-    record = _two_part(layout, faces)
+def test_720_4_and_722_4_omen_and_preparation_cards_have_their_normal_characteristics(
+    layout: str, inset_type: str, faces: int
+) -> None:
+    """Outside an Omen spell on the stack an omen card has only its normal characteristics
+    (720.4); a preparation card has only them in every zone (722.4): the front part's name,
+    cost, colors, types and power and toughness, in hand and on the battlefield."""
+    record = _front_and_inset(layout, faces, inset_type)
+    name = record["card_faces"][0]["name"] if faces == 2 else record["name"]
+    scenario = Scenario(
+        2,
+        database=CardDatabase(parse_oracle_cards([record])),
+        registry=CardRegistry(
+            [CardDefinition(face["name"]) for face in record.get("card_faces", [record])]
+        ),
+    )
+    (in_hand,) = scenario.hand(P0, [record["name"]])
+    (on_field,) = scenario.battlefield(P0, [record["name"]])
+    state = scenario.build()
+    for obj in (in_hand, on_field):
+        chars = characteristics(state, obj)
+        assert chars.name == name
+        assert chars.mana_cost == parse_mana_cost("{1}{G}") and chars.mana_value == 2
+        assert chars.colors == (G,) and chars.subtypes == ("Elf",)
+        assert (chars.power, chars.toughness) == (2, 2)
+
+
+def test_an_adventure_card_that_is_not_an_omen_is_still_a_gap() -> None:
+    """715.4 would also give an adventurer its normal characteristics, but adventures are M4
+    (715.3); only omens and preparation cards are read as their front part."""
+    record = _front_and_inset("adventure", 2, "Instant — Adventure")
     with pytest.raises(NotImplementedRule) as gap:
         chars_of(record)
     assert gap.value.rule == "109.3"
+
+
+def test_107_4e_a_colorless_hybrid_symbol_colors_and_values_the_card() -> None:
+    """{C/W} is white (107.4e: a hybrid symbol is its colors, even with a colorless half) and
+    counts 1 (202.3f: the largest component of {C/W} is one mana)."""
+    card = fx.spell("Test Colorless Hybrid", "{C/W}{C/W}", 2.0, "Sorcery", ["W"])
+    (chars,) = chars_of(card)
+    assert chars.colors == (W,) and chars.mana_value == 2
+    assert chars.mana_cost == parse_mana_cost("{C/W}{C/W}")
 
 
 # --- Review additions ---------------------------------------------------------------------------

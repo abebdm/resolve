@@ -441,7 +441,7 @@ completes a step (CLAUDE.md, "Documentation requirements").
   kind of 107.4, `ManaCost`, `parse_mana_cost`, mana value 202.3 and colors 202.2), parsed into
   `CardFace.cost` (an unreadable cost is refused by `DeckCard` and reported by the coverage tool
   like an unreadable type line); `Characteristics.mana_cost`, `colors` and `mana_value`;
-  `characteristics` raises 109.3 for the omen and preparation layouts whatever their face count;
+  `characteristics` reads the normal front part of omen and preparation cards (720.4, 722.4);
   `resolve.cards.primitives.words` (`ColorWord`, `LandTypeWord`, `SubtypeWord`, `NameRef`,
   `rewrite_words`); `ChooseCounts` (601.2h) with random-agent, text-agent and fuzz-probe support;
   `Color` in `resolve.data.types`; `tools/excerpts/cards.json` (the three vanilla creatures).
@@ -485,7 +485,7 @@ earlier milestones must leave room for every row in this map.
 | 106 | Mana | M1 ✓, M2; 106.7 M6 | E |  |
 | 107 | Numbers and Symbols | M2 (107.4 symbols parsed: M2.2 ✓); 107.4e-f, 107.4h M9; 107.14 M4; 107.15, 107.17 M9 | E | hybrid and Phyrexian: M2 builds the announcement stage |
 | 108 | Cards | M0 ✓ | E |  |
-| 109 | Objects | M1 ✓; 109.3 with each layout (omen and preparation: gap raised, M2.2 ✓) | E |  |
+| 109 | Objects | M1 ✓; 109.3 with each layout (omen and preparation read as their normal part: M2.2 ✓; 720.4, 722.4) | E |  |
 | 110 | Permanents | M1 ✓; statuses with their mechanics | E |  |
 | 111 | Tokens | M4 | E | D (Regisaur Alpha, Generous Gift) |
 | 112 | Spells | M2; copies M5 | E |  |
@@ -589,9 +589,9 @@ earlier milestones must leave room for every row in this map.
 | 717 | Attraction Cards | M7 (an Attraction deck in the command zone, 717.2; the junkyard, 717.6) | S | Unfinity: 22 Attractions without the acorn stamp are Commander-legal |
 | 718 | Prototype Cards | M5 (casting room M2) | S |  |
 | 719 | Case Cards | M4 | S |  |
-| 720 | Omen Cards | M2 | S | casting and resolution |
+| 720 | Omen Cards | M2 | S | casting and resolution; 720.4 normal characteristics M2.2 ✓ (plan corrected: not a 109.3 gap); 720.3 variant gap M2.3 |
 | 721 | Station Cards | M4 | S |  |
-| 722 | Preparation Cards | M5 | S |  |
+| 722 | Preparation Cards | M5 | S | 722.4 normal characteristics M2.2 ✓ (plan corrected); 722.3 variant gap M2.3 |
 | 723 | Controlling Another Player | M9 (seam M2.1 ✓) | X | `deciding_player`, `DecisionRequest.for_player`, `knows_identity`, `concede(by=)`: seams in place |
 | 724 | Ending Turns and Phases | M3 (turn frame M2.1 ✓) | X | the turn frame is `TakeTurn` on the task stack (`turn_frame_index`) |
 | 725 | The Monarch | M7 | S | D (Regal Behemoth) |

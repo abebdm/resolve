@@ -29,6 +29,7 @@ from resolve.cards.primitives.words import (
 )
 from resolve.data.types import Color
 from resolve.values import Immutable
+from tests.state.test_immutability import type_problems
 
 WHITE, BLUE = ColorWord(Color.WHITE), ColorWord(Color.BLUE)
 FOREST, ISLAND = LandTypeWord("Forest"), LandTypeWord("Island")
@@ -113,3 +114,15 @@ def test_a_mapping_between_different_kinds_of_word_is_refused() -> None:
 def test_a_word_maps_to_the_same_word_is_a_no_change() -> None:
     value = spell()
     assert rewrite_words(value, {WHITE: WHITE}) == value
+
+
+@pytest.mark.parametrize(
+    "annotation",
+    [list[ColorWord], dict[str, ColorWord], set[SubtypeWord], frozenset[LandTypeWord]],
+)
+def test_a_definition_cant_hide_words_in_a_collection_the_walk_skips(annotation: object) -> None:
+    """``rewrite_words`` walks dataclass fields and tuples. Immutable values may hold nothing
+    else (lists, dicts and sets are refused by the immutability check), so no word in a
+    definition is out of its reach."""
+    assert type_problems(annotation)
+    assert not type_problems(tuple[ColorWord, ...])
