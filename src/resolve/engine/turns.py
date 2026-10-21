@@ -112,6 +112,10 @@ class TakeTurn(Task):
         return Push((TakeTurn(next_in_turn_order(state, self.player)),))
 
 
+def turn_frame_index(state: GameState) -> int:
+    raise NotImplementedRule("724.1: the turn frame (M2.1 stub)")
+
+
 def _skipped(state: GameState, segment: Segment) -> bool:
     _, step = segment
     if step is Step.DRAW:

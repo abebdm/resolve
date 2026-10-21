@@ -128,6 +128,9 @@ class GameState:
     - ``pending``: the decision the engine is waiting for, if any. ``result``: set when the game
       is over.
     - ``event_log``: everything that happened, with CR citations.
+    - ``extra_turns``: the players who will take extra turns before the normal turn order goes
+      on, the next one last (500.7: the most recently created turn is taken first).
+    - ``turn_direction``: 1 when turn order proceeds clockwise (103.1), -1 when it is reversed.
     """
 
     config: GameConfig
@@ -149,6 +152,8 @@ class GameState:
     next_object_id: int = 1
     next_timestamp: int = 1
     next_request_id: int = 1
+    extra_turns: list[PlayerId] = field(default_factory=list[PlayerId])
+    turn_direction: int = 1
 
     def player(self, player: PlayerId) -> Player:
         """The player with this ID; ``EngineError`` if there is none."""

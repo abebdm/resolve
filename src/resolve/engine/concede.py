@@ -26,7 +26,7 @@ from resolve.state.game import GameState
 from resolve.state.ids import PlayerId
 
 
-def concede(state: GameState, player: PlayerId) -> None:
+def concede(state: GameState, player: PlayerId, *, by: PlayerId | None = None) -> None:
     """``player`` concedes the game (104.3a).
 
     Raises ``InvalidAnswer``, changing nothing, if the game is over or the player has already

@@ -84,6 +84,7 @@ class WaitingFor(Immutable):
 
     player: PlayerId
     kind: DecisionKind
+    for_player: PlayerId
 
 
 @dataclass(frozen=True)
@@ -142,7 +143,9 @@ def view_for(state: GameState, viewer: PlayerId) -> PlayerView:
         command=show(state.command),
         starting_player=state.starting_player,
         turn=_turn_view(state),
-        waiting_for=None if pending is None else WaitingFor(pending.player, pending.kind),
+        waiting_for=None
+        if pending is None
+        else WaitingFor(pending.player, pending.kind, pending.for_player),
         request=pending if pending is not None and pending.player == viewer else None,
         log=tuple(
             shown for entry in state.event_log if (shown := entry.shown_to(viewer)) is not None

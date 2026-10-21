@@ -58,6 +58,7 @@ def apply_result(state: GameState, task: Task, result: TaskResult) -> None:
             state.pending = DecisionRequest(
                 id=state.next_request_id,
                 player=result.player,
+                for_player=result.player,
                 kind=result.kind,
                 space=result.space,
                 prompt=result.prompt,

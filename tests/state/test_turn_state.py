@@ -152,6 +152,7 @@ def test_the_check_reads_the_pending_request() -> None:
     state.pending = DecisionRequest(
         state.pending.id,
         P0,
+        P0,
         DecisionKind.PRIORITY_ACTION,
         ChooseOne((PassOption(),)),
         "?",
