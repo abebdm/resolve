@@ -8,6 +8,7 @@ an empty stack (302.1); casting itself is a gap until M2 (601.2).
 
 from __future__ import annotations
 
+import dataclasses
 from pathlib import Path
 
 import pytest
@@ -97,8 +98,8 @@ def test_202_the_real_cost_colors_and_mana_value(
     assert face.cost is not None and face.cost.colors == colors  # 202.2
     assert face.cost.mana_value() == value == card.mana_value  # 202.3, as Scryfall reports it
     assert card.mana_cost_problems == ()
-    # The fixture the engine tests use is the same card.
-    assert parse_card(record) == card
+    # The fixture the engine tests use is the same card (its Oracle ID is invented).
+    assert parse_card(record) == dataclasses.replace(card, oracle_id=parse_card(record).oracle_id)
 
 
 @pytest.mark.parametrize(("name", "text", "colors", "value", "record"), COSTS)

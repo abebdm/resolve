@@ -35,7 +35,7 @@ most likely to expose a design that took one.
 | Hullbreacher / Notion Thief | replacing opponents' draws (614) | M6 | | not yet |
 | Humility + Opalescence | layers 4, 6 and 7b; dependency and timestamps (613.8) | M5 | | not yet |
 | Blood Moon + Urborg, Tomb of Yawgmoth | a layer 4 dependency; an ability removed by a type change (613.8) | M5 | | not yet |
-| Mind Bend | changing color words and land types (612) | M5 | M2 typed words | not yet |
+| Mind Bend | changing color words and land types (612) | M5 | M2 typed words (M2.2 ✓) | not yet |
 | Volrath's Shapeshifter | an object with the full text of another card (613, 612) | M5 | M2 definitions as data | not yet |
 | Spellweaver Helix | linked abilities; casting a copy; matching names (607, 707.12) | M5 | M2 card-less spell objects | not yet |
 | Painter's Servant + Grindstone | color-changing in layer 5; repeated mill (613, 701.17) | M5 | | not yet |

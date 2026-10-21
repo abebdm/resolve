@@ -56,7 +56,9 @@ def chars_of(*records: dict[str, Any]) -> list[Characteristics]:
     names = [name for record in records for name in _face_names(record)]
     scenario = Scenario(
         2,
-        database=CardDatabase(parse_oracle_cards([*CARDS, *records])),
+        database=CardDatabase(
+            parse_oracle_cards(list({r["oracle_id"]: r for r in [*CARDS, *records]}.values()))
+        ),
         registry=CardRegistry([CardDefinition(name) for name in {*names, "Forest"}]),
     )
     objects = scenario.hand(P0, [record["name"] for record in records])

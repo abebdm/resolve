@@ -1,7 +1,8 @@
 """Computing an object's characteristics (109.3, design.md §8).
 
 ``characteristics(state, obj)`` is the single place the engine reads what an object *is*: its
-name, types, abilities, power and toughness (printed numbers, 208.1; a star raises
+name, mana cost, colors, mana value, types, abilities, power and toughness (printed numbers,
+208.1; a star raises
 ``NotImplementedRule("208.2")`` when read). It starts from the card's printed face and will
 apply continuous effects through the layer system (613) once they exist (M5). Nothing can
 create a continuous effect yet, so for now the result is the printed face. Characteristics are
@@ -19,7 +20,18 @@ Which face counts:
   front face up (712.8c), and nothing can turn a permanent's back face up yet (712.8d);
 - other multi-faced cards (split, flip, adventurer, meld, ...): ``NotImplementedRule``, since
   each has its own rules for combined or alternative characteristics (709.4, 710.1, 715.4,
-  712.4).
+  712.4). So are the omen and preparation layouts (720, 722), even when their data has one face.
+
+Mana cost, colors and mana value (202):
+
+- the mana cost is the face's printed cost, ``None`` if it has none (202.3a, and not the same
+  as ``{0}``);
+- the colors are the face's colors in the card data (105.2, 202.2): Scryfall derives them from the
+  mana cost and any color indicator (204.2), so a card whose colors are set otherwise (devoid)
+  reads right too;
+- the mana value is the cost's, with {X} as 0 (202.3e); M2.3 gives an object on the stack the X
+  chosen for it. The back face of a nonmodal double-faced card is never read yet (712.8d), so
+  202.3b needs nothing.
 """
 
 from __future__ import annotations
@@ -41,6 +53,9 @@ if TYPE_CHECKING:
 
 # Scryfall layouts of double-faced cards whose front face gives the characteristics (712.8a).
 FRONT_FACE_LAYOUTS = ("transform", "modal_dfc")
+# Layouts of cards with two parts, each with its own characteristics (720.3, 722), whatever the
+# number of faces in the data.
+TWO_PART_LAYOUTS = ("omen", "prepare")
 
 
 @dataclass(frozen=True)
@@ -90,9 +105,9 @@ def characteristics(state: GameState, obj: ObjectId) -> Characteristics:
     index = _face_index(card.data)
     face = card.data.faces[index]
     types = face.types
-    if types is None:
+    if types is None or face.mana_cost_problem is not None:
         # A deck can't contain such a card (DeckCard refuses it), so this is a bug.
-        raise EngineError(f"{face.name!r} has an unreadable type line in a game")
+        raise EngineError(f"{face.name!r} has an unreadable type line or mana cost in a game")
     abilities: list[Ability] = list(card.definitions[index].abilities)
     if CardType.LAND in types.card_types:
         # 305.6: each basic land type gives the land its intrinsic mana ability.
@@ -109,10 +124,15 @@ def characteristics(state: GameState, obj: ObjectId) -> Characteristics:
         abilities=tuple(abilities),
         power_text=face.power if has_numbers else None,
         toughness_text=face.toughness if has_numbers else None,
+        mana_cost=face.cost,
+        colors=tuple(color for color in Color if color.value in face.colors),
+        mana_value=0 if face.cost is None else face.cost.mana_value(),
     )
 
 
 def _face_index(data: CardData) -> int:
+    if data.layout in TWO_PART_LAYOUTS:
+        raise NotImplementedRule("109.3: the characteristics of omen and preparation cards")
     if not data.is_multi_faced:
         return 0
     if data.layout in FRONT_FACE_LAYOUTS:

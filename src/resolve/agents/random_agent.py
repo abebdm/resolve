@@ -13,6 +13,7 @@ For each answer space it picks:
 - ``ChooseNumber``: each number in range with equal probability. A space without an upper bound
   is capped at ``minimum + unbounded_span``; a random agent can't usefully pick "any" number.
 - ``Distribute``: each division of the total with equal probability (stars and bars).
+- ``ChooseCounts``: each way to reach the total within the maxima with equal probability.
 
 Answers inside the space can still break a rule only the asking task checks (``check_answer``);
 the driver then asks again (``play(..., on_invalid=...)``), and the agent draws a fresh answer.
@@ -25,6 +26,7 @@ from resolve.decisions.spaces import (
     Amounts,
     AnswerSpace,
     AnswerValue,
+    ChooseCounts,
     ChooseNumber,
     ChooseOne,
     ChooseOrder,
@@ -73,6 +75,8 @@ class RandomAgent:
                 return Number(minimum + rng.randbelow(top - minimum + 1))
             case Distribute(recipients=recipients, total=total, minimum_each=minimum_each):
                 return Amounts(self._division(len(recipients), total, minimum_each))
+            case ChooseCounts(maxima=maxima, total=total):
+                return Amounts(self._counts(maxima, total))
             case _:
                 raise EngineError(f"RandomAgent can't answer a {type(space).__name__}")
 
@@ -84,6 +88,30 @@ class RandomAgent:
             j = i + self.rng.randbelow(population - i)
             items[i], items[j] = items[j], items[i]
         return items[:size]
+
+    def _counts(self, maxima: tuple[int, ...], total: int) -> tuple[int, ...]:
+        """A uniformly random way to give each option from 0 to its maximum, adding up to
+        ``total``."""
+        # ways[i][t]: the ways the options from i on can add up to t. Choosing each amount with
+        # probability proportional to the ways the rest can finish makes every answer equally
+        # likely.
+        ways = [[0] * (total + 1) for _ in range(len(maxima) + 1)]
+        ways[len(maxima)][0] = 1
+        for i in range(len(maxima) - 1, -1, -1):
+            for t in range(total + 1):
+                ways[i][t] = sum(ways[i + 1][t - a] for a in range(min(maxima[i], t) + 1))
+        amounts: list[int] = []
+        left = total
+        for i, maximum in enumerate(maxima):
+            pick = self.rng.randbelow(ways[i][left])
+            amount = 0
+            while pick >= ways[i + 1][left - amount]:
+                pick -= ways[i + 1][left - amount]
+                amount += 1
+            assert amount <= maximum
+            amounts.append(amount)
+            left -= amount
+        return tuple(amounts)
 
     def _division(self, recipients: int, total: int, minimum_each: int) -> tuple[int, ...]:
         """A uniformly random way to divide ``total``, at least ``minimum_each`` to each."""

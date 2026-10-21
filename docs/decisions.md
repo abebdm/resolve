@@ -19,6 +19,47 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-21: M2.2: mana costs, colors, 109.3 layouts and `ChooseCounts`
+- **Decision:**
+  - A `ManaSymbol` has a `kind`, its `colors` and a `number`. 107.4 lists `{C/W}` ... `{C/G}`
+    among the monocolored hybrid symbols; they get their own kind (`COLORLESS_HYBRID`) because
+    their alternative is one colorless mana, not generic mana, and 202.3f counts it as 1. Hybrid
+    pairs are accepted only in the orientation 107.4 lists (`{W/U}`, not `{U/W}`), as Scryfall
+    prints them. `{0}`, `{1}`, ... take any decimal number without a leading zero, so Un-set
+    costs such as `{1000000}` read.
+  - A face with no mana cost has `cost = None`, never `ManaCost(())` (202.3a: no cost, mana value
+    0; `{0}` is a cost with mana value 0). A cost that doesn't follow 107.4 (Un-set `{HW}`, `{D}`,
+    `{L}`, `{Y}`, `{Z}`) also reads as `None`, with `mana_cost_problem` giving the reason; the
+    card loads, and `DeckCard`, `build_deck` and the coverage tool refuse it like an unreadable
+    type line.
+  - `Characteristics.colors` come from the card data's colors, not from the cost alone. Scryfall
+    derives them from the cost and any color indicator (202.2, 204.2), and a card whose colors a
+    characteristic-defining ability sets (devoid) reads right too. They are listed in WUBRG order.
+    The Scryfall colors of a face with no colors of its own (a split or adventure face) fall back
+    to the card's, which is only right once M9 gives those layouts their own characteristics.
+  - `Characteristics.mana_value` takes {X} as 0 (202.3e). An object on the stack gets the chosen
+    X when M2.3/M2.7 build the stack object. The 202.3b back-face rule needs nothing yet, because
+    `characteristics` reads only the front face (712.8d).
+  - `characteristics` raises `NotImplementedRule("109.3: ...")` for the layouts `omen` and
+    `prepare` by layout name, whatever the number of faces the data has: a trimmed excerpt may
+    carry one face, and 720 and 722 give each part its own characteristics.
+  - `rewrite_words` refuses a mapping from one kind of word to another (613.1c: a color word
+    changes into a color word), and walks only `init` fields, so derived fields such as
+    `CardFace.types` are recomputed by `__post_init__`.
+  - `ChooseCounts(options, maxima, total)` has no minima: units not spent are 0. It needs at
+    least one option, and can't be built unless `sum(maxima) >= total`. `RandomAgent` draws each
+    valid answer with equal probability by counting completions.
+  - `tools/excerpts/cards.json` holds Grizzly Bears, Savannah Lions and Hill Giant, copied from
+    the 2026-10-21 snapshot. The coverage tool's "Unreadable" heading now names both the type
+    line and the mana cost (the existing test's expected heading changed with it).
+- **Why:** the plan (§3.4, §3.8, design.md §17.6-17.10) asks for these; the choices above are the
+  ones the plan left open. Per-unit payment options would give several answers for one outcome
+  (design.md §6), hence counts.
+- **Rules:** 107.4, 109.3, 202.1-202.3, 204.2, 105.2, 612.2, 613.1c, 720, 722, 601.2h.
+- **Where:** `src/resolve/data/mana_cost.py`, `src/resolve/data/cards.py`,
+  `src/resolve/effects/characteristics.py`, `src/resolve/cards/primitives/words.py`,
+  `src/resolve/decisions/spaces.py`, `src/resolve/agents/`, `tools/fuzz.py`.
+
 ### 2026-10-21: M2.1: rule defaults, legality and the turn frame
 - **Decision:**
   - Every rule default of the M2 plan (§5.1) is a function in `resolve.rules.defaults`. Engine

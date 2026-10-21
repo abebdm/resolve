@@ -8,8 +8,8 @@ Usage::
 
 Sideboards are out of scope for coverage (see docs/roadmap.md) and are only counted with
 ``--include-sideboard``. The exit status is 1 if a deck can't be parsed, names a card that isn't
-in the card data snapshot, or has a card whose type line the engine can't read (205, an Un-set
-joke type); with ``--require-complete`` it is also 1 if any card is missing.
+in the card data snapshot, or has a card whose type line or mana cost the engine can't read (205,
+107.4; an Un-set joke); with ``--require-complete`` it is also 1 if any card is missing.
 """
 
 from __future__ import annotations
@@ -76,7 +76,7 @@ def format_report(coverage: DeckCoverage, *, show_oracle: bool = False) -> str:
     ]
     for title, entries in (
         ("Unknown (not in the card data)", coverage.unknown),
-        ("Unreadable (type line doesn't follow 205)", coverage.unreadable),
+        ("Unreadable (type line or mana cost doesn't follow 205 or 107.4)", coverage.unreadable),
         ("Missing", coverage.missing),
         ("Implemented", coverage.implemented),
     ):

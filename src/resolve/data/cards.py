@@ -16,6 +16,7 @@ behaves in a game is a card definition in ``resolve.cards``; this data is the in
 
 from __future__ import annotations
 
+import contextlib
 import gzip
 import hashlib
 import json
@@ -25,7 +26,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import cast
 
-from resolve.data.mana_cost import ManaCost
+from resolve.data.mana_cost import ManaCost, ManaCostError, parse_mana_cost
 from resolve.data.types import TypeLine, TypeLineError, parse_type_line, try_parse_type_line
 from resolve.values import Immutable
 
@@ -120,7 +121,9 @@ class CardFace(Immutable):
     Mana cost and type line are Scryfall's text (``"{1}{G}"``, ``"Creature — Elf Druid"``); colors
     are single letters (``"W"``, ``"U"``, ``"B"``, ``"R"``, ``"G"``; 105.1). Power, toughness,
     loyalty and defense are ``None`` when the face has none, and otherwise strings, because values
-    such as ``"*"`` (208.2) are not numbers.
+    such as ``"*"`` (208.2) are not numbers. ``types`` and ``cost`` are parsed from the type line
+    and the mana cost (``None`` when that text doesn't follow 205 or 107.4, and ``cost`` is also
+    ``None`` for a face with no mana cost, 202.3a).
     """
 
     name: str
@@ -136,14 +139,26 @@ class CardFace(Immutable):
     cost: ManaCost | None = field(init=False)
 
     def __post_init__(self) -> None:
-        object.__setattr__(self, "cost", None)  # STUB
+        # Derived from ``mana_cost``; ``None`` for no cost (202.3a) and for text that doesn't
+        # follow 107.4 (``mana_cost_problem`` says which). Such a card loads, but can't be played.
+        cost = None
+        if self.mana_cost:
+            with contextlib.suppress(ManaCostError):
+                cost = parse_mana_cost(self.mana_cost)
+        object.__setattr__(self, "cost", cost)
         # Derived from ``type_line``; ``None`` when it doesn't follow 205 (an Un-set joke type).
         # Such a card loads, but can't be played (DeckCard, coverage).
         object.__setattr__(self, "types", try_parse_type_line(self.type_line))
 
     @property
     def mana_cost_problem(self) -> str | None:
-        """STUB."""
+        """Why the mana cost can't be read (107.4), or ``None`` if it can (or there is none)."""
+        if not self.mana_cost:
+            return None
+        try:
+            parse_mana_cost(self.mana_cost)
+        except ManaCostError as error:
+            return str(error)
         return None
 
     @property
@@ -198,8 +213,12 @@ class CardData(Immutable):
 
     @property
     def mana_cost_problems(self) -> tuple[str, ...]:
-        """STUB."""
-        return ()
+        """Why each face whose mana cost can't be read can't be (107.4); empty if all can."""
+        return tuple(
+            f"{face.name}: {problem}"
+            for face in self.faces
+            if (problem := face.mana_cost_problem) is not None
+        )
 
     @property
     def face_names(self) -> tuple[str, ...]:

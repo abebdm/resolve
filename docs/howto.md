@@ -214,8 +214,8 @@ copied from the snapshot into a committed JSON file. Never write card records by
    snapshot's manifest (`taken_from`).
 2. Load it with `resolve.data.cards.load_card_excerpt(path)`, a `CardDatabase`.
 3. After updating the snapshot, check the excerpts still match it:
-   `uv run python tools/card_excerpt.py tools/excerpts/basic_lands.json --check`; rewrite one
-   that doesn't.
+   `uv run python tools/card_excerpt.py tools/excerpts/basic_lands.json --check` (and
+   `cards.json`, the vanilla creatures); rewrite one that doesn't.
 4. Test what uses the excerpt against the cards' printed characteristics (see
    `tests/tooling/test_card_excerpt_tool.py`).
 
@@ -267,10 +267,13 @@ all six pass. Before pushing:
 1. Add the kind to `DecisionKind` (`src/resolve/decisions/kinds.py`) with its CR rule in a
    comment, if it isn't there yet.
 2. Use an existing answer space if one fits (`ChooseOne`, `ChooseSubset`, `ChooseOrder`,
-   `ChooseNumber`, `Distribute`). A new space goes in `spaces.py`: a frozen `AnswerSpace` with a
+   `ChooseNumber`, `Distribute`, `ChooseCounts`). A new space goes in `spaces.py`: a frozen `AnswerSpace` with a
    `__post_init__` that raises `ValueError` if the space can't be answered, a `validate` that
    raises `InvalidAnswer`, a canonical answer value (one valid answer per outcome), and tests of
-   valid, invalid, empty and boundary answers in `tests/decisions/test_answer_spaces.py`.
+   valid, invalid, empty and boundary answers in `tests/decisions/test_answer_spaces.py`. Give
+   it a case in each of `RandomAgent.random_value` (uniform over the valid answers, tested with
+   the chi-square helper), `resolve.agents.text` (hint, options, parser) and `invalid_answers`
+   in `tools/fuzz.py` (answers the space must reject), each with tests.
 3. The asking task returns `NeedDecision(...)`, rejects rules-illegal answers in `check_answer`
    (without changing anything), and continues in `resume`.
 
@@ -354,7 +357,11 @@ files.
 2. Write the definition in a module of `src/resolve/cards/definitions/` (one module per card
    or card group, such as `basic_lands.py`): a `CardDefinition(name, abilities=(...))` per face,
    built from the primitives in `docs/primitives.md`, and added to the module's `DEFINITIONS`.
-   Leave out what rules give the card by themselves (a basic land type's mana ability, 305.6).
+   Leave out what rules give the card by themselves (a basic land type's mana ability, 305.6;
+   its mana cost, colors and mana value, which come from the card data, 202). Write every color
+   word, land type and subtype the definition uses as a typed word (`ColorWord`,
+   `LandTypeWord`, `SubtypeWord`) and refer to the card's own name only through `ThisObject()`;
+   a card name that must appear is a `NameRef` (612.2).
 3. Add a Scryfall-format record to `tests/scryfall_fixtures.py` if tests need the card, and to
    `scenario_database()` / `scenario_registry()` in `tests/game_fixtures.py` for scenarios.
 4. Write `tests/cards/test_<card or group>.py`: the computed characteristics, each ability in

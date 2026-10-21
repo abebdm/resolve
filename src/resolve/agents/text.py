@@ -13,6 +13,7 @@ Answers are typed as option indices, starting at 0, matching the engine's ``Pick
 | ``ChooseOrder``  | every index, in the chosen order        | ``1 0 2`` |
 | ``ChooseNumber`` | a number                                | ``4``     |
 | ``Distribute``   | one amount per recipient, in order      | ``2 1``   |
+| ``ChooseCounts`` | one amount per option, in order         | ``2 0``   |
 
 Besides answers, ``view`` reprints the view, ``log`` prints the whole visible log, ``help``
 explains the syntax, and ``quit`` (or the end of input) raises ``QuitGame``.
@@ -31,6 +32,7 @@ from resolve.decisions.spaces import (
     AnswerSpace,
     AnswerValue,
     CastSpellOption,
+    ChooseCounts,
     ChooseNumber,
     ChooseOne,
     ChooseOrder,
@@ -193,6 +195,11 @@ def _answer_hint(space: AnswerSpace) -> str:
                 f"Type one amount per recipient, at least {minimum_each} each, "
                 f"adding up to {total}."
             )
+        case ChooseCounts(maxima=maxima, total=total):
+            return (
+                f"Type one amount per option (at most {', '.join(map(str, maxima))}), "
+                f"adding up to {total}."
+            )
         case _:
             return "This kind of answer can't be typed yet."
 
@@ -203,7 +210,7 @@ def render_request(request: DecisionRequest, view: PlayerView) -> str:
     lines = [f"Player {request.player}: {request.prompt} ({request.kind.value}; CR {rules})"]
     space = request.space
     options: tuple[Option, ...] = ()
-    if isinstance(space, ChooseOne | ChooseSubset | ChooseOrder):
+    if isinstance(space, ChooseOne | ChooseSubset | ChooseOrder | ChooseCounts):
         options = space.options
     elif isinstance(space, Distribute):
         options = space.recipients
@@ -239,7 +246,7 @@ def parse_answer(space: AnswerSpace, text: str) -> AnswerValue:
             return PickMany(() if text == "-" else tuple(sorted(_numbers(text))))
         case ChooseOrder():
             return Order(_numbers(text))
-        case Distribute():
+        case Distribute() | ChooseCounts():
             return Amounts(_numbers(text))
         case _:
             raise AnswerSyntaxError(f"a {type(space).__name__} can't be typed yet")
@@ -248,7 +255,7 @@ def parse_answer(space: AnswerSpace, text: str) -> AnswerValue:
 HELP = """\
 Answer with option numbers (from 0) or numbers:
   one option: 2        a subset: 3 0 (or - for none)    an order: 1 0 2
-  a number: 4          amounts per recipient: 2 1
+  a number: 4          amounts per recipient or option: 2 1
 Commands: view (show the game again), log (the whole log), help, quit."""
 
 

@@ -193,6 +193,8 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
   documentation).
 - [x] The coverage-map consistency test, and the rule defaults M0/M1 hard-coded turned into
   single functions (rule 12, M2.1).
+- [x] Mana costs and symbols (107.4), characteristics' mana cost, colors and mana value (202), typed
+  words (612), and the `ChooseCounts` answer space (M2.2).
 - [ ] The full casting process (601.2):
   - announce, with **cast variants and permissions** chosen before the card moves, so every
     layout that changes how a spell is cast fits (split cards and Rooms 709.3, double-faced
@@ -435,6 +437,15 @@ completes a step (CLAUDE.md, "Documentation requirements").
   `GameState.extra_turns` and `turn_direction`; `TakeTurn` as the turn frame (724); `DecisionRequest.for_player`
   (723.5) and `concede(by=)` (723.6); `ManaPoolEmptied.kept`. A normal game is unchanged: the
   quick fuzz summary is identical to M1's.
+- **Done (M2.2, mana costs and characteristics):** `resolve.data.mana_cost` (`ManaSymbol` of every
+  kind of 107.4, `ManaCost`, `parse_mana_cost`, mana value 202.3 and colors 202.2), parsed into
+  `CardFace.cost` (an unreadable cost is refused by `DeckCard` and reported by the coverage tool
+  like an unreadable type line); `Characteristics.mana_cost`, `colors` and `mana_value`;
+  `characteristics` raises 109.3 for the omen and preparation layouts whatever their face count;
+  `resolve.cards.primitives.words` (`ColorWord`, `LandTypeWord`, `SubtypeWord`, `NameRef`,
+  `rewrite_words`); `ChooseCounts` (601.2h) with random-agent, text-agent and fuzz-probe support;
+  `Color` in `resolve.data.types`; `tools/excerpts/cards.json` (the three vanilla creatures).
+  No behavior change: the quick fuzz summary is identical to M2.1's.
 
 ---
 
@@ -472,9 +483,9 @@ earlier milestones must leave room for every row in this map.
 | 104 | Ending the Game | M1 ✓; 104.3c-d M4, M7; 104.4b M7; alternative wins and losses M5 | E | `can_lose_game`: default function in place (M2.1 ✓) |
 | 105 | Colors | M2 | E |  |
 | 106 | Mana | M1 ✓, M2; 106.7 M6 | E |  |
-| 107 | Numbers and Symbols | M2; 107.4e-f, 107.4h M9; 107.14 M4; 107.15, 107.17 M9 | E | hybrid and Phyrexian: M2 builds the announcement stage |
+| 107 | Numbers and Symbols | M2 (107.4 symbols parsed: M2.2 ✓); 107.4e-f, 107.4h M9; 107.14 M4; 107.15, 107.17 M9 | E | hybrid and Phyrexian: M2 builds the announcement stage |
 | 108 | Cards | M0 ✓ | E |  |
-| 109 | Objects | M1 ✓; 109.3 with each layout | E |  |
+| 109 | Objects | M1 ✓; 109.3 with each layout (omen and preparation: gap raised, M2.2 ✓) | E |  |
 | 110 | Permanents | M1 ✓; statuses with their mechanics | E |  |
 | 111 | Tokens | M4 | E | D (Regisaur Alpha, Generous Gift) |
 | 112 | Spells | M2; copies M5 | E |  |
@@ -491,9 +502,9 @@ earlier milestones must leave room for every row in this map.
 | 123 | Stickers | M5 (stickers change names, abilities, power and toughness: 123.6-123.8); M7 (sticker sheets chosen before the game, 123.2) | S | Unfinity: 47 cards that use stickers and 48 sticker sheets are Commander-legal |
 | 200 | General | — | — | nothing to implement |
 | 201 | Name | M1 ✓; 201.4 M4 | E |  |
-| 202 | Mana Cost and Color | M2 | E |  |
+| 202 | Mana Cost and Color | M2 (M2.2 ✓: 202.1-202.3; 202.3e on the stack M2.7) | E |  |
 | 203 | Illustration | out of scope | — | no game rules |
-| 204 | Color Indicator | M2 | E | colors come from the card data |
+| 204 | Color Indicator | M2 (M2.2 ✓) | E | colors come from the card data |
 | 205 | Type Line | M1 ✓; type changes M5 | E |  |
 | 206 | Expansion Symbol | M9 | X | 206.3: City in a Bottle, Golgothian Sylex and Apocalypse Chime refer to names "originally printed" in a set; 206.3a-c list those names, so no extra card data is needed |
 | 207 | Text Box | M1 ✓ | E | ability words have no rules meaning (207.2c) |
@@ -555,7 +566,7 @@ earlier milestones must leave room for every row in this map.
 | 609 | Effects | M2 | E |  |
 | 610 | One-Shot Effects | M2; 610.3 M4 | E |  |
 | 611 | Continuous Effects | M5 | E |  |
-| 612 | Text-Changing Effects | M5 (typed words from M2) | X |  |
+| 612 | Text-Changing Effects | M5 (typed words and `rewrite_words`: M2.2 ✓) | X |  |
 | 613 | Interaction of Continuous Effects | M5 | E |  |
 | 614 | Replacement Effects | M6 | E |  |
 | 615 | Prevention Effects | M6 | E |  |

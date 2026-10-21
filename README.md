@@ -29,8 +29,10 @@ every numbered rule and keyword a milestone on the way to handling every tournam
 and the list of hardest cards in [`docs/torture-tests.md`](docs/torture-tests.md). Its second
 step made the rules the early code hard-wired (land plays, hand size, the turn sequence, who
 decides) into single functions that effects can change later, and added a test that keeps the
-map in step with the Comprehensive Rules; games play exactly as before. **Next:** casting
-spells (601.2). Details: "Current status" in [`CLAUDE.md`](CLAUDE.md).
+map in step with the Comprehensive Rules; games play exactly as before. Its third step taught
+the engine to read mana costs (every kind of mana symbol), and so a card's colors and mana value,
+added the typed words a text-changing effect will need and an answer space for paying mana; games
+still play exactly as before. **Next:** casting spells (601.2). Details: "Current status" in [`CLAUDE.md`](CLAUDE.md).
 
 Resolve is unofficial Fan Content permitted under the Wizards of the Coast Fan Content Policy. It
 is not approved or endorsed by Wizards. Portions of the materials used are property of Wizards of
