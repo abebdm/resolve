@@ -28,6 +28,7 @@ from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer, DecisionRequest, validate_answer
 from resolve.decisions.spaces import (
     AnswerSpace,
+    ChooseCounts,
     ChooseNumber,
     ChooseOne,
     ChooseOrder,
@@ -683,6 +684,8 @@ SPACES: list[AnswerSpace] = [
     ChooseNumber(0, 4),
     ChooseNumber(2),
     Distribute(OPTIONS[:2], 5),
+    ChooseCounts(OPTIONS[:2], (2, 1), 2),
+    ChooseCounts(OPTIONS, (3, 3, 3), 4),
 ]
 
 

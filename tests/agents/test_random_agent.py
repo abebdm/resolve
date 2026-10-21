@@ -10,6 +10,7 @@ from resolve.agents.random_agent import DEFAULT_UNBOUNDED_SPAN, RandomAgent
 from resolve.decisions.spaces import (
     Amounts,
     AnswerSpace,
+    ChooseCounts,
     ChooseNumber,
     ChooseOne,
     ChooseOrder,
@@ -44,6 +45,10 @@ SPACES: list[AnswerSpace] = [
     Distribute(OPTIONS[:1], 4),
     Distribute(OPTIONS[:2], 5, minimum_each=0),
     Distribute(OPTIONS[:2], 0, minimum_each=0),
+    ChooseCounts(OPTIONS[:3], (2, 2, 2), 3),
+    ChooseCounts(OPTIONS[:2], (2, 1), 2),
+    ChooseCounts(OPTIONS[:2], (2, 1), 0),
+    ChooseCounts(OPTIONS[:1], (5,), 5),
 ]
 
 SAMPLES = 2000
@@ -156,6 +161,32 @@ def test_distribute_with_no_spare_gives_each_recipient_the_minimum() -> None:
     assert agent.random_value(Distribute(OPTIONS[:3], 3)) == Amounts((1, 1, 1))
     assert agent.random_value(Distribute(OPTIONS[:1], 4)) == Amounts((4,))
     assert agent.random_value(Distribute(OPTIONS[:2], 0, minimum_each=0)) == Amounts((0, 0))
+
+
+def test_choose_counts_is_uniform_over_the_valid_answers() -> None:
+    """3 among three kinds of unit with at most 2 of each: 10 divisions minus the 3 that give
+    one kind all 3 = 7 answers."""
+    agent = RandomAgent(seed=10)
+    space = ChooseCounts(OPTIONS[:3], (2, 2, 2), 3)
+    counts = Counter[object](agent.random_value(space) for _ in range(SAMPLES * 3))
+    assert set(counts) == {
+        Amounts(a)
+        for a in [(2, 1, 0), (2, 0, 1), (1, 2, 0), (0, 2, 1), (1, 0, 2), (0, 1, 2), (1, 1, 1)]
+    }
+    assert_uniform(counts, 7)
+
+
+def test_choose_counts_respects_the_maxima() -> None:
+    agent = RandomAgent(seed=13)
+    space = ChooseCounts(OPTIONS[:2], (2, 1), 2)
+    assert {agent.random_value(space) for _ in range(200)} == {Amounts((2, 0)), Amounts((1, 1))}
+
+
+def test_choose_counts_with_one_answer_gives_it() -> None:
+    agent = RandomAgent(seed=14)
+    assert agent.random_value(ChooseCounts(OPTIONS[:2], (2, 1), 0)) == Amounts((0, 0))
+    assert agent.random_value(ChooseCounts(OPTIONS[:1], (5,), 5)) == Amounts((5,))
+    assert agent.random_value(ChooseCounts(OPTIONS[:2], (1, 1), 2)) == Amounts((1, 1))
 
 
 def test_the_same_seed_gives_the_same_answers() -> None:

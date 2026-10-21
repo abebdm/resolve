@@ -265,6 +265,7 @@ independent of the kind:
 | `ChooseOrder(options)` | `Order(permutation)` | a permutation of the option indices |
 | `ChooseNumber(minimum, maximum or None)` | `Number(value)` | within bounds |
 | `Distribute(recipients, total, minimum_each)` | `Amounts(amounts)` | one per recipient, each at least the minimum, adding up to the total (601.2d) |
+| `ChooseCounts(options, maxima, total)` | `Amounts(amounts)` | one per option, each from 0 to its maximum, adding up to the total (601.2h; built in M2.2, §17.7) |
 
 Every outcome has exactly one valid answer (canonical forms), which helps AI search. Options are
 typed (`PlayerOption`, `ObjectOption`, `NamedOption`, and the priority actions `PassOption`,

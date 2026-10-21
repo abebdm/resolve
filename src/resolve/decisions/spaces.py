@@ -10,6 +10,8 @@ An answer space describes every answer a decision accepts:
 | ``ChooseNumber`` | ``Number(value)``     | ``minimum <= value <= maximum``                    |
 | ``Distribute``   | ``Amounts(amounts)``  | one amount per recipient, each at least             |
 |                  |                       | ``minimum_each``, adding up to ``total``           |
+| ``ChooseCounts`` | ``Amounts(amounts)``  | one amount per option, each from 0 to its maximum,  |
+|                  |                       | adding up to ``total``                              |
 
 ``ChooseOne`` lists every option (an *enumerated* space, which the AI will search). The others are
 *constrained* spaces, described by bounds rather than listed.
@@ -281,5 +283,45 @@ class Distribute(AnswerSpace):
             raise InvalidAnswer(f"give exactly one amount for each of {len(self.recipients)}")
         if any(amount < self.minimum_each for amount in amounts):
             raise InvalidAnswer(f"each recipient must get at least {self.minimum_each}")
+        if sum(amounts) != self.total:
+            raise InvalidAnswer(f"the amounts must add up to {self.total}, not {sum(amounts)}")
+
+
+@dataclass(frozen=True)
+class ChooseCounts(AnswerSpace):
+    """Choose how many of each listed option, from none up to its maximum, adding up to ``total``.
+
+    The space for paying mana (601.2h, design.md §17.7): each option is a class of identical
+    units in the pool, and the answer says how many of each class to spend. Per-unit options
+    would give several answers for one outcome, which the canonical-answer rule (§6) forbids;
+    counts give exactly one.
+    """
+
+    options: tuple[Option, ...]
+    maxima: tuple[int, ...]
+    total: int
+
+    def __post_init__(self) -> None:
+        if not self.options:
+            raise ValueError("ChooseCounts needs at least one option")
+        if len(self.maxima) != len(self.options):
+            raise ValueError(
+                f"ChooseCounts needs one maximum per option: {len(self.options)} options, "
+                f"{len(self.maxima)} maxima"
+            )
+        if any(maximum < 0 for maximum in self.maxima) or self.total < 0:
+            raise ValueError("ChooseCounts can't have a negative maximum or total")
+        if sum(self.maxima) < self.total:
+            raise ValueError(
+                f"ChooseCounts can't reach a total of {self.total} with maxima {self.maxima}"
+            )
+
+    def validate(self, answer: AnswerValue) -> None:
+        amounts = _int_tuple(_expect(answer, Amounts).amounts, "amounts")
+        if len(amounts) != len(self.options):
+            raise InvalidAnswer(f"give exactly one amount for each of {len(self.options)}")
+        for amount, maximum in zip(amounts, self.maxima, strict=True):
+            if not 0 <= amount <= maximum:
+                raise InvalidAnswer(f"each amount must be between 0 and its maximum {maximum}")
         if sum(amounts) != self.total:
             raise InvalidAnswer(f"the amounts must add up to {self.total}, not {sum(amounts)}")

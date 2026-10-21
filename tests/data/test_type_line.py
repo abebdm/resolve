@@ -182,5 +182,6 @@ def test_the_coverage_tool_lists_unreadable_cards_and_fails(tmp_path: Path) -> N
         [deck], load_card_database(tmp_path), CardRegistry([CardDefinition("Forest")])
     )
     assert "2 distinct: 1 implemented, 0 missing, 0 unknown, 1 unreadable" in report
-    assert "Unreadable (type line doesn't follow 205):\n  1 Test Joke  [Mainboard]" in report
+    heading = "Unreadable (type line or mana cost doesn't follow 205 or 107.4):"
+    assert f"{heading}\n  1 Test Joke  [Mainboard]" in report
     assert status == 1

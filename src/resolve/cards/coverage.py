@@ -22,7 +22,8 @@ class CoverageStatus(Enum):
     # The name doesn't identify exactly one card in the card data snapshot (a typo, a card newer
     # than the snapshot, or an ambiguous name).
     UNKNOWN = "unknown"
-    # The card's type line doesn't follow 205 (an Un-set joke type), so it can't be played.
+    # The card's type line or mana cost doesn't follow 205 or 107.4 (an Un-set joke), so it can't
+    # be played.
     UNREADABLE = "unreadable"
 
 
@@ -73,7 +74,8 @@ class DeckCoverage:
 
     @property
     def unreadable(self) -> tuple[CardCoverage, ...]:
-        """Cards whose type line the engine can't read (205), so they can't be played."""
+        """Cards whose type line or mana cost the engine can't read (205, 107.4), so they can't be
+        played."""
         return self.with_status(CoverageStatus.UNREADABLE)
 
     @property
@@ -121,6 +123,12 @@ def deck_coverage(
             status, reason = (
                 CoverageStatus.UNREADABLE,
                 f"its type line doesn't follow 205 ({problems})",
+            )
+        elif card.mana_cost_problems:
+            problems = "; ".join(card.mana_cost_problems)
+            status, reason = (
+                CoverageStatus.UNREADABLE,
+                f"its mana cost doesn't follow 107.4 ({problems})",
             )
         elif missing_faces:
             status, reason = CoverageStatus.MISSING, None

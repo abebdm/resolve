@@ -6,7 +6,9 @@ import pytest
 
 from resolve.decisions.spaces import (
     Amounts,
+    AnswerSpace,
     AnswerValue,
+    ChooseCounts,
     ChooseNumber,
     ChooseOne,
     ChooseOrder,
@@ -25,8 +27,7 @@ from resolve.state.ids import ObjectId, PlayerId
 THREE = (ObjectOption(ObjectId(10)), ObjectOption(ObjectId(11)), PlayerOption(PlayerId(0)))
 
 
-def accepts(space: ChooseOne | ChooseSubset | ChooseOrder | ChooseNumber | Distribute,
-            value: AnswerValue) -> bool:  # fmt: skip
+def accepts(space: AnswerSpace, value: AnswerValue) -> bool:
     try:
         space.validate(value)
     except InvalidAnswer:
@@ -169,3 +170,72 @@ def test_distribute_that_cannot_be_satisfied_is_a_bug() -> None:
     with pytest.raises(ValueError, match="recipient"):
         Distribute((), total=0)
     assert accepts(Distribute(THREE, total=3), Amounts((1, 1, 1)))
+
+
+# --- ChooseCounts ------------------------------------------------------------------------------
+
+
+def test_601_2h_choose_counts_gives_each_option_up_to_its_maximum() -> None:
+    """Pay 2 from two kinds of unit (two of the first, one of the second): (2, 0) and (1, 1)."""
+    space = ChooseCounts(THREE[:2], maxima=(2, 1), total=2)
+    assert accepts(space, Amounts((2, 0)))
+    assert accepts(space, Amounts((1, 1)))
+    assert not accepts(space, Amounts((0, 2)))  # more than the second's maximum
+    assert not accepts(space, Amounts((1, 0)))  # adds up to 1, not 2
+    assert not accepts(space, Amounts((2, 1)))  # adds up to 3
+    assert not accepts(space, Amounts((2,)))  # wrong length
+    assert not accepts(space, Amounts((1, 1, 0)))
+    assert not accepts(space, Amounts((3, -1)))  # negative
+    assert not accepts(space, Number(2))  # wrong kind of answer
+
+
+def test_choose_counts_accepts_only_integers() -> None:
+    space = ChooseCounts(THREE[:2], maxima=(2, 1), total=2)
+    assert not accepts(space, Amounts((1.0, 1.0)))  # pyright: ignore[reportArgumentType]
+    assert not accepts(space, Amounts((True, True)))  # a bool isn't an amount
+
+
+def test_choose_counts_with_a_total_of_zero_accepts_only_all_zeros() -> None:
+    space = ChooseCounts(THREE[:2], maxima=(2, 1), total=0)
+    assert accepts(space, Amounts((0, 0)))
+    assert not accepts(space, Amounts((1, 0)))
+
+
+def test_choose_counts_that_cannot_be_satisfied_is_a_bug() -> None:
+    with pytest.raises(ValueError, match="total"):
+        ChooseCounts(THREE[:2], maxima=(1, 1), total=3)  # sum(maxima) < total
+    with pytest.raises(ValueError, match="option"):
+        ChooseCounts((), maxima=(), total=0)
+    with pytest.raises(ValueError, match="maxima"):
+        ChooseCounts(THREE[:2], maxima=(1,), total=1)  # one maximum per option
+    with pytest.raises(ValueError, match="negative"):
+        ChooseCounts(THREE[:2], maxima=(2, -1), total=1)
+    with pytest.raises(ValueError, match="negative"):
+        ChooseCounts(THREE[:2], maxima=(2, 1), total=-1)
+    assert accepts(ChooseCounts(THREE[:2], maxima=(1, 1), total=2), Amounts((1, 1)))
+
+
+def test_choose_counts_has_one_valid_answer_per_outcome() -> None:
+    """Per-unit options would give several answers for one outcome (design.md 17.7); counts
+    don't: the same units are the same tuple."""
+    space = ChooseCounts(THREE, maxima=(2, 2, 2), total=3)
+    valid = [
+        Amounts((a, b, c)) for a in range(3) for b in range(3) for c in range(3)
+        if accepts(space, Amounts((a, b, c)))
+    ]  # fmt: skip
+    assert len(valid) == len(set(valid)) == 7  # compositions of 3 into 3 parts each at most 2
+
+
+def test_choose_counts_rejects_an_amount_for_an_option_with_maximum_zero() -> None:
+    space = ChooseCounts(THREE[:2], maxima=(0, 2), total=1)
+    assert accepts(space, Amounts((0, 1)))
+    assert not accepts(space, Amounts((1, 0)))
+
+
+def test_choose_counts_survives_copy_and_pickle() -> None:
+    import copy
+    import pickle
+
+    space = ChooseCounts(THREE[:2], maxima=(2, 1), total=2)
+    assert pickle.loads(pickle.dumps(space)) == space
+    assert copy.deepcopy(space) == space

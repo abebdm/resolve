@@ -26,7 +26,7 @@ class DeckCard(Immutable):
 
     Building one with definitions that don't match the faces raises ``DeckError``, so a deck can't
     contain an unimplemented card even when it is built by hand. Nor can it contain a card whose
-    type line the engine can't read (205; an Un-set joke type).
+    type line or mana cost the engine can't read (205, 107.4; Un-set jokes).
     """
 
     data: CardData
@@ -43,6 +43,12 @@ class DeckCard(Immutable):
         if problems:
             raise DeckError(
                 f"{self.data.name!r} can't be played: its type line doesn't follow 205 "
+                f"({'; '.join(problems)})"
+            )
+        problems = self.data.mana_cost_problems
+        if problems:
+            raise DeckError(
+                f"{self.data.name!r} can't be played: its mana cost doesn't follow 107.4 "
                 f"({'; '.join(problems)})"
             )
 

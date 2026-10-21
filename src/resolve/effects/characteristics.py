@@ -1,7 +1,8 @@
 """Computing an object's characteristics (109.3, design.md §8).
 
 ``characteristics(state, obj)`` is the single place the engine reads what an object *is*: its
-name, types, abilities, power and toughness (printed numbers, 208.1; a star raises
+name, mana cost, colors, mana value, types, abilities, power and toughness (printed numbers,
+208.1; a star raises
 ``NotImplementedRule("208.2")`` when read). It starts from the card's printed face and will
 apply continuous effects through the layer system (613) once they exist (M5). Nothing can
 create a continuous effect yet, so for now the result is the printed face. Characteristics are
@@ -20,6 +21,23 @@ Which face counts:
 - other multi-faced cards (split, flip, adventurer, meld, ...): ``NotImplementedRule``, since
   each has its own rules for combined or alternative characteristics (709.4, 710.1, 715.4,
   712.4).
+- omen and preparation cards: their front part (720.4, 722.4: outside an Omen spell on the stack
+  an omen card has only its normal characteristics, and a preparation card has them in every
+  zone). The layouts are ``omen``, ``prepare``, and Scryfall's ``adventure`` layout when the
+  second face is an Omen (the data files omens that way), and the data may carry one face or
+  two. Casting an omen card as an Omen (720.3) and casting a preparation card's alternative
+  part (722.3) are cast variants, whose gaps M2.3 raises.
+
+Mana cost, colors and mana value (202):
+
+- the mana cost is the face's printed cost, ``None`` if it has none (202.3a, and not the same
+  as ``{0}``);
+- the colors are the face's colors in the card data (105.2, 202.2): Scryfall derives them from the
+  mana cost and any color indicator (204.2), so a card whose colors are set otherwise (devoid)
+  reads right too;
+- the mana value is the cost's, with {X} as 0 (202.3e); M2.3 gives an object on the stack the X
+  chosen for it. The back face of a nonmodal double-faced card is never read yet (712.8d), so
+  202.3b needs nothing.
 """
 
 from __future__ import annotations
@@ -29,7 +47,8 @@ from typing import TYPE_CHECKING
 
 from resolve.cards.primitives.abilities import BASIC_LAND_MANA, Ability, intrinsic_mana_ability
 from resolve.data.cards import CardData
-from resolve.data.types import CardType, Supertype
+from resolve.data.mana_cost import ManaCost
+from resolve.data.types import CardType, Color, Supertype
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.state.ids import ObjectId
 from resolve.state.zones import ZoneKind
@@ -40,6 +59,10 @@ if TYPE_CHECKING:
 
 # Scryfall layouts of double-faced cards whose front face gives the characteristics (712.8a).
 FRONT_FACE_LAYOUTS = ("transform", "modal_dfc")
+# Layouts of omen and preparation cards (720, 722), whatever the number of faces in the data.
+NORMAL_FACE_LAYOUTS = ("omen", "prepare")
+# 205.3: the subtype of an omen's inset part; Scryfall's "adventure" layout also holds omens.
+OMEN_SUBTYPE = "Omen"
 
 
 @dataclass(frozen=True)
@@ -53,6 +76,9 @@ class Characteristics(Immutable):
     abilities: tuple[Ability, ...] = ()
     power_text: str | None = None
     toughness_text: str | None = None
+    mana_cost: ManaCost | None = None
+    colors: tuple[Color, ...] = ()
+    mana_value: int = 0
 
     def is_a(self, card_type: CardType) -> bool:
         """Whether the object has this card type (205.2)."""
@@ -86,9 +112,9 @@ def characteristics(state: GameState, obj: ObjectId) -> Characteristics:
     index = _face_index(card.data)
     face = card.data.faces[index]
     types = face.types
-    if types is None:
+    if types is None or face.mana_cost_problem is not None:
         # A deck can't contain such a card (DeckCard refuses it), so this is a bug.
-        raise EngineError(f"{face.name!r} has an unreadable type line in a game")
+        raise EngineError(f"{face.name!r} has an unreadable type line or mana cost in a game")
     abilities: list[Ability] = list(card.definitions[index].abilities)
     if CardType.LAND in types.card_types:
         # 305.6: each basic land type gives the land its intrinsic mana ability.
@@ -105,14 +131,26 @@ def characteristics(state: GameState, obj: ObjectId) -> Characteristics:
         abilities=tuple(abilities),
         power_text=face.power if has_numbers else None,
         toughness_text=face.toughness if has_numbers else None,
+        mana_cost=face.cost,
+        colors=tuple(color for color in Color if color.value in face.colors),
+        mana_value=0 if face.cost is None else face.cost.mana_value(),
     )
 
 
 def _face_index(data: CardData) -> int:
+    if data.layout in NORMAL_FACE_LAYOUTS or _is_omen(data):
+        return 0  # 720.4, 722.4
     if not data.is_multi_faced:
         return 0
     if data.layout in FRONT_FACE_LAYOUTS:
         return 0  # 712.8a, 712.8c, 712.8d
     raise NotImplementedRule(
         "109.3: the characteristics of multi-faced cards other than double-faced cards"
+    )
+
+
+def _is_omen(data: CardData) -> bool:
+    """Whether the card is an omen card (720.1): its second part has the Omen subtype."""
+    return any(
+        face.types is not None and OMEN_SUBTYPE in face.types.subtypes for face in data.faces[1:]
     )

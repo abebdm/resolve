@@ -48,6 +48,35 @@ The "{T}: Add [mana symbol]" a land has for each basic land type. Never put it i
 - **Parameters:** `mana: tuple[ManaType, ...]` (at least one).
 - **Example:** `AddMana((ManaType.GREEN,))` in the Forest's intrinsic ability.
 
+## Typed words (`resolve.cards.primitives.words`)
+
+### `ColorWord`, `LandTypeWord`, `SubtypeWord`, `NameRef` (`resolve.cards.primitives.words`)
+Words in a definition, typed so a text-changing effect can find the ones it changes. A color
+word used as a color, a land type used as a land type and a creature or other subtype used as
+one are rewritable; a card name (`NameRef`) never is.
+- **Rules:** 612.2, 612.2a, 205.3.
+- **Parameters:** `ColorWord(color)`, `LandTypeWord(name)`, `SubtypeWord(name)`, `NameRef(name)`.
+- **Example:** none yet in a definition (a mana Medallion's "green" will be `ColorWord(Color.GREEN)`); the
+  unit tests in `tests/rules/test_612_typed_words.py`.
+
+### `rewrite_words(value, mapping)` (`resolve.cards.primitives.words`)
+Walks an Immutable value (dataclass fields and tuples, at any depth) and replaces each typed word
+that is a key of `mapping`; returns the value itself when nothing changes. A mapping between
+different kinds of word raises `ValueError`.
+- **Rules:** 612.2, 612.3 (only the definition's own words are walked), 613.1c.
+- **Example:** M5's Mind Bend (`rewrite_words(definition, {ColorWord(WHITE): ColorWord(BLUE)})`).
+
+## Costs: mana (`resolve.data.mana_cost`)
+
+### `ManaSymbol`, `ManaCost`, `parse_mana_cost(text)` (`resolve.data.mana_cost`)
+A mana cost as data: every symbol of 107.4 (colored, {C}, generic, {X}, hybrid, monocolored and
+colorless hybrid, Phyrexian, hybrid Phyrexian, snow) in printed order, with `text`, `colors`
+(202.2, WUBRG order) and `mana_value(x=0)` (202.3). `CardFace.cost` holds the parsed cost, `None`
+for no mana cost (202.3a, not the same as `{0}`) or a cost that doesn't follow 107.4
+(`ManaCostError`). Paying a cost is M2.3's `TotalCost` and `PayCosts`.
+- **Rules:** 107.4, 202.1-202.3, 202.3e-g.
+- **Example:** `parse_mana_cost("{2/W}{2/W}").mana_value() == 4` (Test Hybrid in the tests).
+
 ## Targets and filters
 
 *None yet.*

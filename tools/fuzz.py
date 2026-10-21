@@ -77,6 +77,7 @@ from resolve.decisions.request import DecisionAnswer, DecisionRequest
 from resolve.decisions.spaces import (
     Amounts,
     AnswerValue,
+    ChooseCounts,
     ChooseNumber,
     ChooseOne,
     ChooseOrder,
@@ -368,6 +369,13 @@ def invalid_answers(
             wrong += [
                 answer(Amounts((total,) * (len(recipients) + 1))),
                 answer(Amounts((total + 1,) + (0,) * (len(recipients) - 1))),
+            ]
+        case ChooseCounts(options=options, maxima=maxima, total=total):
+            wrong += [
+                answer(Amounts((total,) * (len(options) + 1))),
+                answer(Amounts((total + 1,) + (0,) * (len(options) - 1))),
+                answer(Amounts((maxima[0] + 1,) + (0,) * (len(options) - 1))),
+                answer(Amounts((-1,) + (0,) * (len(options) - 1))),
             ]
         case _:
             pass

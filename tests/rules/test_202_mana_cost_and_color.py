@@ -1,0 +1,235 @@
+"""202, 105.2, 204: an object's mana cost, colors and mana value in its characteristics.
+
+From the pinned CR:
+
+- 202.1, 202.3a: a card's mana cost is the symbols printed in its top right; a land (or any card
+  without one) has no mana cost, and its mana value is 0, which is not the same as a cost of {0}.
+- 202.2, 105.2: an object is the color or colors of the mana symbols in its mana cost (hybrid
+  and Phyrexian symbols are all of their colors, 202.2d); colorless mana symbols and generic
+  mana add no color. 204.2: a color indicator adds colors; the card data's colors include it.
+- 202.3, 202.3e-g: mana value is the total amount of mana in the cost; {X} is 0 off the stack,
+  hybrid symbols count their largest half, Phyrexian symbols 1.
+- 109.3: characteristics include mana cost and color. Omen and preparation cards have only their
+  normal characteristics outside an Omen spell on the stack (720.4, 722.4), which is where the
+  engine reads them until casting an omen as an Omen (720.3, M2.3's variant gaps) exists.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import pytest
+
+from resolve.cards.registry import CardDefinition, CardRegistry
+from resolve.data.cards import CardDatabase, parse_oracle_cards
+from resolve.data.mana_cost import parse_mana_cost
+from resolve.data.types import Color
+from resolve.effects.characteristics import Characteristics, characteristics
+from resolve.errors import NotImplementedRule
+from resolve.state.ids import PlayerId
+from tests import scryfall_fixtures as fx
+from tests.scenario import Scenario
+
+P0 = PlayerId(0)
+W, U, B, R, G = Color.WHITE, Color.BLUE, Color.BLACK, Color.RED, Color.GREEN
+
+CARDS = [
+    fx.FOREST,
+    fx.GRIZZLY_BEARS,
+    fx.HILL_GIANT,
+    fx.LLANOWAR_ELVES,
+    fx.SOL_RING,
+    fx.SELESNYA_SIGNET,
+    fx.FIERY_CONFLUENCE,
+    fx.RISHKARS_EXPERTISE,
+    fx.TEST_MOX,
+    fx.TEST_GOLD,
+    fx.TEST_GROWTH,
+    fx.TEST_HYBRID,
+    fx.TEST_TWO_TONE,
+    fx.TEST_PHYREXIAN,
+    fx.TEST_SNOW,
+]
+
+
+def chars_of(*records: dict[str, Any]) -> list[Characteristics]:
+    """The characteristics of each card, in hand, with the definitions the tests need."""
+    names = [name for record in records for name in _face_names(record)]
+    scenario = Scenario(
+        2,
+        database=CardDatabase(
+            parse_oracle_cards(list({r["oracle_id"]: r for r in [*CARDS, *records]}.values()))
+        ),
+        registry=CardRegistry([CardDefinition(name) for name in {*names, "Forest"}]),
+    )
+    objects = scenario.hand(P0, [record["name"] for record in records])
+    state = scenario.build()
+    return [characteristics(state, obj) for obj in objects]
+
+
+def _face_names(record: dict[str, Any]) -> list[str]:
+    faces: list[dict[str, Any]] = record.get("card_faces", [record])
+    return [face["name"] for face in faces]
+
+
+def one(record: dict[str, Any]) -> Characteristics:
+    (chars,) = chars_of(record)
+    return chars
+
+
+# --- 202.1, 202.3a: the cost ------------------------------------------------------------------
+
+
+def test_202_1_the_mana_cost_is_in_the_characteristics() -> None:
+    assert one(fx.HILL_GIANT).mana_cost == parse_mana_cost("{3}{R}")
+    assert one(fx.TEST_HYBRID).mana_cost == parse_mana_cost("{2/W}{2/W}")
+
+
+def test_202_1_a_land_has_no_mana_cost_unlike_a_zero_cost() -> None:
+    """202.3a: a land has no mana cost and mana value 0; {0} is a cost, with mana value 0 too."""
+    forest, mox = chars_of(fx.FOREST, fx.TEST_MOX)
+    assert forest.mana_cost is None and forest.mana_value == 0
+    assert mox.mana_cost is not None and mox.mana_value == 0
+    assert forest.mana_cost != mox.mana_cost
+
+
+# --- 202.3: mana value ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("record", "value"),
+    [
+        (fx.HILL_GIANT, 4),
+        (fx.FIERY_CONFLUENCE, 4),
+        (fx.LLANOWAR_ELVES, 1),
+        (fx.RISHKARS_EXPERTISE, 6),
+        (fx.TEST_GROWTH, 1),  # 202.3e: {X}{G} with X as 0 off the stack
+        (fx.TEST_HYBRID, 4),  # 202.3f: {2/W}{2/W}
+        (fx.TEST_TWO_TONE, 3),  # 202.3f: {1}{W/U}{W/U}
+        (fx.TEST_PHYREXIAN, 3),  # 202.3g: {1}{W/P}{W/P}
+        (fx.TEST_SNOW, 2),
+        (fx.FOREST, 0),
+    ],
+)
+def test_202_3_mana_value(record: dict[str, Any], value: int) -> None:
+    assert one(record).mana_value == value
+
+
+# --- 105.2, 202.2: colors ---------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("record", "colors"),
+    [
+        (fx.GRIZZLY_BEARS, (G,)),
+        (fx.SOL_RING, ()),  # 202.2b: no colored symbol in {1}
+        (fx.SELESNYA_SIGNET, ()),  # 202.2b: its {G}{W} is in its ability, not its cost
+        (fx.TEST_GOLD, (W, B)),  # 202.2c
+        (fx.TEST_TWO_TONE, (W, U)),  # 202.2d
+        (fx.TEST_PHYREXIAN, (W,)),  # 107.4f
+        (fx.FOREST, ()),  # 105.2c: a land isn't green, whatever it taps for
+    ],
+)
+def test_105_2_colors_come_from_the_card(record: dict[str, Any], colors: tuple[Color, ...]) -> None:
+    assert one(record).colors == colors
+
+
+def test_204_2_a_color_indicator_gives_the_colors_the_card_data_lists() -> None:
+    """204.2: an object with a color indicator is each color it denotes. Scryfall's colors
+    include indicators, so a face with no cost and colors [U] (a back face) is blue."""
+    indicated = fx.spell("Test Indicated", "", 0.0, "Creature — Spirit", ["U"])
+    (chars,) = chars_of(indicated)
+    assert chars.mana_cost is None and chars.colors == (U,) and chars.mana_value == 0
+
+
+def test_105_2_colors_are_listed_in_the_order_white_blue_black_red_green() -> None:
+    data_order = fx.spell("Test Reversed", "{G}{W}", 2.0, "Sorcery", ["G", "W"])
+    assert one(data_order).colors == (W, G)
+
+
+# --- 720.4, 722.4: omen and preparation cards -------------------------------------------------
+
+
+def _front_and_inset(layout: str, faces: int, inset_type: str) -> dict[str, Any]:
+    """A card of ``layout`` whose data has one face (trimmed) or two."""
+    front = fx.spell(f"Test Front {layout}", "{1}{G}", 2.0, "Creature — Elf", ["G"])
+    front["power"], front["toughness"] = "2", "2"
+    front["layout"] = layout
+    if faces == 1:
+        return front
+    inset = fx.spell(f"Test Inset {layout}", "{R}", 1.0, inset_type, ["R"])
+    return {
+        **front,
+        "name": f"{front['name']} // {inset['name']}",
+        "card_faces": [{**front, "object": "card_face"}, {**inset, "object": "card_face"}],
+    }
+
+
+@pytest.mark.parametrize(
+    ("layout", "inset_type"),
+    [
+        ("prepare", "Sorcery"),  # 722.4: in every zone
+        ("omen", "Instant — Omen"),
+        ("adventure", "Instant — Omen"),  # how the card data files real omens (720.1)
+    ],
+)
+@pytest.mark.parametrize("faces", [1, 2])
+def test_720_4_and_722_4_omen_and_preparation_cards_have_their_normal_characteristics(
+    layout: str, inset_type: str, faces: int
+) -> None:
+    """Outside an Omen spell on the stack an omen card has only its normal characteristics
+    (720.4); a preparation card has only them in every zone (722.4): the front part's name,
+    cost, colors, types and power and toughness, in hand and on the battlefield."""
+    record = _front_and_inset(layout, faces, inset_type)
+    name = record["card_faces"][0]["name"] if faces == 2 else record["name"]
+    scenario = Scenario(
+        2,
+        database=CardDatabase(parse_oracle_cards([record])),
+        registry=CardRegistry(
+            [CardDefinition(face["name"]) for face in record.get("card_faces", [record])]
+        ),
+    )
+    (in_hand,) = scenario.hand(P0, [record["name"]])
+    (on_field,) = scenario.battlefield(P0, [record["name"]])
+    state = scenario.build()
+    for obj in (in_hand, on_field):
+        chars = characteristics(state, obj)
+        assert chars.name == name
+        assert chars.mana_cost == parse_mana_cost("{1}{G}") and chars.mana_value == 2
+        assert chars.colors == (G,) and chars.subtypes == ("Elf",)
+        assert (chars.power, chars.toughness) == (2, 2)
+
+
+def test_an_adventure_card_that_is_not_an_omen_is_still_a_gap() -> None:
+    """715.4 would also give an adventurer its normal characteristics, but adventures are M4
+    (715.3); only omens and preparation cards are read as their front part."""
+    record = _front_and_inset("adventure", 2, "Instant — Adventure")
+    with pytest.raises(NotImplementedRule) as gap:
+        chars_of(record)
+    assert gap.value.rule == "109.3"
+
+
+def test_107_4e_a_colorless_hybrid_symbol_colors_and_values_the_card() -> None:
+    """{C/W} is white (107.4e: a hybrid symbol is its colors, even with a colorless half) and
+    counts 1 (202.3f: the largest component of {C/W} is one mana)."""
+    card = fx.spell("Test Colorless Hybrid", "{C/W}{C/W}", 2.0, "Sorcery", ["W"])
+    (chars,) = chars_of(card)
+    assert chars.colors == (W,) and chars.mana_value == 2
+    assert chars.mana_cost == parse_mana_cost("{C/W}{C/W}")
+
+
+# --- Review additions ---------------------------------------------------------------------------
+
+
+def test_202_2_colors_come_from_the_card_data_not_from_the_cost_alone() -> None:
+    """A characteristic-defining ability (devoid) makes a card colorless whatever its cost, and
+    a color indicator (204.2) colors a card whose cost has none."""
+    devoid = fx.spell("Test Devoid", "{2}{R}", 3.0, "Creature — Eldrazi", [])
+    indicated = fx.spell("Test Indicated Cost", "{2}", 2.0, "Creature — Spirit", ["U"])
+    assert one(devoid).colors == ()
+    assert one(indicated).colors == (U,)
+
+
+def test_202_3_a_transform_card_reads_the_front_faces_cost() -> None:
+    chars = one(fx.TRANSFORM_CARD)
+    assert chars.mana_cost == parse_mana_cost("{1}{G}") and chars.mana_value == 2

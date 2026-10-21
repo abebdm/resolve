@@ -26,6 +26,7 @@ from resolve.decisions.spaces import (
     AnswerSpace,
     AnswerValue,
     CastSpellOption,
+    ChooseCounts,
     ChooseNumber,
     ChooseOne,
     ChooseOrder,
@@ -146,6 +147,14 @@ def test_render_request_numbers_the_options_from_zero() -> None:
     ]
 
 
+def test_render_request_numbers_the_options_of_a_counts_space() -> None:
+    own, _, ids = board()
+    space = ChooseCounts((PlayerOption(P2), ObjectOption(ids["elves"])), (2, 1), 2)
+    request = DecisionRequest(4, P0, P0, DecisionKind.PAY_COSTS, space, "Pay.", ("601.2h",))
+    lines = render_request(request, own).splitlines()
+    assert lines[1:3] == ["  0: player 2", f"  1: Llanowar Elves #{ids['elves']}"]
+
+
 @pytest.mark.parametrize(
     ("space", "hint"),
     [
@@ -154,6 +163,8 @@ def test_render_request_numbers_the_options_from_zero() -> None:
         (ChooseNumber(0, 5), "Type a number from 0 to 5."),
         (ChooseNumber(1), "Type a number from 1."),
         (Distribute(OPTIONS[:2], 3), "adding up to 3."),
+        (ChooseCounts(OPTIONS[:2], (2, 1), 2), "at most 2, 1"),
+        (ChooseCounts(OPTIONS[:2], (2, 1), 2), "adding up to 2."),
     ],
 )
 def test_render_request_explains_how_to_answer(space: AnswerSpace, hint: str) -> None:
@@ -173,6 +184,8 @@ def test_render_request_explains_how_to_answer(space: AnswerSpace, hint: str) ->
         (ChooseOrder(OPTIONS), "1 0 2", Order((1, 0, 2))),
         (ChooseNumber(-5, 5), "-3", Number(-3)),
         (Distribute(OPTIONS[:2], 3), "2 1", Amounts((2, 1))),
+        (ChooseCounts(OPTIONS[:2], (2, 1), 2), "1 1", Amounts((1, 1))),
+        (ChooseCounts(OPTIONS[:2], (2, 1), 2), "2,0", Amounts((2, 0))),
         (ChooseOne(OPTIONS), "7", Pick(7)),  # out of range: the engine rejects it, not the parser
     ],
 )
