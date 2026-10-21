@@ -217,8 +217,8 @@ pickled, which would make AI search and save/restore impossible.
 
 **Reversing illegal actions (733)**
 
-When an action begins (casting a spell; from M4, activating an ability or taking a special
-action), its task stores a **checkpoint** (`resolve.state.checkpoint`): a copy of every
+When an action begins (casting a spell, activating a mana ability with a mana cost; from M4,
+activating any ability or taking a special action), its task stores a **checkpoint** (`resolve.state.checkpoint`): a copy of every
 restorable `GameState` field. It leaves out an explicit list (`NOT_RESTORED`):
 
 - the event log;
@@ -230,8 +230,11 @@ restorable `GameState` field. It leaves out an explicit list (`NOT_RESTORED`):
 If the action can't be completed (601.2e, 601.6, 601.2h, 118.3), the reversal goes as follows:
 
 1. The player chooses which of the mana abilities they activated during the action to reverse
-   (733.1; `REVERSE_MANA_ABILITIES`, not asked when none were). From M2.4 the kept ones must
-   include every ability whose mana a kept ability spent.
+   (733.1; `REVERSE_MANA_ABILITIES`, not asked when none were): those activated while paying
+   for one of them included (Selesnya Signet's {1}), in the order they began, and not those
+   already reversed. The kept ones must include every ability whose mana paid for a kept one
+   (checked by replaying the kept ones' mana on the pool at the checkpoint,
+   `resolve.engine.reversal`).
 2. The checkpoint is restored. A player who left the game meanwhile stays gone (800.4a).
 3. The kept mana abilities aren't undone (733.1): their results stand exactly as they happened.
    The events each logged during its activation are made again as recorded (`Event.redo`), in
@@ -245,12 +248,14 @@ If the action can't be completed (601.2e, 601.6, 601.2h, 118.3), the reversal go
    public `ActionReversed` is logged.
 
 The player keeps priority, and the passes made before the attempt still count (733.2): the
-priority task doesn't clear them when a cast begins; the cast clears them as it completes
-(601.2i). 733.1 forbids reversing library actions; 601.2h pays such costs last, and mana
+priority task doesn't clear them when a cast or an activation begins; the cast clears them as it
+completes (601.2i), and so does a completed mana ability activation. 733.1 forbids reversing library actions; 601.2h pays such costs last, and mana
 abilities can't do them (605.1a), so finding one since the checkpoint is an `EngineError`.
 
 The action's task holds its payment (`PayCosts`, §17.7) in a field rather than as a separate
-task, because the reversal needs the mana abilities activated while paying.
+task, because the reversal needs the mana abilities activated while paying. A mana ability with a
+mana cost is such an action too: `ActivateManaAbility` takes its own checkpoint, embeds a
+`PayCosts`, and is reversed the same way if its cost can't be paid, inside or outside a cast.
 
 **Rule defaults (rule 12)**
 
@@ -283,7 +288,7 @@ A `DecisionRequest` contains:
   The task names the player the rules ask; the loop maps them through `deciding_player` (723.5),
   so they differ only while another player controls them
 - a `kind` (choose action at priority, choose targets, choose modes, choose X, pay costs,
-  declare attackers, declare blockers, assign combat damage, order triggers, order
+  choose a color, reverse mana abilities, declare attackers, declare blockers, assign combat damage, order triggers, order
   replacement effects, choose a card name, mulligan, yes/no for "may", etc.)
 - **options**, given in one of two forms:
   - an **enumerated list** where the set is finite and reasonably small
@@ -750,16 +755,23 @@ sign-off.*
 
 *Provisional: designed in M2's plan; built in M2.2 to M2.4. That milestone's plan may revise it,
 with the user's sign-off. M2.3 built `PayCosts` (`resolve.engine.payment`) for generic, colored
-and {C} mana; the action being paid for holds it in a field (§5, "Reversing illegal actions").*
+and {C} mana; the action being paid for holds it in a field (§5, "Reversing illegal actions").
+M2.4 added mana abilities' mana costs and restricted mana (106.6).*
 
-`PayCosts(payer, cost, paying_for)` pays the costs of spells, of abilities and of effects. Its
-decisions go through `deciding_player`, and it uses only the payer's resources (723.5a).
+`PayCosts(payer, cost, purpose)` pays the costs of spells (`ForSpell`), of abilities
+(`ForAbility`) and later of effects. Its decisions go through `deciding_player`, and it uses only
+the payer's resources (723.5a).
 
 - **601.2g:** an `ACTIVATE_MANA_ABILITIES` decision offers "pay" and every mana ability the
-  payer can activate (605.3a, 605.3c).
+  payer can activate (605.3a), but not those being activated (605.3c: the ability whose cost is
+  being paid, and those it is paying for).
 - **601.2h:** a `PAY_COSTS` decision in the space `ChooseCounts(options, maxima, total)`,
-  answered with `Amounts`: how many units of each class of identical mana to spend. It is not
-  asked when only one answer pays. When none pays, the action is reversed (17.4).
+  answered with `Amounts`: how many units of each class of identical mana to spend. A class of
+  restricted mana that may not be spent on `purpose` (106.6) has a maximum of 0. It is not
+  asked when only one answer pays. When none pays, the action is reversed (§5).
+- A mana ability with a mana cost (Selesnya Signet) pays it with its own embedded `PayCosts`,
+  which may activate other mana abilities in turn; `PayCosts.activations` holds the activation
+  tasks, each with its own payment, so a reversal reaches them all.
 
 Per-unit options would give two answers for one outcome, breaking §6's canonical answers. That
 is why the space is new.

@@ -10,7 +10,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from resolve.data.types import CardType
-from resolve.errors import NotImplementedRule
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.values import Immutable
 
@@ -38,7 +37,15 @@ class ControlsAtLeast(Immutable):
 
     def met(self, state: GameState, source: ObjectId, player: PlayerId) -> bool:
         """Whether ``player`` controls at least ``count`` permanents of the card type now."""
-        raise NotImplementedRule("602.5: activation conditions (M2.4 stub)")
+        from resolve.effects.characteristics import characteristics
+
+        controlled = sum(
+            1
+            for obj in state.battlefield
+            if state.objects[obj].controller == player
+            and characteristics(state, obj).is_a(self.card_type)
+        )
+        return controlled >= self.count
 
     @property
     def text(self) -> str:

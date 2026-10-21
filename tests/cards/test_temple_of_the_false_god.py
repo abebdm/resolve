@@ -30,7 +30,7 @@ from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana, ManaType
 from resolve.state.turn import Phase
-from tests.casting_support import activate, activate_with_priority, cast, options, records
+from tests.casting_support import activate, activate_with_priority, cast, options, pay, records
 from tests.game_fixtures import request_of
 from tests.scenario import Scenario, run_script
 
@@ -94,5 +94,5 @@ def test_602_5_the_condition_applies_while_paying_too() -> None:
     assert request_of(state).kind is DecisionKind.ACTIVATE_MANA_ABILITIES
     assert ActivateAbilityOption(temple, 0) not in options(state)
     assert all(ActivateAbilityOption(f, 0) in options(state) for f in forests)
-    run_script(state, activate(forests[0]), activate(forests[1]))
+    run_script(state, activate(forests[0]), activate(forests[1]), pay())
     assert len(records(state, SpellCast)) == 1

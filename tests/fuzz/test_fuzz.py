@@ -728,7 +728,7 @@ def test_the_command_line_runs_games_and_reports_a_benchmark() -> None:
     assert "Answers per game: min 1, average 1.0, max 1." in text
     assert "Turns per game: min 1, average 1.0, max 1." in text
     assert "Endings: decked x0, life total x0, concession x0, draw x10, rules gap x0." in text
-    assert "Played: 0 lands, 0 mana abilities activated." in text
+    assert "Played: 0 lands, 0 mana abilities activated, 0 reversed." in text
     assert "decks: empty;" in text
     assert "games per second" in text
 
@@ -780,14 +780,14 @@ def test_the_command_line_plays_the_chosen_formats(args: list[str], formats: str
 def test_the_command_line_refuses_unimplemented_decks(tmp_path: Path) -> None:
     """Decks are refused, never approximated (design.md §11)."""
     data = tmp_path / "data"
-    fx.write_snapshot(data, cards=[fx.FOREST, fx.LLANOWAR_ELVES])
+    fx.write_snapshot(data, cards=[fx.FOREST, fx.TEST_RAPTOR])
     deck_file = tmp_path / "deck.txt"
-    deck_file.write_text("Mainboard\n10 Forest\n1 Llanowar Elves\n", encoding="utf-8")
+    deck_file.write_text("Mainboard\n10 Forest\n1 Test Raptor\n", encoding="utf-8")
     output = io.StringIO()
     with redirect_stdout(output):
         status = fuzz_tool.main(["--deck", str(deck_file), "--data-dir", str(data)])
     assert status == 1
-    assert "'Llanowar Elves' is not implemented" in output.getvalue()
+    assert "'Test Raptor' is not implemented" in output.getvalue()
 
 
 def test_the_command_line_plays_decks_from_the_snapshot(tmp_path: Path) -> None:

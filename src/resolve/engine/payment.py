@@ -1,35 +1,43 @@
-"""Paying costs: the mana part (601.2g-h, 605.3a, 118.3, design.md §17.7).
+"""Paying costs: the mana part (601.2g-h, 605.3a, 118.3, 106.6, design.md §17.7).
 
-``PayCosts(payer, cost, paying_for)`` pays a mana cost in two parts:
+``PayCosts(payer, cost, purpose)`` pays a mana cost, for a spell (``ForSpell``) or an ability
+(``ForAbility``), in two parts:
 
 1. **601.2g:** the payer may activate mana abilities first (605.3a). ``ACTIVATE_MANA_ABILITIES``
    is a ``ChooseOne`` of ``PAY`` ("done: pay now") and each mana ability the payer can activate,
    asked again after each activation. Activating them isn't mandatory (118.3c). With no ability
-   to activate, "pay" is the only answer and nothing is asked.
-2. **601.2h:** the pool is grouped into classes of identical units (equal ``Mana`` values: type
-   and source), and ``PAY_COSTS`` is a ``ChooseCounts`` of how many units of each class to spend,
-   adding up to the cost's total. ``check_answer`` refuses a choice that doesn't pay it: each
-   colored symbol needs a unit of its color (107.4a), each {C} a colorless unit (107.4c), and
-   generic mana takes any (107.4b). With exactly one paying choice nothing is asked; with none,
-   the cost can't be paid (118.3), and the action paying it is reversed (733.1).
+   to activate, "pay" is the only answer and nothing is asked. The abilities being activated
+   (``excluding``: the one whose cost this is, and those whose costs it is paying for) aren't
+   offered (605.3c).
+2. **601.2h:** the pool is grouped into classes of identical units (equal ``Mana`` values: type,
+   source and restriction), and ``PAY_COSTS`` is a ``ChooseCounts`` of how many units of each
+   class to spend, adding up to the cost's total. A class whose restriction doesn't allow
+   spending it on ``purpose`` (106.6) has a maximum of 0. ``check_answer`` refuses a choice that
+   doesn't pay it: restricted mana spent on something it can't be (106.6), and each colored
+   symbol needs a unit of its color (107.4a), each {C} a colorless unit (107.4c), while generic
+   mana takes any (107.4b). With exactly one paying choice nothing is asked; with none, the cost
+   can't be paid (118.3), and the action paying it is reversed (733.1).
 
 It uses only the payer's own pool and permanents (723.5a), and its decisions are the payer's
 (the engine loop maps them through ``defaults.deciding_player``).
 
-``PayCosts`` isn't a task on the stack: the task of the action being paid for (``CastSpell``)
-holds it in a field and calls ``step``, ``check_answer`` and ``resume``, because the action needs
-the mana abilities activated while paying in order to reverse them (733.1; docs/decisions.md).
-``step`` and ``resume`` give a ``NeedDecision``, a ``Push`` of tasks to run before asking again
-(an activation), ``Paid`` or ``Unpayable``.
+``PayCosts`` isn't a task on the stack: the task of the action being paid for (``CastSpell``, or
+``ActivateManaAbility`` for a mana ability with a mana cost) holds it in a field and calls
+``step``, ``check_answer`` and ``resume``, because the action needs the mana abilities activated
+while paying in order to reverse them (733.1; docs/decisions.md). ``step`` and ``resume`` give a
+``NeedDecision``, a ``Push`` of tasks to run before asking again (an activation), ``Paid`` or
+``Unpayable``. ``activations`` holds the ``ActivateManaAbility`` tasks it pushed, in order; each
+holds its own payment, so the activations made while paying for an activation are reachable too
+(``resolve.engine.reversal``).
 
-Hybrid, Phyrexian and snow symbols (M9) and {X} (M2.7) raise ``NotImplementedRule``. Mana
-restrictions (106.6) and non-mana components arrive in M2.4 and M4.
+Hybrid, Phyrexian and snow symbols (M9) and {X} (M2.7) raise ``NotImplementedRule``; non-mana
+components arrive in M4.
 """
 
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING
 
@@ -47,48 +55,42 @@ from resolve.decisions.spaces import (
     Pick,
 )
 from resolve.effects.characteristics import characteristics
-from resolve.engine.mana import ActivateManaAbility
 from resolve.errors import EngineError, InvalidAnswer, NotImplementedRule
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.mana import Mana, ManaType, describe_mana
+from resolve.state.mana import ForAbility, ForSpell, Mana, ManaType, PaymentPurpose, describe_mana
 from resolve.tasks import NeedDecision, Push
 from resolve.values import Immutable
 
 if TYPE_CHECKING:
     from resolve.decisions.request import DecisionRequest
+    from resolve.engine.mana import ActivateManaAbility
     from resolve.state.game import GameState
 
 PAY = NamedOption("pay")
 """601.2g: done activating mana abilities; pay the cost now."""
 
+AbilityKey = tuple[ObjectId, int]
+"""An ability of an object: the object, and the ability's index among its abilities."""
 
-def mana_ability_options(state: GameState, player: PlayerId) -> tuple[ActivateAbilityOption, ...]:
+
+def mana_ability_options(
+    state: GameState, player: PlayerId, excluding: Sequence[AbilityKey] = ()
+) -> tuple[ActivateAbilityOption, ...]:
     """The mana abilities ``player`` can activate now (605.3a, 602.2: of the permanents they
-    control), in battlefield order and ability order."""
+    control), in battlefield order and ability order, but for those being activated
+    (``excluding``, 605.3c)."""
     options: list[ActivateAbilityOption] = []
     for obj in state.battlefield:
         if state.objects[obj].controller != player:
             continue
         for index, ability in enumerate(characteristics(state, obj).abilities):
-            if isinstance(ability, ActivatedManaAbility) and ability.can_activate(
-                state, obj, player
+            if (
+                isinstance(ability, ActivatedManaAbility)
+                and (obj, index) not in excluding
+                and ability.can_activate(state, obj, player)
             ):
                 options.append(ActivateAbilityOption(obj, index))
     return tuple(options)
-
-
-@dataclass(frozen=True)
-class ManaActivation(Immutable):
-    """A mana ability activated while paying: ability ``ability`` of ``source`` (733.1).
-
-    ``log_from`` and ``log_to`` delimit the event log entries of its activation (``log_to`` is
-    ``None`` until it has finished), so a reversal can keep its results as they happened.
-    """
-
-    source: ObjectId
-    ability: int
-    log_from: int
-    log_to: int | None = None
 
 
 @dataclass(frozen=True)
@@ -204,24 +206,30 @@ class PaymentStage(Enum):
 
 @dataclass(slots=True)
 class PayCosts:
-    """``payer`` pays ``cost``, the mana part of a total cost, for ``paying_for`` (601.2g-h).
+    """``payer`` pays ``cost``, the mana part of a total cost, for ``purpose`` (601.2g-h).
 
-    ``activations`` lists the mana abilities activated while paying, in order (733.1).
+    - ``excluding``: the abilities being activated, which can't be activated to pay (605.3c).
+    - ``activations``: the mana abilities activated while paying, in order (733.1).
     """
 
     payer: PlayerId
     cost: ManaCost
-    paying_for: ObjectId | None = None
+    purpose: PaymentPurpose
+    excluding: tuple[AbilityKey, ...] = ()
     stage: PaymentStage = PaymentStage.ACTIVATE
-    activations: list[ManaActivation] = field(default_factory=list[ManaActivation])
+    activations: list[ActivateManaAbility] = field(default_factory=list["ActivateManaAbility"])
+
+    @property
+    def source(self) -> ObjectId:
+        """The spell, or the source of the ability, being paid for (the decisions' source)."""
+        match self.purpose:
+            case ForSpell(spell=obj) | ForAbility(source=obj):
+                return obj
 
     def step(self, state: GameState) -> PaymentStep:
         """Ask, activate or finish; safe to call again after it asked (design.md §5)."""
-        if self.activations and self.activations[-1].log_to is None:
-            # The activation pushed last has finished: its log entries end here.
-            self.activations[-1] = replace(self.activations[-1], log_to=len(state.event_log))
         if self.stage is PaymentStage.ACTIVATE:
-            abilities = mana_ability_options(state, self.payer)
+            abilities = mana_ability_options(state, self.payer, self.excluding)
             if abilities:
                 return NeedDecision(
                     player=self.payer,
@@ -229,12 +237,12 @@ class PayCosts:
                     space=ChooseOne((PAY, *abilities)),
                     prompt=f"Activate mana abilities, or pay {self.cost.text}.",
                     rules=("601.2g", "605.3a"),
-                    source=self.paying_for,
+                    source=self.source,
                 )
             self.stage = PaymentStage.PAY
         need = mana_need(self.cost)
         pool = state.player(self.payer).mana_pool
-        classes = mana_classes(pool)
+        classes = self._spendable(state)
         found = payments(classes, need, limit=2)
         if not found:
             return Unpayable()  # 118.3
@@ -249,18 +257,34 @@ class PayCosts:
                 need.total,
             ),
             prompt=f"Pay {self.cost.text} from {describe_mana(tuple(pool))}.",
-            rules=("601.2h", "118.3a"),
-            source=self.paying_for,
+            rules=("601.2h", "118.3a", "106.6"),
+            source=self.source,
         )
 
+    def _spendable(self, state: GameState) -> list[tuple[Mana, int]]:
+        """The pool's classes of identical units, each with how many of it may be spent on this
+        payment: none of a class whose restriction forbids it (106.6)."""
+        return [
+            (unit, count if self._may_spend(state, unit) else 0)
+            for unit, count in mana_classes(state.player(self.payer).mana_pool)
+        ]
+
+    def _may_spend(self, state: GameState, unit: Mana) -> bool:
+        return unit.restriction is None or unit.restriction.allows(state, self.purpose)
+
     def check_answer(self, state: GameState, answer: AnswerValue) -> None:
-        """Refuse a payment that doesn't pay the cost (601.2h, 107.4a-c)."""
+        """Refuse a payment that doesn't pay the cost (601.2h, 107.4a-c, 106.6)."""
         if self.stage is not PaymentStage.PAY:
             return
         if not isinstance(answer, Amounts):
             raise EngineError(f"PayCosts can't check {answer!r}")
         classes = mana_classes(state.player(self.payer).mana_pool)
         chosen = [(unit, amount) for (unit, _), amount in zip(classes, answer.amounts, strict=True)]
+        for unit, amount in chosen:
+            if amount and unit.restriction is not None and not self._may_spend(state, unit):
+                raise InvalidAnswer(
+                    f"that mana can't be spent on this (106.6): {unit.restriction.text}"
+                )
         if not mana_need(self.cost).paid_by(chosen):
             raise InvalidAnswer(
                 f"that mana doesn't pay {self.cost.text}: colored symbols need mana of their "
@@ -276,8 +300,12 @@ class PayCosts:
                 raise EngineError(f"PayCosts can't resume with {answer!r}")
             match request.space.chosen(answer):
                 case ActivateAbilityOption(object=source, ability=index):
-                    self.activations.append(ManaActivation(source, index, len(state.event_log)))
-                    return Push((ActivateManaAbility(self.payer, source, index),))
+                    # Imported here: an activation with a mana cost holds a PayCosts (605.3a).
+                    from resolve.engine.mana import ActivateManaAbility
+
+                    activation = ActivateManaAbility(self.payer, source, index, self.excluding)
+                    self.activations.append(activation)
+                    return Push((activation,))
                 case _:
                     self.stage = PaymentStage.PAY
                     return self.step(state)

@@ -31,8 +31,9 @@ logging them twice, so their results stand (a "for each card in your hand" abili
 added, although the spell is back in hand). Then a public
 ``ActionReversed`` records that every player saw the card (400.2). The player keeps priority
 (733.2), and passes made before the attempt still count: the priority task clears them only once
-a spell is cast. The dependency rule of 733.1 (an ability whose mana a kept ability spent must be
-kept) has nothing to check until mana abilities can have mana costs (M2.4).
+a spell is cast. The activations listed include those made while paying for a mana ability's
+mana cost (Selesnya Signet, 605.3a), and 733.1's dependency rule is checked: an ability whose
+mana paid for a kept mana ability must be kept too (``resolve.engine.reversal``).
 
 A caster who leaves the game during the cast (a concession, 104.3a) takes their spell with them
 (800.4a): the cast just ends.
@@ -46,18 +47,19 @@ from typing import TYPE_CHECKING
 
 from resolve.data.mana_cost import ManaCost, SymbolKind
 from resolve.decisions.kinds import DecisionKind
-from resolve.decisions.spaces import AnswerValue, ChooseSubset, ManaActivationOption, PickMany
+from resolve.decisions.spaces import AnswerValue, ChooseSubset, PickMany
 from resolve.effects.characteristics import characteristics
+from resolve.engine import reversal
 from resolve.engine.payment import Paid, PayCosts, PaymentStep, Unpayable
+from resolve.engine.reversal import activations_made
 from resolve.errors import EngineError, NotImplementedRule
-from resolve.events.base import Event
 from resolve.events.mana import ManaSpent
 from resolve.events.pipeline import ApplyEvents
 from resolve.events.spells import ActionReversed, SpellCast, SpellProposed
 from resolve.rules import legality
-from resolve.state.checkpoint import Checkpoint, restore_checkpoint, take_checkpoint
+from resolve.state.checkpoint import Checkpoint, take_checkpoint
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.mana import Mana
+from resolve.state.mana import ForSpell, Mana
 from resolve.state.spell import (
     Alternative,
     AlternativeKind,
@@ -202,7 +204,7 @@ class CastSpell(Task):
             self.stage = CastStage.REVERSE
             return self.run(state)
         self.total = cost
-        self.payment = PayCosts(self.player, cost, self.spell)
+        self.payment = PayCosts(self.player, cost, ForSpell(self.spell))
         self.stage = CastStage.PAY
         return self.run(state)
 
@@ -247,49 +249,30 @@ class CastSpell(Task):
 
     # --- 733.1 ----------------------------------------------------------------------------------
 
-    def _activations(self) -> tuple[ManaActivationOption, ...]:
-        if self.payment is None:
-            return ()
-        return tuple(
-            ManaActivationOption(number, activation.source, activation.ability)
-            for number, activation in enumerate(self.payment.activations)
-        )
-
     def _ask_reverse(self, state: GameState) -> TaskResult:
-        activations = self._activations()
-        if not activations:
+        made = activations_made(self.payment)
+        if not made:
             return self._reverse(state, ())
         return NeedDecision(
             player=self.player,
             kind=DecisionKind.REVERSE_MANA_ABILITIES,
-            space=ChooseSubset(activations, 0, len(activations)),
+            space=ChooseSubset(reversal.options(made), 0, len(made)),
             prompt="The spell can't be cast. Choose the mana abilities to reverse.",
             rules=("733.1",),
             source=self.spell,
         )
 
-    def _reverse(self, state: GameState, kept: tuple[ManaActivationOption, ...]) -> TaskResult:
+    def _reverse(self, state: GameState, kept: tuple[int, ...]) -> TaskResult:
         if self.checkpoint is None:
             raise EngineError("CastSpell is reversing without a checkpoint")
-        activations = [] if self.payment is None else self.payment.activations
-        kept_entries: list[Event] = []
-        for option in kept:
-            activation = activations[option.number]
-            for entry in state.event_log[activation.log_from : activation.log_to]:
-                record = entry.record
-                # A concession during the activation isn't part of it (restore_checkpoint keeps
-                # its consequences, 800.4a).
-                if isinstance(record, Event) and not record.outside_actions:
-                    kept_entries.append(record)
-        restore_checkpoint(state, self.checkpoint)
+        made = activations_made(self.payment)
         # 733.1: the mana abilities the player doesn't reverse aren't undone: their results stand
         # exactly as they happened (they aren't activated again).
-        for record in kept_entries:
-            record.redo(state)
+        reversal.reverse_to(state, self.checkpoint, made, kept)
         reversed_ = ActionReversed(
             player=self.player,
             card=self.card,
-            kept=tuple(option.object for option in kept),
+            kept=tuple(made[number].source for number in kept),
             rules=("733.1", "733.2"),
         )
         return Push((ApplyEvents((reversed_,)),))
@@ -297,25 +280,34 @@ class CastSpell(Task):
     # --- Answers --------------------------------------------------------------------------------
 
     def check_answer(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> None:
-        if self.stage is CastStage.PAY:
-            self._payment().check_answer(state, answer)
+        match self.stage:
+            case CastStage.PAY:
+                self._payment().check_answer(state, answer)
+            case CastStage.REVERSE:
+                if self.checkpoint is not None and isinstance(answer, PickMany):
+                    made = activations_made(self.payment)
+                    reversal.check_kept(
+                        state, self.checkpoint, self.player, made, _kept(len(made), answer)
+                    )
+            case _:
+                pass
 
     def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
         match self.stage:
             case CastStage.PAY:
                 return self._paying(state, self._payment().resume(state, request, answer))
             case CastStage.REVERSE:
-                if not isinstance(request.space, ChooseSubset) or not isinstance(answer, PickMany):
+                if not isinstance(answer, PickMany):
                     raise EngineError(f"CastSpell can't resume with {answer!r}")
-                undone = set(answer.indices)
-                kept = tuple(
-                    option
-                    for index, option in enumerate(request.space.options)
-                    if index not in undone and isinstance(option, ManaActivationOption)
-                )
-                return self._reverse(state, kept)
+                return self._reverse(state, _kept(len(activations_made(self.payment)), answer))
             case _:
                 raise EngineError(f"CastSpell asked nothing in its {self.stage.value} stage")
+
+
+def _kept(count: int, answer: PickMany) -> tuple[int, ...]:
+    """The positions not chosen for reversal (733.1: the answer names those to reverse)."""
+    undone = set(answer.indices)
+    return tuple(number for number in range(count) if number not in undone)
 
 
 def _variant_gap(state: GameState, card: ObjectId, variant: CastVariant) -> None:

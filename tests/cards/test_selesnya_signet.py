@@ -53,7 +53,6 @@ from tests.casting_support import (
     choose_color,
     options,
     pass_,
-    pay,
     records,
     reverse,
 )
@@ -119,7 +118,7 @@ def test_605_3a_the_signet_pays_for_a_spell_after_a_land_pays_for_the_signet() -
     (bears,) = scenario.hand(P0, ["Grizzly Bears"])
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
-    run_script(state, cast(bears, P0), activate(signet), activate(forest), pay())
+    run_script(state, cast(bears, P0), activate(signet), activate(forest))
     (cast_event,) = records(state, SpellCast)
     assert sorted(cast_event.mana_spent, key=repr) == sorted(
         (Mana(G, signet), Mana(W, signet)), key=repr
@@ -193,13 +192,14 @@ def test_733_1_an_ability_activated_for_a_failed_signet_may_be_reversed_with_it(
 
 
 def failed_giant() -> tuple[GameState, ObjectId, ObjectId, ObjectId]:
-    """P0 tries to cast Hill Giant ({3}{R}): activates the Signet, taps the Forest to pay its {1},
-    then pays: {G}{W} can't pay {3}{R}. The reversal decision is pending."""
+    """P0 tries to cast Hill Giant ({3}{R}): activates the Signet and taps the Forest to pay its
+    {1}; no mana ability is left, so the payment is made at once: {G}{W} can't pay {3}{R}. The
+    reversal decision is pending."""
     scenario, signet, forest = signet_and_forest()
     (giant,) = scenario.hand(P0, ["Hill Giant"])
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
-    run_script(state, cast(giant, P0), activate(signet), activate(forest), pay())
+    run_script(state, cast(giant, P0), activate(signet), activate(forest))
     return state, giant, signet, forest
 
 

@@ -41,10 +41,12 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
      `draw x0` (nothing in M2.3's decks can change a life total); `decked` may be 0, since most
      games stop at the 508.1 gap once a creature resolves (M2.11 settles the final
      expectations);
-   - `Spells:` shows casts, resolutions and reversals above zero; `Casts per card:` lists Sol Ring
-     and the vanilla creatures; `Gaps:` lists only `508.1` and `903.8`;
+   - `Spells:` shows casts, resolutions and reversals above zero; `Casts per card:` lists the
+     excerpt's cards (Sol Ring, the Signets, the mana creatures and the vanilla creatures; the
+     lands are played, not cast); `Gaps:` lists only `508.1` and `903.8`;
    - `Turns per game:` reaches a maximum of several tens of turns, and `Played:` shows
-     thousands of lands and mana abilities;
+     thousands of lands and mana abilities, and some reversed mana ability activations
+     (Selesnya Signet activated with nothing to pay its {1});
    - the last line gives the time; note it if it is much longer than the estimate above.
    The exact numbers depend on the engine and change from milestone to milestone; a run with the
    same code always prints the same numbers, except the timing.

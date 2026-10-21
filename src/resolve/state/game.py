@@ -301,8 +301,8 @@ def create_object(
 ) -> GameObject:
     """Create a new object on top of ``zone`` (or at its bottom), with a new ID and timestamp.
 
-    400.7, 613.7d. A per-player zone of another player means the owner's zone of that kind
-    (400.3).
+    400.7, 613.7d. A permanent records the turn it entered (``entered_turn``, 302.6). A
+    per-player zone of another player means the owner's zone of that kind (400.3).
     """
     zone = _destination(owner, zone, controller)
     obj = GameObject(
@@ -313,6 +313,9 @@ def create_object(
         zone=zone,
         timestamp=new_timestamp(state),
     )
+    if zone.kind is ZoneKind.BATTLEFIELD:
+        # 302.6: the turn it came under its controller's control (0: before the first turn).
+        obj.entered_turn = 0 if state.turn is None else state.turn.number
     state.next_object_id += 1
     state.objects[obj.id] = obj
     if bottom:

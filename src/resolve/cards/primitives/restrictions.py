@@ -10,8 +10,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from resolve.cards.primitives.words import SubtypeWord
-from resolve.errors import NotImplementedRule
-from resolve.state.mana import ManaRestriction, PaymentPurpose
+from resolve.state.mana import ForAbility, ForSpell, ManaRestriction, PaymentPurpose
 
 if TYPE_CHECKING:
     from resolve.state.game import GameState
@@ -30,7 +29,11 @@ class SpendOnlyOnSubtype(ManaRestriction):
     subtype: SubtypeWord
 
     def allows(self, state: GameState, purpose: PaymentPurpose) -> bool:
-        raise NotImplementedRule("106.6: mana restrictions (M2.4 stub)")
+        from resolve.effects.characteristics import characteristics
+
+        match purpose:
+            case ForSpell(spell=obj) | ForAbility(source=obj):
+                return self.subtype.name in characteristics(state, obj).subtypes
 
     @property
     def text(self) -> str:
