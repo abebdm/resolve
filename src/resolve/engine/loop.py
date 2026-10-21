@@ -6,7 +6,8 @@ is over (``state.result`` is set).
 
 ``submit_answer`` validates an answer, then resumes the paused task with it:
 
-1. The answer must be for the pending request, from its player, and inside its answer space.
+1. The answer must be for the pending request, from its player (the one the rules ask, or, while
+   another player controls them, their controller: 723.5), and inside its answer space.
 2. The paused task's ``check_answer`` may reject it on rules grounds.
 3. Only then is anything changed: the answer is logged, ``pending`` is cleared, the task's
    ``resume`` runs, and the loop continues.
@@ -20,6 +21,7 @@ from __future__ import annotations
 from resolve.decisions.request import DecisionAnswer, DecisionRequest, validate_answer
 from resolve.errors import EngineError, InvalidAnswer
 from resolve.events.base import AnswerRecord, append_log
+from resolve.rules import defaults
 from resolve.state.game import GameState
 from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
 
@@ -55,9 +57,13 @@ def apply_result(state: GameState, task: Task, result: TaskResult) -> None:
             state.tasks.extend(reversed(tasks))
         case NeedDecision():
             state.player(result.player)  # validates the ID
+            # 723.5: the player the rules ask may be controlled; their controller then answers.
+            deciding = defaults.deciding_player(state, result.player)
+            state.player(deciding)
             state.pending = DecisionRequest(
                 id=state.next_request_id,
-                player=result.player,
+                player=deciding,
+                for_player=result.player,
                 kind=result.kind,
                 space=result.space,
                 prompt=result.prompt,

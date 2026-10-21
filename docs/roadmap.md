@@ -191,7 +191,7 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
 
 - [x] The plan, the rules coverage map, the torture tests and rules 12 and 13 (M2.0,
   documentation).
-- [ ] The coverage-map consistency test, and the rule defaults M0/M1 hard-coded turned into
+- [x] The coverage-map consistency test, and the rule defaults M0/M1 hard-coded turned into
   single functions (rule 12, M2.1).
 - [ ] The full casting process (601.2):
   - announce, with **cast variants and permissions** chosen before the card moves, so every
@@ -427,6 +427,14 @@ completes a step (CLAUDE.md, "Documentation requirements").
   map and the per-milestone checklists in `docs/roadmap.md`, the torture tests
   (`docs/torture-tests.md`), rules 12 and 13 below, and the provisional design-ahead sections of
   `docs/design.md`.
+- **Done (M2.1, rule defaults):** `tests/tooling/test_coverage_map.py` (the map agrees with the
+  pinned CR); `resolve.rules.defaults`, one function for each rule default of plan §5.1, which
+  the engine calls through the module (`defaults.maximum_hand_size(...)`) so a replacement is
+  obeyed everywhere; `resolve.rules.legality` (`allowed`, `PlayLand`, permissions and
+  prohibitions: 101.2, 305.1, 305.2b); `TurnState.segments` (the segments still to begin),
+  `GameState.extra_turns` and `turn_direction`; `TakeTurn` as the turn frame (724); `DecisionRequest.for_player`
+  (723.5) and `concede(by=)` (723.6); `ManaPoolEmptied.kept`. A normal game is unchanged: the
+  quick fuzz summary is identical to M1's.
 
 ---
 
@@ -458,10 +466,10 @@ earlier milestones must leave room for every row in this map.
 | CR | Name | Milestone | Tier | Notes |
 |---|---|---|---|---|
 | 100 | General | M0 ✓ | E |  |
-| 101 | The Magic Golden Rules | M1 ✓ (101.4); 101.2 system M2; 101.1, 101.3 with each effect | E | `allowed` (design.md §11) |
+| 101 | The Magic Golden Rules | M1 ✓ (101.4); 101.2 system M2 (skeleton M2.1 ✓); 101.1, 101.3 with each effect | E | `allowed` (design.md §17.2); land plays are its first action |
 | 102 | Players | M1 ✓ | E | teams (102.3-102.4): out of scope with the team variants |
-| 103 | Starting the Game | M1 ✓; 103.6 M5; 103.2b M7 | E | `opening_hand_actions` |
-| 104 | Ending the Game | M1 ✓; 104.3c-d M4, M7; 104.4b M7; alternative wins and losses M5 | E | `can_lose_game` |
+| 103 | Starting the Game | M1 ✓; 103.6 M5; 103.2b M7 | E | `opening_hand_actions`, `mulligan_options`, `starting_life`, `starting_hand_size`: default functions in place (M2.1 ✓) |
+| 104 | Ending the Game | M1 ✓; 104.3c-d M4, M7; 104.4b M7; alternative wins and losses M5 | E | `can_lose_game`: default function in place (M2.1 ✓) |
 | 105 | Colors | M2 | E |  |
 | 106 | Mana | M1 ✓, M2; 106.7 M6 | E |  |
 | 107 | Numbers and Symbols | M2; 107.4e-f, 107.4h M9; 107.14 M4; 107.15, 107.17 M9 | E | hybrid and Phyrexian: M2 builds the announcement stage |
@@ -500,7 +508,7 @@ earlier milestones must leave room for every row in this map.
 | 302 | Creatures | M1 ✓, M2 (302.6), M3 | E |  |
 | 303 | Enchantments | M2; Auras M4 | E | Sagas, Classes, Cases and Rooms have their own rows |
 | 304 | Instants | M2 | E |  |
-| 305 | Lands | M1 ✓; 305.2 default M2.1; modifiers M5 | E |  |
+| 305 | Lands | M1 ✓; modifiers M5 | E | `land_plays_allowed`, `land_play_options`: default functions in place (M2.1 ✓) |
 | 306 | Planeswalkers | M4 (attacking them M3) | E |  |
 | 307 | Sorceries | M2 | E |  |
 | 308 | Kindreds | M1 ✓ | E |  |
@@ -513,18 +521,18 @@ earlier milestones must leave room for every row in this map.
 | 315 | Conspiracies | M7 | X | used only in limited play (315.1); 25 conspiracy cards are banned rather than never legal, so they are in scope |
 | 400 | General | M0 ✓; 400.7 exceptions with their mechanics; 400.11 M7 | E |  |
 | 401 | Library | M1 ✓ | E |  |
-| 402 | Hand | M1 ✓; 402.2 default M2.1; modifiers M5 | E | D (Reliquary Tower) |
+| 402 | Hand | M1 ✓; modifiers M5 | E | D (Reliquary Tower); `maximum_hand_size`: default function in place (M2.1 ✓) |
 | 403 | Battlefield | M1 ✓ | E |  |
 | 404 | Graveyard | M1 ✓ | E |  |
 | 405 | Stack | M2; 405.3 M4 | E |  |
 | 406 | Exile | M2; face-down exile M4 | E |  |
 | 407 | Ante | M7 | X | the 9 ante cards are banned in every format, not never legal; they need an option to play for ante (407.2, 407.3) |
 | 408 | Command | M7; emblems M4 | E |  |
-| 500 | General | M1 ✓; 500.5 default M2.1; 500.7-500.10 M3; 500.11 M6 | E |  |
+| 500 | General | M1 ✓; 500.7-500.10 M3; 500.11 M6 | E | `turn_structure`, `is_skipped`, `next_turn`, `mana_that_empties`, `TurnState.segments`: default functions in place (M2.1 ✓) |
 | 501 | Beginning Phase | M1 ✓ | E |  |
-| 502 | Untap Step | M1 ✓; 502.3 default M2.1; 502.1 M9; 502.2 M7 | E |  |
+| 502 | Untap Step | M1 ✓; 502.1 M9; 502.2 M7 | E | `permanents_that_untap`: default function in place (M2.1 ✓) |
 | 503 | Upkeep Step | M1 ✓ | E |  |
-| 504 | Draw Step | M1 ✓; 504.1 default M2.1 | E |  |
+| 504 | Draw Step | M1 ✓ | E | `draw_step_draws`: default function in place (M2.1 ✓) |
 | 505 | Main Phase | M1 ✓; 505.3-505.5 M9 | E |  |
 | 506 | Combat Phase | M3 | E |  |
 | 507 | Beginning of Combat Step | M3 | E |  |
@@ -573,8 +581,8 @@ earlier milestones must leave room for every row in this map.
 | 720 | Omen Cards | M2 | S | casting and resolution |
 | 721 | Station Cards | M4 | S |  |
 | 722 | Preparation Cards | M5 | S |  |
-| 723 | Controlling Another Player | M9 (seam M2.1) | X |  |
-| 724 | Ending Turns and Phases | M3 (turn frame M2.1) | X |  |
+| 723 | Controlling Another Player | M9 (seam M2.1 ✓) | X | `deciding_player`, `DecisionRequest.for_player`, `knows_identity`, `concede(by=)`: seams in place |
+| 724 | Ending Turns and Phases | M3 (turn frame M2.1 ✓) | X | the turn frame is `TakeTurn` on the task stack (`turn_frame_index`) |
 | 725 | The Monarch | M7 | S | D (Regal Behemoth) |
 | 726 | The Initiative | M7 | S |  |
 | 727 | Restarting the Game | M7 | X |  |

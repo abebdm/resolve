@@ -1,7 +1,12 @@
 """Taking turns: phases, steps and their turn-based actions (500-514, 103.8).
 
-``TakeTurn`` runs one player's turn through ``TURN_SEQUENCE`` (500.1) and then starts the next
-player's turn in turn order (103.1). Each segment is a ``RunStep``:
+``TakeTurn`` runs one player's turn through the segments the rules give it
+(``defaults.turn_structure``, 500.1), kept as data in ``TurnState.segments``, and then starts the
+next turn (``defaults.next_turn``: extra turns first, 500.7, then the next player in turn order,
+103.1). It stays on the task stack for the whole turn, so it is the turn's frame: removing every
+task above it and the remaining segments cuts the rest of the turn short (724,
+``turn_frame_index``).
+Each segment is a ``RunStep``:
 
 1. the step (or main phase) begins: ``StepBegan`` (500.4 and 500.6 happen here);
 2. its turn-based actions (703);
@@ -9,7 +14,7 @@ player's turn in turn order (103.1). Each segment is a ``RunStep``:
 4. it ends: effects lasting until its end would expire (none exist yet), then unspent mana
    empties from every pool (500.5, 703.4q).
 
-Skipped steps (500.11) don't begin at all:
+Skipped steps (500.11) don't begin at all (``defaults.is_skipped``):
 
 - 103.8a: in a two-player game, the starting player skips the draw step of their first turn.
   In a game that began with more than two players nobody does (103.8c).
@@ -20,13 +25,15 @@ Skipped steps (500.11) don't begin at all:
 The turn-based actions implemented:
 
 - untap step: 502.1 (phasing) and 502.2 (day and night) can't apply, since nothing has phasing
-  and it is never day or night; 502.3: the active player untaps all their permanents at once.
-- draw step: the active player draws a card (504.1).
+  and it is never day or night; 502.3: the active player untaps their permanents at once, those
+  ``defaults.permanents_that_untap`` names (all of them).
+- draw step: the active player draws ``defaults.draw_step_draws`` cards, one (504.1).
 - beginning of combat: 507.1 has no choice to make. In a two-player game the nonactive player
   is the defending player (506.2); every multiplayer game uses the attack multiple players
   option, so all the active player's opponents are defending players (802.2, docs/decisions.md).
 - declare attackers: with no creature to attack with, the declaration is empty (508.1).
-- cleanup: the active player discards down to their maximum hand size of seven (514.1, 402.2);
+- cleanup: the active player discards down to their maximum hand size, seven (514.1, 402.2,
+  ``defaults.maximum_hand_size``);
   514.2 removes all damage from permanents (and would end "until end of turn" effects, none of
   which can exist yet); then
   514.3a: if state-based actions would be performed (or triggers are waiting), they are, the
@@ -55,7 +62,6 @@ from resolve.decisions.spaces import (
 from resolve.effects.characteristics import characteristics
 from resolve.engine.drawing import DrawCards
 from resolve.engine.mana import EmptyManaPools
-from resolve.engine.mulligans import is_multiplayer
 from resolve.engine.priority import PriorityRound, current_turn
 from resolve.engine.sba import state_based_actions
 from resolve.errors import EngineError, NotImplementedRule
@@ -63,17 +69,14 @@ from resolve.events.cards import CardDiscarded
 from resolve.events.permanents import DamageRemoved, PermanentsUntapped
 from resolve.events.pipeline import ApplyEvents
 from resolve.events.turn import StepBegan, TurnBegan
-from resolve.state.game import next_in_turn_order
+from resolve.rules import defaults
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.turn import TURN_SEQUENCE, Phase, Segment, Step, gives_priority
+from resolve.state.turn import Phase, Step, gives_priority
 from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
 
 if TYPE_CHECKING:
     from resolve.decisions.request import DecisionRequest
     from resolve.state.game import GameState
-
-# 402.2: a player's maximum hand size is normally seven. No effect can change it yet.
-MAXIMUM_HAND_SIZE = 7
 
 
 @dataclass(slots=True)
@@ -88,37 +91,57 @@ class FirstTurn(Task):
 
 @dataclass(slots=True)
 class TakeTurn(Task):
-    """``player``'s turn. ``position`` is the index in ``TURN_SEQUENCE`` of the next segment."""
+    """``player``'s turn, and the frame of the task stack that holds everything the turn does.
+
+    - ``extra``: this turn is one of ``GameState.extra_turns`` (500.7), taken after ``regular``.
+    - ``regular``: the player whose regular turn the turn order is at (``None``: ``player``).
+      The turn that follows an extra turn is the one after this player's, not the extra turn's
+      player's (500.7: extra turns are added directly after the specified turn).
+    - ``started``: the turn has begun (``TurnBegan``).
+    """
 
     player: PlayerId
-    position: int = 0
+    extra: bool = False
+    regular: PlayerId | None = None
     started: bool = False
 
     def run(self, state: GameState) -> TaskResult:
-        if not self.started and state.player(self.player).left_game:
-            # 800.4k: a player who left the game doesn't begin a turn.
-            return Push((TakeTurn(next_in_turn_order(state, self.player)),))
+        after = self.player if self.regular is None else self.regular
         if not self.started:
+            if self.extra:
+                state.extra_turns.pop()  # 500.7: taken now (or lost, 800.4k)
+            if state.player(self.player).left_game:
+                # 800.4k: a player who left the game doesn't begin a turn.
+                return Push((self._next(state, after),))
             self.started = True
             number = 1 if state.turn is None else state.turn.number + 1
             began = TurnBegan(player=self.player, number=number, rules=("500.1",))
             return Push((ApplyEvents((began,)), self))
-        while self.position < len(TURN_SEQUENCE):
-            segment = TURN_SEQUENCE[self.position]
-            self.position += 1
-            if not _skipped(state, segment):
+        turn = current_turn(state)
+        while turn.segments:
+            segment = turn.segments.pop(0)
+            if not defaults.is_skipped(state, segment):
                 return Push((RunStep(*segment), self))
-        # The turn is over; the next player in turn order takes the next turn (103.1, 500.1).
-        return Push((TakeTurn(next_in_turn_order(state, self.player)),))
+        # The turn is over; the next one begins (500.7, 103.1, 500.1).
+        return Push((self._next(state, after),))
+
+    def _next(self, state: GameState, after: PlayerId) -> TakeTurn:
+        following = defaults.next_turn(state, after)
+        if following.extra:
+            return TakeTurn(following.player, extra=True, regular=after)
+        return TakeTurn(following.player)
 
 
-def _skipped(state: GameState, segment: Segment) -> bool:
-    _, step = segment
-    if step is Step.DRAW:
-        # 103.8a: the starting player's first draw step, in a two-player game (103.8c).
-        return current_turn(state).number == 1 and not is_multiplayer(state)
-    # 508.8: no attackers can have been declared (see the module docstring).
-    return step in (Step.DECLARE_BLOCKERS, Step.COMBAT_DAMAGE)
+def turn_frame_index(state: GameState) -> int:
+    """The index in ``state.tasks`` of the turn in progress's frame, its ``TakeTurn`` (724).
+
+    Every task above it belongs to the turn; ending the turn removes them and the remaining
+    segments (``TurnState.segments``) that the turn skips. ``EngineError`` outside a turn.
+    """
+    for index in range(len(state.tasks) - 1, -1, -1):
+        if isinstance(state.tasks[index], TakeTurn):
+            return index
+    raise EngineError("there is no turn in progress, so there is no turn frame (724)")
 
 
 class StepStage(Enum):
@@ -176,12 +199,11 @@ class RunStep(Task):
     def _turn_based_actions(self, state: GameState, active: PlayerId) -> tuple[Task, ...]:
         match self.step:
             case Step.UNTAP:
-                # 502.3: the active player untaps all their permanents at once (no effect can
-                # keep one from untapping yet).
+                # 502.3: the active player untaps their permanents at once.
                 tapped = tuple(
                     obj
-                    for obj in state.battlefield
-                    if state.objects[obj].controller == active and state.objects[obj].tapped
+                    for obj in defaults.permanents_that_untap(state, active)
+                    if state.objects[obj].tapped
                 )
                 if not tapped:
                     return ()
@@ -190,7 +212,8 @@ class RunStep(Task):
             case Step.DRAW:
                 if state.player(active).left_game:
                     return ()  # 800.4j: the turn goes on without an active player to draw
-                return (DrawCards(active, 1, ("504.1",)),)
+                draws = defaults.draw_step_draws(state, active)
+                return (DrawCards(active, draws, ("504.1",)),) if draws > 0 else ()
             case Step.DECLARE_ATTACKERS:
                 for obj in state.battlefield:
                     permanent = state.objects[obj]
@@ -252,14 +275,15 @@ class DiscardToHandSize(Task):
         if len(self.chosen) > 1:
             return self._ask_order()  # asked again after a concession
         hand = state.player(self.player).hand
-        excess = len(hand) - MAXIMUM_HAND_SIZE
-        if excess <= 0:
-            return Done()
+        maximum = defaults.maximum_hand_size(state, self.player)
+        if maximum is None or len(hand) <= maximum:
+            return Done()  # 402.2: no maximum hand size, or the hand is within it
+        excess = len(hand) - maximum
         return NeedDecision(
             player=self.player,
             kind=DecisionKind.DISCARD,
             space=ChooseSubset(tuple(ObjectOption(obj) for obj in hand), excess, excess),
-            prompt=f"Discard {excess} card(s) down to your maximum hand size of seven.",
+            prompt=f"Discard {excess} card(s) down to your maximum hand size of {maximum}.",
             rules=("514.1", "402.2"),
         )
 

@@ -6,6 +6,7 @@ checks again, until a check performs nothing. The state-based actions implemente
 
 - 704.5a: a player with 0 or less life loses the game.
 - 704.5b: a player who attempted to draw from an empty library since the last check loses.
+  Both only if ``defaults.can_lose_game`` says the player can (104.3).
 - 704.5f: a creature with 0 or less toughness is put into its owner's graveyard.
 - 704.5g: a creature with toughness above 0 and lethal damage marked on it is destroyed.
 
@@ -28,6 +29,8 @@ from resolve.events.base import Event
 from resolve.events.game import GameEnded, PlayerLeftGame, PlayerLost
 from resolve.events.permanents import PermanentDestroyed, PutIntoGraveyard
 from resolve.events.pipeline import ApplyEvents
+from resolve.rules import defaults
+from resolve.rules.defaults import LossReason
 from resolve.state.game import apnap_order, players_in_game
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
@@ -55,9 +58,13 @@ def state_based_actions(state: GameState) -> tuple[Event, ...]:
             events.append(PermanentDestroyed(obj=obj, rules=("704.5g", "120.6", "701.8a")))
     for player_id in apnap_order(state):
         player = state.player(player_id)
-        if player.life <= 0:
+        # 104.3: a player who can't lose the game for the reason stays in it. Their state is kept,
+        # so they lose as soon as they can (the drawing attempt is remembered, 121.4).
+        if player.life <= 0 and defaults.can_lose_game(state, player_id, LossReason.LIFE_TOTAL):
             events.append(PlayerLost(player=player_id, rules=("704.5a", "704.3")))
-        elif player.drew_from_empty_library:
+        elif player.drew_from_empty_library and defaults.can_lose_game(
+            state, player_id, LossReason.EMPTY_LIBRARY
+        ):
             events.append(PlayerLost(player=player_id, rules=("704.5b", "121.4", "704.3")))
     return tuple(events)
 
@@ -116,7 +123,7 @@ class CheckStateBasedActions(Task):
         if not isinstance(request.space, ChooseOrder) or not isinstance(answer, Order):
             raise EngineError(f"CheckStateBasedActions can't resume with {answer!r}")
         chosen = request.space.chosen(answer)
-        self.orders[request.player] = tuple(
+        self.orders[request.for_player] = tuple(
             option.object for option in chosen if isinstance(option, ObjectOption)
         )
         return self.run(state)

@@ -274,6 +274,32 @@ all six pass. Before pushing:
 3. The asking task returns `NeedDecision(...)`, rejects rules-illegal answers in `check_answer`
    (without changing anything), and continues in `resume`.
 
+### Add or change a rule default
+
+A rule default is a value or procedure a card or effect could change: a count or limit, the
+turn's structure, who decides and who sees, the zones and timing of playing and casting
+(CLAUDE.md rule 12). All of them live in `src/resolve/rules/defaults.py`.
+
+1. Check the rules coverage map (`docs/roadmap.md`) for the cards and rules that change it, and
+   the rule's text (`uv run python tools/rule.py <number>`).
+2. Write the function in `resolve.rules.defaults`: it takes the `GameState` (and the player or
+   object it is about), returns the CR's default, and cites the rule in its docstring with what
+   changes it later. Add it to the table in the module docstring and to `CITATIONS` in
+   `tests/rules/test_rule_defaults.py`.
+3. Use it in the engine **through the module**: `from resolve.rules import defaults`, then
+   `defaults.maximum_hand_size(state, player)`. Never `from resolve.rules.defaults import ...`;
+   that binds the name, and a replacement of the function wouldn't reach it.
+4. Legality questions (may this player do this?) are an `Action` in
+   `resolve/rules/legality.py` with its permissions and prohibitions; a "can't" is a
+   prohibition, which wins over any permission (101.2).
+5. Test it twice, in `tests/rules/`: the default value, and a **seam test**: replace the
+   function with `monkeypatch` (the typed helpers in `tests/seams.py`) and check the engine obeys
+   it everywhere the rule applies, for example two land plays allowed means a second land is
+   offered. M5 replaces seam tests with tests using real effects.
+6. In `docs/roadmap.md`, mark the map row "default function in place". `tests/tooling/test_coverage_map.py`
+   checks the map against the pinned CR; it fails if a section or keyword is missing,
+   duplicated, misnamed or has an invalid milestone or tier.
+
 ### Look up a rule
 
 Never open the CR file in full (it is larger than an agent's context). All commands work in

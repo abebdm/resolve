@@ -132,6 +132,7 @@ def test_render_request_numbers_the_options_from_zero() -> None:
     request = DecisionRequest(
         id=3,
         player=P0,
+        for_player=P0,
         kind=DecisionKind.CHOOSE_TARGETS,
         space=ChooseOne((PlayerOption(P2), ObjectOption(ids["elves"]))),
         prompt="Choose a target.",
@@ -157,7 +158,7 @@ def test_render_request_numbers_the_options_from_zero() -> None:
 )
 def test_render_request_explains_how_to_answer(space: AnswerSpace, hint: str) -> None:
     own, _, _ = board()
-    request = DecisionRequest(1, P0, DecisionKind.DIVIDE, space, "Decide.", ("601.2d",))
+    request = DecisionRequest(1, P0, P0, DecisionKind.DIVIDE, space, "Decide.", ("601.2d",))
     assert hint in render_request(request, own)
 
 

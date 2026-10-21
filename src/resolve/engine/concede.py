@@ -26,13 +26,20 @@ from resolve.state.game import GameState
 from resolve.state.ids import PlayerId
 
 
-def concede(state: GameState, player: PlayerId) -> None:
+def concede(state: GameState, player: PlayerId, *, by: PlayerId | None = None) -> None:
     """``player`` concedes the game (104.3a).
 
-    Raises ``InvalidAnswer``, changing nothing, if the game is over or the player has already
-    left it, and ``EngineError`` for an unknown player or a game stopped by an error.
+    ``by`` names who is conceding, when it matters: 723.6 says the controller of a player can't
+    make them concede, so anyone but ``player`` is refused. A controlled player may concede at
+    any time.
+
+    Raises ``InvalidAnswer``, changing nothing, if someone else is conceding for them (723.6), the
+    game is over or the player has already left it, and ``EngineError`` for an unknown player or a
+    game stopped by an error.
     """
     conceding = state.player(player)  # validates the ID
+    if by is not None and by != player:
+        raise InvalidAnswer(f"player {by} can't concede for player {player} (723.6, 104.3a)")
     if state.result is not None:
         raise InvalidAnswer("the game is over")
     if conceding.left_game:

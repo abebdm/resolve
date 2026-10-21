@@ -41,16 +41,15 @@ touches. Read more when a section points you to another.
 ## Current status
 
 **Current milestone: M2 (Spells and the stack), in progress: the plan is approved
-(`docs/plans/m2.md`) and its first step, M2.0 (documentation), is done. M0 (Skeleton) and M1
-(Turn structure) are complete.** What each completed step built, and where, is in
-`docs/roadmap.md`, "What's built".
+(`docs/plans/m2.md`); M2.0 (documentation) and M2.1 (the coverage-map test and the rule defaults)
+are done. M0 (Skeleton) and M1 (Turn structure) are complete.** What each completed step built,
+and where, is in `docs/roadmap.md`, "What's built".
 
-- **Known violations of rule 12:** the M0/M1 code still hard-codes the rule defaults listed in
-  `docs/plans/m2.md` §5.1 (one land per turn, maximum hand size seven, the fixed turn sequence,
-  the affected player always deciding, and others). M2.1 removes them.
-- **Next:** M2.1, the coverage-map consistency test and the rule-default functions. Then M2.2
-  onward: casting (601.2), which is the `NotImplementedRule("601.2")` gap every game with a
-  nonland card can reach.
+- **Known violations of rule 12:** none. Every default of `docs/plans/m2.md` §5.1 comes from a
+  function in `resolve.rules.defaults` (how to add or change one: `docs/howto.md`).
+- **Next:** M2.2 (mana costs, spell characteristics, typed words and `ChooseCounts`) onward:
+  casting (601.2), which is the `NotImplementedRule("601.2")` gap every game with a nonland card
+  can reach.
 
 Do not start a milestone unless the user asks.
 

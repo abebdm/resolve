@@ -218,7 +218,10 @@ def invariant_violations(state: GameState) -> list[str]:
                 problems.append(f"player {player.id} left the game but owns objects (800.4a)")
             if player.mana_pool:
                 problems.append(f"player {player.id} left the game but has mana")
-            if state.pending is not None and state.pending.player == player.id:
+            if state.pending is not None and player.id in (
+                state.pending.player,
+                state.pending.for_player,
+            ):
                 problems.append(f"player {player.id} left the game but is asked a decision")
         if player.left_game and not player.lost and state.result is None:
             problems.append(f"player {player.id} left a game in progress without losing")
@@ -275,10 +278,17 @@ def _turn_violations(state: GameState) -> list[str]:
         problems.append(f"player {turn.priority} holds priority but already passed (117.4)")
     if turn.lands_played < 0:
         problems.append("lands played this turn is negative")
+    for segment in turn.segments:
+        if segment not in TURN_SEQUENCE:
+            problems.append(f"{segment} isn't a step of a turn (500.1)")
+    if any(not 0 <= p < count for p in state.extra_turns):
+        problems.append(f"the extra turns {state.extra_turns} aren't players' turns (500.7)")
+    if state.turn_direction not in (1, -1):
+        problems.append(f"turn order's direction {state.turn_direction} isn't 1 or -1 (103.1)")
     if pending is not None and pending.kind is DecisionKind.PRIORITY_ACTION:
-        if turn.priority != pending.player:
+        if turn.priority != pending.for_player:
             problems.append(
-                f"player {pending.player} is asked for a priority action, but "
+                f"player {pending.for_player} is asked for a priority action, but "
                 f"{turn.priority} holds priority"
             )
         if not gives_priority(turn.step) and turn.step is not Step.CLEANUP:

@@ -49,12 +49,13 @@ from resolve.engine.loop import run
 from resolve.engine.priority import PriorityRound
 from resolve.engine.setup import initial_state
 from resolve.engine.turns import RunStep, StepStage, TakeTurn
+from resolve.rules import defaults
 from resolve.state.config import GameConfig
 from resolve.state.game import Card, GameState, create_object, zone_list
 from resolve.state.ids import CardId, ObjectId, PlayerId
 from resolve.state.invariants import check_invariants, check_pure_data
 from resolve.state.mana import Mana, ManaType
-from resolve.state.turn import TURN_SEQUENCE, Phase, Step, TurnState, gives_priority, segment_of
+from resolve.state.turn import Phase, Step, TurnState, gives_priority, segment_of
 from resolve.state.zones import BATTLEFIELD, COMMAND, EXILE, STACK, Zone, ZoneKind
 from resolve.tasks import Task
 from tests import game_fixtures
@@ -253,7 +254,12 @@ class Scenario:
             passed=list(passed),
             lands_played=lands_played,
         )
-        rest = TakeTurn(active, position=TURN_SEQUENCE.index(segment) + 1, started=True)
+        structure = defaults.turn_structure(state, active)
+        # A structure the effects changed may lack this segment: then nothing remains.
+        state.turn.segments = (
+            list(structure[structure.index(segment) + 1 :]) if segment in structure else []
+        )
+        rest = TakeTurn(active, started=True)
         if start:
             self._resume = (RunStep(phase, step), rest)
         else:
