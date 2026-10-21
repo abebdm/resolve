@@ -41,27 +41,25 @@ from resolve.decisions.spaces import (
     ChooseOne,
     ChooseOrder,
     ChooseSubset,
-    NamedOption,
     ObjectOption,
     Order,
     Pick,
     PickMany,
 )
+from resolve.engine import defaults
+from resolve.engine.defaults import KEEP, MULLIGAN
 from resolve.engine.drawing import DrawCards
 from resolve.errors import EngineError
 from resolve.events.cards import CardsPutOnBottom, HandShuffledIntoLibrary
 from resolve.events.game import MulliganDeclared
 from resolve.events.pipeline import ApplyEvents
-from resolve.state.game import players_in_game, turn_order
+from resolve.state.game import is_multiplayer, players_in_game, turn_order
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
 
 if TYPE_CHECKING:
     from resolve.decisions.request import DecisionRequest
     from resolve.state.game import GameState
-
-KEEP = NamedOption("keep")
-MULLIGAN = NamedOption("mulligan")
 
 
 class Stage(Enum):
@@ -70,14 +68,6 @@ class Stage(Enum):
     DRAW = "draw"
     DECLARE = "declare"
     BOTTOM = "bottom"
-
-
-def is_multiplayer(state: GameState) -> bool:
-    """Whether the game began with more than two players (100.1b).
-
-    Seats are never removed, so the number of seats is the number of players the game began with.
-    """
-    return len(state.players) > 2
 
 
 def counted_mulligans(state: GameState, taken: int) -> int:
@@ -118,10 +108,11 @@ class OpeningHands(Task):
                 return self._bottom(state)
 
     def _draws(self, state: GameState, players: tuple[PlayerId, ...]) -> tuple[Task, ...]:
-        size = state.config.starting_hand_size
-        if size == 0:
-            return ()
-        return tuple(DrawCards(player, size, ("103.5", "121.2c")) for player in players)
+        return tuple(
+            DrawCards(player, size, ("103.5", "121.2c"))
+            for player in players
+            if (size := defaults.starting_hand_size(state, player)) > 0
+        )
 
     def _may_mulligan(self, state: GameState, player: PlayerId) -> bool:
         # 103.5: mulligans are allowed "until their opening hand would be zero cards, after
@@ -137,10 +128,19 @@ class OpeningHands(Task):
                 self.kept.append(player)
                 self.declared[player] = False
                 continue
+            options = defaults.mulligan_options(state, player)
+            if not options:
+                raise EngineError(f"player {player} has no way to answer 103.5")
+            if len(options) == 1:
+                # A question with a single possible answer isn't asked.
+                self.declared[player] = options[0] == MULLIGAN
+                if options[0] == KEEP:
+                    self.kept.append(player)
+                continue
             return NeedDecision(
                 player=player,
                 kind=DecisionKind.MULLIGAN,
-                space=ChooseOne((KEEP, MULLIGAN)),
+                space=ChooseOne(options),
                 prompt="Keep this hand, or take a mulligan?",
                 rules=("103.5",),
             )
@@ -202,7 +202,7 @@ class OpeningHands(Task):
         return Push((ApplyEvents(events), self))
 
     def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
-        player = request.player
+        player = request.for_player
         match request.kind, request.space, answer:
             case DecisionKind.MULLIGAN, ChooseOne(), Pick():
                 take = request.space.chosen(answer) == MULLIGAN

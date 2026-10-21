@@ -21,6 +21,9 @@ class DecisionRequest(Immutable):
     """A question the engine is waiting for a player to answer.
 
     - ``id``: unique within the game; the answer must echo it, so a stale answer is refused.
+    - ``player``: who answers. ``for_player``: whose decision it is by the rules. They differ
+      when another player makes the decision for them (723.5, 723.8, 723.9); only ``player``
+      may answer, and resources used are ``for_player``'s (723.5a).
     - ``kind`` and ``space``: what is asked, and which answers are accepted.
     - ``prompt``: a short English description for text interfaces.
     - ``rules``: the CR rules that call for this decision.
@@ -29,6 +32,7 @@ class DecisionRequest(Immutable):
 
     id: int
     player: PlayerId
+    for_player: PlayerId
     kind: DecisionKind
     space: AnswerSpace
     prompt: str

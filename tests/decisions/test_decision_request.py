@@ -13,6 +13,7 @@ from resolve.state.ids import PlayerId
 REQUEST = DecisionRequest(
     id=7,
     player=PlayerId(1),
+    for_player=PlayerId(1),
     kind=DecisionKind.CHOOSE_X,
     space=ChooseNumber(0, 3),
     prompt="Choose X.",
@@ -46,7 +47,9 @@ def test_an_answer_must_be_a_decision_answer() -> None:
 @pytest.mark.parametrize("rules", [(), ("ten",), ("103.1", "1.1")])
 def test_requests_must_cite_the_rules_that_ask_for_them(rules: tuple[str, ...]) -> None:
     with pytest.raises(ValueError, match="CR citation"):
-        DecisionRequest(1, PlayerId(0), DecisionKind.MAY, ChooseNumber(0, 1), "?", rules)
+        DecisionRequest(
+            1, PlayerId(0), PlayerId(0), DecisionKind.MAY, ChooseNumber(0, 1), "?", rules
+        )
 
 
 def test_decision_kinds_have_distinct_values() -> None:

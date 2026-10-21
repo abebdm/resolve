@@ -18,9 +18,11 @@ it was.
 from __future__ import annotations
 
 from resolve.decisions.request import DecisionAnswer, DecisionRequest, validate_answer
+from resolve.engine import defaults
 from resolve.errors import EngineError, InvalidAnswer
 from resolve.events.base import AnswerRecord, append_log
 from resolve.state.game import GameState
+from resolve.state.ids import PlayerId
 from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
 
 # Tasks one call to ``run`` may execute before the engine assumes it is stuck. This guards
@@ -57,7 +59,8 @@ def apply_result(state: GameState, task: Task, result: TaskResult) -> None:
             state.player(result.player)  # validates the ID
             state.pending = DecisionRequest(
                 id=state.next_request_id,
-                player=result.player,
+                player=_decider(state, result.player),
+                for_player=result.player,
                 kind=result.kind,
                 space=result.space,
                 prompt=result.prompt,
@@ -65,6 +68,16 @@ def apply_result(state: GameState, task: Task, result: TaskResult) -> None:
                 source=result.source,
             )
             state.next_request_id += 1
+
+
+def _decider(state: GameState, player: PlayerId) -> PlayerId:
+    """Who answers the decision the rules ask of ``player`` (723.5, 723.8, 723.9).
+
+    A deciding player who has left the game no longer controls anyone: effects that give a
+    player control of another player end when they leave (800.4a).
+    """
+    decider = defaults.deciding_player(state, player)
+    return player if state.player(decider).left_game else decider
 
 
 def submit_answer(state: GameState, answer: DecisionAnswer) -> None:

@@ -23,6 +23,8 @@ from resolve.data.types import CardType
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import AnswerValue, ChooseOrder, ObjectOption, Order
 from resolve.effects.characteristics import characteristics
+from resolve.engine import defaults
+from resolve.engine.defaults import LossReason
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.base import Event
 from resolve.events.game import GameEnded, PlayerLeftGame, PlayerLost
@@ -56,8 +58,11 @@ def state_based_actions(state: GameState) -> tuple[Event, ...]:
     for player_id in apnap_order(state):
         player = state.player(player_id)
         if player.life <= 0:
-            events.append(PlayerLost(player=player_id, rules=("704.5a", "704.3")))
-        elif player.drew_from_empty_library:
+            if defaults.can_lose_game(state, player_id, LossReason.ZERO_LIFE):
+                events.append(PlayerLost(player=player_id, rules=("704.5a", "704.3")))
+        elif player.drew_from_empty_library and defaults.can_lose_game(
+            state, player_id, LossReason.EMPTY_LIBRARY
+        ):
             events.append(PlayerLost(player=player_id, rules=("704.5b", "121.4", "704.3")))
     return tuple(events)
 
@@ -116,7 +121,7 @@ class CheckStateBasedActions(Task):
         if not isinstance(request.space, ChooseOrder) or not isinstance(answer, Order):
             raise EngineError(f"CheckStateBasedActions can't resume with {answer!r}")
         chosen = request.space.chosen(answer)
-        self.orders[request.player] = tuple(
+        self.orders[request.for_player] = tuple(
             option.object for option in chosen if isinstance(option, ObjectOption)
         )
         return self.run(state)

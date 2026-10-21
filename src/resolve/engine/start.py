@@ -11,8 +11,8 @@
    opponents is left out: a uniformly random order stays uniformly random.
 4. 103.4: life totals were set by ``initial_state``.
 5. 103.5: opening hands and mulligans (``resolve.engine.mulligans.OpeningHands``).
-6. 103.6: actions from opening hands. No card definition can have such an ability yet, so there
-   is nothing to do.
+6. 103.6: actions from opening hands (``OpeningHandActions``). No card definition can have such
+   an ability yet; ``defaults.opening_hand_actions`` reports none.
 7. 103.8: the starting player takes their first turn (``resolve.engine.turns``).
 """
 
@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import AnswerValue, ChooseOne, Pick, PlayerOption
+from resolve.engine import defaults
 from resolve.engine.mulligans import OpeningHands
 from resolve.engine.turns import FirstTurn
 from resolve.errors import EngineError, NotImplementedRule
@@ -74,10 +75,28 @@ class StartGame(Task):
         chosen = StartingPlayerChosen(
             chooser=self.chooser, starting_player=option.player, rules=("103.1",)
         )
-        next_steps: tuple[Task, ...] = (ShuffleLibraries(), OpeningHands(), FirstTurn())
+        next_steps: tuple[Task, ...] = (
+            ShuffleLibraries(),
+            OpeningHands(),
+            OpeningHandActions(),
+            FirstTurn(),
+        )
         if state.config.commander is not None:
             next_steps = (PutCommandersIntoCommandZone(), *next_steps)
         return Push((ApplyEvents((chosen,)), *next_steps))
+
+
+@dataclass(slots=True)
+class OpeningHandActions(Task):
+    """103.6: players may take actions from their opening hands (Leylines, companions), the
+    starting player first and then in turn order. No card definition can have such an ability
+    yet, so any card ``opening_hand_actions`` reports is a rules gap (M5, M9)."""
+
+    def run(self, state: GameState) -> TaskResult:
+        for player in turn_order(state):
+            if defaults.opening_hand_actions(state, player):
+                raise NotImplementedRule("103.6: taking actions from an opening hand (roadmap M5)")
+        return Done()
 
 
 @dataclass(slots=True)

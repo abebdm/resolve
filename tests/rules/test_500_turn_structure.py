@@ -28,7 +28,7 @@ from resolve.state.config import GameConfig
 from resolve.state.game import GameState
 from resolve.state.ids import PlayerId
 from resolve.state.invariants import invariant_violations, state_impurities
-from resolve.state.turn import Phase, Step
+from resolve.state.turn import TURN_SEQUENCE, Phase, Step
 from tests.game_fixtures import Passer, deck, pass_until, request_of, started_game
 from tests.scenario import Scenario
 
@@ -219,7 +219,7 @@ def test_a_turn_resumed_by_the_scenario_continues_into_the_next_turn() -> None:
     assert turn is not None and turn.active_player == P0
     records = [e.record for e in state.event_log if isinstance(e.record, StepBegan | TurnBegan)]
     assert records[0] == StepBegan(phase=Phase.ENDING, step=Step.CLEANUP, rules=("514", "500.6"))
-    assert records[1] == TurnBegan(player=P0, number=5, rules=("500.1",))
+    assert records[1] == TurnBegan(player=P0, number=5, segments=TURN_SEQUENCE, rules=("500.1",))
 
 
 def test_full_two_player_game_ends_by_decking() -> None:

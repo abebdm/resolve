@@ -40,3 +40,21 @@ class ManaPoolEmptied(Event):
         if tuple(pool) != self.mana:
             raise EngineError(f"player {self.player}'s pool isn't {self.mana}")
         pool.clear()
+
+
+@dataclass(frozen=True, kw_only=True)
+class ManaLost(Event):
+    """Part of ``player``'s pool empties as a step or phase ends (500.5, 703.4q): the units in
+    ``mana`` leave the pool and the rest stays (an effect keeps it, 500.5, 106.4)."""
+
+    player: PlayerId
+    mana: tuple[Mana, ...]
+
+    def apply(self, state: GameState) -> None:
+        pool = state.player(self.player).mana_pool
+        remaining = list(pool)
+        for unit in self.mana:
+            if unit not in remaining:
+                raise EngineError(f"player {self.player}'s pool doesn't hold {unit}")
+            remaining.remove(unit)
+        pool[:] = remaining

@@ -7,8 +7,9 @@ from typing import TYPE_CHECKING
 
 from resolve.cards.primitives.abilities import ActivatedManaAbility
 from resolve.effects.characteristics import characteristics
+from resolve.engine import defaults
 from resolve.errors import EngineError
-from resolve.events.mana import ManaPoolEmptied
+from resolve.events.mana import ManaLost, ManaPoolEmptied
 from resolve.events.pipeline import ApplyEvents
 from resolve.state.game import apnap_order
 from resolve.state.ids import ObjectId, PlayerId
@@ -48,13 +49,19 @@ class ActivateManaAbility(Task):
 
 
 def empty_mana_pools(state: GameState) -> tuple[Event, ...]:
-    """500.5, 703.4q: every player's unspent mana empties, in APNAP order; nothing for empty
-    pools."""
-    return tuple(
-        ManaPoolEmptied(player=player, mana=tuple(pool), rules=("500.5", "703.4q", "106.4"))
-        for player in apnap_order(state)
-        if (pool := state.player(player).mana_pool)
-    )
+    """500.5, 703.4q: every player's unspent mana that empties (``mana_that_empties``) empties,
+    in APNAP order; nothing for pools with none. A pool that empties completely is one
+    ``ManaPoolEmptied``; if some of it stays, the rest is lost as ``ManaLost``."""
+    events: list[Event] = []
+    for player in apnap_order(state):
+        pool = tuple(state.player(player).mana_pool)
+        emptying = defaults.mana_that_empties(state, player)
+        rules = ("500.5", "703.4q", "106.4")
+        if emptying and emptying == pool:
+            events.append(ManaPoolEmptied(player=player, mana=pool, rules=rules))
+        elif emptying:
+            events.append(ManaLost(player=player, mana=emptying, rules=rules))
+    return tuple(events)
 
 
 @dataclass(slots=True)

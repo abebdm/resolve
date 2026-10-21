@@ -97,6 +97,9 @@ class TurnState:
     - ``passed``: the players who have passed priority in succession since the last time a
       player took an action, in the order they passed (117.3d, 117.4).
     - ``lands_played``: lands the active player has played this turn (305.2).
+    - ``segments``: the segments still to come this turn, in order, as data (500.1, 500.8-500.10):
+      ``resolve.engine.defaults.turn_structure`` gives the turn's segments when it begins, and
+      effects that add phases or steps change this list.
     """
 
     number: int
@@ -106,6 +109,7 @@ class TurnState:
     priority: PlayerId | None = None
     passed: list[PlayerId] = field(default_factory=list[PlayerId])
     lands_played: int = 0
+    segments: list[Segment] = field(default_factory=list[Segment])
 
     @property
     def segment(self) -> Segment:

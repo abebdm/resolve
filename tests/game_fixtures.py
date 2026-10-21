@@ -10,6 +10,10 @@ cards use test-only definitions without abilities. Use these for tests that star
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from types import ModuleType
+from typing import Any
+
+import pytest
 
 from resolve.cards.definitions import basic_lands, vanilla_creatures
 from resolve.cards.registry import CardDefinition, CardRegistry
@@ -199,3 +203,14 @@ def choose_starting_player(state: GameState, index: int) -> NotImplementedRule |
     except NotImplementedRule as gap:
         return gap
     return None
+
+
+def patch_function(
+    monkeypatch: pytest.MonkeyPatch, module: ModuleType, name: str, replacement: Callable[..., Any]
+) -> None:
+    """Replace the function ``name`` of ``module`` for one test (the seam tests, CLAUDE.md rule 12).
+
+    Typed so that tests may pass a lambda; the engine looks the function up on the module at
+    each call, so the replacement applies everywhere.
+    """
+    monkeypatch.setattr(module, name, replacement)

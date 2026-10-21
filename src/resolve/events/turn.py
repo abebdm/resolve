@@ -9,7 +9,7 @@ from resolve.errors import EngineError
 from resolve.events.base import Event
 from resolve.state.ids import PlayerId
 from resolve.state.mana import Mana
-from resolve.state.turn import Phase, Step, TurnState
+from resolve.state.turn import Phase, Segment, Step, TurnState
 
 if TYPE_CHECKING:
     from resolve.state.game import GameState
@@ -20,17 +20,22 @@ class TurnBegan(Event):
     """``player``'s turn ``number`` began (103.8, 500.1); they are the active player (102.1).
 
     The turn begins with its untap step (501.1), which ``StepBegan`` then records.
+    ``segments`` is the turn's structure (500.1, ``defaults.turn_structure``); the turn keeps
+    the segments still to come as data (``TurnState.segments``).
     """
 
     player: PlayerId
     number: int
+    segments: tuple[Segment, ...] = ()
 
     def apply(self, state: GameState) -> None:
         state.player(self.player)  # validates the ID
         previous = 0 if state.turn is None else state.turn.number
         if self.number != previous + 1:
             raise EngineError(f"turn {self.number} can't follow turn {previous}")
-        state.turn = TurnState(number=self.number, active_player=self.player)
+        state.turn = TurnState(
+            number=self.number, active_player=self.player, segments=list(self.segments)
+        )
 
 
 @dataclass(frozen=True, kw_only=True)

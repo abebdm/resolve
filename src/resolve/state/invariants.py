@@ -218,7 +218,10 @@ def invariant_violations(state: GameState) -> list[str]:
                 problems.append(f"player {player.id} left the game but owns objects (800.4a)")
             if player.mana_pool:
                 problems.append(f"player {player.id} left the game but has mana")
-            if state.pending is not None and state.pending.player == player.id:
+            if state.pending is not None and player.id in (
+                state.pending.player,
+                state.pending.for_player,
+            ):
                 problems.append(f"player {player.id} left the game but is asked a decision")
         if player.left_game and not player.lost and state.result is None:
             problems.append(f"player {player.id} left a game in progress without losing")
@@ -236,6 +239,10 @@ def invariant_violations(state: GameState) -> list[str]:
         problems.append("a decision is pending but the task stack is empty")
     if state.pending is not None and state.result is not None:
         problems.append("a decision is pending but the game is over")
+    if state.turn_direction not in (1, -1):
+        problems.append(f"turn direction {state.turn_direction} isn't 1 or -1 (103.1)")
+    if any(not 0 <= p < len(state.players) for p in state.extra_turns):
+        problems.append(f"extra turns {state.extra_turns} name a player who doesn't exist (500.7)")
     if state.pending is not None and state.pending.id >= state.next_request_id:
         problems.append("the pending request's id isn't below next_request_id")
     for index, entry in enumerate(state.event_log):
@@ -264,6 +271,8 @@ def _turn_violations(state: GameState) -> list[str]:
         problems.append(f"the active player {turn.active_player} isn't a player")
     if turn.segment not in TURN_SEQUENCE:
         problems.append(f"{turn.segment} isn't a step of a turn (500.1)")
+    if any(segment not in TURN_SEQUENCE for segment in turn.segments):
+        problems.append(f"the turn's remaining segments {turn.segments} aren't steps (500.1)")
     if turn.priority is not None:
         if not 0 <= turn.priority < count:
             problems.append(f"the priority holder {turn.priority} isn't a player")
@@ -276,9 +285,9 @@ def _turn_violations(state: GameState) -> list[str]:
     if turn.lands_played < 0:
         problems.append("lands played this turn is negative")
     if pending is not None and pending.kind is DecisionKind.PRIORITY_ACTION:
-        if turn.priority != pending.player:
+        if turn.priority != pending.for_player:
             problems.append(
-                f"player {pending.player} is asked for a priority action, but "
+                f"player {pending.for_player} is asked for a priority action, but "
                 f"{turn.priority} holds priority"
             )
         if not gives_priority(turn.step) and turn.step is not Step.CLEANUP:

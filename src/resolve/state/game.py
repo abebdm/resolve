@@ -127,6 +127,8 @@ class GameState:
     - ``tasks``: the task stack; the last element runs next (design.md §5).
     - ``pending``: the decision the engine is waiting for, if any. ``result``: set when the game
       is over.
+    - ``extra_turns``: players who will take an extra turn, the one to take it next last (500.7).
+    - ``turn_direction``: 1 when turn order is clockwise (103.1), -1 when it is reversed.
     - ``event_log``: everything that happened, with CR citations.
     """
 
@@ -145,6 +147,8 @@ class GameState:
     tasks: list[Task] = field(default_factory=list["Task"])
     pending: DecisionRequest | None = None
     result: GameResult | None = None
+    extra_turns: list[PlayerId] = field(default_factory=list[PlayerId])
+    turn_direction: int = 1
     event_log: list[LogEntry] = field(default_factory=list["LogEntry"])
     next_object_id: int = 1
     next_timestamp: int = 1
@@ -192,14 +196,23 @@ def zone_list(state: GameState, zone: Zone) -> list[ObjectId]:
 def turn_order(state: GameState) -> tuple[PlayerId, ...]:
     """All players in turn order, starting with the starting player (103.1).
 
-    Turn order proceeds clockwise, which is seating order. Players who left the game (800.4)
-    can't exist yet, so every player is included.
+    Turn order proceeds clockwise (103.1), which is seating order, unless ``turn_direction``
+    says it is reversed. Every player is included, also those who left the game (800.4).
     """
     if state.starting_player is None:
         raise EngineError("turn order isn't defined before the starting player is chosen (103.1)")
     first = state.starting_player
     count = len(state.players)
-    return tuple(PlayerId((first + offset) % count) for offset in range(count))
+    direction = state.turn_direction
+    return tuple(PlayerId((first + direction * offset) % count) for offset in range(count))
+
+
+def is_multiplayer(state: GameState) -> bool:
+    """Whether the game began with more than two players (100.1b).
+
+    Seats are never removed, so the number of seats is the number of players the game began with.
+    """
+    return len(state.players) > 2
 
 
 def players_in_game(state: GameState) -> tuple[PlayerId, ...]:
@@ -229,13 +242,14 @@ def apnap_order(state: GameState) -> tuple[PlayerId, ...]:
 
 
 def next_in_turn_order(state: GameState, player: PlayerId) -> PlayerId:
-    """The player after ``player`` in turn order (clockwise, 103.1), among those still in the game.
+    """The player after ``player`` in turn order (clockwise, 103.1, unless ``turn_direction``
+    reverses it), among those still in the game.
 
     ``player`` itself may have left the game; ``EngineError`` if nobody else is still in it.
     """
     count = len(state.players)
     for offset in range(1, count + 1):
-        candidate = PlayerId((player + offset) % count)
+        candidate = PlayerId((player + state.turn_direction * offset) % count)
         if candidate != player and not state.player(candidate).left_game:
             return candidate
     raise EngineError(f"no player after player {player} is still in the game")

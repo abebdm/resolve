@@ -688,7 +688,7 @@ SPACES: list[AnswerSpace] = [
 
 @pytest.mark.parametrize("space", SPACES, ids=repr)
 def test_every_probe_answer_is_invalid(space: AnswerSpace) -> None:
-    request = DecisionRequest(4, PlayerId(1), DecisionKind.MAY, space, "?", ("117.1",))
+    request = DecisionRequest(4, PlayerId(1), PlayerId(1), DecisionKind.MAY, space, "?", ("117.1",))
     probes = invalid_answers(request, 3, RandomAgent(1).random_value(space))
     assert len(probes) >= 5
     for probe in probes:

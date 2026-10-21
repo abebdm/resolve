@@ -26,6 +26,7 @@ from dataclasses import dataclass
 
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionRequest
+from resolve.engine import defaults
 from resolve.errors import NotImplementedRule
 from resolve.events.base import LogEntry
 from resolve.state.game import GameObject, GameResult, GameState
@@ -80,9 +81,11 @@ class TurnView(Immutable):
 
 @dataclass(frozen=True)
 class WaitingFor(Immutable):
-    """Who the game is waiting for, and for what kind of decision."""
+    """Who the game is waiting for, and for what kind of decision: ``player`` answers, and
+    ``for_player`` is whose decision it is (723.5)."""
 
     player: PlayerId
+    for_player: PlayerId
     kind: DecisionKind
 
 
@@ -105,12 +108,31 @@ class PlayerView(Immutable):
 
 
 def is_known_to(obj: GameObject, viewer: PlayerId) -> bool:
-    """Whether ``viewer`` knows the identity of ``obj`` (400.2, 402.3)."""
+    """Whether ``viewer`` knows the identity of ``obj`` by the zone it is in and who was shown
+    it (400.2, 402.3)."""
     if obj.zone.kind.is_public:
         return True
     if obj.zone.kind is ZoneKind.HAND and obj.owner == viewer:
         return True
     return viewer in obj.known_to
+
+
+def knows_identity(state: GameState, obj: GameObject, viewer: PlayerId) -> bool:
+    """Whether ``viewer`` may see the identity of ``obj``: the one visibility check of views
+    (design.md §17.1).
+
+    ``viewer`` knows what they know themselves (400.2, 402.3), and also what any player they
+    make the decisions of knows (723.4: information visible to the player being controlled is
+    visible to both that player and their controller; ``defaults.deciding_player``).
+    """
+    if is_known_to(obj, viewer):
+        return True
+    return any(
+        player.id != viewer
+        and defaults.deciding_player(state, player.id) == viewer
+        and is_known_to(obj, player.id)
+        for player in state.players
+    )
 
 
 def view_for(state: GameState, viewer: PlayerId) -> PlayerView:
@@ -142,7 +164,9 @@ def view_for(state: GameState, viewer: PlayerId) -> PlayerView:
         command=show(state.command),
         starting_player=state.starting_player,
         turn=_turn_view(state),
-        waiting_for=None if pending is None else WaitingFor(pending.player, pending.kind),
+        waiting_for=None
+        if pending is None
+        else WaitingFor(pending.player, pending.for_player, pending.kind),
         request=pending if pending is not None and pending.player == viewer else None,
         log=tuple(
             shown for entry in state.event_log if (shown := entry.shown_to(viewer)) is not None
@@ -160,7 +184,7 @@ def _turn_view(state: GameState) -> TurnView | None:
 
 def _object_view(state: GameState, obj: GameObject, viewer: PlayerId) -> ObjectView:
     name: str | None = None
-    if is_known_to(obj, viewer):
+    if knows_identity(state, obj, viewer):
         if obj.card is None:
             raise NotImplementedRule("111.1: viewing objects not represented by a card")
         name = state.cards[obj.card].data.name

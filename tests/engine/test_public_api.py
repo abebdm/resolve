@@ -147,7 +147,7 @@ def test_views_during_and_after_the_103_1_choice() -> None:
     for other in others:
         view = view_for(state, other)
         assert view.request is None
-        assert view.waiting_for == WaitingFor(chooser, DecisionKind.CHOOSE_STARTING_PLAYER)
+        assert view.waiting_for == WaitingFor(chooser, chooser, DecisionKind.CHOOSE_STARTING_PLAYER)
     choose_starting_player(state, 1)
     # Then the opening hands are drawn (103.5): 21 draws, the starting player's first.
     public = [type(e.record).__name__ for e in view_for(state, others[0]).log]
