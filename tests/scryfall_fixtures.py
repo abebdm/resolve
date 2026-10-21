@@ -276,6 +276,29 @@ RISHKARS_EXPERTISE = spell(
     "Draw cards equal to the greatest power among creatures you control.",
 )  # fmt: skip
 
+# Real mana sources of M2.4 (Oracle text from the 2026-10-21 snapshot, tools/excerpts/cards.json).
+_IDENTITY_MANA = "{T}: Add one mana of any color in your commander's color identity."
+ARCANE_SIGNET = spell("Arcane Signet", "{2}", 2.0, "Artifact", [], _IDENTITY_MANA)
+COMMAND_TOWER = spell("Command Tower", "", 0.0, "Land", [], _IDENTITY_MANA)
+TEMPLE_OF_THE_FALSE_GOD = spell(
+    "Temple of the False God", "", 0.0, "Land", [],
+    "{T}: Add {C}{C}. Activate only if you control five or more lands.",
+)  # fmt: skip
+AVACYNS_PILGRIM: dict[str, Any] = {
+    **vanilla("Avacyn's Pilgrim", "{G}", 1.0, "Human Monk", ("1", "1"), "G"),
+    "oracle_id": "oid-avacyns-pilgrim",
+    "oracle_text": "{T}: Add {W}.",
+    "color_identity": ["G", "W"],
+}
+IXALLIS_LOREKEEPER: dict[str, Any] = {
+    **vanilla("Ixalli's Lorekeeper", "{G}", 1.0, "Human Druid", ("1", "1"), "G"),
+    "oracle_id": "oid-ixallis-lorekeeper",
+    "oracle_text": "{T}: Add one mana of any color. Spend this mana only to cast a Dinosaur spell "
+    "or activate an ability of a Dinosaur source.",
+}
+# An invented vanilla Dinosaur (Ixalli's Lorekeeper, Kinjalli's Caller).
+TEST_RAPTOR = vanilla("Test Raptor", "{1}{G}", 2.0, "Dinosaur", ("2", "2"), "G")
+
 # Invented cards for the other kinds of mana symbol (107.4).
 TEST_MOX = spell("Test Mox", "{0}", 0.0, "Artifact", [], "")
 TEST_GOLD = spell("Test Gold", "{W}{B}", 2.0, "Sorcery", ["W", "B"])

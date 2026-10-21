@@ -1,8 +1,8 @@
 """Decks and games for engine tests, built from ``tests/scryfall_fixtures.py``.
 
-Forests use the real definition (``resolve.cards.definitions.basic_lands``); the other fixture
-cards use test-only definitions without abilities. Use these for tests that start a game with
-``new_game``; to set up a board state directly, use the scenario builder
+Forests and Llanowar Elves use their real definitions (``resolve.cards.definitions``); the
+other fixture cards use test-only definitions without abilities. Use these for tests that start a
+game with ``new_game``; to set up a board state directly, use the scenario builder
 (``tests/scenario.py``), which looks cards up in ``scenario_database()`` and
 ``scenario_registry()`` by default.
 """
@@ -11,7 +11,13 @@ from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 
-from resolve.cards.definitions import basic_lands, mana_rocks, vanilla_creatures
+from resolve.cards.definitions import (
+    basic_lands,
+    mana_creatures,
+    mana_rocks,
+    nonbasic_lands,
+    vanilla_creatures,
+)
 from resolve.cards.registry import CardDefinition, CardRegistry
 from resolve.data.cards import CardDatabase, parse_card, parse_oracle_cards
 from resolve.decisions.kinds import DecisionKind
@@ -37,7 +43,7 @@ from resolve.state.turn import Phase, Step
 from tests import scryfall_fixtures as fx
 
 FOREST = DeckCard(parse_card(fx.FOREST), (basic_lands.FOREST,))
-ELVES = DeckCard(parse_card(fx.LLANOWAR_ELVES), (CardDefinition("Llanowar Elves"),))
+ELVES = DeckCard(parse_card(fx.LLANOWAR_ELVES), (mana_creatures.LLANOWAR_ELVES,))
 DAYBREAKER = DeckCard(
     parse_card(fx.TRANSFORM_CARD),
     (CardDefinition("Test Daybreaker"), CardDefinition("Test Nightfall")),
@@ -49,7 +55,7 @@ def registry() -> CardRegistry:
     return CardRegistry(
         [
             basic_lands.FOREST,
-            CardDefinition("Llanowar Elves"),
+            mana_creatures.LLANOWAR_ELVES,
             CardDefinition("Test Daybreaker"),
             CardDefinition("Test Nightfall"),
         ]
@@ -62,8 +68,9 @@ def database() -> CardDatabase:
 
 
 def scenario_registry() -> CardRegistry:
-    """``registry()`` plus the other basic lands, the vanilla creatures, Sol Ring, the fixture
-    instant, sorcery, split card and nonbasic Forest: the scenario builder's default."""
+    """``registry()`` plus the other basic lands, the vanilla creatures, the mana rocks, mana
+    creatures and nonbasic lands, the fixture instant, sorcery, split card, nonbasic Forest and
+    Test Raptor: the scenario builder's default."""
     extra = (
         "Test Shock",
         "Test Ponder",
@@ -75,6 +82,7 @@ def scenario_registry() -> CardRegistry:
         "Test Wisp",
         "Test Star",
         "Test Wagon",
+        "Test Raptor",
     )
     lands = (basic_lands.PLAINS, basic_lands.ISLAND, basic_lands.SWAMP, basic_lands.MOUNTAIN)
     creatures = vanilla_creatures.DEFINITIONS
@@ -84,6 +92,8 @@ def scenario_registry() -> CardRegistry:
             *lands,
             *creatures,
             *mana_rocks.DEFINITIONS,
+            *(d for d in mana_creatures.DEFINITIONS if d is not mana_creatures.LLANOWAR_ELVES),
+            *nonbasic_lands.DEFINITIONS,
             *map(CardDefinition, extra),
         ]
     )
@@ -93,7 +103,9 @@ def scenario_database() -> CardDatabase:
     """``database()`` plus the cards of ``scenario_registry()``: the scenario builder's default."""
     extra = [fx.INSTANT_CARD, fx.SORCERY_CARD, fx.NONBASIC_FOREST, fx.LAND_CREATURE, fx.DUAL_LAND]
     extra += [fx.GRIZZLY_BEARS, fx.SAVANNAH_LIONS, fx.HILL_GIANT, fx.ZERO_TOUGHNESS]
-    extra += [fx.STAR_CREATURE, fx.VEHICLE, fx.SOL_RING]
+    extra += [fx.STAR_CREATURE, fx.VEHICLE, fx.SOL_RING, fx.ARCANE_SIGNET, fx.SELESNYA_SIGNET]
+    extra += [fx.COMMAND_TOWER, fx.TEMPLE_OF_THE_FALSE_GOD, fx.AVACYNS_PILGRIM]
+    extra += [fx.IXALLIS_LOREKEEPER, fx.TEST_RAPTOR]
     lands = [fx.PLAINS, fx.ISLAND, fx.SWAMP, fx.MOUNTAIN]
     return CardDatabase(parse_oracle_cards([*fx.default_cards(), *lands, *extra]))
 

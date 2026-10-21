@@ -19,6 +19,9 @@ What a scenario can set:
 - which players know a hidden card (``known_to``, 400.2);
 - which permanents are tapped (``tap``, 110.5), the damage marked on them (``damage``, 120.6)
   and the mana in each pool (``mana``, 106.4);
+- the turn during which each permanent came under its controller's control (``entered_turn``,
+  302.6; default 0, before the first turn, so no summoning sickness once its controller's turn
+  has begun);
 - each player's commanders (903.3), in any zone;
 - the starting player (103.1), which fixes turn order; ``None`` means not chosen yet;
 - with ``at(...)``, the turn in progress: its number, the active player, the phase and step, who
@@ -39,7 +42,7 @@ built state is checked with ``check_invariants`` and ``check_pure_data``.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 from resolve.agents.driver import play
 from resolve.agents.scripted import ScriptedAgent, ScriptStep
@@ -107,12 +110,14 @@ class Scenario:
         zone: Zone,
         controller: PlayerId | None = None,
         known_to: Sequence[PlayerId] = (),
+        entered_turn: int = 0,
     ) -> ObjectId:
         """Put a new card named ``name`` on top of ``zone``; returns its object's ID.
 
         ``controller`` is required on the battlefield and the stack and refused elsewhere
         (108.4, 110.2). A library, hand or graveyard must be the owner's own (400.3). ``known_to``
         lists players who know the card's identity although the zone hides it (400.2).
+        ``entered_turn`` is the turn a permanent came under its controller's control (302.6).
         """
         state = self._open()
         state.player(owner)
@@ -127,6 +132,10 @@ class Scenario:
             del state.cards[card.id]  # leave the scenario as it was
             raise
         obj.known_to = tuple(sorted(dict.fromkeys(known_to)))
+        if entered_turn:
+            if zone.kind is not ZoneKind.BATTLEFIELD:
+                raise ScenarioError("only a permanent has a turn it came under control (302.6)")
+            obj.entered_turn = entered_turn
         return obj.id
 
     def library(self, player: PlayerId, names: Sequence[str]) -> list[ObjectId]:
@@ -142,12 +151,25 @@ class Scenario:
         return self._pile(Zone.graveyard(player), player, names)
 
     def battlefield(
-        self, controller: PlayerId, names: Sequence[str], *, owner: PlayerId | None = None
+        self,
+        controller: PlayerId,
+        names: Sequence[str],
+        *,
+        owner: PlayerId | None = None,
+        entered_turn: int = 0,
     ) -> list[ObjectId]:
-        """Put permanents onto the battlefield under ``controller`` (owned by ``owner``)."""
+        """Put permanents onto the battlefield under ``controller`` (owned by ``owner``), which
+        came under that control during turn ``entered_turn`` (302.6; 0: before the first turn)."""
         owner = controller if owner is None else owner
         return [
-            self.add(name, owner=owner, zone=BATTLEFIELD, controller=controller) for name in names
+            self.add(
+                name,
+                owner=owner,
+                zone=BATTLEFIELD,
+                controller=controller,
+                entered_turn=entered_turn,
+            )
+            for name in names
         ]
 
     def stack(
@@ -239,12 +261,18 @@ class Scenario:
         passed: Sequence[PlayerId] = (),
         lands_played: int = 0,
         begin: bool = False,
+        last_turns: Mapping[PlayerId, int | None] | None = None,
     ) -> Scenario:
         """Put the game in turn ``number`` of ``active``, at ``where`` (a step or a main phase).
 
         ``active`` defaults to the starting player. ``priority`` (default: the active player)
         receives priority next, after ``passed`` have passed in succession (117.4). With
         ``begin`` (always, for untap and cleanup) the step starts from its beginning instead.
+
+        Each player's most recent turn (``Player.last_turn_began``, 302.6) is set as if turns had
+        gone around in turn order up to this one: the active player's is ``number``, the player
+        before them in turn order had ``number - 1``, and so on (``None``: no turn yet).
+        ``last_turns`` overrides it for the players it names.
         """
         state = self._open()
         if state.starting_player is None:
@@ -258,6 +286,12 @@ class Scenario:
         start = begin or not gives_priority(step)
         if start and (passed or priority is not None):
             raise ScenarioError("a step that starts from its beginning has no priority yet")
+        seats = len(state.players)
+        for back in range(seats):
+            seat = PlayerId((active - back * state.turn_direction) % seats)
+            state.player(seat).last_turn_began = number - back if number - back >= 1 else None
+        for player, last in (last_turns or {}).items():
+            state.player(player).last_turn_began = last
         state.turn = TurnState(
             number=number,
             active_player=active,
