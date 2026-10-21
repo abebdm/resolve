@@ -12,8 +12,8 @@ From the pinned CR:
 - 500.5, 703.4q: as each step and phase ends, unspent mana empties from every pool.
 - 502.3: in the untap step the active player untaps their permanents, all at once; other
   players' permanents stay tapped.
-- 302.6: a creature's {T} ability needs the creature to have been controlled since the turn
-  began; that isn't tracked yet, so it is a gap.
+- 302.6: a creature's {T} ability needs the creature to have been controlled since its
+  controller's turn began (``tests/rules/test_302_6_summoning_sickness.py``).
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer
 from resolve.decisions.spaces import ActivateAbilityOption, ChooseOne, Option, PassOption, Pick
 from resolve.engine.api import submit
-from resolve.errors import InvalidAnswer, NotImplementedRule
+from resolve.errors import InvalidAnswer
 from resolve.events.mana import ManaAdded, ManaPoolEmptied
 from resolve.events.permanents import PermanentsUntapped, PermanentTapped
 from resolve.events.turn import PriorityPassed
@@ -246,18 +246,21 @@ def test_502_3_nothing_tapped_logs_no_untap() -> None:
     assert events(state, PermanentsUntapped) == []
 
 
-def test_302_6_a_creatures_tap_ability_is_a_gap() -> None:
+def test_302_6_a_creature_controlled_since_the_turn_began_taps_for_mana() -> None:
+    """A creature's {T} mana ability, on a creature P0 has controlled since before their turn
+    began: offered in the upkeep, and it adds its mana (605.3a, 605.3b)."""
     elf = CardDefinition(
         "Llanowar Elves",
         (ActivatedManaAbility((TapSelfCost(),), AddMana((G,))),),
     )
     registry = CardRegistry([elf, *(scenario_registry().get(n) for n in ("Forest",))])
     scenario = Scenario(2, registry=registry)
-    scenario.battlefield(P0, ["Llanowar Elves"])
-    scenario.at(Step.UPKEEP)
-    with pytest.raises(NotImplementedRule) as gap:
-        scenario.build()
-    assert gap.value.rule == "302.6"
+    (elves,) = scenario.battlefield(P0, ["Llanowar Elves"])
+    scenario.at(Step.UPKEEP, number=3)
+    state = scenario.build()
+    assert ActivateAbilityOption(elves, 0) in options(state)
+    run_script(state, tap(elves, P0))
+    assert state.player(P0).mana_pool == [Mana(G, elves)]
 
 
 def test_an_answer_naming_no_offered_option_is_rejected() -> None:

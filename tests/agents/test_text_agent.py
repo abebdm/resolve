@@ -18,6 +18,9 @@ from resolve.agents.text import (
     render_request,
     render_view,
 )
+from resolve.cards.primitives.restrictions import SpendOnlyOnSubtype
+from resolve.cards.primitives.words import SubtypeWord
+from resolve.data.types import Color
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionRequest
 from resolve.decisions.spaces import (
@@ -31,6 +34,7 @@ from resolve.decisions.spaces import (
     ChooseOne,
     ChooseOrder,
     ChooseSubset,
+    ColorOption,
     Distribute,
     ManaActivationOption,
     ManaOption,
@@ -303,6 +307,16 @@ def test_casting_and_paying_options_are_described_in_words() -> None:
     assert describe_option(ManaOption(Mana(ManaType.COLORLESS)), own) == "{C}"
     assert describe_option(ManaActivationOption(0, elves, 0), own) == (
         f"reverse ability 0 of Llanowar Elves #{elves}"
+    )
+
+
+def test_colors_and_restricted_mana_are_described_in_words() -> None:
+    """A color to choose (106.1a) is its name; restricted mana (106.6) shows its restriction."""
+    own, _, ids = board()
+    assert describe_option(ColorOption(Color.GREEN), own) == "green"
+    dinosaur = SpendOnlyOnSubtype(SubtypeWord("Dinosaur"))
+    assert describe_option(ManaOption(Mana(ManaType.RED, ids["elves"], dinosaur)), own) == (
+        f"{{R}} from Llanowar Elves #{ids['elves']} ({dinosaur.text})"
     )
 
 

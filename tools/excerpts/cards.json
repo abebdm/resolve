@@ -91,7 +91,170 @@
       "colors": [],
       "color_identity": [],
       "keywords": []
+    },
+    {
+      "object": "card",
+      "oracle_id": "0bc7f093-bef0-4f1a-852c-4b75ebf54838",
+      "name": "Arcane Signet",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "cmc": 2.0,
+      "type_line": "Artifact",
+      "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": []
+    },
+    {
+      "object": "card",
+      "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+      "name": "Command Tower",
+      "layout": "normal",
+      "mana_cost": "",
+      "cmc": 0.0,
+      "type_line": "Land",
+      "oracle_text": "{T}: Add one mana of any color in your commander's color identity.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": []
+    },
+    {
+      "object": "card",
+      "oracle_id": "1436dd81-496e-42a5-b210-fb5b9cdf073f",
+      "name": "Selesnya Signet",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "cmc": 2.0,
+      "type_line": "Artifact",
+      "oracle_text": "{1}, {T}: Add {G}{W}.",
+      "colors": [],
+      "color_identity": [
+        "G",
+        "W"
+      ],
+      "keywords": []
+    },
+    {
+      "object": "card",
+      "oracle_id": "68954295-54e3-4303-a6bc-fc4547a4e3a3",
+      "name": "Llanowar Elves",
+      "layout": "normal",
+      "mana_cost": "{G}",
+      "cmc": 1.0,
+      "type_line": "Creature — Elf Druid",
+      "oracle_text": "{T}: Add {G}.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "power": "1",
+      "toughness": "1"
+    },
+    {
+      "object": "card",
+      "oracle_id": "069f6530-e65c-4d52-85f3-e0a2acd148c5",
+      "name": "Avacyn's Pilgrim",
+      "layout": "normal",
+      "mana_cost": "{G}",
+      "cmc": 1.0,
+      "type_line": "Creature — Human Monk",
+      "oracle_text": "{T}: Add {W}.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G",
+        "W"
+      ],
+      "keywords": [],
+      "power": "1",
+      "toughness": "1"
+    },
+    {
+      "object": "card",
+      "oracle_id": "a3ce0fa9-8742-4e2c-a8a0-00fc009f998a",
+      "name": "Ixalli's Lorekeeper",
+      "layout": "normal",
+      "mana_cost": "{G}",
+      "cmc": 1.0,
+      "type_line": "Creature — Human Druid",
+      "oracle_text": "{T}: Add one mana of any color. Spend this mana only to cast a Dinosaur spell or activate an ability of a Dinosaur source.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "power": "1",
+      "toughness": "1"
+    },
+    {
+      "object": "card",
+      "oracle_id": "cfdd5dc6-593e-495a-8cfe-3a56b3c4c7df",
+      "name": "Temple of the False God",
+      "layout": "normal",
+      "mana_cost": "",
+      "cmc": 0.0,
+      "type_line": "Land",
+      "oracle_text": "{T}: Add {C}{C}. Activate only if you control five or more lands.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": []
     }
   ],
-  "rulings": []
+  "rulings": [
+    {
+      "object": "ruling",
+      "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+      "source": "wotc",
+      "published_at": "2020-11-10",
+      "comment": "If you have two commanders, the ability adds one mana of any color in their combined color identities."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+      "source": "wotc",
+      "published_at": "2020-11-10",
+      "comment": "If your commander is a card that has no colors in its color identity, Command Tower's ability produces no mana. It doesn't produce {C}."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "0895c9b7-ae7d-4bb3-af17-3b75deb50a25",
+      "source": "wotc",
+      "published_at": "2020-11-10",
+      "comment": "If you don't have a commander, Command Tower's ability produces no mana."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "0bc7f093-bef0-4f1a-852c-4b75ebf54838",
+      "source": "wotc",
+      "published_at": "2020-11-10",
+      "comment": "If you have two commanders, the ability adds one mana of any color in their combined color identities."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "0bc7f093-bef0-4f1a-852c-4b75ebf54838",
+      "source": "wotc",
+      "published_at": "2020-11-10",
+      "comment": "If your commander is a card that has no colors in its color identity, Arcane Signet's ability produces no mana. It doesn't produce {C}."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "0bc7f093-bef0-4f1a-852c-4b75ebf54838",
+      "source": "wotc",
+      "published_at": "2020-11-10",
+      "comment": "If you don't have a commander, Arcane Signet's ability produces no mana."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "a3ce0fa9-8742-4e2c-a8a0-00fc009f998a",
+      "source": "wotc",
+      "published_at": "2023-11-10",
+      "comment": "A \"Dinosaur source\" is any object with the creature type Dinosaur. This means you could spend the mana to activate an ability of a Dinosaur you control or a Dinosaur card in your hand or graveyard, for example."
+    }
+  ]
 }

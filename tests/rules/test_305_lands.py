@@ -32,7 +32,6 @@ from resolve.decisions.spaces import (
     PlayLandOption,
 )
 from resolve.effects.characteristics import characteristics
-from resolve.errors import NotImplementedRule
 from resolve.events.permanents import LandPlayed
 from resolve.state.game import GameState
 from resolve.state.ids import PlayerId
@@ -239,14 +238,16 @@ def test_305_9_a_land_that_is_also_a_creature_is_played_never_cast() -> None:
     assert options(scenario.build()) == (PassOption(),)
 
 
-def test_302_6_a_land_creatures_mana_ability_is_a_gap() -> None:
-    """On the battlefield its {T} ability is a creature's (302.6), which isn't tracked yet."""
+def test_302_6_a_land_creatures_mana_ability_has_summoning_sickness() -> None:
+    """On the battlefield its {T} ability is a creature's (302.6): offered if it has been under
+    P0's control since their turn began, not if it arrived this turn."""
     scenario = Scenario(2)
-    scenario.battlefield(P0, ["Test Land Creature"])
+    (old,) = scenario.battlefield(P0, ["Test Land Creature"])
+    (new,) = scenario.battlefield(P0, ["Test Land Creature"], entered_turn=1)
     scenario.at(Step.UPKEEP)
-    with pytest.raises(NotImplementedRule) as gap:
-        scenario.build()
-    assert gap.value.rule == "302.6"
+    state = scenario.build()
+    assert ActivateAbilityOption(old, 0) in options(state)
+    assert ActivateAbilityOption(new, 0) not in options(state)
 
 
 def test_305_6_two_basic_land_types_give_one_ability_each_in_type_line_order() -> None:

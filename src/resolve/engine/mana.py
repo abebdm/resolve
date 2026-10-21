@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING
 
 from resolve.cards.primitives.abilities import ActivatedManaAbility
 from resolve.effects.characteristics import characteristics
-from resolve.errors import EngineError
+from resolve.cards.primitives.effects import AddMana
+from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.mana import ManaPoolEmptied
 from resolve.events.pipeline import ApplyEvents
 from resolve.rules import defaults
@@ -40,11 +41,16 @@ class ActivateManaAbility(Task):
         if not self.paid:
             if not ability.can_activate(state, self.source, self.player):
                 raise EngineError(f"player {self.player} can't activate that ability now")
+            if ability.mana_cost is not None:
+                raise NotImplementedRule("605.3a: paying a mana ability's mana cost (M2.4 stub)")
             self.paid = True
             payment: list[Event] = []
             for cost in ability.cost:
                 payment += cost.payment(state, self.source, self.player)
             return Push((ApplyEvents(tuple(payment)), self))
+        if not isinstance(ability.effect, AddMana):
+            ability.effect.colors(state, self.source, self.player)
+            raise NotImplementedRule("106.1a: choosing the color of mana (M2.4 stub)")
         return Push((ApplyEvents(ability.effect.events(state, self.source, self.player)),))
 
 

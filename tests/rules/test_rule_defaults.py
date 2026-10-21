@@ -12,7 +12,7 @@ The expected values are worked from the pinned CR:
 - 500.7: extra turns come before the normal turn order (none here); 103.1: turn order proceeds
   clockwise.
 - 502.3: the active player untaps all their permanents. 500.5: all unspent mana empties.
-- 104.3: a player loses by the usual means. 302.6: summoning sickness (M2.4 builds the check).
+- 104.3: a player loses by the usual means. 302.6: summoning sickness.
 - 723.5: nobody decides for another player by default; 723.4, 400.2, 402.3: who knows what.
 - 103.4, 103.5, 903.10a: the game configuration. 103.6: no actions from opening hands by
   default. 702.11c, 702.18a: no player has hexproof or shroud by default.
@@ -261,16 +261,29 @@ def test_723_5_nobody_decides_for_another_player_by_default() -> None:
     assert [defaults.deciding_player(state, p) for p in (P0, P1, P2)] == [P0, P1, P2]
 
 
-def test_302_6_a_tap_cost_on_a_creature_is_still_a_gap_until_m2_4() -> None:
-    """The M1 behaviour stays (no behaviour change in M2.1): a permanent that isn't a creature
-    can be tapped for a cost if it's untapped (118.3); a creature raises the 302.6 gap."""
+def test_302_6_a_creature_taps_for_a_cost_only_if_controlled_since_its_controllers_turn_began() -> (
+    None
+):
+    """In P0's turn 2: a Forest and a Sol Ring that arrived this turn may be tapped for a cost; a
+    creature (Llanowar Elves, Test Land Creature) only if it came under P0's control before turn
+    2 began. A creature of P1, who hasn't had a turn yet, can't."""
     scenario = Scenario(2)
-    forest, elves = scenario.battlefield(P0, ["Forest", "Llanowar Elves"])
-    scenario.battlefield(P0, ["Test Land Creature"])
+    forest, ring, new_elves, new_dryad = scenario.battlefield(
+        P0, ["Forest", "Sol Ring", "Llanowar Elves", "Test Land Creature"], entered_turn=2
+    )
+    old_elves, old_dryad = scenario.battlefield(
+        P0, ["Llanowar Elves", "Test Land Creature"], entered_turn=1
+    )
+    (theirs,) = scenario.battlefield(P1, ["Llanowar Elves"])
+    scenario.at(Phase.PRECOMBAT_MAIN, number=2, last_turns={P0: 2, P1: None})
     state = scenario.build()
-    assert defaults.can_tap_for_cost(state, forest)
-    with pytest.raises(NotImplementedRule, match=r"302\.6"):
-        defaults.can_tap_for_cost(state, elves)
+    assert defaults.can_tap_for_cost(state, forest) and defaults.can_tap_for_cost(state, ring)
+    assert defaults.can_tap_for_cost(state, old_elves) and defaults.can_tap_for_cost(
+        state, old_dryad
+    )
+    assert not defaults.can_tap_for_cost(state, new_elves)
+    assert not defaults.can_tap_for_cost(state, new_dryad)
+    assert not defaults.can_tap_for_cost(state, theirs)
 
 
 def test_702_11c_no_player_has_abilities_by_default() -> None:
