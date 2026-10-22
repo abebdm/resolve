@@ -60,7 +60,7 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
    `uv run pytest tests/agents/test_autopay_brute_force.py --thorough`. It builds 20 000 random
    small boards and costs and, on each, searches every answer through the engine for a way to
    pay; the auto-payer's planner must find a plan whenever the search finds a payment, and its
-   plan must cast the spell. A few minutes. Check that both tests pass (`2 passed`); a failure
+   plan must complete the action. About 5 minutes. Check that both tests pass (`2 passed`); a failure
    lists each board it got wrong (the spell, the permanents, the pool and the commander).
 7. **Rules gaps:** `uv run python tools/gaps.py` lists every rule the engine doesn't implement
    yet. Check it matches what the milestone left for later (`docs/roadmap.md`).

@@ -495,7 +495,7 @@ gives the plan; the module docstring lists its preferences.
    `tests/agents/test_autopay_brute_force.py`. That test searches every answer through the
    engine on random boards and fails when the planner misses a payment the search finds. Its
    presets: 150 boards by default (a few seconds), 20 000 with
-   `uv run pytest tests/agents/test_autopay_brute_force.py --thorough` (a few minutes). A board
+   `uv run pytest tests/agents/test_autopay_brute_force.py --thorough` (about 5 minutes). A board
    it reports becomes a regression test in `test_autopay.py`.
 
 ### Run a test's thorough preset
