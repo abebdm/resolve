@@ -38,9 +38,9 @@ from resolve.rules import defaults
 from resolve.state.game import GameObject, GameResult, GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana, ManaRestriction, ManaType, PaymentPurpose
-from resolve.state.zones import ZoneKind
 from resolve.state.spell import CastChoices
 from resolve.state.turn import Phase, Step
+from resolve.state.zones import ZoneKind
 from resolve.values import Immutable
 
 

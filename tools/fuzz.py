@@ -98,9 +98,13 @@ from resolve.decisions.spaces import (
     Pick,
     PickMany,
 )
+from resolve.effects.characteristics import characteristics
 from resolve.engine.api import new_game, pending_decision, submit, view_for
+from resolve.engine.casting import CastSpell, CastStage
 from resolve.engine.concede import concede
 from resolve.engine.deck import Deck, build_deck
+from resolve.engine.mana import ActivateManaAbility, ActivationStage
+from resolve.engine.payment import PayCosts
 from resolve.engine.view import ObjectView, PlayerView
 from resolve.errors import DeckError, InvalidAnswer, NotImplementedRule
 from resolve.events.base import AnswerRecord, LogEntry
@@ -233,6 +237,34 @@ def _expected_name(state: GameState, obj_id: ObjectId, viewer: PlayerId) -> str 
     return name
 
 
+def _expected_abilities(
+    state: GameState, obj_id: ObjectId, viewer: PlayerId
+) -> list[tuple[int, str]]:
+    """The abilities ``viewer`` should see on an object: a permanent's, by index and text
+    (400.2); none elsewhere, where a card may be hidden (402.3)."""
+    obj = state.objects[obj_id]
+    if obj.zone.kind is not ZoneKind.BATTLEFIELD or _expected_name(state, obj_id, viewer) is None:
+        return []
+    return [(i, ability.text) for i, ability in enumerate(characteristics(state, obj_id).abilities)]
+
+
+def _expected_payments(state: GameState) -> list[tuple[object, ...]]:
+    """The payments under way, read from the tasks paying them (bottom of the task stack first),
+    not from ``Task.payment_under_way``: a cast or a mana ability activation in its paying stage
+    (601.2g-h, 602.2b)."""
+    found: list[tuple[object, ...]] = []
+    for task in state.tasks:
+        match task:
+            case (
+                CastSpell(stage=CastStage.PAY, payment=PayCosts() as payment)
+                | ActivateManaAbility(stage=ActivationStage.PAY, payment=PayCosts() as payment)
+            ):
+                found.append((payment.payer, payment.cost, payment.purpose))
+            case _:
+                pass
+    return found
+
+
 @dataclass
 class CheckedLog:
     """The event log as a game's last full check verified it, so the next walks only what's new.
@@ -318,7 +350,14 @@ def view_problems(
                 problems.append(f"{where} misreports the damage on object {obj.id}")
             if obj.spell != state.objects[obj.id].spell:  # 400.2: the stack is public
                 problems.append(f"{where} misreports how spell {obj.id} is being cast")
+            if [(a.index, a.text) for a in obj.abilities] != _expected_abilities(
+                state, obj.id, viewer
+            ):  # 400.2: a permanent's abilities are public; other objects show none
+                problems.append(f"{where} of the abilities of object {obj.id} is wrong")
 
+    # 601.2a, 601.2f-h, 602.2a: the costs being paid are public, outermost first.
+    if [(p.payer, p.cost, p.purpose) for p in view.payments] != _expected_payments(state):
+        problems.append(f"{where} misreports the payments under way")
     if [summary.id for summary in view.players] != [player.id for player in state.players]:
         problems.append(f"{where} lists the wrong players")
     for summary, player in zip(view.players, state.players, strict=False):

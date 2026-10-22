@@ -6,10 +6,14 @@ Usage::
     uv run python tools/play_cli.py --players 4 --commander  # a four-player Commander game
     uv run python tools/play_cli.py --random 1 2             # seats 1 and 2 play randomly
     uv run python tools/play_cli.py --deck decks/a.txt --deck decks/b.txt
+    uv run python tools/play_cli.py --autopay --deck decks/a.txt --deck decks/b.txt
 
 Each human seat sees only its own view (design.md §9). At the end the final view is shown only
 if a single seat is human (or, when every seat is random, player 0's). A ``--random`` seat ``i``
-plays as ``RandomAgent(agent_seed + i)``. Answers are typed as described in
+plays as ``RandomAgent(agent_seed + i)``. With ``--autopay`` the auto-payer
+(``resolve.agents.autopay``) answers every seat's mana payments (601.2g-h): which mana abilities
+to activate, which mana to spend, the color of the mana, and reversing a cast that can't be paid
+(733.1); the seat answers everything else. Answers are typed as described in
 ``resolve.agents.text`` (``help`` at the prompt). With ``--deck``, one decklist per player, the
 cards come from the snapshot in ``data/`` and every card must be implemented; decks are refused,
 never approximated. Without ``--deck`` every player gets an empty deck (tools never invent
@@ -29,6 +33,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import TextIO
 
+from resolve.agents.autopay import AutoPayAgent
 from resolve.agents.base import Agent
 from resolve.agents.driver import play
 from resolve.agents.random_agent import RandomAgent
@@ -91,6 +96,18 @@ def play_game(
     return EXIT_OVER
 
 
+def seat_agents(
+    players: int, *, random_seats: Sequence[int], agent_seed: int, human: Agent, autopay: bool
+) -> list[Agent]:
+    """One agent per seat: ``RandomAgent(agent_seed + i)`` on the random seats, ``human`` on the
+    others; with ``autopay``, each inside an ``AutoPayAgent``."""
+    agents: list[Agent] = []
+    for seat in range(players):
+        agent = RandomAgent(agent_seed + seat) if seat in random_seats else human
+        agents.append(AutoPayAgent(agent) if autopay else agent)
+    return agents
+
+
 def main(
     argv: Sequence[str] | None = None, *, input: TextIO | None = None, output: TextIO | None = None
 ) -> int:
@@ -108,6 +125,9 @@ def main(
         "--random", type=int, nargs="*", default=[], metavar="SEAT", help="seats played randomly"
     )
     parser.add_argument("--agent-seed", type=int, default=0, help="seed for the random agents")
+    parser.add_argument(
+        "--autopay", action="store_true", help="pay mana costs automatically for every seat"
+    )
     args = parser.parse_args(argv)
 
     decks_given: list[Path] = args.deck
@@ -140,9 +160,9 @@ def main(
         return EXIT_GAP
 
     human = TextAgent(input, out)
-    agents: list[Agent] = [
-        RandomAgent(args.agent_seed + seat) if seat in seats else human for seat in range(players)
-    ]
+    agents = seat_agents(
+        players, random_seats=seats, agent_seed=args.agent_seed, human=human, autopay=args.autopay
+    )
     humans = [PlayerId(seat) for seat in range(players) if seat not in seats]
     # The one human's view; player 0's when only random agents play; no one's in hot-seat play.
     viewer = humans[0] if len(humans) == 1 else (PlayerId(0) if not humans else None)

@@ -42,7 +42,7 @@ from resolve.engine import loop as engine_loop
 from resolve.engine.api import new_game, view_for
 from resolve.engine.concede import concede
 from resolve.engine.deck import Deck
-from resolve.engine.view import PlayerView
+from resolve.engine.view import AbilityView, PlayerView
 from resolve.errors import InvalidAnswer
 from resolve.events.base import AnswerRecord, LogEntry
 from resolve.events.game import Conceded, PlayerLost
@@ -51,10 +51,12 @@ from resolve.state.config import GameConfig
 from resolve.state.game import GameObject, GameState
 from resolve.state.ids import PlayerId
 from resolve.state.mana import ManaType
+from resolve.state.turn import Phase as TurnPhase
 from resolve.state.turn import Step as TurnStep
 from resolve.state.zones import COMMAND, Zone
 from resolve.tasks import Task
 from tests import scryfall_fixtures as fx
+from tests.casting_support import cast
 from tests.engine_support import (
     AsksLaxly,
     AskTwice,
@@ -548,6 +550,75 @@ def board() -> GameState:
 
 def test_state_problems_accepts_correct_views() -> None:
     assert state_problems(board()) == []
+
+
+def paying_board() -> GameState:
+    """Player 0 casting Grizzly Bears with two Forests on the battlefield: its payment is under
+    way (601.2g)."""
+    scenario = Scenario(2)
+    scenario.battlefield(PlayerId(0), ["Forest", "Forest"])
+    (bears,) = scenario.hand(PlayerId(0), ["Grizzly Bears"])
+    scenario.at(TurnPhase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(bears, PlayerId(0)))
+    return state
+
+
+def test_state_problems_accepts_a_view_of_a_payment_under_way() -> None:
+    assert state_problems(paying_board()) == []
+
+
+def test_state_problems_finds_a_view_hiding_the_payment_under_way(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """601.2a, 601.2f: the spell and its cost are public while it is paid."""
+    state = paying_board()
+    leaking(monkeypatch, lambda view: dataclasses.replace(view, payments=()))
+    assert state_problems(state) == [
+        "player 0's view misreports the payments under way",
+        "player 1's view misreports the payments under way",
+    ]
+
+
+def test_state_problems_finds_a_permanent_shown_without_its_abilities(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """400.2: the battlefield is public, abilities included."""
+    state = paying_board()
+    forest = state.battlefield[0]
+
+    def stripped(view: PlayerView) -> PlayerView:
+        shown = tuple(
+            dataclasses.replace(obj, abilities=()) if obj.id == forest else obj
+            for obj in view.battlefield
+        )
+        return dataclasses.replace(view, battlefield=shown)
+
+    leaking(monkeypatch, stripped)
+    assert state_problems(state) == [
+        f"player 0's view of the abilities of object {forest} is wrong",
+        f"player 1's view of the abilities of object {forest} is wrong",
+    ]
+
+
+def test_state_problems_finds_abilities_shown_off_the_battlefield(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = board()
+    card = state.players[1].graveyard[0]
+    extra = (AbilityView(0, "{T}: Add {G}."),)
+
+    def leaked(view: PlayerView) -> PlayerView:
+        players = list(view.players)
+        graveyard = tuple(
+            dataclasses.replace(obj, abilities=extra) if obj.id == card else obj
+            for obj in players[1].graveyard
+        )
+        players[1] = dataclasses.replace(players[1], graveyard=graveyard)
+        return dataclasses.replace(view, players=tuple(players))
+
+    leaking(monkeypatch, leaked)
+    assert f"player 0's view of the abilities of object {card} is wrong" in state_problems(state)
 
 
 def test_state_problems_finds_a_view_showing_every_log_entry(

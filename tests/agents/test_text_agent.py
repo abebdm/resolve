@@ -64,9 +64,10 @@ from resolve.state.spell import (
 from resolve.state.turn import Phase
 from resolve.state.turn import Step as TurnStep
 from resolve.state.zones import Zone
+from tests.casting_support import activate, cast
 from tests.engine_support import AskTwice
 from tests.game_fixtures import choose_starting_player, request_of, start
-from tests.scenario import Scenario
+from tests.scenario import Scenario, run_script
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 OPTIONS = (PlayerOption(P0), PlayerOption(P1), PlayerOption(P2))
@@ -355,3 +356,23 @@ def test_describe_object_shows_damage() -> None:
     scenario.damage(bears, 1)
     text = render_view(view_for(scenario.build(), P1))
     assert f"Grizzly Bears #{bears} (1 damage)" in text
+
+
+def test_render_view_shows_the_payments_under_way() -> None:
+    """601.2g, 605.3a: the spell's cost, then the cost of the Signet activated while paying it,
+    as every player sees them."""
+    scenario = Scenario(2)
+    signet, _ = scenario.battlefield(P0, ["Selesnya Signet", "Forest"])
+    (bears,) = scenario.hand(P0, ["Grizzly Bears"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(bears, P0), activate(signet))
+    spell = state.stack[-1]
+    text = render_view(view_for(state, P1))
+    assert (
+        f"Paying: {{1}}{{G}} for Grizzly Bears #{spell} (player 0); "
+        f"{{1}} for ability 0 of Selesnya Signet #{signet} (player 0)."
+    ) in text
+    idle = Scenario(2)
+    idle.battlefield(P0, ["Selesnya Signet"])
+    assert "Paying:" not in render_view(view_for(idle.build(), P1))

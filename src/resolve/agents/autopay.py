@@ -23,11 +23,14 @@ so the same view and request always give the same answer. What it reads:
 **The plan** (``plan_payment``). A plan is a set of offered mana abilities to activate such that
 every cost under way can be paid: each colored symbol by mana of its color (107.4a), each {C} by
 colorless mana (107.4c), generic mana by any (107.4b), restricted mana only where allowed
-(106.6). The mana a mana ability under way will add pays only the costs outside its own; the
-mana of a newly activated mana ability with a mana cost (Selesnya Signet) pays only the costs
-under way, and its own cost only unrestricted mana from the pool and from mana abilities without
-a mana cost (a simplification: a Signet paid by another Signet's mana isn't planned). Among the
-plans, it prefers, in order:
+(106.6). The mana a mana ability under way will add pays only the costs outside its own. The
+planned mana abilities with a mana cost (Selesnya Signet) are activated one after another, and
+each order is tried: the mana of each pays the costs under way and the costs of those activated
+after it (602.2b), never its own. Their costs aren't paid with restricted mana: a restriction is
+judged by the engine only for the payments under way (``PaymentView.spendable``), and no
+implemented card's restriction allows spending on a mana ability with a mana cost.
+``tests/agents/test_autopay_brute_force.py`` checks that the planner finds a plan whenever a
+search through the engine finds a payment. Among the plans, it prefers, in order:
 
 1. the fewest sources of flexible mana (a choice of color, such as Command Tower);
 2. the fewest sources of restricted mana (Ixalli's Lorekeeper): both are kept for where they're

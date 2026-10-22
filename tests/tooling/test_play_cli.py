@@ -7,15 +7,30 @@ from pathlib import Path
 
 import pytest
 
+from resolve.agents.autopay import AutoPayAgent
+from resolve.agents.random_agent import RandomAgent
 from resolve.agents.scripted import ScriptedAgent, choose
+from resolve.agents.text import TextAgent
+from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import CastSpellOption
+from resolve.engine.api import pending_decision, submit, view_for
+from resolve.events.spells import SpellCast
 from resolve.state.config import GameConfig
 from resolve.state.ids import PlayerId
 from resolve.state.spell import COMMANDER, NORMAL
 from resolve.state.turn import Phase
 from tests import scryfall_fixtures as fx
-from tests.scenario import Scenario
-from tools.play_cli import EXIT_CANT_START, EXIT_GAP, EXIT_OVER, EXIT_QUIT, main, play_game
+from tests.casting_support import cast, records
+from tests.scenario import Scenario, run_script
+from tools.play_cli import (
+    EXIT_CANT_START,
+    EXIT_GAP,
+    EXIT_OVER,
+    EXIT_QUIT,
+    main,
+    play_game,
+    seat_agents,
+)
 
 
 def run_cli(args: list[str], typed: str = "") -> tuple[int, str]:
@@ -155,3 +170,36 @@ def test_missing_card_data_is_reported(tmp_path: Path) -> None:
 
 def test_exit_statuses_are_distinct() -> None:
     assert len({EXIT_OVER, EXIT_CANT_START, 2, EXIT_GAP, EXIT_QUIT}) == 5
+
+
+def test_autopay_wraps_every_seat_in_the_auto_payer() -> None:
+    """``--autopay``: the auto-payer answers every seat's payment decisions (601.2g-h), human or
+    random; without it the seats are the plain agents."""
+    human = TextAgent(io.StringIO(""), io.StringIO())
+    plain = seat_agents(3, random_seats=[1], agent_seed=5, human=human, autopay=False)
+    assert plain[0] is human and plain[2] is human and isinstance(plain[1], RandomAgent)
+    wrapped = seat_agents(3, random_seats=[1], agent_seed=5, human=human, autopay=True)
+    assert all(isinstance(agent, AutoPayAgent) for agent in wrapped)
+    inner = [agent.inner for agent in wrapped if isinstance(agent, AutoPayAgent)]
+    assert inner[0] is human and inner[2] is human and isinstance(inner[1], RandomAgent)
+
+
+def test_with_autopay_a_human_isnt_asked_to_pay() -> None:
+    """A human casting Grizzly Bears ({1}{G}) with two Forests: the auto-payer taps them, so the
+    terminal reads nothing (an empty input would quit the game)."""
+    scenario = Scenario(2)
+    scenario.battlefield(PlayerId(0), ["Forest", "Forest"])
+    (bears,) = scenario.hand(PlayerId(0), ["Grizzly Bears"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(bears, PlayerId(0)))
+    output = io.StringIO()
+    (agent,) = seat_agents(
+        1, random_seats=[], agent_seed=0, human=TextAgent(io.StringIO(""), output), autopay=True
+    )
+    while (request := pending_decision(state)) is not None and request.kind is not (
+        DecisionKind.PRIORITY_ACTION
+    ):
+        submit(state, agent.decide(view_for(state, request.player), request))
+    assert len(records(state, SpellCast)) == 1
+    assert output.getvalue() == ""
