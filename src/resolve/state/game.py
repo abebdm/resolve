@@ -68,6 +68,9 @@ class GameObject:
     - ``spell``: how it is being (or was) cast, for a spell on the stack (601.2, design.md §17.5);
       ``None`` everywhere else.
     - ``cast_record``: for a permanent that was a spell, how that spell was cast (400.7d).
+    - ``entered_turn``: for a permanent, the number of the turn during which it came under its
+      controller's control: when it entered the battlefield (0: before the first turn). 302.6
+      compares it with ``Player.last_turn_began``; a change of control (M5) sets it again.
     """
 
     id: ObjectId
@@ -81,6 +84,7 @@ class GameObject:
     damage: int = 0
     spell: CastChoices | None = None
     cast_record: CastChoices | None = None
+    entered_turn: int = 0
 
 
 @dataclass(slots=True)
@@ -94,6 +98,8 @@ class Player:
     - ``left_game``: the player has left the game (104.5, 800.4): after losing, or after a draw
       for them. A player who left owns no objects any more (800.4a).
     - ``mana_pool``: unspent mana, one unit per element, in the order it was added (106.4).
+    - ``last_turn_began``: the number of this player's most recent turn that began (302.6), or
+      ``None`` before their first turn.
     """
 
     id: PlayerId
@@ -106,6 +112,7 @@ class Player:
     lost: bool = False
     left_game: bool = False
     mana_pool: list[Mana] = field(default_factory=list[Mana])
+    last_turn_began: int | None = None
 
 
 @dataclass(frozen=True)
@@ -294,8 +301,8 @@ def create_object(
 ) -> GameObject:
     """Create a new object on top of ``zone`` (or at its bottom), with a new ID and timestamp.
 
-    400.7, 613.7d. A per-player zone of another player means the owner's zone of that kind
-    (400.3).
+    400.7, 613.7d. A permanent records the turn it entered (``entered_turn``, 302.6). A
+    per-player zone of another player means the owner's zone of that kind (400.3).
     """
     zone = _destination(owner, zone, controller)
     obj = GameObject(
@@ -306,6 +313,9 @@ def create_object(
         zone=zone,
         timestamp=new_timestamp(state),
     )
+    if zone.kind is ZoneKind.BATTLEFIELD:
+        # 302.6: the turn it came under its controller's control (0: before the first turn).
+        obj.entered_turn = 0 if state.turn is None else state.turn.number
     state.next_object_id += 1
     state.objects[obj.id] = obj
     if bottom:

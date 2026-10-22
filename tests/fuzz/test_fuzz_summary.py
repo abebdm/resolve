@@ -34,7 +34,7 @@ from resolve.events.spells import ActionReversed, PermanentSpellResolved, SpellC
 from resolve.state.config import GameConfig
 from resolve.state.ids import PlayerId
 from resolve.state.turn import Phase
-from tests.casting_support import activate, cast, pass_, reverse
+from tests.casting_support import activate, activate_with_priority, cast, pass_, reverse
 from tests.engine_support import EndGame, running
 from tests.game_fixtures import answer, deck, pass_until, request_of, started_game
 from tests.scenario import Scenario, run_script
@@ -163,7 +163,7 @@ def test_the_summary_lines() -> None:
         "Turns per game: min 3, average 5.0, max 7.",
         "Endings: decked x1, life total x0, concession x1, draw x0, rules gap x0, "
         "other (704.5c) x1.",
-        "Played: 5 lands, 9 mana abilities activated.",
+        "Played: 5 lands, 9 mana abilities activated, 0 reversed.",
         "Spells: 0 cast, 0 resolved, 0 reversed.",
         "Casts per card: none.",
         "Gaps: none.",
@@ -199,6 +199,21 @@ def test_game_stats_count_casts_resolutions_reversals_and_the_gap() -> None:
     stats = GameStats.of(FuzzResult(9, 0, "508.1: declaring attackers", state))
     assert stats.casts == (("Sol Ring", 1),)
     assert (stats.resolved, stats.reversed, stats.gap) == (1, 1, "508.1")
+    assert stats.abilities_reversed == 0
+
+
+def test_game_stats_count_reversed_mana_abilities_apart_from_reversed_casts() -> None:
+    """Selesnya Signet activated with no mana for its {1}: its activation is reversed (733.1),
+    which is no reversed cast."""
+    scenario = Scenario(2)
+    (signet,) = scenario.battlefield(PlayerId(0), ["Selesnya Signet"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, activate_with_priority(signet), activate_with_priority(signet))
+    stats = GameStats.of(FuzzResult(2, 0, "508.1: declaring attackers", state))
+    assert (stats.reversed, stats.abilities_reversed) == (0, 2)
+    games = [stats, GameStats(1, 0, 1, DRAW, 0, 0, abilities_reversed=1)]
+    assert summary_lines(games)[4] == "Played: 0 lands, 0 mana abilities activated, 3 reversed."
 
 
 def test_the_summary_of_one_game() -> None:
@@ -244,22 +259,34 @@ def numbers(pattern: str, text: str) -> tuple[float, ...]:
     return tuple(float(group) for group in found.groups())
 
 
+# The excerpt's cards, by hand: the noncreature ones, and the creatures.
+NONCREATURES = [
+    "Arcane Signet", "Command Tower", "Selesnya Signet", "Sol Ring", "Temple of the False God"
+]  # fmt: skip
+CREATURES = [
+    "Avacyn's Pilgrim", "Grizzly Bears", "Hill Giant", "Ixalli's Lorekeeper", "Llanowar Elves",
+    "Savannah Lions",
+]  # fmt: skip
+
+
 def expected_deck(recipe: str, copies: int) -> Counter[str]:
     """A recipe's deck, worked out by hand: ``copies`` of each basic land and ``copies // 2``
-    (at least one) of each recipe card: Sol Ring for ``spells``, every excerpt card for
-    ``creatures``."""
-    cards = ["Sol Ring"] if recipe == "spells" else [
-        "Grizzly Bears", "Hill Giant", "Savannah Lions", "Sol Ring"
-    ]  # fmt: skip
+    (at least one) of each recipe card: the noncreature cards for ``spells``, every excerpt card
+    for ``creatures``."""
+    cards = NONCREATURES if recipe == "spells" else NONCREATURES + CREATURES
     deck: Counter[str] = Counter({name: copies for name in fuzz_tool.BASIC_LAND_NAMES})
     deck.update({name: max(1, copies // 2) for name in cards})
     return deck
 
 
 def test_the_recipes_hold_the_excerpt_minus_the_exclusions() -> None:
-    assert fuzz_tool.recipe_cards("spells") == ("Sol Ring",)
+    assert fuzz_tool.recipe_cards("spells") == (
+        "Arcane Signet", "Command Tower", "Selesnya Signet", "Sol Ring", "Temple of the False God"
+    )  # fmt: skip
     assert fuzz_tool.recipe_cards("creatures") == (
-        "Grizzly Bears", "Hill Giant", "Savannah Lions", "Sol Ring"
+        "Arcane Signet", "Avacyn's Pilgrim", "Command Tower", "Grizzly Bears", "Hill Giant",
+        "Ixalli's Lorekeeper", "Llanowar Elves", "Savannah Lions", "Selesnya Signet", "Sol Ring",
+        "Temple of the False God",
     )  # fmt: skip
     assert fuzz_tool.FUZZ_EXCLUSIONS == {}
     for recipe in fuzz_tool.RECIPES:
@@ -297,7 +324,7 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
     # Each game's numbers, counted here from its final state.
     answers: list[int] = []
     turns: list[int] = []
-    lands = mana = cast = resolved = reversed_ = 0
+    lands = mana = cast = resolved = reversed_ = abilities_reversed = 0
     casts: Counter[str] = Counter()
     gaps: Counter[str] = Counter()
     endings: Counter[str] = Counter()
@@ -316,7 +343,16 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
                 cast += 1
                 casts[record.name or "?"] += 1
         resolved += sum(1 for record in records if isinstance(record, PermanentSpellResolved))
-        reversed_ += sum(1 for record in records if isinstance(record, ActionReversed))
+        reversed_ += sum(
+            1
+            for record in records
+            if isinstance(record, ActionReversed) and record.card is not None
+        )
+        abilities_reversed += sum(
+            1
+            for record in records
+            if isinstance(record, ActionReversed) and record.source is not None
+        )
         if result.gap is not None:
             endings["rules gap"] += 1
             gaps[result.gap.split(": ")[0]] += 1
@@ -346,7 +382,9 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
         r"rules gap x(\d+)\.",
         text,
     ) == (endings["decked"], 0, endings["concession"], 0, endings["rules gap"])
-    assert numbers(r"Played: (\d+) lands, (\d+) mana abilities activated\.", text) == (lands, mana)
+    assert numbers(
+        r"Played: (\d+) lands, (\d+) mana abilities activated, (\d+) reversed\.", text
+    ) == (lands, mana, abilities_reversed)
     assert numbers(r"Spells: (\d+) cast, (\d+) resolved, (\d+) reversed\.", text) == (
         cast,
         resolved,
@@ -366,7 +404,7 @@ def test_every_other_commander_game_gives_the_seats_commanders(
     its commander (903.3), cycled; with an even seed, none."""
     recorder = Recorder(canned_result())
     run_main(monkeypatch, recorder, "--format", "commander", "--games", "4", "--jobs", "1")
-    creatures = ["Grizzly Bears", "Hill Giant", "Savannah Lions"]
+    creatures = CREATURES
     for config, decks, seed, _ in recorder.calls:
         assert config.commander is not None
         for player_deck in decks:

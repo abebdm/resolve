@@ -631,7 +631,9 @@ class GameStats:
       (``ManaAdded``, 605.3a, 106.4).
     - ``casts``: spells cast (``SpellCast``, 601.2i), per card name, sorted by name.
     - ``resolved``: spells resolved (``PermanentSpellResolved``, 608.3a); ``reversed``: illegal
-      casts reversed (``ActionReversed``, 733.1).
+      casts reversed (``ActionReversed`` of a card, 733.1).
+    - ``abilities_reversed``: mana ability activations reversed because their mana cost couldn't
+      be paid (``ActionReversed`` of a source, 733.1).
     - ``gap``: the rule of the gap the game stopped at, if any.
     """
 
@@ -645,6 +647,7 @@ class GameStats:
     resolved: int = 0
     reversed: int = 0
     gap: str | None = None
+    abilities_reversed: int = 0
 
     @staticmethod
     def of(result: FuzzResult) -> GameStats:
@@ -666,7 +669,13 @@ class GameStats:
                 )
             ),
             resolved=sum(isinstance(record, PermanentSpellResolved) for record in records),
-            reversed=sum(isinstance(record, ActionReversed) for record in records),
+            reversed=sum(
+                isinstance(record, ActionReversed) and record.card is not None for record in records
+            ),
+            abilities_reversed=sum(
+                isinstance(record, ActionReversed) and record.source is not None
+                for record in records
+            ),
             gap=None if result.gap is None else result.gap.split(": ", 1)[0],
         )
 
@@ -696,7 +705,8 @@ def summary_lines(games: Sequence[GameStats]) -> list[str]:
         f"Turns per game: {_spread([game.turns for game in games])}.",
         "Endings: " + ", ".join(f"{name} x{endings[name]}" for name in names) + ".",
         f"Played: {sum(game.lands_played for game in games)} lands, "
-        f"{sum(game.mana_abilities for game in games)} mana abilities activated.",
+        f"{sum(game.mana_abilities for game in games)} mana abilities activated, "
+        f"{sum(game.abilities_reversed for game in games)} reversed.",
         f"Spells: {sum(casts.values())} cast, {sum(game.resolved for game in games)} resolved, "
         f"{sum(game.reversed for game in games)} reversed.",
         "Casts per card: " + _counted(casts) + ".",

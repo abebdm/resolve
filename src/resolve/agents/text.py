@@ -37,6 +37,7 @@ from resolve.decisions.spaces import (
     ChooseOne,
     ChooseOrder,
     ChooseSubset,
+    ColorOption,
     Distribute,
     ManaActivationOption,
     ManaOption,
@@ -110,9 +111,12 @@ def describe_option(option: Option, view: PlayerView) -> str:
             return f"activate ability {index} of {_named(view, obj)}"
         case ManaOption(mana=mana):
             source = "" if mana.source is None else f" from {_named(view, mana.source)}"
-            return mana.type.symbol + source
+            restriction = "" if mana.restriction is None else f" ({mana.restriction.text})"
+            return mana.type.symbol + source + restriction
         case ManaActivationOption(object=obj, ability=index):
             return f"reverse ability {index} of {_named(view, obj)}"
+        case ColorOption(color=color):
+            return color.name.lower()
 
 
 def _named(view: PlayerView, obj: ObjectId) -> str:

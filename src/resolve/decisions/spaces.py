@@ -31,6 +31,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from itertools import pairwise
 
+from resolve.data.types import Color
 from resolve.errors import InvalidAnswer
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana
@@ -110,6 +111,13 @@ class ManaActivationOption(Immutable):
     ability: int
 
 
+@dataclass(frozen=True)
+class ColorOption(Immutable):
+    """A color (105.1), such as the color of the mana an ability adds (106.1a)."""
+
+    color: Color
+
+
 Option = (
     PlayerOption
     | ObjectOption
@@ -120,6 +128,7 @@ Option = (
     | ActivateAbilityOption
     | ManaOption
     | ManaActivationOption
+    | ColorOption
 )
 
 # --- Answer values -----------------------------------------------------------------------------

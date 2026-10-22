@@ -207,8 +207,8 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
 - [ ] Timing rules for sorceries, instants and permanents; flash.
 - [ ] One permission and prohibition system for every legality check, where "can't" beats "can"
   (101.2).
-- [x] Reversing an illegal action (733) by checkpoint and restore (M2.3; the dependency check
-  between kept mana abilities arrives with mana costs on mana abilities, M2.4).
+- [x] Reversing an illegal action (733) by checkpoint and restore (M2.3), with the dependency
+  check between kept mana abilities (M2.4).
 - [ ] Evergreen keywords whose rules live here: flash (702.8), hexproof (702.11), shroud (702.18),
   indestructible (702.12), and the targeting part of protection (702.16). Design targeting so these
   restrictions fit naturally.
@@ -223,9 +223,9 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
   reductions in 601.2f's order.
 - [ ] Casting without paying the mana cost, during resolution (608.2g, 118.9; Rishkar's
   Expertise).
-- [ ] Mana abilities beyond basic lands (605): "any color in your commander's color identity",
+- [x] Mana abilities beyond basic lands (605): "any color in your commander's color identity",
   activation conditions, mana costs on mana abilities, creatures' mana abilities and summoning
-  sickness (302.6), restricted mana (Ixalli's Lorekeeper).
+  sickness (302.6), restricted mana (Ixalli's Lorekeeper) (M2.4).
 - [ ] The first primitives: damage, destroy, exile, draw, life gain, counter target spell.
 - [ ] Cards: 14 from the target decks, 8 keyword example cards and the torture tests Decimate
   and Cryptic Command (`docs/plans/m2.md` §7).
@@ -249,6 +249,12 @@ triggered mana abilities and "when that mana is spent" → M4; offspring, castin
 - [ ] Defender (702.3); the retired evergreen evasion keywords intimidate (702.13), landwalk
   (702.14) and fear (702.36).
 - [ ] Haste (702.10), including its 302.6 part.
+- [ ] Summoning sickness for attacking (302.6), sharing M2.4's "controlled since the turn
+  began" test. `defaults.can_tap_for_cost` covers only a creature's own {T}/{Q} abilities
+  (302.6, 602.5a): the tap costs of convoke (702.51), improvise (702.126), crew (702.122) and
+  "tap an untapped creature you control" ignore summoning sickness and must not use it.
+  Consider renaming it here (for example a shared `summoning_sick(state, obj)` predicate for
+  {T} costs and attacking; docs/decisions.md, 2026-10-21 "Deferred from M2.4").
 - [ ] Protection's blocking part (702.16f).
 - [ ] Multiplayer attacks: choosing which player or planeswalker each creature attacks, and
   leaving room for attacking battles (310). Attack and block declarations use a constrained
@@ -260,8 +266,16 @@ triggered mana abilities and "when that mana is spent" → M4; offspring, castin
 ## M4 — Activated and triggered abilities
 
 - [ ] Activated abilities (602), including costs like tapping and sacrificing; equip.
+- [ ] Mana-ability activation goes through `legality.allowed` (101.2), like other activations:
+  an `Action` with the rules' permissions (602.2, 605.3a) and the prohibitions effects add
+  ("can't activate"; split second 702.61, M9, which spares mana abilities, 702.61b). Deferred
+  from M2 (the M2 plan listed the action, but no M2 step built it; until then
+  `ActivatedManaAbility.can_activate` decides, with 602.5 conditions in `activate_only_if`;
+  docs/decisions.md, 2026-10-21 "Deferred from M2.4").
 - [ ] Non-mana costs (118): sacrifice, discard, exile, life, counters, tapping other permanents,
-  with reversal (733) by M2's checkpoint.
+  with reversal (733) by M2's checkpoint. Tapping an untapped creature for a cost ignores
+  summoning sickness: not through `can_tap_for_cost` (302.6 covers only a creature's own
+  {T}/{Q} abilities).
 - [ ] Triggered abilities (603):
   - APNAP ordering
   - intervening-if conditions (603.4)
@@ -464,6 +478,21 @@ completes a step (CLAUDE.md, "Documentation requirements").
   (`resolve.cards.definitions.mana_rocks`, in the excerpt). The fuzz harness plays the
   `spells` and `creatures` deck recipes with commanders in every other Commander game, allows
   the 508.1 and 903.8 gaps, and reports casts, resolutions, reversals, casts per card and gaps.
+- **Done (M2.4, mana abilities beyond basic lands, and summoning sickness):** 302.6 in
+  `defaults.can_tap_for_cost`, with `GameObject.entered_turn` (set as a permanent is created)
+  and `Player.last_turn_began` (set by `TurnBegan`); primitives `ManaPaymentCost`,
+  `AddManaOfAnyColor`, `ControlsAtLeast` (`resolve.cards.primitives.conditions`),
+  `SpendOnlyOnSubtype` (`resolve.cards.primitives.restrictions`) and
+  `ActivatedManaAbility.activate_only_if`; `ManaRestriction`, `Mana.restriction`, `ForSpell` and
+  `ForAbility` (`resolve.state.mana`); `resolve.rules.commander.commander_color_identity`
+  (903.4); `ActivateManaAbility` in stages, with a nested `PayCosts` and checkpoint for a mana
+  cost, the `CHOOSE_COLOR` decision (`ColorOption`) and its own reversal; `PayCosts(payer, cost,
+  purpose, excluding)` (605.3c, 106.6); `resolve.engine.reversal` (activations in the order they
+  began, nested ones included; 733.1's dependency check; `reverse_to`); `ManaSpent.redo`;
+  `ActionReversed.source`. Cards: Arcane Signet, Selesnya Signet (`mana_rocks`), Llanowar Elves,
+  Avacyn's Pilgrim, Ixalli's Lorekeeper (`mana_creatures`), Command Tower, Temple of the False
+  God (`nonbasic_lands`); the fixture decks use the real Llanowar Elves. The fuzz recipes hold
+  them all; the summary counts reversed mana ability activations apart from reversed casts.
 
 ---
 
@@ -500,7 +529,7 @@ earlier milestones must leave room for every row in this map.
 | 103 | Starting the Game | M1 ✓; 103.6 M5; 103.2b M7 | E | `opening_hand_actions`, `mulligan_options`, `starting_life`, `starting_hand_size`: default functions in place (M2.1 ✓) |
 | 104 | Ending the Game | M1 ✓; 104.3c-d M4, M7; 104.4b M7; alternative wins and losses M5 | E | `can_lose_game`: default function in place (M2.1 ✓) |
 | 105 | Colors | M2 | E |  |
-| 106 | Mana | M1 ✓, M2 (spending mana, 106.4a: M2.3 ✓; restrictions 106.6 M2.4); 106.7 M6 | E |  |
+| 106 | Mana | M1 ✓, M2 (spending mana, 106.4a: M2.3 ✓; restrictions 106.6, any color 106.1a, undefined mana 106.5: M2.4 ✓); 106.7 M6 | E | `Mana.restriction`, `ManaRestriction` |
 | 107 | Numbers and Symbols | M2 (107.4 symbols parsed: M2.2 ✓); 107.4e-f, 107.4h M9; 107.14 M4; 107.15, 107.17 M9 | E | hybrid and Phyrexian: M2 builds the announcement stage |
 | 108 | Cards | M0 ✓ | E |  |
 | 109 | Objects | M1 ✓; 109.3 with each layout (omen and preparation read as their normal part: M2.2 ✓; 720.4, 722.4) | E |  |
@@ -512,7 +541,7 @@ earlier milestones must leave room for every row in this map.
 | 115 | Targets | M2; 115.7 M5 | E |  |
 | 116 | Special Actions | M1 ✓ (116.2a); the others with their mechanics | E | 116.2i out of scope (Planechase); 116.2j is for conspiracy cards (315) |
 | 117 | Timing and Priority | M1 ✓, M2 (117.1a casting, 117.3b-c, 117.4 with the stack: M2.3 ✓; flash M2.8) | E |  |
-| 118 | Costs | M2 (mana: paying generic, colored and {C} mana M2.3 ✓; X M2.7; reductions M2.9); M4 (other costs, 118.12) | E |  |
+| 118 | Costs | M2 (mana: paying generic, colored and {C} mana M2.3 ✓; mana costs of mana abilities, restricted mana M2.4 ✓; X M2.7; reductions M2.9); M4 (other costs, 118.12) | E |  |
 | 119 | Life | M2 | E |  |
 | 120 | Damage | M2 (noncombat), M3 (combat), M4 (120.3b-d, 120.3g) | E |  |
 | 121 | Drawing a Card | M1 ✓; 121.6 M6 | E |  |
@@ -534,7 +563,7 @@ earlier milestones must leave room for every row in this map.
 | 213 | Information Below the Text Box | out of scope | — | no game rules |
 | 300 | General | M1 ✓ | E |  |
 | 301 | Artifacts | M2 (casting artifact spells: M2.3 ✓); Equipment M4; Vehicles M5; Fortifications M9 | E |  |
-| 302 | Creatures | M1 ✓, M2 (302.6), M3 | E |  |
+| 302 | Creatures | M1 ✓, M2 (302.6 for {T} costs: M2.4 ✓), M3 (302.6 for attacking) | E | `can_tap_for_cost`, `GameObject.entered_turn`, `Player.last_turn_began` |
 | 303 | Enchantments | M2; Auras M4 | E | Sagas, Classes, Cases and Rooms have their own rows |
 | 304 | Instants | M2 | E |  |
 | 305 | Lands | M1 ✓; modifiers M5 | E | `land_plays_allowed`, `land_play_options`: default functions in place (M2.1 ✓) |
@@ -574,10 +603,10 @@ earlier milestones must leave room for every row in this map.
 | 514 | Cleanup Step | M1 ✓; 514.2 effects ending M5 | E |  |
 | 600 | General | — | — | nothing to implement |
 | 601 | Casting Spells | M2 (M2.3 ✓: 601.2a, 601.2e-i, 601.3, 601.3e variants and permissions, 601.6; 601.2b-c M2.6-M2.7; 601.2d M4; 601.3b M6) | E | gaps per variant: 709.3, 712.11a-b, 715.3, 718.3, 720.3, 722.3, 708.4, 702.102; 903.8 |
-| 602 | Activating Activated Abilities | M4 | E |  |
+| 602 | Activating Activated Abilities | M4 (for mana abilities, 602.2b mana costs and 602.5 "activate only if": M2.4 ✓) | E |  |
 | 603 | Handling Triggered Abilities | M4 | E |  |
 | 604 | Handling Static Abilities | M5 (M2: keyword and cost-reduction statics) | E |  |
-| 605 | Mana Abilities | M1 ✓, M2 (605.3a while casting: M2.3 ✓); 605.1b M4 | E |  |
+| 605 | Mana Abilities | M1 ✓, M2 (605.3a while casting: M2.3 ✓; 605.2, 605.3a while paying a mana ability's cost, 605.3c: M2.4 ✓); 605.1b M4 | E |  |
 | 606 | Loyalty Abilities | M4 | E |  |
 | 607 | Linked Abilities | M4 | E | D (hideaway) |
 | 608 | Resolving Spells and Abilities | M2 (608.1, 608.3a: M2.3 ✓; 608.2 M2.6) | E | `resolved_spell_destination` (608.2n) in place (M2.3 ✓) |
@@ -620,7 +649,7 @@ earlier milestones must leave room for every row in this map.
 | 730 | Merging with Permanents | M5 | X | mutate |
 | 731 | Day and Night | M7 | S |  |
 | 732 | Taking Shortcuts | M7 | E | how much of it is worth implementing: design.md §16 |
-| 733 | Handling Illegal Actions | M2 (M2.3 ✓; the kept-abilities dependency check of 733.1 with M2.4's mana costs) | E | checkpoint and restore (`resolve.state.checkpoint`) |
+| 733 | Handling Illegal Actions | M2 (M2.3 ✓; reversing a mana ability activation and the kept-abilities dependency check of 733.1: M2.4 ✓) | E | checkpoint and restore (`resolve.state.checkpoint`), `resolve.engine.reversal` |
 | 800 | General | M1 ✓ (800.4a, h, j, k); the rest M7 | E |  |
 | 801 | Limited Range of Influence Option | out of scope | — | Commander doesn't use it (903.2) |
 | 802 | Attack Multiple Players Option | M3, M7 | E | Commander's multiplayer default |
@@ -636,7 +665,7 @@ earlier milestones must leave room for every row in this map.
 | 900 | General | — | — | nothing to implement |
 | 901 | Planechase | out of scope | — | a casual variant |
 | 902 | Vanguard | out of scope | — | a casual variant |
-| 903 | Commander | M7 (903.4 for mana M2; 903.8 cast gap M2.3 ✓); 903.12 Brawl and 903.13 Commander Draft out of scope | E | the project's format |
+| 903 | Commander | M7 (903.4, 903.4a, 903.4f for mana: M2.4 ✓; 903.8 cast gap M2.3 ✓); 903.12 Brawl and 903.13 Commander Draft out of scope | E | the project's format; `commander_color_identity` |
 | 904 | Archenemy | out of scope | — | a casual variant |
 | 905 | Conspiracy Draft | out of scope | — | the draft itself (905.1-905.2) isn't a game the engine plays; the game's conspiracy rules are 315 and 702.106, which are in scope |
 
@@ -652,7 +681,7 @@ earlier milestones must leave room for every row in this map.
 | 702.7 | First Strike | M3 | E | D |
 | 702.8 | Flash | M2 | E |  |
 | 702.9 | Flying | M3 | E | D |
-| 702.10 | Haste | M3 | E | D; the 302.6 hook is built in M2 |
+| 702.10 | Haste | M3 | E | D; the 302.6 hook is `defaults.can_tap_for_cost` (M2.4 ✓); the attack half shares its test |
 | 702.11 | Hexproof | M2 | E | D; including "hexproof from" |
 | 702.12 | Indestructible | M2 | E | D |
 | 702.13 | Intimidate | M3 | E | retired evergreen |
@@ -693,7 +722,7 @@ earlier milestones must leave room for every row in this map.
 | 702.48 | Offering | M4 | X |  |
 | 702.49 | Ninjutsu | M4 | S |  |
 | 702.50 | Epic | M5 | X |  |
-| 702.51 | Convoke | M4 | S | a payment alternative |
+| 702.51 | Convoke | M4 | S | a payment alternative; tapping a creature for convoke ignores summoning sickness: must not use `can_tap_for_cost` (302.6 covers only a creature's own {T}/{Q} abilities) |
 | 702.52 | Dredge | M6 | S |  |
 | 702.53 | Transmute | M4 | S |  |
 | 702.54 | Bloodthirst | M6 | S |  |
@@ -764,11 +793,11 @@ earlier milestones must leave room for every row in this map.
 | 702.119 | Emerge | M4 | S |  |
 | 702.120 | Escalate | M2 | S |  |
 | 702.121 | Melee | M5 | S |  |
-| 702.122 | Crew | M5 | S |  |
+| 702.122 | Crew | M5 | S | tapping creatures to crew ignores summoning sickness: must not use `can_tap_for_cost` (302.6 covers only a creature's own {T}/{Q} abilities) |
 | 702.123 | Fabricate | M4 | S |  |
 | 702.124 | Partner | M7 | E | Commander deck construction; D (Lae'zel's Choose a Background, no in-game effect) |
 | 702.125 | Undaunted | M2 | S |  |
-| 702.126 | Improvise | M4 | S | a payment alternative |
+| 702.126 | Improvise | M4 | S | a payment alternative; must not use `can_tap_for_cost` (302.6 is about creatures' own {T}/{Q} abilities) |
 | 702.127 | Aftermath | M5 | S | split cards |
 | 702.128 | Embalm | M5 | S |  |
 | 702.129 | Eternalize | M5 | S |  |

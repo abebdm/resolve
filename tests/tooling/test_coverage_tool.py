@@ -125,11 +125,14 @@ def test_run_reports_unparseable_and_missing_decks(tmp_path: Path) -> None:
 def test_main_reads_the_snapshot(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     data_dir = tmp_path / "data"
     fx.write_snapshot(data_dir)
-    deck = write_deck(tmp_path, "Mainboard\n1 Llanowar Elves\n")
+    deck = write_deck(
+        tmp_path, "Mainboard\n1 Llanowar Elves\n1 Test Daybreaker // Test Nightfall\n"
+    )
     assert coverage_tool.main([str(deck), "--data-dir", str(data_dir)]) == 0
     out = capsys.readouterr().out
     assert out.startswith("Card data: Snapshot 2026-10-18\n")
-    assert "1 cards, 1 distinct: 0 implemented, 1 missing, 0 unknown" in out
+    # The real registry: Llanowar Elves is implemented (M2.4), the fixture DFC isn't.
+    assert "2 cards, 2 distinct: 1 implemented, 1 missing, 0 unknown" in out
 
 
 def test_main_without_snapshot_fails_clearly(
@@ -161,8 +164,10 @@ def test_redirected_report_with_oracle_text_is_written_as_utf8(tmp_path: Path) -
         oracle_text="+1: Draw a card.\n\u22123: Exile target creature.",
         loyalty="4",
     )
-    fx.write_snapshot(tmp_path / "data", cards=[fx.LLANOWAR_ELVES, walker])
-    deck = write_deck(tmp_path, "Mainboard\n1 Test Walker\n9 Llanowar Elves\n")
+    # An invented copy of Llanowar Elves: the real one is implemented, so its text isn't shown.
+    elf = {**fx.LLANOWAR_ELVES, "oracle_id": "oid-test-elf", "name": "Test Elf"}
+    fx.write_snapshot(tmp_path / "data", cards=[elf, walker])
+    deck = write_deck(tmp_path, "Mainboard\n1 Test Walker\n9 Test Elf\n")
     completed = subprocess.run(
         [
             sys.executable,
@@ -188,8 +193,8 @@ def test_redirected_report_with_oracle_text_is_written_as_utf8(tmp_path: Path) -
         "      Loyalty 4\n"
     ) in report
     assert report.endswith(
-        "  9 Llanowar Elves  [Mainboard]\n"
-        "      Llanowar Elves {G}\n"
+        "  9 Test Elf  [Mainboard]\n"
+        "      Test Elf {G}\n"
         "      Creature \u2014 Elf Druid\n"
         "      {T}: Add {G}.\n"
         "      1/1\n"

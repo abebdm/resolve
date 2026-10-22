@@ -19,6 +19,87 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-21: Identical mana in 733.1's dependency check
+- **Decision:** when a player reverses some of the mana abilities activated during an illegal
+  action, 733.1 refuses to reverse one "unless mana from those abilities ... was spent on another
+  mana ability that wasn't reversed". The check replays the kept activations' mana events on the
+  pool as it was at the checkpoint. If a kept payment could have spent either of two identical
+  units (same type, source and restriction), one already in the pool before the action and one
+  that a reversed ability made, it counts as having spent the one already there, so the
+  reversal is allowed. A kept payment whose units can't be found at all spent a reversed
+  ability's mana, and the answer is refused.
+- **Why:** identical units are interchangeable, and `PAY_COSTS` groups them into one class, so
+  the player never chose a particular unit; 733.1 can't tell them apart either. Either way the
+  state after the reversal is consistent (the kept payment's units are there to spend again).
+  The alternative, assuming the newest unit was spent, would forbid reversals that are
+  indistinguishable from allowed ones.
+- **Rules:** 733.1, 106.4, 601.2h.
+- **Where:** `resolve.engine.reversal.check_kept`; tests
+  `test_733_1_identical_mana_from_before_the_action_counts_as_what_was_spent` and
+  `test_733_1_identical_mana_already_spent_elsewhere_is_no_excuse`
+  (`tests/cards/test_selesnya_signet.py`).
+
+### 2026-10-21: Deferred from M2.4: mana abilities and `allowed`; the scope of `can_tap_for_cost`
+- **Decision (approved by the user):** mana-ability activation doesn't go through
+  `legality.allowed` (101.2) yet. The M2 plan's §2 listed the action, but none of its steps
+  built it, so it moves to M4 with the other activations (roadmap M4 item).
+  `ActivatedManaAbility.can_activate` decides meanwhile (602.2, 602.5 via `activate_only_if`).
+- **Decision (approved by the user):** `defaults.can_tap_for_cost` is for a permanent's own {T}
+  in its ability's cost (302.6, 602.5a; {Q} in M9 too). The tap costs of convoke, improvise,
+  crew and "tap an untapped creature you control" ignore summoning sickness and must not call
+  it. M3's plan should consider renaming it, for example to a shared `summoning_sick` predicate
+  that both {T} costs and attacking use (roadmap M3 item; coverage-map notes on 702.51, 702.122
+  and 702.126).
+- **Why:** both were found during M2.4. The first is the plan's own inconsistency; building it
+  now would have widened the step. The second is the test reviewer's note; the plan named the
+  function, and renaming it is M3's call.
+- **Rules:** 101.2, 602.2, 602.5, 602.5a, 302.6, 702.10, 702.51, 702.61b, 702.122, 702.126.
+- **Where:** `resolve.rules.legality`, `resolve.rules.defaults.can_tap_for_cost`,
+  `resolve.cards.primitives.abilities`.
+
+### 2026-10-21: M2.4: mana abilities with mana costs, restricted mana, summoning sickness
+- **Decision (nested payments):** a mana ability with a mana cost (Selesnya Signet) is paid by an
+  embedded `PayCosts` inside `ActivateManaAbility`, which takes its own checkpoint first and, if
+  the payment can't be made, reverses itself like a cast (733.1: it asks which of the abilities
+  activated meanwhile to reverse). `PayCosts.activations` now holds the `ActivateManaAbility`
+  tasks themselves (shared references, pure data), each with its log range and its own payment,
+  instead of M2.3's frozen `ManaActivation` records, so a reversal of the outer action sees the
+  activations made while paying for an activation. The reversal list is in the order the
+  activations began (Signet before the Forest that paid for it); an activation already reversed
+  isn't listed, but the abilities kept from it are (`resolve.engine.reversal.activations_made`).
+  An activation's own events are its log range minus those of the activations nested in it.
+- **Decision (733.1's dependency, "unless mana from those abilities ... was spent on another mana
+  ability that wasn't reversed"):** checked by replaying the kept activations' `ManaAdded` and
+  `ManaSpent` on the pool as it was at the checkpoint; a kept payment whose units are missing
+  spent mana of a reversed ability, and the answer is refused. Identical units: see "Identical
+  mana in 733.1's dependency check" above.
+- **Decision (passes, 117.4 and 733.2):** activating a mana ability with priority no longer
+  clears the passes before it begins; `ActivateManaAbility` clears them when it completes, and a
+  reversed activation leaves them (as a reversed cast does).
+- **Decision (106.6):** `Mana.restriction` holds a `ManaRestriction` (abstract in
+  `resolve.state.mana`, primitives in `resolve.cards.primitives.restrictions`); a payment names
+  its purpose (`ForSpell`, `ForAbility`). A class of mana the restriction forbids is offered with
+  a maximum of 0 in `PAY_COSTS`, so the space stays canonical and shows the mana.
+- **Decision (302.6):** `GameObject.entered_turn` (the turn a permanent came under its
+  controller's control; 0 before the first turn) and `Player.last_turn_began` (set by
+  `TurnBegan`). A creature may pay {T} costs iff `entered_turn < last_turn_began`; a player who
+  hasn't begun a turn can't tap creatures. M5's control-changing effects must set
+  `entered_turn` again. The scenario builder defaults permanents to `entered_turn=0` and sets
+  each player's last turn as if turns had gone around in order (`at(last_turns=...)` overrides).
+- **Decision (903.4, 903.4f, 106.5):** "any color in your commander's color identity" reads the
+  combined `color_identity` of the controller's commanders from the card data (903.4a). No
+  commander, or no color in the identity, leaves no color to choose: the ability is still
+  activated and paid (605.2) and adds nothing. One color isn't asked.
+- **Decision (Temple of the False God):** 602.5's "activate only if" is a field of
+  `ActivatedManaAbility` (`activate_only_if`), checked in `can_activate`, so it applies with
+  priority and while paying alike.
+- **Rules:** 106.1a, 106.5, 106.6, 117.4, 302.6, 602.2b, 602.5, 602.5a, 605.2, 605.3a, 605.3c,
+  733.1, 733.2, 903.4, 903.4a, 903.4f.
+- **Where:** `resolve.engine.mana`, `resolve.engine.payment`, `resolve.engine.reversal`,
+  `resolve.engine.casting`, `resolve.engine.priority`, `resolve.rules.defaults`,
+  `resolve.rules.commander`, `resolve.state.mana`, `resolve.state.game`,
+  `resolve.cards.primitives` (`costs`, `effects`, `conditions`, `restrictions`, `abilities`).
+
 ### 2026-10-21: Kept mana abilities' results stand after a reversal (733.1)
 - **Decision (the user: "follow the MTG rulebook"):** after an illegal action is reversed, the
   mana abilities the player didn't reverse keep their results exactly as they happened. The
@@ -30,8 +111,8 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   Activating one again acts on the restored state: "add {G} for each card in your hand" would
   count the spell back in hand, and Lion's Eye Diamond (M4) would discard it. The test reviewer
   found the problem.
-- **How:** each `ManaActivation` records the log range of its activation (`log_from`,
-  `log_to`). Events no player's action causes (`Event.outside_actions`: a concession, leaving,
+- **How:** each activation records the log range of its activation (`log_from`, `log_to`;
+  M2.4 moved them onto `ActivateManaAbility`). Events no player's action causes (`Event.outside_actions`: a concession, leaving,
   the game ending) are skipped: `restore_checkpoint` keeps their consequences. `redo` is
   implemented for `PermanentTapped` and `ManaAdded`; any other event raises
   `NotImplementedRule("733.1")` until a mana ability can cause it (M4).

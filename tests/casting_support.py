@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from resolve.agents.scripted import Choose, Step, choose
+from resolve.data.types import Color
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import (
     ActivateAbilityOption,
     Amounts,
     CastSpellOption,
     ChooseOne,
+    ColorOption,
     ManaActivationOption,
     Option,
     PassOption,
@@ -56,6 +58,11 @@ def counts(*amounts: int) -> Step:
 def reverse(*activations: ManaActivationOption) -> Choose:
     """733.1: which of the mana abilities activated during the action to reverse."""
     return choose(*activations, kind=DecisionKind.REVERSE_MANA_ABILITIES)
+
+
+def choose_color(color: Color) -> Choose:
+    """106.1a: the color of the mana an ability adds."""
+    return choose(ColorOption(color), kind=DecisionKind.CHOOSE_COLOR)
 
 
 def pass_(player: PlayerId | None = None) -> Choose:

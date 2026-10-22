@@ -68,3 +68,11 @@ class ManaSpent(Event):
             remaining.remove(unit)
         pool[:] = remaining
         return replace(self, left=tuple(remaining))
+
+    def redo(self, state: GameState) -> None:
+        # 733.1: a kept mana ability's payment stands: the same units are spent again.
+        pool = state.player(self.player).mana_pool
+        for unit in self.mana:
+            if unit not in pool:
+                raise EngineError(f"player {self.player}'s pool has no {unit} to spend again")
+            pool.remove(unit)

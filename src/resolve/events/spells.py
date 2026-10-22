@@ -68,11 +68,13 @@ class ActionReversed(Event):
     """``player``'s action was illegal and has been reversed (733.1): the game is as it was
     before it, but for the mana abilities the player kept, whose results stand (``kept``: their
     sources, in activation order). ``card`` is the card a reversed cast returned to its zone (with
-    its old ID), which every player saw on the stack: they know it now (400.2). Public."""
+    its old ID), which every player saw on the stack: they know it now (400.2). ``source`` is the
+    source of a reversed mana ability activation (602.2b). Public."""
 
     player: PlayerId
     card: ObjectId | None = None
     kept: tuple[ObjectId, ...] = ()
+    source: ObjectId | None = None
 
     def apply(self, state: GameState) -> None:
         if self.card is None:
