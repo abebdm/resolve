@@ -21,8 +21,9 @@ often the full checks run (``check_every``); explicit options override them. Gam
 so a failing game is reproduced by its seed and the run's options.
 
 Each game is played by ``RandomAgent``s; on the odd seats the auto-payer
-(``resolve.agents.autopay.AutoPayAgent``) answers their payment decisions. Before every answer (with ``check_every`` N > 1, every
-N answers and at the end; the bookkeeping invariants always) the harness checks:
+(``resolve.agents.autopay.AutoPayAgent``) answers their payment decisions. Before every answer
+(with ``check_every`` N > 1, every N answers and at the end; the bookkeeping invariants always)
+the harness checks:
 
 - the state's bookkeeping invariants and that it is pure data (``resolve.state.invariants``);
 - every player's view, against an oracle written out from the rules rather than the engine's
@@ -71,7 +72,7 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from resolve.agents.autopay import AutoPayAgent
+from resolve.agents.autopay import AutoPayAgent, plan_payment
 from resolve.agents.base import Agent
 from resolve.agents.driver import MAX_ATTEMPTS, agent_for
 from resolve.agents.random_agent import RandomAgent
@@ -80,8 +81,10 @@ from resolve.cards.registry import default_registry
 from resolve.data.cards import CardDatabase, CardDataError, load_card_database, load_card_excerpt
 from resolve.data.decklist import DeckEntry, Decklist, DecklistError, load_decklist
 from resolve.data.types import CardType
+from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer, DecisionRequest
 from resolve.decisions.spaces import (
+    ActivateAbilityOption,
     Amounts,
     AnswerValue,
     ChooseCounts,
@@ -98,18 +101,19 @@ from resolve.decisions.spaces import (
 from resolve.engine.api import new_game, pending_decision, submit, view_for
 from resolve.engine.concede import concede
 from resolve.engine.deck import Deck, build_deck
-from resolve.engine.view import ObjectView
+from resolve.engine.view import ObjectView, PlayerView
 from resolve.errors import DeckError, InvalidAnswer, NotImplementedRule
 from resolve.events.base import AnswerRecord, LogEntry
 from resolve.events.cards import CardDrawn, CardsPutOnBottom
 from resolve.events.game import PlayerLost
 from resolve.events.mana import ManaAdded
 from resolve.events.permanents import LandPlayed
-from resolve.events.spells import ActionReversed, PermanentSpellResolved, SpellCast
+from resolve.events.spells import ActionReversed, PermanentSpellResolved, SpellCast, SpellProposed
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState, players_in_game
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.invariants import invariant_violations, mutable_parts, state_impurities
+from resolve.state.mana import ForSpell
 from resolve.state.rng import Rng
 from resolve.state.zones import ZoneKind
 
@@ -131,12 +135,59 @@ class FuzzResult:
     - ``answers``: answers the engine accepted; ``rejected``: random answers it rejected.
     - ``gap``: the ``NotImplementedRule`` message the game stopped at, or ``None`` if it ended.
     - ``state``: the final state.
+    - ``payable_reversed``: for each cast reversed although it could be paid when its payment
+      began (``PayableCasts``), the player who cast it.
     """
 
     answers: int
     rejected: int
     gap: str | None
     state: GameState
+    payable_reversed: tuple[PlayerId, ...] = ()
+
+
+@dataclass
+class PayableCasts:
+    """Which casts could be paid when their payment began, and which of those were reversed
+    (plan M2.5's measure of the auto-payer, docs/decisions.md).
+
+    A cast is judged at its first payment decision (601.2g-h): payable if it is ``PAY_COSTS``
+    (601.2h asks only when the pool pays in two or more ways) or if the auto-payer's planner
+    (``plan_payment``) finds a plan for its ``ACTIVATE_MANA_ABILITIES``. A cast asking nothing
+    is payable if it is cast and not if it is reversed. ``tests/agents/test_autopay.py`` checks
+    the planner against a brute-force search, so a cast it calls unpayable is.
+    """
+
+    judgment: bool | None = None
+    seen: int = 0
+    reversed: list[PlayerId] = field(default_factory=list[PlayerId])
+
+    def before(self, view: PlayerView, request: DecisionRequest) -> None:
+        """Judge the cast under way at its first payment decision."""
+        if self.judgment is not None or len(view.payments) != 1:
+            return
+        if not isinstance(view.payments[0].purpose, ForSpell):
+            return
+        match request.kind, request.space:
+            case DecisionKind.PAY_COSTS, _:
+                self.judgment = True
+            case DecisionKind.ACTIVATE_MANA_ABILITIES, ChooseOne(options=options):
+                offered = [o for o in options if isinstance(o, ActivateAbilityOption)]
+                self.judgment = plan_payment(view, request.for_player, offered) is not None
+            case _:
+                pass
+
+    def after(self, state: GameState) -> None:
+        """Note how the casts logged since the last call ended."""
+        for entry in state.event_log[self.seen :]:
+            record = entry.record
+            if isinstance(record, SpellProposed | SpellCast):
+                self.judgment = None
+            elif isinstance(record, ActionReversed) and record.card is not None:
+                if self.judgment:
+                    self.reversed.append(record.player)
+                self.judgment = None
+        self.seen = len(state.event_log)
 
 
 # What submitting an answer did: accepted, rejected (with the message) or stopped at a gap.
@@ -445,6 +496,7 @@ def fuzz_run(
 
     answers = rejected = in_a_row = 0
     concessions = Rng.from_seed(concession_seed)
+    payable = PayableCasts()
     try:
         while gap is None:
             request = pending_decision(state)
@@ -478,7 +530,9 @@ def fuzz_run(
                 if _pickled(state) != state:
                     raise fail(f"a pickled copy differs from the state after {answers} answers")
             agent = agent_for(agents, request.player)
-            answer = agent.decide(view_for(state, request.player), request)
+            view = view_for(state, request.player)
+            payable.before(view, request)
+            answer = agent.decide(view, request)
             if probe_invalid and snapshot is not None:
                 before = pickle.loads(snapshot)
                 for bad in invalid_answers(request, len(state.players), answer.value):
@@ -489,6 +543,7 @@ def fuzz_run(
                         raise fail(f"the rejected answer {bad} changed the state")
             copies = [copy.deepcopy(state), _pickled(state)] if copying else []
             outcome = _submit(state, answer)
+            payable.after(state)
             for name, other in zip(("deep copy", "pickled copy"), copies, strict=False):
                 other_outcome = _submit(other, answer)
                 if other_outcome != outcome:
@@ -519,7 +574,7 @@ def fuzz_run(
         raise fail(f"{type(error).__name__}: {error}") from error
 
     _check_replay(make_state, state, gap, fail)
-    return FuzzResult(answers, rejected, gap, state)
+    return FuzzResult(answers, rejected, gap, state, tuple(payable.reversed))
 
 
 def _check_replay(
@@ -648,6 +703,9 @@ class GameStats:
       be paid (``ActionReversed`` of a source, 733.1).
     - ``autopay_casts``, ``autopay_reversed``: the spells cast and the casts reversed by the
       auto-paying seats (``is_autopay_seat``).
+    - ``payable_reversed``, ``autopay_payable_reversed``: the casts reversed although they could
+      be paid when their payment began (``PayableCasts``), by every seat and by the auto-paying
+      ones.
     - ``gap``: the rule of the gap the game stopped at, if any.
     """
 
@@ -664,6 +722,8 @@ class GameStats:
     abilities_reversed: int = 0
     autopay_casts: int = 0
     autopay_reversed: int = 0
+    payable_reversed: int = 0
+    autopay_payable_reversed: int = 0
 
     @staticmethod
     def of(result: FuzzResult) -> GameStats:
@@ -703,6 +763,8 @@ class GameStats:
                 and is_autopay_seat(record.player)
                 for record in records
             ),
+            payable_reversed=len(result.payable_reversed),
+            autopay_payable_reversed=sum(is_autopay_seat(p) for p in result.payable_reversed),
         )
 
 
@@ -724,8 +786,12 @@ def summary_lines(games: Sequence[GameStats]) -> list[str]:
     gaps = Counter(game.gap for game in games if game.gap is not None)
     names = [*ENDINGS, *sorted(name for name in endings if name not in ENDINGS)]
     answers = [game.answers for game in games]
+    autopay_cast = sum(game.autopay_casts for game in games)
+    random_cast = sum(casts.values()) - autopay_cast
     autopay_reversed = sum(game.autopay_reversed for game in games)
     random_reversed = sum(game.reversed for game in games) - autopay_reversed
+    autopay_payable = sum(game.autopay_payable_reversed for game in games)
+    random_payable = sum(game.payable_reversed for game in games) - autopay_payable
     return [
         f"{len(games)} games passed: {sum(answers)} answers accepted, "
         f"{sum(game.rejected for game in games)} rejected.",
@@ -737,10 +803,10 @@ def summary_lines(games: Sequence[GameStats]) -> list[str]:
         f"{sum(game.abilities_reversed for game in games)} reversed.",
         f"Spells: {sum(casts.values())} cast, {sum(game.resolved for game in games)} resolved, "
         f"{sum(game.reversed for game in games)} reversed.",
-        f"Reversed casts: auto-pay seats {autopay_reversed} of "
-        f"{autopay_reversed + sum(game.autopay_casts for game in games)} attempts, "
-        f"random seats {random_reversed} of "
-        f"{random_reversed + sum(casts.values()) - sum(game.autopay_casts for game in games)}.",
+        f"Reversed casts: auto-pay seats {autopay_reversed} of {autopay_reversed + autopay_cast} "
+        f"attempts, {autopay_payable} of {autopay_payable + autopay_cast} payable; random seats "
+        f"{random_reversed} of {random_reversed + random_cast}, {random_payable} of "
+        f"{random_payable + random_cast} payable.",
         "Casts per card: " + _counted(casts) + ".",
         "Gaps: " + _counted(gaps) + ".",
     ]

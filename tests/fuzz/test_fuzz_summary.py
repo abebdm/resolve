@@ -22,8 +22,9 @@ from typing import Any
 
 import pytest
 
+from resolve.agents.scripted import Choose, ScriptedAgent, Step
 from resolve.decisions.spaces import ActivateAbilityOption, ChooseOne, Pick, PlayLandOption
-from resolve.engine.api import submit
+from resolve.engine.api import submit, view_for
 from resolve.engine.concede import concede
 from resolve.engine.deck import Deck
 from resolve.events.base import LogEntry
@@ -32,9 +33,20 @@ from resolve.events.mana import ManaAdded
 from resolve.events.permanents import LandPlayed
 from resolve.events.spells import ActionReversed, PermanentSpellResolved, SpellCast
 from resolve.state.config import GameConfig
-from resolve.state.ids import PlayerId
+from resolve.state.game import GameState
+from resolve.state.ids import ObjectId, PlayerId
+from resolve.state.mana import ManaType
 from resolve.state.turn import Phase
-from tests.casting_support import activate, activate_with_priority, cast, pass_, pay, reverse
+from tests.casting_support import (
+    activate,
+    activate_with_priority,
+    cast,
+    counts,
+    pass_,
+    pay,
+    records,
+    reverse,
+)
 from tests.engine_support import EndGame, running
 from tests.game_fixtures import answer, deck, pass_until, request_of, started_game
 from tests.scenario import Scenario, run_script
@@ -47,6 +59,7 @@ from tools.fuzz import (
     RULES_GAP,
     FuzzResult,
     GameStats,
+    PayableCasts,
     ending,
     fuzz_game,
     summary_lines,
@@ -165,7 +178,8 @@ def test_the_summary_lines() -> None:
         "other (704.5c) x1.",
         "Played: 5 lands, 9 mana abilities activated, 0 reversed.",
         "Spells: 0 cast, 0 resolved, 0 reversed.",
-        "Reversed casts: auto-pay seats 0 of 0 attempts, random seats 0 of 0.",
+        "Reversed casts: auto-pay seats 0 of 0 attempts, 0 of 0 payable; random seats 0 of 0, "
+        "0 of 0 payable.",
         "Casts per card: none.",
         "Gaps: none.",
     ]
@@ -181,7 +195,8 @@ def test_the_summary_counts_spells_casts_per_card_and_gaps() -> None:
     ]
     assert summary_lines(games)[5:] == [
         "Spells: 4 cast, 3 resolved, 5 reversed.",
-        "Reversed casts: auto-pay seats 0 of 0 attempts, random seats 5 of 9.",
+        "Reversed casts: auto-pay seats 0 of 0 attempts, 0 of 0 payable; random seats 5 of 9, "
+        "0 of 4 payable.",
         "Casts per card: Grizzly Bears x1, Sol Ring x3.",
         "Gaps: 508.1 x2, 903.8 x1.",
     ]
@@ -232,14 +247,67 @@ def test_game_stats_count_casts_and_reversals_of_the_auto_paying_seats() -> None
     assert (stats.reversed, stats.autopay_casts, stats.autopay_reversed) == (1, 1, 1)
 
 
+def payable_after(state: GameState, *steps: Step | Choose) -> list[PlayerId]:
+    """Run ``steps`` as ``fuzz_run`` does, judging the casts with ``PayableCasts``; returns the
+    players whose payable casts were reversed."""
+    tracker = PayableCasts(seen=len(state.event_log))
+    agent = ScriptedAgent(steps)
+    for _ in steps:
+        request = request_of(state)
+        view = view_for(state, request.player)
+        tracker.before(view, request)
+        submit(state, agent.decide(view, request))
+        tracker.after(state)
+    return tracker.reversed
+
+
+def bears_with(lands: list[str], mana: tuple[ManaType, ...] = ()) -> tuple[GameState, ObjectId]:
+    scenario = Scenario(2)
+    scenario.battlefield(PlayerId(0), lands)
+    (bears,) = scenario.hand(PlayerId(0), ["Grizzly Bears"])
+    scenario.mana(PlayerId(0), *mana)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    return scenario.build(), bears
+
+
+def test_a_payable_cast_paid_too_early_counts_as_a_payable_reversal() -> None:
+    """Grizzly Bears ({1}{G}) with two Forests: payable (601.2g: the planner finds the Forests);
+    answering "pay" at once leaves it unpaid (118.3), so it is reversed (733.1)."""
+    state, bears = bears_with(["Forest", "Forest"])
+    assert payable_after(state, cast(bears), pay()) == [PlayerId(0)]
+
+
+def test_an_unpayable_reversed_cast_isnt_a_payable_reversal() -> None:
+    """One Forest can't pay {1}{G} (107.4b): reversing it was inevitable."""
+    state, bears = bears_with(["Forest"])
+    assert payable_after(state, cast(bears), pay()) == []
+
+
+def test_a_cast_whose_first_question_is_the_payment_is_payable() -> None:
+    """Pool {G}{G}{W} and no mana ability: 601.2h asks only because the pool pays in two ways
+    (GG, GW). The cast completes: no payable reversal."""
+    state, bears = bears_with([], (ManaType.GREEN, ManaType.GREEN, ManaType.WHITE))
+    assert payable_after(state, cast(bears), counts(2, 0)) == []
+    assert len(records(state, SpellCast)) == 1
+
+
+def test_game_stats_count_payable_reversals_by_seat() -> None:
+    state, _ = bears_with([])
+    result = FuzzResult(1, 0, "508.1: declaring attackers", state, (PlayerId(1), PlayerId(0)))
+    stats = GameStats.of(result)
+    assert (stats.payable_reversed, stats.autopay_payable_reversed) == (2, 1)
+
+
 def test_the_summary_compares_the_auto_paying_seats_with_the_random_ones() -> None:
-    """Of the attempts (casts and reversed casts) of each kind of seat, how many were reversed."""
+    """Of the attempts (casts and reversed casts) of each kind of seat, how many were reversed;
+    and of the payable ones (casts, and casts reversed although payable), how many."""
     games = [
-        GameStats(10, 0, 3, RULES_GAP, 2, 5, (("Sol Ring", 3),), 2, 4, "508.1", 0, 2, 1),
-        GameStats(5, 0, 1, DRAW, 0, 0, (("Sol Ring", 1),), 0, 2, None, 0, 0, 0),
+        GameStats(10, 0, 3, RULES_GAP, 2, 5, (("Sol Ring", 3),), 2, 4, "508.1", 0, 2, 1, 3, 0),
+        GameStats(5, 0, 1, DRAW, 0, 0, (("Sol Ring", 1),), 0, 2, None, 0, 0, 0, 1, 0),
     ]
     assert summary_lines(games)[6] == (
-        "Reversed casts: auto-pay seats 1 of 3 attempts, random seats 5 of 7."
+        "Reversed casts: auto-pay seats 1 of 3 attempts, 0 of 2 payable; random seats 5 of 7, "
+        "4 of 6 payable."
     )
 
 
@@ -427,20 +495,33 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
         resolved,
         reversed_,
     )
+    payable_reversed = Counter(
+        "auto-pay" if player % 2 else "random"
+        for result in recorder.results
+        for player in result.payable_reversed
+    )
+    payable = {
+        seat: payable_reversed[seat] + attempts[seat] - reversed_by[seat] for seat in attempts
+    }
     assert numbers(
-        r"Reversed casts: auto-pay seats (\d+) of (\d+) attempts, random seats (\d+) of (\d+)\.",
+        r"Reversed casts: auto-pay seats (\d+) of (\d+) attempts, (\d+) of (\d+) payable; random "
+        r"seats (\d+) of (\d+), (\d+) of (\d+) payable\.",
         text,
     ) == (
         reversed_by["auto-pay"],
         attempts["auto-pay"],
+        payable_reversed["auto-pay"],
+        payable["auto-pay"],
         reversed_by["random"],
         attempts["random"],
+        payable_reversed["random"],
+        payable["random"],
     )
-    # M2.5's "done when": the auto-paying seats reverse far fewer of their casts.
-    assert attempts["auto-pay"] > 0 and attempts["random"] > 0
-    assert reversed_by["auto-pay"] * 2 * attempts["random"] < (
-        reversed_by["random"] * attempts["auto-pay"]
-    ), "the auto-payers reverse less than half as often"
+    # M2.5's "done when" (docs/decisions.md): of the casts that could be paid when their payment
+    # began, the auto-paying seats reverse none, while the random seats reverse some.
+    assert payable["auto-pay"] > 0 and payable["random"] > 0
+    assert payable_reversed["auto-pay"] == 0
+    assert payable_reversed["random"] > 0
     per_card = ", ".join(f"{name} x{casts[name]}" for name in sorted(casts))
     assert f"Casts per card: {per_card}." in text
     per_gap = ", ".join(f"{rule} x{gaps[rule]}" for rule in sorted(gaps)) or "none"

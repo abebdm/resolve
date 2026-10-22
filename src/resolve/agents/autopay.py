@@ -57,7 +57,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from itertools import combinations
+from itertools import combinations, permutations
 
 from resolve.agents.base import Agent
 from resolve.decisions.kinds import DecisionKind
@@ -110,13 +110,12 @@ class _Demand:
 @dataclass(frozen=True)
 class _Unit:
     """One unit of mana, in the pool or to come: its type, or the types it may be chosen as
-    (106.1a); its restriction; ``reach``, the demands it may pay given when it exists (those
-    numbered below it; ``None``: any); and the planned source it comes from (``None``: the pool
-    or an ability under way)."""
+    (106.1a); its restriction; ``reach``, the demands it may pay given when it exists (``None``:
+    any); and the planned source it comes from (``None``: the pool or an ability under way)."""
 
     types: tuple[ManaType, ...]
     restriction: ManaRestriction | None
-    reach: int | None = None
+    reach: tuple[int, ...] | None = None
     source: int | None = None
 
 
@@ -140,7 +139,7 @@ def _slots(demands: Sequence[_Demand], order: Sequence[int]) -> list[Slot]:
 
 def _may_pay(unit: _Unit, slot: Slot, demands: Sequence[_Demand]) -> bool:
     demand, needed = slot
-    if unit.reach is not None and demand >= unit.reach:
+    if unit.reach is not None and demand not in unit.reach:
         return False
     if unit.restriction is not None:
         spendable = demands[demand].spendable
@@ -216,7 +215,9 @@ def _pool(view: PlayerView, player: PlayerId) -> tuple[Mana, ...]:
     return ()
 
 
-def _output_units(output: ManaOutput, reach: int | None, source: int | None = None) -> list[_Unit]:
+def _output_units(
+    output: ManaOutput, reach: tuple[int, ...] | None, source: int | None = None
+) -> list[_Unit]:
     if output.fixed:
         return [_Unit((t,), output.restriction, reach, source) for t in output.fixed]
     if output.one_of:
@@ -240,7 +241,7 @@ def _chain(view: PlayerView, player: PlayerId) -> tuple[list[_Demand], list[_Uni
         if level and isinstance(purpose, ForAbility):
             ability = _ability(view, purpose.source, purpose.ability)
             if ability is not None and ability.mana is not None:
-                units += _output_units(ability.mana, level)
+                units += _output_units(ability.mana, tuple(range(level)))
     return demands, units
 
 
@@ -297,44 +298,68 @@ class _Trial:
     demands: tuple[_Demand, ...]
     slots: tuple[Slot, ...]
     units: tuple[_Unit, ...]
+    order: tuple[int, ...] = ()  # the sources with a mana cost, in the order to activate them
 
 
 def _try(demands: Sequence[_Demand], units: Sequence[_Unit], chosen: Sequence[_Source]) -> _Trial:
     """Whether the payments under way can be paid with the mana ``chosen`` adds (and the costs
-    of those of them that have one), and the plan's score (lower is better)."""
+    of those of them that have one), and the plan's score (lower is better).
+
+    The sources with a mana cost are activated one after another, in some order: the mana of
+    each pays the payments under way and the costs of those activated after it (602.2b: it comes
+    only once its own cost is paid), never its own or an earlier one's. Each order is tried."""
     chain = len(demands)
-    all_demands = list(demands)
-    all_units = list(units)
-    for source in chosen:
-        if source.cost is not None:
-            all_demands.append(_Demand(source.cost, None))
-    for index, source in enumerate(chosen):
-        # The mana of an ability with a mana cost comes after that cost is paid (602.2b).
-        all_units += _output_units(source.output, chain if source.cost is not None else None, index)
-    # Innermost first: the ability costs to come, then the payments under way inside out.
-    order = [*range(chain, len(all_demands)), *range(chain - 1, -1, -1)]
-    slots = _slots(all_demands, order)
-    if len(all_units) < len(slots):
-        return _Trial(False, tuple(chosen), (), (), (), ())
-    matched = _match(slots, all_units, all_demands)
-    feasible = all(unit is not None for unit in matched)
-    asked = {mana_type for demand in all_demands for mana_type, _ in demand.need.typed}
-    off_color = sum(
-        1
-        for unit in all_units
-        if unit.source is not None and len(unit.types) == 1 and unit.types[0] not in asked
-    )
-    score = (
-        sum(source.flexible for source in chosen),
-        sum(source.restricted for source in chosen),
-        len(chosen),
-        off_color,
-        len(all_units) - len(slots),
-        tuple(source.position for source in chosen),
-    )
-    return _Trial(
-        feasible, tuple(chosen), score, tuple(all_demands), tuple(slots), tuple(all_units)
-    )
+    costly = [index for index, source in enumerate(chosen) if source.cost is not None]
+    outer = tuple(range(chain))
+    asked = {mana_type for demand in demands for mana_type, _ in demand.need.typed}
+    asked |= {mana_type for i in costly for mana_type, _ in _cost(chosen[i]).typed}
+    trial: _Trial | None = None
+    for order in permutations(costly):
+        all_demands = [*demands, *(_Demand(_cost(chosen[i]), None) for i in order)]
+        all_units = list(units)
+        for index, source in enumerate(chosen):
+            reach: tuple[int, ...] | None = None
+            if source.cost is not None:
+                rank = order.index(index)
+                reach = (*outer, *range(chain + rank + 1, chain + len(order)))
+            all_units += _output_units(source.output, reach, index)
+        # Innermost first: the ability costs to come, then the payments under way inside out.
+        slots = _slots(all_demands, [*range(chain, len(all_demands)), *range(chain - 1, -1, -1)])
+        if len(all_units) < len(slots):
+            return _Trial(False, tuple(chosen), (), (), (), (), ())
+        feasible = all(unit is not None for unit in _match(slots, all_units, all_demands))
+        off_color = sum(
+            1
+            for unit in all_units
+            if unit.source is not None and len(unit.types) == 1 and unit.types[0] not in asked
+        )
+        score = (
+            sum(source.flexible for source in chosen),
+            sum(source.restricted for source in chosen),
+            len(chosen),
+            off_color,
+            len(all_units) - len(slots),
+            tuple(source.position for source in chosen),
+        )
+        trial = _Trial(
+            feasible,
+            tuple(chosen),
+            score,
+            tuple(all_demands),
+            tuple(slots),
+            tuple(all_units),
+            order,
+        )
+        if feasible:
+            return trial
+    assert trial is not None
+    return trial
+
+
+def _cost(source: _Source) -> ManaNeed:
+    if source.cost is None:
+        raise ValueError("the source has no mana cost")
+    return source.cost
 
 
 def _selections(groups: Sequence[Sequence[_Source]], size: int) -> list[list[_Source]]:
@@ -423,7 +448,12 @@ def _plan(trial: _Trial, chain: int) -> Plan:
         source = trial.units[unit].source
         if demand == chain - 1 and source is not None and source not in now:
             now.append(source)
-    now.sort(key=lambda i: (chosen[i].cost is None, chosen[i].flexible, chosen[i].position))
+
+    def rank(i: int) -> tuple[int, bool, int]:
+        costly = trial.order.index(i) if i in trial.order else len(trial.order)
+        return (costly, chosen[i].flexible, chosen[i].position)
+
+    now.sort(key=rank)
     return Plan(tuple(source.option for source in chosen), tuple(chosen[i].option for i in now))
 
 

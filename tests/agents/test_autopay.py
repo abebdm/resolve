@@ -382,3 +382,20 @@ def test_its_answers_are_never_rejected_by_the_engine() -> None:
             autopay(state)
         except InvalidAnswer as error:  # pragma: no cover - the failure message
             pytest.fail(f"{spell} from {lands}: {error}")
+
+
+def test_605_3a_one_signets_mana_pays_another_signets_cost() -> None:
+    """Hill Giant ({3}{R}) from Arcane Signet (commander Savannah Lions: white, 903.4), two
+    Selesnya Signets and a Mountain: the Arcane Signet's {W} pays one Selesnya Signet's {1}, whose
+    {G}{W} pays the other's {1} and the spell; nothing else makes six mana for the three costs.
+    (Found by ``test_autopay_brute_force``.)"""
+    state, permanents, _ = board(
+        ["Arcane Signet", "Selesnya Signet", "Mountain", "Selesnya Signet"],
+        "Hill Giant",
+        config=GameConfig.commander_game(),
+        commander="Savannah Lions",
+    )
+    autopay(state)
+    assert was_cast(state)
+    assert tapped(state, permanents) == [True, True, True, True]
+    assert state.player(P0).mana_pool == []
