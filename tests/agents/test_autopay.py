@@ -399,3 +399,21 @@ def test_605_3a_one_signets_mana_pays_another_signets_cost() -> None:
     assert was_cast(state)
     assert tapped(state, permanents) == [True, True, True, True]
     assert state.player(P0).mana_pool == []
+
+
+def test_601_2h_paying_the_signet_from_the_pool_keeps_the_color_a_later_land_cant_make() -> None:
+    """Pool {B}{R}, a Plains and Selesnya Signet, casting Hill Giant ({3}{R}): the Signet's {1}
+    can take the {B} or the {R} (601.2h asks). Either leaves the spell one symbol short until the
+    Plains is tapped, but the Plains can pay only a generic symbol (107.4b), not the {R} (107.4a),
+    so the {B} pays the Signet. (Found by ``test_autopay_brute_force --thorough``.)"""
+    scenario = Scenario(2)
+    plains, signet = scenario.battlefield(P0, ["Plains", "Selesnya Signet"])
+    (giant,) = scenario.hand(P0, ["Hill Giant"])
+    scenario.mana(P0, ManaType.BLACK, R)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(giant, P0))
+    autopay(state)
+    assert was_cast(state)
+    assert tapped(state, [plains, signet]) == [True, True]
+    assert state.player(P0).mana_pool == []

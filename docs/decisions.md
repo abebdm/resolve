@@ -37,8 +37,12 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   boards of up to four sources, a pool of up to two units (some restricted) and a spell: the
   planner must find a plan whenever the search finds a payment, and its plan must cast the spell.
   150 boards by default, 20 000 with `pytest --thorough` (`tests/conftest.py`). The search found
-  one gap in the first version of the planner, a Signet's {1} paid with another Signet's mana,
-  and the planner now tries each activation order of the Signets it plans.
+  two faults in the first version, each now a regression test in `test_autopay.py`: a Signet's
+  {1} paid with another Signet's mana wasn't planned (the planner now tries each activation
+  order of the Signets it plans); and paying a Signet's {1} from a pool holding the spell's
+  {R} could spend the {R}, because `choose_payment` can't see the lands the outer payment will
+  still tap (it now keeps colored symbols payable first: a later land pays any generic symbol,
+  but a colored one only with its color).
 - **Rules:** 601.2g-h, 605.3a, 602.2b, 106.6, 107.4a-c, 118.3, 733.1.
 - **Where:** `tools/fuzz.py` (`PayableCasts`, `FuzzResult.payable_reversed`, `GameStats`,
   `summary_lines`), `resolve.agents.autopay` (`_try`), `docs/plans/m2.md` (M2.5).

@@ -46,9 +46,10 @@ others are activated when the outer payment resumes, and the cost of a mana abil
 being activated. With no plan it answers "pay", and the action is reversed (118.3, 733.1).
 
 **Paying from the pool** (601.2h). Of the ways to pay the innermost cost (the engine's
-``payments``), it picks the one that leaves the outer costs payable by the most symbols from
-what's left and the mana of the abilities under way, then spends restricted mana first and
-mana of the cost's colors first.
+``payments``), it picks the one that leaves the most colored and {C} symbols of the outer costs
+payable from what's left and the mana of the abilities under way (a mana ability activated
+later for an outer cost can pay a generic symbol, but a colored one only with its color), then
+the most symbols, then spends restricted mana first and mana of the cost's colors first.
 
 **Colors** (106.1a). It picks the color that lets the most colored symbols, then the most
 symbols, of the costs under way be paid from the pool, the mana of the abilities under way and
@@ -488,21 +489,28 @@ def choose_payment(view: PlayerView, player: PlayerId, space: ChooseCounts) -> A
     asked = {mana_type for mana_type, _ in demands[innermost].need.typed}
     pool = _pool(view, player)
 
-    def score(amounts: tuple[int, ...]) -> tuple[int, int, int]:
+    # Colored and {C} symbols first: a mana ability activated later for an outer cost may pay
+    # any generic symbol (107.4b), but a colored one only with its color (107.4a).
+    every = _slots(outer, range(len(outer)))
+    colored = [slot for slot in every if slot[1] is not None]
+    slots = colored + [slot for slot in every if slot[1] is None]
+
+    def score(amounts: tuple[int, ...]) -> tuple[int, int, int, int]:
         left = list(pool)
         for (unit, _), amount in zip(classes, amounts, strict=True):
             for _ in range(amount):
                 left.remove(unit)
         rest = [_Unit((unit.type,), unit.restriction) for unit in left]
         rest += units[len(pool) :]  # the mana of the abilities under way
-        slots = _slots(outer, range(len(outer)))
-        unpaid = sum(unit is None for unit in _match(slots, rest, outer))
+        matched = _match(slots, rest, outer)
+        unpaid_colored = sum(unit is None for unit in matched[: len(colored)])
+        unpaid = sum(unit is None for unit in matched)
         spent = [
             unit for (unit, _), amount in zip(classes, amounts, strict=True) for _ in range(amount)
         ]
         restricted = sum(unit.restriction is not None for unit in spent)
         off_color = sum(unit.type not in asked for unit in spent)
-        return (unpaid, -restricted, off_color)
+        return (unpaid_colored, unpaid, -restricted, off_color)
 
     return Amounts(min(found, key=score))
 
