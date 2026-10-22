@@ -25,15 +25,20 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from resolve.cards.primitives.abilities import ActivatedManaAbility
+from resolve.cards.primitives.effects import AddMana, ManaEffect
+from resolve.data.mana_cost import ManaCost
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionRequest
+from resolve.effects.characteristics import characteristics
+from resolve.engine.payment import PayCosts
 from resolve.errors import NotImplementedRule
 from resolve.events.base import LogEntry
 from resolve.rules import defaults
 from resolve.state.game import GameObject, GameResult, GameState
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.data.mana_cost import ManaCost
 from resolve.state.mana import Mana, ManaRestriction, ManaType, PaymentPurpose
+from resolve.state.zones import ZoneKind
 from resolve.state.spell import CastChoices
 from resolve.state.turn import Phase, Step
 from resolve.values import Immutable
@@ -186,6 +191,68 @@ def view_for(state: GameState, viewer: PlayerId) -> PlayerView:
         request=pending if pending is not None and pending.player == viewer else None,
         log=tuple(shown for entry in state.event_log if (shown := _shown(state, entry, viewer))),
         result=state.result,
+        payments=tuple(
+            _payment_view(state, payment)
+            for task in state.tasks  # the bottom first: the outermost action
+            if (payment := task.payment_under_way()) is not None
+        ),
+    )
+
+
+def _payment_view(state: GameState, payment: PayCosts) -> PaymentView:
+    """A payment under way, with the restrictions that allow spending mana on it (106.6): those
+    of the payer's pool, then those of the mana their permanents' mana abilities add, each
+    once, in that order."""
+    restrictions: list[ManaRestriction] = []
+    candidates = [unit.restriction for unit in state.player(payment.payer).mana_pool]
+    for obj in state.battlefield:
+        if state.objects[obj].controller == payment.payer:
+            for ability in characteristics(state, obj).abilities:
+                if isinstance(ability, ActivatedManaAbility) and not isinstance(
+                    ability.effect, AddMana
+                ):
+                    candidates.append(ability.effect.restriction)
+    for restriction in candidates:
+        if restriction is not None and restriction not in restrictions:
+            restrictions.append(restriction)
+    return PaymentView(
+        payment.payer,
+        payment.cost,
+        payment.purpose,
+        tuple(r for r in restrictions if r.allows(state, payment.purpose)),
+    )
+
+
+def _ability_views(state: GameState, obj: GameObject) -> tuple[AbilityView, ...]:
+    """A permanent's abilities (400.2: the battlefield is public); none for other objects."""
+    if obj.zone.kind is not ZoneKind.BATTLEFIELD or obj.controller is None:
+        return ()
+    views: list[AbilityView] = []
+    for index, ability in enumerate(characteristics(state, obj.id).abilities):
+        if isinstance(ability, ActivatedManaAbility):
+            cost = ability.mana_cost
+            views.append(
+                AbilityView(
+                    index,
+                    ability.text,
+                    None if cost is None else cost.mana,
+                    _mana_output(state, obj.id, obj.controller, ability.effect),
+                )
+            )
+        else:
+            views.append(AbilityView(index, ability.text))
+    return tuple(views)
+
+
+def _mana_output(
+    state: GameState, source: ObjectId, controller: PlayerId, effect: ManaEffect
+) -> ManaOutput:
+    """The mana ``effect`` would add for ``controller`` now (106.1a, 903.4)."""
+    if isinstance(effect, AddMana):
+        return ManaOutput(fixed=effect.mana)
+    colors = effect.colors(state, source, controller)
+    return ManaOutput(
+        one_of=tuple(ManaType(color.value) for color in colors), restriction=effect.restriction
     )
 
 
@@ -214,8 +281,12 @@ def _turn_view(state: GameState) -> TurnView | None:
 
 def _object_view(state: GameState, obj: GameObject, viewer: PlayerId) -> ObjectView:
     name: str | None = None
+    abilities: tuple[AbilityView, ...] = ()
     if defaults.knows_identity(state, obj, viewer):
         if obj.card is None:
             raise NotImplementedRule("111.1: viewing objects not represented by a card")
         name = state.cards[obj.card].data.name
-    return ObjectView(obj.id, name, obj.owner, obj.controller, obj.tapped, obj.damage, obj.spell)
+        abilities = _ability_views(state, obj)
+    return ObjectView(
+        obj.id, name, obj.owner, obj.controller, obj.tapped, obj.damage, obj.spell, abilities
+    )

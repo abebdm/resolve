@@ -34,7 +34,7 @@ from resolve.events.spells import ActionReversed, PermanentSpellResolved, SpellC
 from resolve.state.config import GameConfig
 from resolve.state.ids import PlayerId
 from resolve.state.turn import Phase
-from tests.casting_support import activate, activate_with_priority, cast, pass_, reverse
+from tests.casting_support import activate, activate_with_priority, cast, pass_, pay, reverse
 from tests.engine_support import EndGame, running
 from tests.game_fixtures import answer, deck, pass_until, request_of, started_game
 from tests.scenario import Scenario, run_script
@@ -165,6 +165,7 @@ def test_the_summary_lines() -> None:
         "other (704.5c) x1.",
         "Played: 5 lands, 9 mana abilities activated, 0 reversed.",
         "Spells: 0 cast, 0 resolved, 0 reversed.",
+        "Reversed casts: auto-pay seats 0 of 0 attempts, random seats 0 of 0.",
         "Casts per card: none.",
         "Gaps: none.",
     ]
@@ -180,6 +181,7 @@ def test_the_summary_counts_spells_casts_per_card_and_gaps() -> None:
     ]
     assert summary_lines(games)[5:] == [
         "Spells: 4 cast, 3 resolved, 5 reversed.",
+        "Reversed casts: auto-pay seats 0 of 0 attempts, random seats 5 of 9.",
         "Casts per card: Grizzly Bears x1, Sol Ring x3.",
         "Gaps: 508.1 x2, 903.8 x1.",
     ]
@@ -214,6 +216,31 @@ def test_game_stats_count_reversed_mana_abilities_apart_from_reversed_casts() ->
     assert (stats.reversed, stats.abilities_reversed) == (0, 2)
     games = [stats, GameStats(1, 0, 1, DRAW, 0, 0, abilities_reversed=1)]
     assert summary_lines(games)[4] == "Played: 0 lands, 0 mana abilities activated, 3 reversed."
+
+
+def test_game_stats_count_casts_and_reversals_of_the_auto_paying_seats() -> None:
+    """The odd seats are the auto-payers (``fuzz_game``): P1 casts Sol Ring with a Forest, then
+    tries Grizzly Bears with nothing to pay for it (reversed, 733.1); P0's casts don't count."""
+    scenario = Scenario(2)
+    ring, bears = scenario.hand(PlayerId(1), ["Sol Ring", "Grizzly Bears"])
+    (forest,) = scenario.battlefield(PlayerId(1), ["Forest"])
+    scenario.at(Phase.PRECOMBAT_MAIN, active=PlayerId(1))
+    state = scenario.build()
+    run_script(state, cast(ring), activate(forest), pass_(), pass_())
+    run_script(state, cast(bears), pay())
+    stats = GameStats.of(FuzzResult(9, 0, "508.1: declaring attackers", state))
+    assert (stats.reversed, stats.autopay_casts, stats.autopay_reversed) == (1, 1, 1)
+
+
+def test_the_summary_compares_the_auto_paying_seats_with_the_random_ones() -> None:
+    """Of the attempts (casts and reversed casts) of each kind of seat, how many were reversed."""
+    games = [
+        GameStats(10, 0, 3, RULES_GAP, 2, 5, (("Sol Ring", 3),), 2, 4, "508.1", 0, 2, 1),
+        GameStats(5, 0, 1, DRAW, 0, 0, (("Sol Ring", 1),), 0, 2, None, 0, 0, 0),
+    ]
+    assert summary_lines(games)[6] == (
+        "Reversed casts: auto-pay seats 1 of 3 attempts, random seats 5 of 7."
+    )
 
 
 def test_the_summary_of_one_game() -> None:
@@ -328,6 +355,8 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
     casts: Counter[str] = Counter()
     gaps: Counter[str] = Counter()
     endings: Counter[str] = Counter()
+    attempts: Counter[str] = Counter()
+    reversed_by: Counter[str] = Counter()
     for result in recorder.results:
         state = result.state
         assert state.turn is not None
@@ -342,6 +371,14 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
             if isinstance(record, SpellCast):
                 cast += 1
                 casts[record.name or "?"] += 1
+        for record in records:
+            if isinstance(record, SpellCast | ActionReversed) and (
+                not isinstance(record, ActionReversed) or record.card is not None
+            ):
+                seat = "auto-pay" if record.player % 2 else "random"
+                attempts[seat] += 1
+                if isinstance(record, ActionReversed):
+                    reversed_by[seat] += 1
         resolved += sum(1 for record in records if isinstance(record, PermanentSpellResolved))
         reversed_ += sum(
             1
@@ -390,6 +427,20 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
         resolved,
         reversed_,
     )
+    assert numbers(
+        r"Reversed casts: auto-pay seats (\d+) of (\d+) attempts, random seats (\d+) of (\d+)\.",
+        text,
+    ) == (
+        reversed_by["auto-pay"],
+        attempts["auto-pay"],
+        reversed_by["random"],
+        attempts["random"],
+    )
+    # M2.5's "done when": the auto-paying seats reverse far fewer of their casts.
+    assert attempts["auto-pay"] > 0 and attempts["random"] > 0
+    assert reversed_by["auto-pay"] * 2 * attempts["random"] < (
+        reversed_by["random"] * attempts["auto-pay"]
+    ), "the auto-payers reverse less than half as often"
     per_card = ", ".join(f"{name} x{casts[name]}" for name in sorted(casts))
     assert f"Casts per card: {per_card}." in text
     per_gap = ", ".join(f"{rule} x{gaps[rule]}" for rule in sorted(gaps)) or "none"

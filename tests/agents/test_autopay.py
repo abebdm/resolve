@@ -45,7 +45,7 @@ from resolve.decisions.spaces import (
 from resolve.engine.api import new_game, pending_decision, submit, view_for
 from resolve.engine.payment import PAY
 from resolve.engine.view import PlayerView
-from resolve.errors import InvalidAnswer
+from resolve.errors import InvalidAnswer, NotImplementedRule
 from resolve.events.spells import ActionReversed, SpellCast
 from resolve.rules import defaults
 from resolve.state.config import GameConfig
@@ -330,7 +330,10 @@ def test_it_is_deterministic() -> None:
         decks = [recipe_deck("creatures", 8), recipe_deck("spells", 8)]
         played = new_game(GameConfig.standard(), decks, 7)
         agents = [AutoPayAgent(RandomAgent(seat)) for seat in range(2)]
-        play(played, agents, max_answers=600, on_invalid=lambda error: None)
+        try:
+            play(played, agents, max_answers=600, on_invalid=lambda error: None)
+        except NotImplementedRule as gap:  # creatures attack: declaring attackers is M3
+            assert str(gap).startswith("508.1"), gap
         return played
 
     one, two = game(), game()

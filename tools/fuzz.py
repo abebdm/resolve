@@ -20,7 +20,8 @@ often the full checks run (``check_every``); explicit options override them. Gam
 ``--copies`` with each recipe),
 so a failing game is reproduced by its seed and the run's options.
 
-Each game is played by ``RandomAgent``s. Before every answer (with ``check_every`` N > 1, every
+Each game is played by ``RandomAgent``s; on the odd seats the auto-payer
+(``resolve.agents.autopay.AutoPayAgent``) answers their payment decisions. Before every answer (with ``check_every`` N > 1, every
 N answers and at the end; the bookkeeping invariants always) the harness checks:
 
 - the state's bookkeeping invariants and that it is pure data (``resolve.state.invariants``);
@@ -70,6 +71,7 @@ from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from resolve.agents.autopay import AutoPayAgent
 from resolve.agents.base import Agent
 from resolve.agents.driver import MAX_ATTEMPTS, agent_for
 from resolve.agents.random_agent import RandomAgent
@@ -544,6 +546,11 @@ def _check_replay(
         raise fail("the replay doesn't reproduce the identical state")
 
 
+def is_autopay_seat(seat: int) -> bool:
+    """Whether the auto-payer plays seat ``seat`` (with a random agent): the odd seats."""
+    return seat % 2 == 1
+
+
 def fuzz_game(
     config: GameConfig,
     decks: Sequence[Deck],
@@ -560,9 +567,14 @@ def fuzz_game(
     """Fuzz one game of ``new_game(config, decks, seed)``; the options are ``fuzz_run``'s.
 
     Seat ``i`` is played by ``RandomAgent(agent_seed + i)``; ``agent_seed`` defaults to ``seed``.
+    On the odd seats the auto-payer answers that agent's payment decisions
+    (``AutoPayAgent``, ``is_autopay_seat``).
     """
     base = seed if agent_seed is None else agent_seed
-    agents = [RandomAgent((base + seat) % 2**64) for seat in range(len(decks))]
+    agents: list[Agent] = []
+    for seat in range(len(decks)):
+        agent = RandomAgent((base + seat) % 2**64)
+        agents.append(AutoPayAgent(agent) if is_autopay_seat(seat) else agent)
     commander = " --commander" if config.commander is not None else ""
     describe = (
         f"game seed {seed}, {len(decks)} players{commander} "
@@ -634,6 +646,8 @@ class GameStats:
       casts reversed (``ActionReversed`` of a card, 733.1).
     - ``abilities_reversed``: mana ability activations reversed because their mana cost couldn't
       be paid (``ActionReversed`` of a source, 733.1).
+    - ``autopay_casts``, ``autopay_reversed``: the spells cast and the casts reversed by the
+      auto-paying seats (``is_autopay_seat``).
     - ``gap``: the rule of the gap the game stopped at, if any.
     """
 
@@ -648,6 +662,8 @@ class GameStats:
     reversed: int = 0
     gap: str | None = None
     abilities_reversed: int = 0
+    autopay_casts: int = 0
+    autopay_reversed: int = 0
 
     @staticmethod
     def of(result: FuzzResult) -> GameStats:
@@ -677,6 +693,16 @@ class GameStats:
                 for record in records
             ),
             gap=None if result.gap is None else result.gap.split(": ", 1)[0],
+            autopay_casts=sum(
+                isinstance(record, SpellCast) and is_autopay_seat(record.player)
+                for record in records
+            ),
+            autopay_reversed=sum(
+                isinstance(record, ActionReversed)
+                and record.card is not None
+                and is_autopay_seat(record.player)
+                for record in records
+            ),
         )
 
 
@@ -698,6 +724,8 @@ def summary_lines(games: Sequence[GameStats]) -> list[str]:
     gaps = Counter(game.gap for game in games if game.gap is not None)
     names = [*ENDINGS, *sorted(name for name in endings if name not in ENDINGS)]
     answers = [game.answers for game in games]
+    autopay_reversed = sum(game.autopay_reversed for game in games)
+    random_reversed = sum(game.reversed for game in games) - autopay_reversed
     return [
         f"{len(games)} games passed: {sum(answers)} answers accepted, "
         f"{sum(game.rejected for game in games)} rejected.",
@@ -709,6 +737,10 @@ def summary_lines(games: Sequence[GameStats]) -> list[str]:
         f"{sum(game.abilities_reversed for game in games)} reversed.",
         f"Spells: {sum(casts.values())} cast, {sum(game.resolved for game in games)} resolved, "
         f"{sum(game.reversed for game in games)} reversed.",
+        f"Reversed casts: auto-pay seats {autopay_reversed} of "
+        f"{autopay_reversed + sum(game.autopay_casts for game in games)} attempts, "
+        f"random seats {random_reversed} of "
+        f"{random_reversed + sum(casts.values()) - sum(game.autopay_casts for game in games)}.",
         "Casts per card: " + _counted(casts) + ".",
         "Gaps: " + _counted(gaps) + ".",
     ]

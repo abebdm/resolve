@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from resolve.agents.autopay import AutoPayAgent
 from resolve.agents.base import Agent
 from resolve.agents.random_agent import RandomAgent
 from resolve.agents.scripted import ScriptedAgent, Step
@@ -287,6 +288,28 @@ def test_fuzz_games_are_reproducible_from_their_seed() -> None:
         for seed in range(30)
     }
     assert starters == {0, 1, 2, 3}
+
+
+def test_the_odd_seats_are_auto_paying_random_agents(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Seat ``i`` is ``RandomAgent(agent_seed + i)``; on odd seats the auto-payer answers its
+    payment decisions (plan M2.5, §8), so the summary can compare the two."""
+    seen: list[Sequence[Agent]] = []
+
+    def recording(make_state: Callable[[], GameState], agents: Sequence[Agent], **_: object):
+        seen.append(agents)
+        return fuzz_tool.FuzzResult(0, 0, None, make_state())
+
+    monkeypatch.setattr(fuzz_tool, "fuzz_run", recording)
+    fuzz_game(GameConfig.standard(), decks_for(4, False, 1), 1, agent_seed=50)
+    (agents,) = seen
+    for seat, agent in enumerate(agents):
+        if seat % 2:
+            assert isinstance(agent, AutoPayAgent)
+            inner = agent.inner
+        else:
+            inner = agent
+        assert isinstance(inner, RandomAgent)
+        assert inner.rng == RandomAgent(50 + seat).rng
 
 
 def test_a_game_that_ends_reports_no_gap() -> None:

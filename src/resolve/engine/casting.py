@@ -208,6 +208,10 @@ class CastSpell(Task):
         self.stage = CastStage.PAY
         return self.run(state)
 
+    def payment_under_way(self) -> PayCosts | None:
+        """601.2g-h: the spell's total cost, while it is being paid."""
+        return self.payment if self.stage is CastStage.PAY else None
+
     def _payment(self) -> PayCosts:
         if self.payment is None:
             raise EngineError("CastSpell is paying without a payment")
