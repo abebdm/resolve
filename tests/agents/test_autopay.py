@@ -23,6 +23,7 @@ and otherwise only that the engine accepts the answers and the spell is cast.
 from __future__ import annotations
 
 import copy
+import pickle
 
 import pytest
 
@@ -36,16 +37,19 @@ from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer, DecisionRequest
 from resolve.decisions.spaces import (
     ActivateAbilityOption,
+    Amounts,
+    ChooseCounts,
     ChooseOne,
     ChooseSubset,
     ColorOption,
+    ManaOption,
     Pick,
     PickMany,
 )
 from resolve.engine.api import new_game, pending_decision, submit, view_for
 from resolve.engine.payment import PAY
 from resolve.engine.view import PlayerView
-from resolve.errors import InvalidAnswer, NotImplementedRule
+from resolve.errors import NotImplementedRule
 from resolve.events.spells import ActionReversed, SpellCast
 from resolve.rules import defaults
 from resolve.state.config import GameConfig
@@ -59,7 +63,7 @@ from tests.game_fixtures import request_of
 from tests.scenario import Scenario, run_script
 from tools.fuzz import recipe_deck
 
-P0, P1 = PlayerId(0), PlayerId(1)
+P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 W, R, G = ManaType.WHITE, ManaType.RED, ManaType.GREEN
 DINOSAUR = SpendOnlyOnSubtype(SubtypeWord("Dinosaur"))
 PAYMENT_KINDS = (
@@ -150,7 +154,9 @@ def test_601_2h_pays_hill_giant_with_sol_ring_a_mountain_and_a_forest() -> None:
 def test_605_3a_pays_hill_giant_through_selesnya_signet_tapping_the_forest_for_the_signet() -> None:
     """{3}{R} from Selesnya Signet ({1}, {T}: Add {G}{W}), Forest, Mountain and Plains: only all
     four make enough mana, so the Signet is activated and a land pays its {1} (605.3a). That land
-    can't be the Mountain, whose {R} the spell needs; the Forest comes first."""
+    can't be the Mountain, whose {R} the spell needs. The Plains would pay it as legally; the
+    Forest is the auto-payer's choice, its tie-break being the earliest permanent (policy, not a
+    rule)."""
     state, (signet, forest, mountain, plains), _ = board(
         ["Selesnya Signet", "Forest", "Mountain", "Plains"], "Hill Giant"
     )
@@ -322,8 +328,12 @@ def test_it_is_deterministic() -> None:
     from the same seeds end in equal states."""
     state, _, _ = board(["Selesnya Signet", "Forest", "Mountain", "Plains"], "Hill Giant")
     request = request_of(state)
-    first = AutoPayAgent(MustNotBeAsked()).decide(view_for(state, P0), request)
-    second = AutoPayAgent(MustNotBeAsked()).decide(view_for(state, P0), request)
+    view = view_for(state, P0)
+    first = AutoPayAgent(MustNotBeAsked()).decide(view, request)
+    # A copy of the view made by pickling has new objects throughout: an answer that depended on
+    # object identity or on the order of a set would show here.
+    copied = pickle.loads(pickle.dumps((view, request)))
+    second = AutoPayAgent(MustNotBeAsked()).decide(*copied)
     assert first == second
 
     def game() -> GameState:
@@ -368,20 +378,227 @@ def test_723_5a_deciding_for_another_player_it_uses_only_that_players_resources(
     assert state.player(P1).mana_pool == [Mana(G), Mana(G)]
 
 
-def test_its_answers_are_never_rejected_by_the_engine() -> None:
-    """Every answer it gives on these boards is accepted (``autopay`` submits them): an
-    ``InvalidAnswer`` would fail the test."""
-    for lands, spell in (
-        (["Forest", "Forest", "Plains"], "Grizzly Bears"),
-        (["Selesnya Signet", "Selesnya Signet", "Forest", "Mountain"], "Hill Giant"),
-        (["Command Tower", "Arcane Signet", "Mountain"], "Hill Giant"),
-        (["Sol Ring", "Temple of the False God", "Mountain"], "Hill Giant"),
-    ):
-        state, _, _ = board(lands, spell)
-        try:
-            autopay(state)
-        except InvalidAnswer as error:  # pragma: no cover - the failure message
-            pytest.fail(f"{spell} from {lands}: {error}")
+@pytest.mark.parametrize(
+    ("lands", "spell", "cast_"),
+    [
+        (["Forest", "Forest", "Plains"], "Grizzly Bears", True),
+        # 605.3a: the Forest pays one Signet's {1}, that Signet's mana the other's.
+        (["Selesnya Signet", "Selesnya Signet", "Forest", "Mountain"], "Hill Giant", True),
+        # 903.4f, 106.5: no commander, so neither adds mana; the Mountain alone is 1 < 4.
+        (["Command Tower", "Arcane Signet", "Mountain"], "Hill Giant", False),
+        # 602.5: Temple needs five lands (it has two), so {C}{C} + {R} is 3 < 4.
+        (["Sol Ring", "Temple of the False God", "Mountain"], "Hill Giant", False),
+    ],
+)
+def test_its_answers_are_accepted_and_it_casts_exactly_what_can_be_paid(
+    lands: list[str], spell: str, cast_: bool
+) -> None:
+    """Every answer it gives is accepted (``autopay`` submits them; an ``InvalidAnswer`` fails the
+    test), and the spell is cast exactly when the board can pay it."""
+    state, permanents, _ = board(lands, spell)
+    autopay(state)
+    assert was_cast(state) is cast_
+    if not cast_:
+        assert not any(tapped(state, permanents))  # 733.1: everything reversed
+
+
+def test_903_4_a_commanders_identity_without_the_color_gives_no_plan() -> None:
+    """Commander Hill Giant (red): Command Tower makes only {R} (903.4), so Command Tower and a
+    Plains can't pay {1}{G} (107.4a). No plan: the Tower is never activated."""
+    state, (tower, plains), _ = board(
+        ["Command Tower", "Plains"],
+        "Grizzly Bears",
+        config=GameConfig.commander_game(),
+        commander="Hill Giant",
+    )
+    answered = autopay(state)
+    assert [request.kind for request, _ in answered] == [DecisionKind.ACTIVATE_MANA_ABILITIES]
+    assert not was_cast(state)
+    assert tapped(state, [tower, plains]) == [False, False]
+
+
+def test_605_3a_pays_a_signet_activated_with_priority() -> None:
+    """The inner agent activates Selesnya Signet with priority (605.3a); its {1} is a payment
+    under way (602.2b), so the auto-payer taps the Forest for it and the inner agent isn't asked.
+    The pool ends {G}{W}."""
+    scenario = Scenario(2)
+    signet, forest = scenario.battlefield(P0, ["Selesnya Signet", "Forest"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, activate_with_priority(signet))
+    answered = autopay(state)
+    assert [request.kind for request, _ in answered] == [DecisionKind.ACTIVATE_MANA_ABILITIES]
+    assert tapped(state, [signet, forest]) == [True, True]
+    assert state.player(P0).mana_pool == [Mana(G, signet), Mana(W, signet)]
+    assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
+
+
+def test_106_1a_chooses_the_color_for_a_signet_activated_with_priority() -> None:
+    """Command Tower pays that Signet's {1}: a payment is under way, so the auto-payer chooses the
+    Tower's color (106.1a; either of W and G pays generic mana, 107.4b)."""
+    scenario = Scenario(2, config=GameConfig.commander_game())
+    scenario.commander(P0, "Avacyn's Pilgrim")
+    signet, tower = scenario.battlefield(P0, ["Selesnya Signet", "Command Tower"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, activate_with_priority(signet))
+    answered = autopay(state)
+    assert DecisionKind.CHOOSE_COLOR in [request.kind for request, _ in answered]
+    assert tapped(state, [signet, tower]) == [True, True]
+    assert state.player(P0).mana_pool == [Mana(G, signet), Mana(W, signet)]
+
+
+def test_106_6_lorekeeper_mana_cant_pay_a_signet_for_a_dinosaur() -> None:
+    """Test Raptor ({1}{G}) from Ixalli's Lorekeeper and Selesnya Signet: the Lorekeeper's mana
+    may pay for the Dinosaur spell but not for the Signet's {1} (106.6: the Signet isn't a
+    Dinosaur source), so the Signet can't add mana and one unit can't pay {1}{G}. No plan."""
+    state, permanents, _ = board(["Ixalli's Lorekeeper", "Selesnya Signet"], "Test Raptor")
+    answered = autopay(state)
+    assert [request.kind for request, _ in answered] == [DecisionKind.ACTIVATE_MANA_ABILITIES]
+    request, answer = answered[0]
+    assert isinstance(request.space, ChooseOne) and isinstance(answer.value, Pick)
+    assert request.space.chosen(answer.value) == PAY
+    assert not was_cast(state)
+    assert tapped(state, permanents) == [False, False]
+
+
+def restricted_pool(spell: str) -> tuple[GameState, ObjectId]:
+    """A Forest and {G} in the pool that may be spent only on a Dinosaur (106.6), casting
+    ``spell``."""
+    scenario = Scenario(2)
+    (forest,) = scenario.battlefield(P0, ["Forest"])
+    (card,) = scenario.hand(P0, [spell])
+    scenario.mana(P0, G, restriction=DINOSAUR)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(card, P0))
+    return state, forest
+
+
+def test_106_6_restricted_mana_in_the_pool_pays_only_for_a_dinosaur() -> None:
+    """Test Raptor: the restricted {G} and the Forest pay {1}{G}. Grizzly Bears: the restricted
+    {G} can't pay for it, so no plan; the Forest stays untapped and the cast is reversed."""
+    state, forest = restricted_pool("Test Raptor")
+    autopay(state)
+    assert was_cast(state)
+    assert state.objects[forest].tapped and state.player(P0).mana_pool == []
+
+    state, forest = restricted_pool("Grizzly Bears")
+    answered = autopay(state)
+    assert [request.kind for request, _ in answered] == [DecisionKind.ACTIVATE_MANA_ABILITIES]
+    assert not was_cast(state)
+    assert not state.objects[forest].tapped
+    assert state.player(P0).mana_pool == [Mana(G, None, DINOSAUR)]
+
+
+def test_118_3_a_tapped_land_is_no_resource() -> None:
+    """A tapped Forest can't pay {T} (118.3), so it isn't offered: a Plains alone can't pay
+    {1}{G}. No plan."""
+    scenario = Scenario(2)
+    forest, plains = scenario.battlefield(P0, ["Forest", "Plains"])
+    scenario.tap(forest)
+    (bears,) = scenario.hand(P0, ["Grizzly Bears"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(bears, P0))
+    autopay(state)
+    assert not was_cast(state)
+    assert not state.objects[plains].tapped
+
+
+def test_302_6_a_summoning_sick_mana_creature_is_no_resource() -> None:
+    """Llanowar Elves that came under P0's control this turn can't use {T} (302.6): a Plains and
+    the Elves don't pay {1}{G}. From a creature P0 controlled since the turn began, they do."""
+    for entered, payable in ((1, False), (0, True)):
+        scenario = Scenario(2)
+        elves, plains = scenario.battlefield(P0, ["Llanowar Elves", "Plains"], entered_turn=entered)
+        (bears,) = scenario.hand(P0, ["Grizzly Bears"])
+        scenario.at(Phase.PRECOMBAT_MAIN, number=1)
+        state = scenario.build()
+        run_script(state, cast(bears, P0))
+        autopay(state)
+        assert was_cast(state) is payable
+        assert tapped(state, [elves, plains]) == [payable, payable]
+
+
+def test_602_5_temple_of_the_false_god_pays_only_with_five_lands() -> None:
+    """Hill Giant ({3}{R}) from Temple of the False God, a Mountain, a Forest and Plains: with four
+    lands the Temple can't be activated (602.5) and three mana don't pay; with five it adds
+    {C}{C}, and Temple, Mountain and one more land pay."""
+    for plains, payable in ((1, False), (2, True)):
+        lands = ["Temple of the False God", "Mountain", "Forest", *["Plains"] * plains]
+        state, permanents, _ = board(lands, "Hill Giant")
+        autopay(state)
+        assert was_cast(state) is payable
+        if payable:
+            assert tapped(state, permanents[:3]) == [True, True, True]
+            assert sum(tapped(state, permanents)) == 3  # 3 permanents for 4 mana
+        else:
+            assert not any(tapped(state, permanents))
+
+
+def test_107_4c_colorless_symbols_need_colorless_mana() -> None:
+    """Test Ember ({1}{C}): Sol Ring's {C}{C} pays it; two Forests' {G}{G} doesn't (107.4c)."""
+    state, (ring,), _ = board(["Sol Ring"], "Test Ember")
+    autopay(state)
+    assert was_cast(state) and state.objects[ring].tapped
+    state, forests, _ = board(["Forest", "Forest"], "Test Ember")
+    autopay(state)
+    assert not was_cast(state) and not any(tapped(state, forests))
+
+
+def test_118_3a_a_cost_of_0_is_paid_without_tapping_anything() -> None:
+    """Test Mox ({0}) with a Forest on the battlefield: 601.2g offers the Forest; the auto-payer
+    answers "pay", and nothing pays nothing (118.3a)."""
+    state, (forest,), _ = board(["Forest"], "Test Mox")
+    answered = autopay(state)
+    request, answer = answered[0]
+    assert isinstance(request.space, ChooseOne) and isinstance(answer.value, Pick)
+    assert request.space.chosen(answer.value) == PAY
+    assert was_cast(state) and not state.objects[forest].tapped
+
+
+def test_in_a_three_player_game_it_pays_with_the_casters_lands_only() -> None:
+    """P2 casts Grizzly Bears in its turn; P0 and P1 have untapped Forests and mana in their
+    pools, which aren't P2's to spend (106.4: a player's mana pool; 602.2: their permanents)."""
+    scenario = Scenario(3)
+    others = [*scenario.battlefield(P0, ["Forest"]), *scenario.battlefield(P1, ["Forest"])]
+    mine = scenario.battlefield(P2, ["Forest", "Forest"])
+    scenario.mana(P0, G, G).mana(P1, G, G)
+    (bears,) = scenario.hand(P2, ["Grizzly Bears"])
+    scenario.at(Phase.PRECOMBAT_MAIN, active=P2)
+    state = scenario.build()
+    run_script(state, cast(bears, P2))
+    autopay(state)
+    assert was_cast(state)
+    assert tapped(state, mine) == [True, True] and tapped(state, others) == [False, False]
+    assert state.player(P0).mana_pool == [Mana(G), Mana(G)]
+    assert state.player(P1).mana_pool == [Mana(G), Mana(G)]
+
+
+def test_723_5a_in_a_three_player_game_the_controller_pays_with_the_controlled_players_lands(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P2 controls P1 (723.5) while P1 casts Grizzly Bears: P2's auto-payer taps P1's Forests,
+    not P2's, and leaves P2's pool alone (723.5a)."""
+
+    def deciding(state: object, player: PlayerId) -> PlayerId:
+        return P2 if player == P1 else player
+
+    monkeypatch.setattr(defaults, "deciding_player", deciding)
+    scenario = Scenario(3)
+    p1_lands = scenario.battlefield(P1, ["Forest", "Forest"])
+    p2_lands = scenario.battlefield(P2, ["Forest", "Forest"])
+    scenario.mana(P2, G, G)
+    (bears,) = scenario.hand(P1, ["Grizzly Bears"])
+    scenario.at(Phase.PRECOMBAT_MAIN, active=P1)
+    state = scenario.build()
+    run_script(state, cast(bears, P2))
+    assert (request_of(state).player, request_of(state).for_player) == (P2, P1)
+    autopay(state)
+    assert was_cast(state)
+    assert tapped(state, p1_lands) == [True, True] and tapped(state, p2_lands) == [False, False]
+    assert state.player(P2).mana_pool == [Mana(G), Mana(G)]
 
 
 def test_605_3a_one_signets_mana_pays_another_signets_cost() -> None:
@@ -405,7 +622,9 @@ def test_601_2h_paying_the_signet_from_the_pool_keeps_the_color_a_later_land_can
     """Pool {B}{R}, a Plains and Selesnya Signet, casting Hill Giant ({3}{R}): the Signet's {1}
     can take the {B} or the {R} (601.2h asks). Either leaves the spell one symbol short until the
     Plains is tapped, but the Plains can pay only a generic symbol (107.4b), not the {R} (107.4a),
-    so the {B} pays the Signet. (Found by ``test_autopay_brute_force --thorough``.)"""
+    so spending the {R} loses the spell. The auto-payer plans to pay the Signet from the pool, and
+    then spends the {B} (paying it with the Plains instead would be legal too). (Found by
+    ``test_autopay_brute_force --thorough``.)"""
     scenario = Scenario(2)
     plains, signet = scenario.battlefield(P0, ["Plains", "Selesnya Signet"])
     (giant,) = scenario.hand(P0, ["Hill Giant"])
@@ -413,7 +632,16 @@ def test_601_2h_paying_the_signet_from_the_pool_keeps_the_color_a_later_land_can
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
     run_script(state, cast(giant, P0))
-    autopay(state)
+    answered = autopay(state)
+    (paid,) = [(r, a) for r, a in answered if r.kind is DecisionKind.PAY_COSTS]
+    request, answer = paid
+    assert isinstance(request.space, ChooseCounts) and isinstance(answer.value, Amounts)
+    spent = {
+        option.mana.type: amount
+        for option, amount in zip(request.space.options, answer.value.amounts, strict=True)
+        if isinstance(option, ManaOption)
+    }
+    assert spent == {ManaType.BLACK: 1, R: 0}
     assert was_cast(state)
     assert tapped(state, [plains, signet]) == [True, True]
     assert state.player(P0).mana_pool == []

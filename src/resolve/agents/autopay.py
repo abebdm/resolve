@@ -85,7 +85,9 @@ from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import ForAbility, Mana, ManaRestriction, ManaType
 from resolve.values import Immutable
 
-# How many ways to pay from the pool ``choose_payment`` compares, at most.
+# How many ways to pay from the pool ``choose_payment`` compares, at most. Each of them pays the
+# innermost cost; past the limit, the best for the outer costs may be missed (no implemented
+# board comes near it: a pool has a few classes and costs are small).
 PAYMENT_LIMIT = 1000
 
 

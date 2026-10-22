@@ -213,3 +213,18 @@ def test_106_6_spendable_lists_the_restrictions_that_allow_spending_on_the_payme
     run_script(state, cast(raptor, P0))
     (payment,) = view_for(state, P0).payments
     assert payment.spendable == (DINOSAUR,)
+
+
+def test_106_6_spendable_is_judged_for_each_payment_under_way() -> None:
+    """Casting Test Raptor with Ixalli's Lorekeeper on the battlefield, P0 activates Selesnya
+    Signet: the Lorekeeper's mana may pay for the Dinosaur spell but not for the Signet's {1}
+    (the Signet isn't a Dinosaur source, 106.6), so each payment lists its own restrictions."""
+    scenario = Scenario(2)
+    _, signet, _ = scenario.battlefield(P0, ["Ixalli's Lorekeeper", "Selesnya Signet", "Forest"])
+    (raptor,) = scenario.hand(P0, ["Test Raptor"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(raptor, P0), activate(signet))
+    spell, nested = view_for(state, P1).payments
+    assert spell.purpose == ForSpell(state.stack[-1]) and spell.spendable == (DINOSAUR,)
+    assert nested.purpose == ForAbility(signet, 0) and nested.spendable == ()

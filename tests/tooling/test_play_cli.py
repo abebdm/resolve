@@ -203,3 +203,20 @@ def test_with_autopay_a_human_isnt_asked_to_pay() -> None:
         submit(state, agent.decide(view_for(state, request.player), request))
     assert len(records(state, SpellCast)) == 1
     assert output.getvalue() == ""
+
+
+def test_the_autopay_flag_reaches_the_seats(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``main`` passes ``--autopay`` (and its absence) on to ``seat_agents``."""
+    import tools.play_cli as play_cli
+
+    seen: list[bool] = []
+    real = play_cli.seat_agents
+
+    def recording(players: int, **options: object) -> list[object]:
+        seen.append(bool(options["autopay"]))
+        return real(players, **options)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(play_cli, "seat_agents", recording)
+    assert run_cli(["--random", "0", "1", "--autopay"])[0] == EXIT_OVER
+    assert run_cli(["--random", "0", "1"])[0] == EXIT_OVER
+    assert seen == [True, False]
