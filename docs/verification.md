@@ -47,12 +47,22 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
    - `Turns per game:` reaches a maximum of several tens of turns, and `Played:` shows
      thousands of lands and mana abilities, and some reversed mana ability activations
      (Selesnya Signet activated with nothing to pay its {1});
+   - `Reversed casts:` shows, for the auto-pay seats, `0 of N payable` with N above zero (the
+     auto-payer never reverses a cast it could pay), and for the random seats some payable casts
+     reversed; most attempts of both kinds are reversed, because the random agents cast what
+     they can't pay;
    - the last line gives the time; note it if it is much longer than the estimate above.
    The exact numbers depend on the engine and change from milestone to milestone; a run with the
    same code always prints the same numbers, except the timing.
 5. **The quick run** (what agents run): `uv run python tools/fuzz.py`. Under a minute: 10 games,
    with the full checks every 10 answers. The same things to check as in step 4, for 10 games.
-6. **Rules gaps:** `uv run python tools/gaps.py` lists every rule the engine doesn't implement
+6. **The auto-payer against brute force:**
+   `uv run pytest tests/agents/test_autopay_brute_force.py --thorough`. It builds 20 000 random
+   small boards and costs and, on each, searches every answer through the engine for a way to
+   pay; the auto-payer's planner must find a plan whenever the search finds a payment, and its
+   plan must cast the spell. A few minutes. Check that both tests pass (`2 passed`); a failure
+   lists each board it got wrong (the spell, the permanents, the pool and the commander).
+7. **Rules gaps:** `uv run python tools/gaps.py` lists every rule the engine doesn't implement
    yet. Check it matches what the milestone left for later (`docs/roadmap.md`).
 
 ## Optional, with the card data snapshot

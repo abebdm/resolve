@@ -140,7 +140,7 @@ drive decisions with a script.
    `answered(state, kind)`. Questions with one possible answer aren't asked, so a script lists
    only the decisions that really come: tapping the only lands that pay asks no `pay()` and no
    `counts`. Give mana with lands, or `scenario.mana(player, ...)` (units with no source, which
-   form one class each type). `scenario.stack(controller, names)` puts spells on the stack as
+   form one class each type; `restriction=` gives them a 106.6 restriction). `scenario.stack(controller, names)` puts spells on the stack as
    if cast from their owner's hand; when all players pass, the top one resolves.
    `choose_color(Color.GREEN)` answers "one mana of any color" (asked only with two or more
    colors). A mana ability with a mana cost (Selesnya Signet) asks its own
@@ -180,12 +180,13 @@ For the engine loop itself, drive it with small tasks.
 ### Run the fuzz harness
 
 `tools/fuzz.py` plays random-agent games and checks each one (`fuzz_run`'s docstring lists the
-checks). It has two presets (`QUICK` and `THOROUGH` in `tools/fuzz.py`); explicit options
+checks). On the odd seats the auto-payer (`AutoPayAgent`, "Pay mana automatically" below)
+answers the random agent's payment decisions. It has two presets (`QUICK` and `THOROUGH` in `tools/fuzz.py`); explicit options
 override either.
 
 | Run | Command (PowerShell and Unix alike) | Games | Decks | Concessions | Full checks | Time |
 |---|---|---|---|---|---|---|
-| Quick (default): agents and day-to-day work | `uv run python tools/fuzz.py` | 10 | both recipes, 8 and 2 of each basic land | 1 decision in 200 | every 10 answers | about 20 s on 4 cores |
+| Quick (default): agents and day-to-day work | `uv run python tools/fuzz.py` | 10 | both recipes, 8 and 2 of each basic land | 1 decision in 200 | every 10 answers | about 15 s on 4 cores (M2.5) |
 | Thorough: the user's milestone verification | `uv run python tools/fuzz.py --thorough` | 100 | both recipes, 8 and 4 of each basic land | 1 decision in 500 | before every decision | about 1 hour on 8 cores, 2 on 4 (measured before M2.3's spells; M2.11 measures it again) |
 
 1. Both presets cycle the player counts 2 to 6, then the formats (standard, then Commander), so
@@ -210,8 +211,10 @@ override either.
    game (min, average, max); endings by type (decked, life total, concession, draw, rules gap,
    then any other, named by the rule of the last loss); lands played, mana abilities activated
    (counted by the mana they added) and mana ability activations reversed (a mana cost that
-   couldn't be paid); spells cast, resolved and reversed; casts per card; gaps by rule; formats; games
-   per second.
+   couldn't be paid); spells cast, resolved and reversed; `Reversed casts:`, for the auto-pay
+   seats and the random seats, the reversed casts of all attempts and of the payable ones (a cast
+   that could be paid when its payment began, `PayableCasts`; the auto-pay seats should reverse
+   none); casts per card; gaps by rule; formats; games per second.
 4. A failure prints `FAILED:` with the seed and the start of a command that reproduces that one
    game, then `This run's options:`, the rest of it (decks, concessions, check interval).
    Reproduce it, write a failing test (a scenario test, or a `fuzz_game` call in `tests/fuzz/`),
@@ -250,8 +253,9 @@ copied from the snapshot into a committed JSON file. Never write card records by
 ### Play a game in the terminal
 
 `uv run python tools/play_cli.py [--players N] [--commander] [--seed S] [--random SEAT ...]
-[--deck PATH ...]`. Every seat not in `--random` is a human at the same terminal, shown only its
-own view. Type option numbers from 0 (`help` at the prompt lists the syntax; `view`, `log` and
+[--deck PATH ...] [--autopay]`. Every seat not in `--random` is a human at the same terminal,
+shown only its own view. With `--autopay` the auto-payer pays every seat's mana costs, so a
+human only chooses what to cast. Type option numbers from 0 (`help` at the prompt lists the syntax; `view`, `log` and
 `quit` also work). Without `--deck` the decks are empty, so every player loses at the first
 upkeep for having drawn from an empty library and the game is a draw. A game that reaches a
 rule the engine doesn't implement exits with status 3.
@@ -470,6 +474,36 @@ toughness, loyalty and defense, added or removed rulings, and cards missing from
 snapshot. Update those cards' definitions and tests.
 
 ---
+
+### Pay mana automatically (the auto-payer)
+
+`resolve.agents.autopay.AutoPayAgent(inner)` answers the payment decisions (601.2g
+`ACTIVATE_MANA_ABILITIES`, 601.2h `PAY_COSTS`, 106.1a `CHOOSE_COLOR` while paying, 733.1
+`REVERSE_MANA_ABILITIES`) and passes the rest to `inner`. It reads only the view:
+`PlayerView.payments` (what is being paid) and `ObjectView.abilities` (what each permanent's
+abilities make), plus the request's `for_player` (723.5a). `plan_payment(view, player, offered)`
+gives the plan; the module docstring lists its preferences.
+
+1. Wrap any agent: `AutoPayAgent(RandomAgent(seed))` (the fuzz seats), `AutoPayAgent(human)`
+   (`play_cli.py --autopay`). It is stateless, so one instance may serve several seats.
+2. A new kind of mana ability (a new `ManaEffect`, or a cost the planner can't read) needs
+   `AbilityView`/`ManaOutput` to describe it (`resolve.engine.view._mana_output`) and the
+   planner's model to cover it (`_sources`, `_output_units`); a new mana restriction needs
+   nothing: the engine evaluates it for the view (`PaymentView.spendable`).
+3. Test it on boards (`tests/agents/test_autopay.py`: `board(...)`, then `autopay(state)`), and
+   add the new sources and spells to `SOURCES`/`SPELLS` in
+   `tests/agents/test_autopay_brute_force.py`. That test searches every answer through the
+   engine on random boards and fails when the planner misses a payment the search finds. Its
+   presets: 150 boards by default (a few seconds), 20 000 with
+   `uv run pytest tests/agents/test_autopay_brute_force.py --thorough` (a few minutes). A board
+   it reports becomes a regression test in `test_autopay.py`.
+
+### Run a test's thorough preset
+
+A test whose length is a trade-off reads the `thorough` fixture (`tests/conftest.py`): its quick
+preset by default, its long one with `uv run pytest <test file> --thorough`. List each such run
+in `docs/verification.md`, and test both presets' values (`test_the_presets`). So far only
+`tests/agents/test_autopay_brute_force.py` has one.
 
 ## Still to write
 

@@ -2,21 +2,22 @@
 
 Task: implement step M2.5 of `docs/plans/m2.md` (the user's prompt in the session; PR to come).
 
-## Decisions so far (move to the docs before the PR)
+## Decisions (recorded in docs/decisions.md, 2026-10-22)
 
-- **Approved by the user (2026-10-22): payments in the view.** The plan didn't say how a
-  view-only agent learns what it is paying. `PlayerView.payments` lists the payments under way
-  (outermost first: payer, cost, purpose, and the restrictions that allow spending mana on it,
-  106.6, evaluated by the engine); `ObjectView.abilities` gives each permanent's abilities as
-  engine-computed `AbilityView`s (text, mana cost, the mana it can make now). Goes into
-  design.md §6/§9/§17.7 and decisions.md.
+- Payments under way and permanents' abilities in the view (approved by the user).
+- New "done when": payable casts reversed per kind of seat; the planner cross-checked against a
+  brute-force search (approved by the user).
 
 ## Done
 
+- View, auto-payer, fuzz seats and `PayableCasts`, `play_cli --autopay`, renderer, fuzz view
+  oracle, brute-force test with `--thorough` (`tests/conftest.py`). Docs: decisions, plan (M2.5
+  and handoff), howto, verification, design §9/§17.7, roadmap, torture tests, CLAUDE.md, README.
+
 ## In progress
 
-- Tests first: `tests/engine/test_view_abilities_and_payments.py`, `tests/agents/test_autopay.py`.
+- The `--thorough` brute-force run (20 000 boards) failed once; finding the boards it reports.
 
 ## Next
 
-- Implement the view, `resolve.agents.autopay`, `play_cli --autopay`, fuzz seats; docs; review.
+- Fix what it finds (regression tests first), full suite, quick fuzz, test-reviewer, PR.
