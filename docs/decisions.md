@@ -34,8 +34,10 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   although the auto-payer cast every payable spell. Because "payable" is judged by the planner
   itself, `tests/agents/test_autopay_brute_force.py` checks it against an exhaustive search
   through the engine (every answer to every payment decision, on copies of the state) on random
-  boards of up to four sources, a pool of up to two units (some restricted) and a spell: the
-  planner must find a plan whenever the search finds a payment, and its plan must cast the spell.
+  boards (up to six permanents, some tapped or summoning-sick, a pool of up to two units, some
+  restricted, an opponent's permanents and mana, a spell cast or a Signet activated with
+  priority): the planner must find a plan whenever the search finds a payment, and its plan must
+  complete the action. The search's completeness rests on assumptions stated in its docstring.
   150 boards by default, 20 000 with `pytest --thorough` (`tests/conftest.py`). The search found
   two faults in the first version, each now a regression test in `test_autopay.py`: a Signet's
   {1} paid with another Signet's mana wasn't planned (the planner now tries each activation
