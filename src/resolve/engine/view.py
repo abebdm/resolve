@@ -32,10 +32,49 @@ from resolve.events.base import LogEntry
 from resolve.rules import defaults
 from resolve.state.game import GameObject, GameResult, GameState
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.mana import Mana
+from resolve.data.mana_cost import ManaCost
+from resolve.state.mana import Mana, ManaRestriction, ManaType, PaymentPurpose
 from resolve.state.spell import CastChoices
 from resolve.state.turn import Phase, Step
 from resolve.values import Immutable
+
+
+@dataclass(frozen=True)
+class ManaOutput(Immutable):
+    """The mana a mana ability adds (106.1a, 106.3), as it would now: ``fixed`` units of those
+    types, or one unit of a type chosen from ``one_of`` as it resolves (106.1a; nothing at all when
+    ``one_of`` is empty and ``fixed`` too, 106.5: Command Tower without a commander, 903.4f).
+    ``restriction`` is what that mana may be spent on (106.6)."""
+
+    fixed: tuple[ManaType, ...] = ()
+    one_of: tuple[ManaType, ...] = ()
+    restriction: ManaRestriction | None = None
+
+
+@dataclass(frozen=True)
+class AbilityView(Immutable):
+    """An ability of a permanent, as every player sees it (400.2): its position among the
+    object's abilities (what an ``ActivateAbilityOption`` names), its text, the mana part of its
+    activation cost (602.2b) and, for a mana ability (605.1a), the mana it adds."""
+
+    index: int
+    text: str
+    mana_cost: ManaCost | None = None
+    mana: ManaOutput | None = None
+
+
+@dataclass(frozen=True)
+class PaymentView(Immutable):
+    """A cost being paid (601.2g-h, 602.2b), public like the spell or ability it pays for
+    (601.2a, 400.2): ``payer`` pays ``cost`` for ``purpose``. ``spendable`` lists the restrictions
+    on mana that allow spending it on this payment (106.6), among those of the payer's mana pool
+    and of the mana their permanents' mana abilities add; mana with any other restriction can't
+    be spent on it."""
+
+    payer: PlayerId
+    cost: ManaCost
+    purpose: PaymentPurpose
+    spendable: tuple[ManaRestriction, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -55,6 +94,7 @@ class ObjectView(Immutable):
     tapped: bool = False
     damage: int = 0
     spell: CastChoices | None = None
+    abilities: tuple[AbilityView, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -108,6 +148,7 @@ class PlayerView(Immutable):
     request: DecisionRequest | None  # only when ``viewer`` is the one deciding
     log: tuple[LogEntry, ...]
     result: GameResult | None
+    payments: tuple[PaymentView, ...] = ()  # outermost first
 
 
 def view_for(state: GameState, viewer: PlayerId) -> PlayerView:
