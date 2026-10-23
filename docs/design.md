@@ -662,8 +662,9 @@ Their order with replacement effects is settled in M6 (614).
 *Provisional: designed in M2's plan; built in M2 (M2.3 onward). That milestone's plan may revise
 it, with the user's sign-off. M2.3 built the variants, the permissions `FROM_HAND` and
 `COMMANDER`, `cast_options`, `variant_characteristics` and `CastSpell` (601.2a, 601.2e-i);
-variants other than normal raise their rules' gaps, and the announcement stages (modes, X,
-targets, division, hybrid) arrive in M2.6, M2.7, M4 and M9.*
+variants other than normal raise their rules' gaps. M2.6 built the targets stage (601.2c: one
+`CHOOSE_TARGETS` per instance of "target", `BecameTargets`); modes, X, division and hybrid arrive
+in M2.7, M4 and M9.*
 
 Every way of casting that changes a spell's characteristics is chosen **before** the card moves
 to the stack, and castability is checked on the chosen characteristics only (601.3e):
@@ -714,7 +715,8 @@ Built in M2.3, and moved to §5 ("Reversing illegal actions").
 *Provisional: designed in M2's plan; built in M2.3 (spells), M4 (abilities), M5 (copies). Each
 milestone's plan may revise it, with the user's sign-off. M2.3 built `GameObject.spell` and
 `CastChoices` (variant, permission, the zone cast from, total cost, mana spent) and
-`ObjectView.spell`; modes, X and targets join the record in M2.6 and M2.7.*
+`ObjectView.spell`; M2.6 added the targets (`CastChoices.targets`, per instance of "target");
+modes and X join the record in M2.7.*
 
 A spell is its card's object on the stack, with `GameObject.spell: CastChoices`. That record is
 Immutable and replaced as each choice is made. It holds every decision 707.10 copies:
@@ -808,7 +810,10 @@ Mode combinations stay enumerated, because the worst real cases are small.
 ### 17.9 Last known information and values
 
 *Provisional: designed in M2's plan; built in M2.6, extended in M4 (look-back) and M5
-(continuous values). Each milestone's plan may revise it, with the user's sign-off.*
+(continuous values). Each milestone's plan may revise it, with the user's sign-off. M2.6 built
+`LastKnown` (`resolve.state.last_known`; card-less objects record none until they exist),
+`resolve.effects.evaluation` (`Context`, `information`, `evaluate`) for resolution, and the
+values `Fixed` and `PowerOf`.*
 
 **Last known information.** `move_object` records a `LastKnown` value for an object leaving the
 battlefield or the stack, in `GameState.last_known`. The value holds the object's
@@ -848,7 +853,9 @@ aren't rewritten (612.3).
 ### 17.11 Keywords, qualities and targeting
 
 *Provisional: designed in M2's plan; built in M2.6 and M2.8. That milestone's plan may revise
-it, with the user's sign-off.*
+it, with the user's sign-off. M2.6 built targeting (`resolve.rules.targeting`,
+`legality.TargetAction`, `Targeter`); 115.5 is the rules' own prohibition there. Keywords and
+qualities are M2.8.*
 
 **Keywords and qualities.**
 
@@ -880,7 +887,9 @@ qualities are judged by: the spell's own, or the ability source's last known inf
 
 *Provisional: designed in M2's plan; built in M2.3 and M2.6. That milestone's plan may revise it,
 with the user's sign-off. M2.3 built `resolved_spell_destination` and the resolution of
-permanent spells (608.3a); instants and sorceries resolve from M2.6.*
+permanent spells (608.3a); M2.6 the resolution of instants and sorceries (`ResolveSpell`; a spell
+whose targets are all illegal goes to its owner's graveyard, 608.2b, without the destination
+function) and the 120.3 table (`DamageDealt.apply`).*
 
 **Where it goes.** `resolved_spell_destination(state, spell)` decides where an instant or sorcery
 goes as it resolves (608.2n), and is also used for a countered spell (701.6). The default is its

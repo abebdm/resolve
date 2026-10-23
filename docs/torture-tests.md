@@ -19,9 +19,9 @@ most likely to expose a design that took one.
 
 | Card | Rules it stresses | Milestone | Touches | Status |
 |---|---|---|---|---|
-| Decimate | four instances of "target"; one object chosen for several of them; no cast unless every instance has a legal target; partial fizzling (601.2c, 608.2b) | M2 | | not yet |
-| Cryptic Command | modes; countering; partial fizzling with one target gone; returning a permanent to its owner's hand (700.2, 701.6, 608.2b, 400.3) | M2 | | not yet |
-| Fiery Confluence | the same mode chosen more than once, each with its own target (700.2d) | M2 (target deck) | | not yet |
+| Decimate | four instances of "target"; one object chosen for several of them; no cast unless every instance has a legal target; partial fizzling (601.2c, 608.2b) | M2 | | M2.6 ✓ (`tests/cards/test_decimate.py`) |
+| Cryptic Command | modes; countering; partial fizzling with one target gone; returning a permanent to its owner's hand (700.2, 701.6, 608.2b, 400.3) | M2 | M2.6 ✓: partial fizzling (608.2b keeps the legal targets per instance; a spell resolves while any is legal) | not yet |
+| Fiery Confluence | the same mode chosen more than once, each with its own target (700.2d) | M2 (target deck) | M2.6 ✓: targets per instance of "target" (`CastChoices.targets`), repeated damage effects as separate `DamageDealt` events | not yet |
 | Lion's Eye Diamond | a mana ability with "activate only as an instant", sacrifice and discard costs, activated while casting, after the spell has left the hand (605.3a, 602.5e, 601.2g) | M4 | M2 payment and reversal (M2.3 ✓: a kept mana ability's results stand, `Event.redo`; M2.4 ✓: nested payments and their reversal, 602.5 conditions as `ActivatedManaAbility.activate_only_if`, where "activate only as an instant" plugs in) | not yet |
 | Fact or Fiction | an opponent separates the piles: a decision by a player other than the controller; hidden then revealed cards (608.2d, 101.4) | M4 | M2.1 `deciding_player` | not yet |
 | Panglacial Wurm | casting from the library while searching it, in the middle of a resolution (701.23, 608.2g) | M4 | M2 cast permissions | not yet |
@@ -47,7 +47,7 @@ most likely to expose a design that took one.
 | Experimental Frenzy | a permission to play from the library top and a prohibition on playing from hand (101.2, 601.3) | M5 | M2 `allowed` | not yet |
 | Bolas's Citadel | playing the top card of the library, paying life rather than mana (118.9) | M5 | M2 cost model | not yet |
 | Twincast on a kicked spell | a copy keeps every choice, kicked included (707.10) | M5 | M2 `CastChoices` | not yet |
-| Bolt Bend / Deflecting Swat | changing a spell's target (115.7) | M5 | M2 `target_problem` | not yet |
+| Bolt Bend / Deflecting Swat | changing a spell's target (115.7) | M5 | M2 `target_problem` (M2.6 ✓) | not yet |
 | Kami of the Crescent Moon | changing how many cards the draw step draws (504.1) | M5 | M2.1 `draw_step_draws` | not yet |
 | Exploration / Azusa, Lost but Seeking | extra land plays (305.2) | M5 | M2.1 `land_plays_allowed` | not yet |
 | Stranglehold | "can't search", and skipping extra turns (101.2, 500.7) | M5 | M2.1 turn structure | not yet |

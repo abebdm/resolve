@@ -41,6 +41,7 @@ from resolve.decisions.spaces import (
     ManaActivationOption,
     ManaOption,
     Option,
+    PlayerOption,
 )
 from resolve.effects.characteristics import variant_characteristics
 from resolve.engine.api import submit, view_for
@@ -74,6 +75,7 @@ from tests.casting_support import (
     activate,
     answered,
     cast,
+    choose_targets,
     counts,
     options,
     pass_,
@@ -231,14 +233,14 @@ def test_118_3a_unspent_mana_stays_and_is_announced() -> None:
 
 
 def test_601_2i_the_caster_receives_priority_after_casting() -> None:
-    """P0 passed in their upkeep; P1 casts Test Shock with {R}. P1 gets priority again (117.3c)
-    and P0's pass no longer counts (117.4)."""
+    """P0 passed in their upkeep; P1 casts Test Shock with {R}, targeting P0 (601.2c). P1 gets
+    priority again (117.3c) and P0's pass no longer counts (117.4)."""
     scenario = Scenario(2)
     (shock,) = scenario.hand(P1, ["Test Shock"])
     scenario.mana(P1, R)
     scenario.at(TurnStep.UPKEEP, priority=P1, passed=[P0])
     state = scenario.build()
-    run_script(state, cast(shock, P1))
+    run_script(state, cast(shock, P1), choose_targets(PlayerOption(P0)))
     request = request_of(state)
     assert request.player == P1 and request.kind is DecisionKind.PRIORITY_ACTION
     turn = state.turn

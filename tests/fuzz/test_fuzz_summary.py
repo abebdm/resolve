@@ -18,6 +18,7 @@ import sys
 from collections import Counter
 from collections.abc import Sequence
 from contextlib import redirect_stdout
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -28,10 +29,17 @@ from resolve.engine.api import submit, view_for
 from resolve.engine.concede import concede
 from resolve.engine.deck import Deck
 from resolve.events.base import LogEntry
+from resolve.events.damage import DamageDealt
 from resolve.events.game import PlayerLost
 from resolve.events.mana import ManaAdded
 from resolve.events.permanents import LandPlayed
-from resolve.events.spells import ActionReversed, PermanentSpellResolved, SpellCast
+from resolve.events.spells import (
+    ActionReversed,
+    PermanentSpellResolved,
+    SpellCast,
+    SpellDidNotResolve,
+    SpellResolved,
+)
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
@@ -177,7 +185,8 @@ def test_the_summary_lines() -> None:
         "Endings: decked x1, life total x0, concession x1, draw x0, rules gap x0, "
         "other (704.5c) x1.",
         "Played: 5 lands, 9 mana abilities activated, 0 reversed.",
-        "Spells: 0 cast, 0 resolved, 0 reversed.",
+        "Spells: 0 cast, 0 resolved, 0 didn't resolve, 0 reversed.",
+        "Damage: 0 dealt.",
         "Reversed casts: auto-pay seats 0 of 0 attempts, 0 of 0 payable; random seats 0 of 0, "
         "0 of 0 payable.",
         "Casts per card: none.",
@@ -193,8 +202,10 @@ def test_the_summary_counts_spells_casts_per_card_and_gaps() -> None:
         ),
         GameStats(5, 0, 1, RULES_GAP, 0, 0, (), 0, 1, "508.1"),
     ]
+    games[1] = replace(games[1], did_not_resolve=2, damage=7)
     assert summary_lines(games)[5:] == [
-        "Spells: 4 cast, 3 resolved, 5 reversed.",
+        "Spells: 4 cast, 3 resolved, 2 didn't resolve, 5 reversed.",
+        "Damage: 7 dealt.",
         "Reversed casts: auto-pay seats 0 of 0 attempts, 0 of 0 payable; random seats 5 of 9, "
         "0 of 4 payable.",
         "Casts per card: Grizzly Bears x1, Sol Ring x3.",
@@ -305,7 +316,7 @@ def test_the_summary_compares_the_auto_paying_seats_with_the_random_ones() -> No
         GameStats(10, 0, 3, RULES_GAP, 2, 5, (("Sol Ring", 3),), 2, 4, "508.1", 0, 2, 1, 3, 0),
         GameStats(5, 0, 1, DRAW, 0, 0, (("Sol Ring", 1),), 0, 2, None, 0, 0, 0, 1, 0),
     ]
-    assert summary_lines(games)[6] == (
+    assert summary_lines(games)[7] == (
         "Reversed casts: auto-pay seats 1 of 3 attempts, 0 of 2 payable; random seats 5 of 7, "
         "4 of 6 payable."
     )
@@ -356,7 +367,8 @@ def numbers(pattern: str, text: str) -> tuple[float, ...]:
 
 # The excerpt's cards, by hand: the noncreature ones, and the creatures.
 NONCREATURES = [
-    "Arcane Signet", "Command Tower", "Selesnya Signet", "Sol Ring", "Temple of the False God"
+    "Arcane Signet", "Chandra's Ignition", "Command Tower", "Decimate", "Selesnya Signet",
+    "Sol Ring", "Swords to Plowshares", "Temple of the False God",
 ]  # fmt: skip
 CREATURES = [
     "Avacyn's Pilgrim", "Grizzly Bears", "Hill Giant", "Ixalli's Lorekeeper", "Llanowar Elves",
@@ -376,12 +388,13 @@ def expected_deck(recipe: str, copies: int) -> Counter[str]:
 
 def test_the_recipes_hold_the_excerpt_minus_the_exclusions() -> None:
     assert fuzz_tool.recipe_cards("spells") == (
-        "Arcane Signet", "Command Tower", "Selesnya Signet", "Sol Ring", "Temple of the False God"
+        "Arcane Signet", "Chandra's Ignition", "Command Tower", "Decimate", "Selesnya Signet",
+        "Sol Ring", "Swords to Plowshares", "Temple of the False God",
     )  # fmt: skip
     assert fuzz_tool.recipe_cards("creatures") == (
-        "Arcane Signet", "Avacyn's Pilgrim", "Command Tower", "Grizzly Bears", "Hill Giant",
-        "Ixalli's Lorekeeper", "Llanowar Elves", "Savannah Lions", "Selesnya Signet", "Sol Ring",
-        "Temple of the False God",
+        "Arcane Signet", "Avacyn's Pilgrim", "Chandra's Ignition", "Command Tower", "Decimate",
+        "Grizzly Bears", "Hill Giant", "Ixalli's Lorekeeper", "Llanowar Elves", "Savannah Lions",
+        "Selesnya Signet", "Sol Ring", "Swords to Plowshares", "Temple of the False God",
     )  # fmt: skip
     assert fuzz_tool.FUZZ_EXCLUSIONS == {}
     for recipe in fuzz_tool.RECIPES:
@@ -420,6 +433,7 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
     answers: list[int] = []
     turns: list[int] = []
     lands = mana = cast = resolved = reversed_ = abilities_reversed = 0
+    did_not_resolve = damage = 0
     casts: Counter[str] = Counter()
     gaps: Counter[str] = Counter()
     endings: Counter[str] = Counter()
@@ -447,7 +461,11 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
                 attempts[seat] += 1
                 if isinstance(record, ActionReversed):
                     reversed_by[seat] += 1
-        resolved += sum(1 for record in records if isinstance(record, PermanentSpellResolved))
+        resolved += sum(
+            1 for record in records if isinstance(record, PermanentSpellResolved | SpellResolved)
+        )
+        did_not_resolve += sum(1 for record in records if isinstance(record, SpellDidNotResolve))
+        damage += sum(record.total for record in records if isinstance(record, DamageDealt))
         reversed_ += sum(
             1
             for record in records
@@ -464,7 +482,9 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
             continue
         assert state.result is not None
         last_loss = [record for record in records if isinstance(record, PlayerLost)][-1]
-        endings[{"704.5b": "decked", "104.3a": "concession"}[last_loss.rules[0]]] += 1
+        endings[
+            {"704.5b": "decked", "704.5a": "life total", "104.3a": "concession"}[last_loss.rules[0]]
+        ] += 1
     assert max(turns) >= 10, "some game reaches a later turn"
     assert lands > 0 and mana > 0
     assert cast > 0 and resolved > 0 and reversed_ > 0, "spells are cast, resolve and are reversed"
@@ -486,15 +506,20 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
         r"Endings: decked x(\d+), life total x(\d+), concession x(\d+), draw x(\d+), "
         r"rules gap x(\d+)\.",
         text,
-    ) == (endings["decked"], 0, endings["concession"], 0, endings["rules gap"])
+    ) == (
+        endings["decked"],
+        endings["life total"],
+        endings["concession"],
+        0,
+        endings["rules gap"],
+    )
     assert numbers(
         r"Played: (\d+) lands, (\d+) mana abilities activated, (\d+) reversed\.", text
     ) == (lands, mana, abilities_reversed)
-    assert numbers(r"Spells: (\d+) cast, (\d+) resolved, (\d+) reversed\.", text) == (
-        cast,
-        resolved,
-        reversed_,
-    )
+    assert numbers(
+        r"Spells: (\d+) cast, (\d+) resolved, (\d+) didn't resolve, (\d+) reversed\.", text
+    ) == (cast, resolved, did_not_resolve, reversed_)
+    assert numbers(r"Damage: (\d+) dealt\.", text) == (damage,)
     payable_reversed = Counter(
         "auto-pay" if player % 2 else "random"
         for result in recorder.results

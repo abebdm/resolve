@@ -10,7 +10,8 @@ always computed, never stored on the object.
 
 Abilities are the face's printed abilities (its card definition), then the abilities rules give
 it: a land with a basic land type has "{T}: Add [mana symbol]" for each one (305.6), in type-line
-order.
+order. An instant's or sorcery's spell ability (113.3a) is ``spell_ability``, apart from the
+others, so it is read (and, from M5, changed by text-changing effects) through here too.
 
 Which face counts:
 
@@ -46,6 +47,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from resolve.cards.primitives.abilities import BASIC_LAND_MANA, Ability, intrinsic_mana_ability
+from resolve.cards.primitives.spells import SpellAbility
 from resolve.data.cards import CardData
 from resolve.data.mana_cost import ManaCost
 from resolve.data.types import CardType, Color, Supertype
@@ -89,6 +91,7 @@ class Characteristics(Immutable):
     mana_cost: ManaCost | None = None
     colors: tuple[Color, ...] = ()
     mana_value: int = 0
+    spell_ability: SpellAbility | None = None
 
     def is_a(self, card_type: CardType) -> bool:
         """Whether the object has this card type (205.2)."""
@@ -199,6 +202,7 @@ def _face_characteristics(state: GameState, game_object: GameObject, index: int)
         mana_cost=face.cost,
         colors=tuple(color for color in Color if color.value in face.colors),
         mana_value=0 if face.cost is None else face.cost.mana_value(),
+        spell_ability=card.definitions[index].spell,
     )
 
 

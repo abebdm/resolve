@@ -19,6 +19,86 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-23: M2.6: a spell ability is part of the definition, read through characteristics
+- **Decision:** an instant's or sorcery's spell ability (113.3a) is `CardDefinition.spell`, a
+  `SpellAbility` (`resolve.cards.primitives.spells`) of one `Mode` (targets, effects) or, from
+  M2.7, several with a `ModeChoice`. The engine reads it only as
+  `characteristics(...).spell_ability`, apart from `abilities` (so permanents' ability views and
+  the auto-payer don't see it). Its text is written from its primitives (`Mode.text`,
+  `refs.Phrasing`: the first mention of a target in full, later ones "it"), and the three real
+  cards' texts equal their Oracle text without reminder text.
+- **Why:** the plan names `CardDefinition.spell`; reading it through `characteristics` keeps the
+  rule that everything an object is comes from one place, where M5's text-changing (612) and
+  layer 6 plug in. Writing the text from the primitives lets a card test compare the definition
+  with the Oracle text, as the mana abilities' tests do.
+- **Rules:** 113.3a, 608.2c, 612.
+- **Where:** `resolve.cards.primitives.spells`, `resolve.cards.registry`,
+  `resolve.effects.characteristics`.
+
+### 2026-10-23: M2.6: targets are chosen per instance of "target"; impossible spells aren't offered
+- **Decision:** `CastSpell`'s `ANNOUNCE` stage asks one `CHOOSE_TARGETS` (`ChooseSubset` of the
+  legal targets, `minimum` to `min(maximum, legal)`) per instance of the word "target", in the
+  order of the text; an instance whose only possible answer is every legal target isn't asked.
+  The choices join the record (`CastChoices.targets`, one tuple per instance) through one public
+  `BecameTargets` once all are chosen. `defaults.cast_options` doesn't offer a spell for which
+  some instance has fewer legal targets than its minimum (`targeting.can_choose_targets`); if
+  that happens anyway during the cast (the board changed), the cast is reversed (733).
+- **Why:** 601.2c makes such a cast illegal, so offering it could only end in a reversal (the
+  plan's "earlier stages offer only legal choices"). A subset space enforces 115.3 (no object
+  twice in one instance) by its shape, and separate instances may each choose the same object
+  (Decimate's ruling). Asking per instance keeps each question small; the instances are
+  independent while no "different targets" wording exists (M4 adds such constraints in
+  `check_answer` when a card needs them).
+- **Rules:** 601.2c, 115.3, 115.6, 733.1.
+- **Where:** `resolve.engine.casting`, `resolve.rules.targeting`, `resolve.rules.defaults`.
+
+### 2026-10-23: M2.6: 115.5 is a prohibition; 608.2b's graveyard isn't the destination function
+- **Decision:** `legality.allowed(TargetAction)`'s permissions are the kind, zone and filter
+  (115.2, 115.4; a player still in the game, 800.4a; an object whose ID still exists, so still
+  in the zone it was targeted in, 608.2b); its one rules prohibition so far is 115.5 (a spell
+  can't target itself). Shroud, hexproof and protection join the prohibitions in M2.8. A spell
+  that doesn't resolve (608.2b) goes straight to its owner's graveyard (`SpellDidNotResolve`);
+  `defaults.resolved_spell_destination` is only for a spell that resolves (608.2n) and, from
+  M2.8, a countered one (701.6a).
+- **Why:** 115.5 is a "can't" of the rules, and as a prohibition it is cited when it refuses.
+  608.2b names the graveyard itself; adventures (715.3d), Omens and buyback change only where a
+  *resolving* spell goes, and flashback-style exile is a replacement effect (M6).
+- **Rules:** 115.2, 115.4, 115.5, 608.2b, 608.2n, 701.6a, 800.4a.
+- **Where:** `resolve.rules.legality`, `resolve.engine.resolution`, `resolve.events.spells`.
+
+### 2026-10-23: M2.6: last known information is a snapshot taken as an object leaves
+- **Decision:** `move_object` stores a `LastKnown` (characteristics, controller, owner, zone,
+  tapped, damage, spell record) for every object with a card leaving the battlefield or the
+  stack, under its old ID in `GameState.last_known`; `PriorityRound` clears it when a player is
+  about to receive priority with an empty stack. `effects.evaluation.information(state, obj)`
+  gives the current information while the object exists, else this snapshot. Card-less objects
+  (copies, abilities on the stack, M4/M5) record none yet: their characteristics can't be
+  computed until they exist. Objects leaving with their owner (800.4a) record none either.
+- **Why:** an object that changes zones is a new object (400.7), so "is it still where it was
+  expected" (608.2h) is "does its ID still exist". A snapshot is taken because characteristics
+  are computed, never stored, and can't be computed after the object is gone. Clearing at the
+  empty-stack priority keeps the state small; nothing resolving can still refer to them.
+- **Rules:** 608.2h, 113.7a, 400.7.
+- **Where:** `resolve.state.last_known`, `resolve.state.game.move_object`,
+  `resolve.effects.evaluation`, `resolve.engine.priority`.
+
+### 2026-10-23: M2.6: effects give tasks; damage is one event whose apply is the 120.3 table
+- **Decision:** a spell's `Effect` gives the tasks that apply it (`Effect.tasks(state, context)`),
+  worked out when it applies; `ResolveSpell` applies the effects one at a time in order. Most
+  give one `ApplyEvents`; `DrawCards` gives the engine's `DrawCards` task (one draw at a time,
+  121.2). `DealDamage` gives one `DamageDealt` to every recipient at once (120.4b), whose `apply`
+  turns damage into its results (120.3a, 120.3e; 120.3c and 120.3h raise until counters exist),
+  reading the source as it is or as it last existed. 0 damage, 0 life and 0 cards give no task
+  (120.8, 119.10, 107.1b), and so does an effect that needs information about an illegal target
+  (608.2b).
+- **Why:** an effect may need several events in sequence (drawing) or, later, a question
+  (608.2d, 608.2g: M2.10, M4); tasks allow both, and `ResolveSpell`'s cursor makes it resume
+  where it was. Putting the results in the event's `apply` keeps them after the replacement and
+  prevention stage (614-616, M6), which acts on the proposed damage (120.4a-b).
+- **Rules:** 608.2c, 608.2h, 120.3, 120.4, 120.8, 119.10, 121.2.
+- **Where:** `resolve.cards.primitives.base.Effect`, `resolve.cards.primitives.effects`,
+  `resolve.engine.resolution.ResolveSpell`, `resolve.events.damage`.
+
 ### 2026-10-22: M2.5's "done when": payable casts reversed, judged by a cross-checked planner
 - **Decision:** the plan's M2.5 criterion "the auto-paying seats reverse far fewer casts than the
   random ones" is replaced, by the user, with: **of the casts that could be paid when their

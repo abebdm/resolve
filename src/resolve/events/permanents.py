@@ -1,5 +1,5 @@
-"""Events that change permanents: playing a land, tapping and untapping, damage removal, and
-permanents leaving for the graveyard (701.8, 704.5f, 704.5g)."""
+"""Events that change permanents: playing a land, tapping and untapping, damage removal,
+permanents leaving for the graveyard (701.8, 704.5f, 704.5g), and exiling (701.13)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from resolve.errors import EngineError
 from resolve.events.base import Event
 from resolve.state.game import move_object
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.zones import BATTLEFIELD, Zone, ZoneKind
+from resolve.state.zones import BATTLEFIELD, EXILE, Zone, ZoneKind
 
 if TYPE_CHECKING:
     from resolve.state.game import GameState
@@ -124,3 +124,19 @@ class DamageRemoved(Event):
             _permanent(state, obj)
         for obj in self.objs:
             state.objects[obj].damage = 0
+
+
+@dataclass(frozen=True, kw_only=True)
+class ObjectExiled(Event):
+    """The object ``obj`` is exiled: it moves to the exile zone from wherever it is (701.13a),
+    face up (406.3), as a new object (400.7, recorded as ``moved``). Public."""
+
+    obj: ObjectId
+    moved: ObjectId | None = None
+
+    def apply(self, state: GameState) -> Event:
+        if self.moved is not None:
+            raise EngineError("an exile is proposed without its outcome")
+        if state.object(self.obj).zone.kind is ZoneKind.EXILE:
+            raise EngineError(f"object {self.obj} is already in exile")
+        return replace(self, moved=move_object(state, self.obj, EXILE).id)

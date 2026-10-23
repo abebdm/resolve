@@ -32,6 +32,7 @@ from resolve.values import Immutable
 if TYPE_CHECKING:
     from resolve.decisions.request import DecisionRequest
     from resolve.events.base import LogEntry
+    from resolve.state.last_known import LastKnown
     from resolve.tasks import Task
 
 
@@ -144,6 +145,8 @@ class GameState:
     - ``extra_turns``: the players who will take extra turns before the normal turn order goes
       on, the next one last (500.7: the most recently created turn is taken first).
     - ``turn_direction``: 1 when turn order proceeds clockwise (103.1), -1 when it is reversed.
+    - ``last_known``: objects that left the battlefield or the stack as they last existed there,
+      by their old IDs (608.2h, ``resolve.state.last_known``).
     """
 
     config: GameConfig
@@ -167,6 +170,7 @@ class GameState:
     next_request_id: int = 1
     extra_turns: list[PlayerId] = field(default_factory=list[PlayerId])
     turn_direction: int = 1
+    last_known: dict[ObjectId, LastKnown] = field(default_factory=dict[ObjectId, "LastKnown"])
 
     def player(self, player: PlayerId) -> Player:
         """The player with this ID; ``EngineError`` if there is none."""
@@ -341,9 +345,18 @@ def move_object(
     put from the command zone into it still becomes a new object (400.10). The old object is
     removed from the game state. Nothing is changed if the move isn't allowed. Only events call
     this.
+
+    An object leaving the battlefield or the stack leaves its last known information behind
+    (``GameState.last_known``, 608.2h).
     """
+    from resolve.state.last_known import snapshot
+
     old = state.object(obj_id)
     zone = _destination(old.owner, zone, controller)
+    if old.zone.kind in (ZoneKind.BATTLEFIELD, ZoneKind.STACK) and old.card is not None:
+        # Objects without a card (copies, abilities on the stack: M4, M5) have no characteristics
+        # to compute yet, so their last known information arrives with them.
+        state.last_known[obj_id] = snapshot(state, old)
     zone_list(state, old.zone).remove(obj_id)
     del state.objects[obj_id]
     return create_object(

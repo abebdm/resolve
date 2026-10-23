@@ -14,8 +14,8 @@ What a scenario can set:
 - the number of players, the ``GameConfig`` and the seed of the game's RNG;
 - each player's life total (any integer: 0 and negative totals are states the game can reach);
 - cards in any zone: libraries, hands and graveyards (added on top, listed top first), the
-  battlefield and the stack (with a controller; on the stack, spells cast from the hand), exile
-  and the command zone;
+  battlefield and the stack (with a controller; on the stack, spells cast from the hand, with
+  their targets: ``targets``), exile and the command zone;
 - which players know a hidden card (``known_to``, 400.2);
 - which permanents are tapped (``tap``, 110.5), the damage marked on them (``damage``, 120.6)
   and the mana in each pool (``mana``, 106.4);
@@ -43,6 +43,7 @@ built state is checked with ``check_invariants`` and ``check_pure_data``.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from dataclasses import replace
 
 from resolve.agents.driver import play
 from resolve.agents.scripted import ScriptedAgent, ScriptStep
@@ -59,7 +60,7 @@ from resolve.state.game import Card, GameState, create_object, zone_list
 from resolve.state.ids import CardId, ObjectId, PlayerId
 from resolve.state.invariants import check_invariants, check_pure_data
 from resolve.state.mana import Mana, ManaRestriction, ManaType
-from resolve.state.spell import FROM_HAND, NORMAL, CastChoices
+from resolve.state.spell import FROM_HAND, NORMAL, CastChoices, Target
 from resolve.state.turn import Phase, Step, TurnState, gives_priority, segment_of
 from resolve.state.zones import BATTLEFIELD, COMMAND, EXILE, STACK, Zone, ZoneKind
 from resolve.tasks import Task
@@ -192,6 +193,16 @@ class Scenario:
                 NORMAL, FROM_HAND, Zone.hand(owner), total_cost=cost
             )
         return ids[::-1]
+
+    def targets(self, spell: ObjectId, *instances: Sequence[Target]) -> Scenario:
+        """Give the spell ``spell`` on the stack its targets (601.2c): one sequence per instance
+        of the word "target", in the order of its text."""
+        state = self._open()
+        obj = state.object(spell)
+        if obj.spell is None:
+            raise ScenarioError(f"object {spell} isn't a spell on the stack")
+        obj.spell = replace(obj.spell, targets=tuple(tuple(chosen) for chosen in instances))
+        return self
 
     def exile(self, owner: PlayerId, names: Sequence[str]) -> list[ObjectId]:
         """Put cards owned by ``owner`` into exile (406), face up."""

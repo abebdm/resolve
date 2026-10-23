@@ -60,12 +60,20 @@ from resolve.state.game import GameState, next_in_turn_order, players_in_game, t
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.invariants import invariant_violations
 from resolve.state.mana import Mana, ManaType
-from resolve.state.spell import COMMANDER, FROM_HAND, NORMAL, CastPermission
+from resolve.state.spell import (
+    COMMANDER,
+    FROM_HAND,
+    NORMAL,
+    CastPermission,
+    TargetObject,
+    TargetPlayer,
+)
 from resolve.state.turn import TURN_SEQUENCE, Phase, Segment, Step
-from resolve.state.zones import Zone, ZoneKind
+from resolve.state.zones import EXILE, Zone, ZoneKind
 from resolve.tasks import Done, Task, TaskResult
+from tests.casting_support import pass_
 from tests.game_fixtures import answer, decks, pass_until, request_of
-from tests.scenario import Scenario, run_script
+from tests.scenario import Scenario, names, run_script
 from tests.seams import (
     patch,
     patch_card,
@@ -808,3 +816,30 @@ def test_601_3_cast_permissions_decide_which_zones_cards_are_cast_from(
     record = state.objects[spell].spell
     assert record is not None and record.cast_from == Zone.graveyard(P0)
     assert state.player(P0).graveyard == []
+
+
+def test_608_2n_a_resolved_instant_goes_where_the_destination_function_says(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With ``resolved_spell_destination`` replaced by exile (as an adventure's 715.3d will),
+    a resolved Test Shock goes to exile. A spell that doesn't resolve still goes to its owner's
+    graveyard (608.2b), which this function doesn't decide."""
+    patch_object(monkeypatch, "resolved_spell_destination", lambda state, spell: EXILE)
+    scenario = Scenario(2)
+    (shock,) = scenario.stack(P0, ["Test Shock"])
+    scenario.targets(shock, [TargetPlayer(P1)])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, pass_(P0), pass_(P1))
+    assert names(state, EXILE) == ["Test Shock"] and state.player(P0).graveyard == []
+    assert state.player(P1).life == 18
+
+    scenario = Scenario(2)
+    (swords,) = scenario.stack(P0, ["Swords to Plowshares"])
+    (bears,) = scenario.graveyard(P1, ["Grizzly Bears"])
+    scenario.targets(swords, [TargetObject(bears)])  # not a permanent: illegal (115.2)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, pass_(P0), pass_(P1))
+    assert names(state, Zone.graveyard(P0)) == ["Swords to Plowshares"]
+    assert state.exile == []

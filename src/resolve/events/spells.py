@@ -1,4 +1,5 @@
-"""Events of casting and resolving spells (601.2, 608, 733)."""
+"""Events of casting and resolving spells (601.2, 608, 733): proposing and casting, targets,
+resolving or not resolving, and reversal."""
 
 from __future__ import annotations
 
@@ -12,8 +13,8 @@ from resolve.events.base import Event
 from resolve.state.game import move_object, players_in_game
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana
-from resolve.state.spell import CastChoices, CastPermission, CastVariant
-from resolve.state.zones import BATTLEFIELD, STACK, ZoneKind
+from resolve.state.spell import CastChoices, CastPermission, CastVariant, Target
+from resolve.state.zones import BATTLEFIELD, STACK, Zone, ZoneKind
 
 if TYPE_CHECKING:
     from resolve.state.game import GameState
@@ -103,3 +104,73 @@ class PermanentSpellResolved(Event):
         new = move_object(state, self.spell, BATTLEFIELD, controller=obj.controller)
         new.cast_record = record
         return replace(self, permanent=new.id)
+
+
+@dataclass(frozen=True, kw_only=True)
+class BecameTargets(Event):
+    """The objects and players chosen for the spell ``spell`` become its targets (601.2c):
+    ``targets`` holds them per instance of the word "target", in the order of its text, and
+    joins its record. Public: targets are announced (601.2c). Abilities that trigger on becoming
+    a target (ward, M4) trigger here. A spell that chose no target at all isn't targeted
+    (115.6)."""
+
+    spell: ObjectId
+    targets: tuple[tuple[Target, ...], ...]
+
+    def apply(self, state: GameState) -> None:
+        obj = state.object(self.spell)
+        if obj.spell is None or obj.zone.kind is not ZoneKind.STACK:
+            raise EngineError(f"object {self.spell} isn't a spell being cast")
+        if obj.spell.targets:
+            raise EngineError(f"spell {self.spell} already has its targets")
+        obj.spell = replace(obj.spell, targets=self.targets)
+
+
+@dataclass(frozen=True, kw_only=True)
+class SpellDidNotResolve(Event):
+    """Every target of the spell ``spell`` is illegal as it would resolve, so it doesn't resolve
+    (608.2b): it is removed from the stack and put into its owner's graveyard, as a new object
+    (400.7, recorded as ``moved``), and none of its effects happen. Public."""
+
+    spell: ObjectId
+    moved: ObjectId | None = None
+
+    def apply(self, state: GameState) -> Event:
+        if self.moved is not None:
+            raise EngineError("a spell is proposed to fail without its outcome")
+        obj = state.object(self.spell)
+        if obj.spell is None or obj.zone.kind is not ZoneKind.STACK:
+            raise EngineError(f"object {self.spell} isn't a spell on the stack")
+        moved = move_object(state, self.spell, Zone.graveyard(obj.owner))
+        return replace(self, moved=moved.id)
+
+
+@dataclass(frozen=True, kw_only=True)
+class SpellResolved(Event):
+    """The instant or sorcery spell ``spell`` has followed its instructions (608.2c); as the
+    final part of its resolution it is put into ``destination`` (608.2n: its owner's graveyard
+    by default, ``defaults.resolved_spell_destination``), as a new object (400.7, recorded as
+    ``moved``). If it left the stack while resolving it still resolved fully, and nothing moves
+    (608.2m): ``destination`` is ``None``. Public."""
+
+    spell: ObjectId
+    destination: Zone | None
+    moved: ObjectId | None = None
+
+    def apply(self, state: GameState) -> Event | None:
+        if self.moved is not None:
+            raise EngineError("a resolution is proposed without its outcome")
+        if self.destination is None:
+            if self.spell in state.objects and self.spell in state.stack:
+                raise EngineError(f"spell {self.spell} is still on the stack")
+            return None
+        obj = state.object(self.spell)
+        if obj.spell is None or obj.zone.kind is not ZoneKind.STACK:
+            raise EngineError(f"object {self.spell} isn't a spell on the stack")
+        controller = obj.controller if self.destination.kind in _CONTROLLED else None
+        moved = move_object(state, self.spell, self.destination, controller=controller)
+        return replace(self, moved=moved.id)
+
+
+# Zones whose objects have a controller (108.4, 110.2): a spell put there keeps its controller.
+_CONTROLLED = (ZoneKind.BATTLEFIELD, ZoneKind.STACK)

@@ -16,10 +16,17 @@ from resolve.cards.definitions import (
     mana_creatures,
     mana_rocks,
     nonbasic_lands,
+    removal,
     vanilla_creatures,
 )
+from resolve.cards.primitives.effects import DealDamage, Destroy, DrawCards
+from resolve.cards.primitives.refs import TargetRef
+from resolve.cards.primitives.spells import Mode, SpellAbility
+from resolve.cards.primitives.targets import ANY_TARGET, target
+from resolve.cards.primitives.values import Fixed
 from resolve.cards.registry import CardDefinition, CardRegistry
 from resolve.data.cards import CardDatabase, parse_card, parse_oracle_cards
+from resolve.data.types import CardType
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer, DecisionRequest
 from resolve.decisions.spaces import (
@@ -50,6 +57,21 @@ DAYBREAKER = DeckCard(
 )
 
 
+# The fixture spells' definitions (tests only).
+# Test Shock deals 2 damage to any target.
+TEST_SHOCK = CardDefinition(
+    "Test Shock",
+    spell=SpellAbility((Mode((ANY_TARGET,), (DealDamage(Fixed(2), (TargetRef(0),)),)),)),
+)
+# Draw a card.
+TEST_PONDER = CardDefinition("Test Ponder", spell=SpellAbility((Mode((), (DrawCards(),)),)))
+# Destroy target artifact.
+TEST_SHATTER = CardDefinition(
+    "Test Shatter",
+    spell=SpellAbility((Mode((target(CardType.ARTIFACT),), (Destroy((TargetRef(0),)),)),)),
+)
+
+
 def registry() -> CardRegistry:
     """A registry implementing the fixture cards used by these decks."""
     return CardRegistry(
@@ -69,11 +91,11 @@ def database() -> CardDatabase:
 
 def scenario_registry() -> CardRegistry:
     """``registry()`` plus the other basic lands, the vanilla creatures, the mana rocks, mana
-    creatures and nonbasic lands, the fixture instant, sorcery, split card, nonbasic Forest,
-    Test Raptor, Test Mox ({0}) and Test Ember ({1}{C}): the scenario builder's default."""
+    creatures and nonbasic lands, the removal spells, the fixture instants (Test Shock, Test
+    Shatter), sorcery (Test Ponder), split card, nonbasic Forest, Test Raptor, Test Mox ({0}),
+    Test Ember ({1}{C}), Test Wall (0/4), Test Totem (an enchantment) and Test Artifact Land
+    Creature: the scenario builder's default."""
     extra = (
-        "Test Shock",
-        "Test Ponder",
         "Test Spark",
         "Test Frost",
         "Test Nonbasic Forest",
@@ -85,6 +107,9 @@ def scenario_registry() -> CardRegistry:
         "Test Raptor",
         "Test Mox",
         "Test Ember",
+        "Test Wall",
+        "Test Totem",
+        "Test Artifact Land Creature",
     )
     lands = (basic_lands.PLAINS, basic_lands.ISLAND, basic_lands.SWAMP, basic_lands.MOUNTAIN)
     creatures = vanilla_creatures.DEFINITIONS
@@ -96,6 +121,10 @@ def scenario_registry() -> CardRegistry:
             *mana_rocks.DEFINITIONS,
             *(d for d in mana_creatures.DEFINITIONS if d is not mana_creatures.LLANOWAR_ELVES),
             *nonbasic_lands.DEFINITIONS,
+            *removal.DEFINITIONS,
+            TEST_SHOCK,
+            TEST_PONDER,
+            TEST_SHATTER,
             *map(CardDefinition, extra),
         ]
     )
@@ -108,6 +137,8 @@ def scenario_database() -> CardDatabase:
     extra += [fx.STAR_CREATURE, fx.VEHICLE, fx.SOL_RING, fx.ARCANE_SIGNET, fx.SELESNYA_SIGNET]
     extra += [fx.COMMAND_TOWER, fx.TEMPLE_OF_THE_FALSE_GOD, fx.AVACYNS_PILGRIM]
     extra += [fx.IXALLIS_LOREKEEPER, fx.TEST_RAPTOR, fx.TEST_MOX, fx.TEST_EMBER]
+    extra += [fx.SWORDS_TO_PLOWSHARES, fx.CHANDRAS_IGNITION, fx.DECIMATE, fx.TEST_WALL]
+    extra += [fx.TEST_SHATTER, fx.TEST_TOTEM, fx.TEST_ARTIFACT_LAND_CREATURE]
     lands = [fx.PLAINS, fx.ISLAND, fx.SWAMP, fx.MOUNTAIN]
     return CardDatabase(parse_oracle_cards([*fx.default_cards(), *lands, *extra]))
 

@@ -6,18 +6,18 @@
       "oracle_cards": {
         "type": "oracle_cards",
         "file": "oracle-cards.jsonl.gz",
-        "updated_at": "2026-10-21T09:01:59.312+00:00",
-        "size": 25068270,
-        "sha256": "4f0593ac82360766842eefc8c754137f86a70c0f5eb2a0b9bd8fe378a028aaf6",
-        "source": "https://data.scryfall.io/oracle-cards/oracle-cards-20261021090159.jsonl.gz"
+        "updated_at": "2026-10-22T21:01:55.797+00:00",
+        "size": 25090657,
+        "sha256": "b567f5160c618730bf3a227a5496979917e4f6979687af32059097ce9e620d1f",
+        "source": "https://data.scryfall.io/oracle-cards/oracle-cards-20261022210155.jsonl.gz"
       },
       "rulings": {
         "type": "rulings",
         "file": "rulings.jsonl.gz",
-        "updated_at": "2026-10-21T09:00:33.096+00:00",
+        "updated_at": "2026-10-22T21:00:34.247+00:00",
         "size": 5422271,
-        "sha256": "dbdd208a470e2da8832ac8d7fae8196b20a73572a7d836b87b030fa715d4fe96",
-        "source": "https://data.scryfall.io/rulings/rulings-20261021090033.jsonl.gz"
+        "sha256": "dc1f51b2948054ac696f83b390dcd54ce733d1e20f5cebb0db53c0979ea4c422",
+        "source": "https://data.scryfall.io/rulings/rulings-20261022210034.jsonl.gz"
       }
     }
   },
@@ -204,6 +204,59 @@
       "colors": [],
       "color_identity": [],
       "keywords": []
+    },
+    {
+      "object": "card",
+      "oracle_id": "b1544f21-7e98-461b-aed5-e748b0168c52",
+      "name": "Swords to Plowshares",
+      "layout": "normal",
+      "mana_cost": "{W}",
+      "cmc": 1.0,
+      "type_line": "Instant",
+      "oracle_text": "Exile target creature. Its controller gains life equal to its power.",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": []
+    },
+    {
+      "object": "card",
+      "oracle_id": "f61680da-606e-4d16-b0a0-361aa5210901",
+      "name": "Chandra's Ignition",
+      "layout": "normal",
+      "mana_cost": "{3}{R}{R}",
+      "cmc": 5.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Target creature you control deals damage equal to its power to each other creature and each opponent.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": []
+    },
+    {
+      "object": "card",
+      "oracle_id": "a4e5693f-12a0-451e-818d-d6efc7b4ed25",
+      "name": "Decimate",
+      "layout": "normal",
+      "mana_cost": "{2}{R}{G}",
+      "cmc": 4.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Destroy target artifact, target creature, target enchantment, and target land. (You can't cast this spell unless you have legal choices for all its targets.)",
+      "colors": [
+        "G",
+        "R"
+      ],
+      "color_identity": [
+        "G",
+        "R"
+      ],
+      "keywords": []
     }
   ],
   "rulings": [
@@ -255,6 +308,41 @@
       "source": "wotc",
       "published_at": "2023-11-10",
       "comment": "A \"Dinosaur source\" is any object with the creature type Dinosaur. This means you could spend the mana to activate an ability of a Dinosaur you control or a Dinosaur card in your hand or graveyard, for example."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "a4e5693f-12a0-451e-818d-d6efc7b4ed25",
+      "source": "wotc",
+      "published_at": "2022-12-08",
+      "comment": "You must choose a legal target for each target required by Decimate. However, if a permanent has multiple card types, it may be chosen as the target for more than one instance of the word \"target.\" For example, you could cast Decimate targeting an artifact creature, an enchantment, and a land."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "b1544f21-7e98-461b-aed5-e748b0168c52",
+      "source": "wotc",
+      "published_at": "2022-12-08",
+      "comment": "Use the power of the creature from when it was last on the battlefield to determine how much life is gained."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "f61680da-606e-4d16-b0a0-361aa5210901",
+      "source": "wotc",
+      "published_at": "2015-06-22",
+      "comment": "If the creature becomes an illegal target by the time Chandra's Ignition tries to resolve (perhaps because another player controls it or it's left the battlefield), Chandra's Ignition won't resolve and none of its effects will happen. No damage will be dealt."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "f61680da-606e-4d16-b0a0-361aa5210901",
+      "source": "wotc",
+      "published_at": "2015-06-22",
+      "comment": "Use the power of the target creature as Chandra's Ignition resolves to determine how much damage it deals to each other creature and each opponent."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "f61680da-606e-4d16-b0a0-361aa5210901",
+      "source": "wotc",
+      "published_at": "2015-06-22",
+      "comment": "The creature is the source of the damage, not Chandra's Ignition. For example, Chandra's Ignition can have a white creature deal damage to a creature with protection from red."
     }
   ]
 }

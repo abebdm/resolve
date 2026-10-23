@@ -26,7 +26,7 @@ from resolve.cards.definitions import vanilla_creatures
 from resolve.cards.registry import CardRegistry
 from resolve.data.cards import CardDatabase, parse_oracle_cards
 from resolve.decisions.kinds import DecisionKind
-from resolve.decisions.spaces import ChooseSubset, ManaActivationOption
+from resolve.decisions.spaces import ChooseSubset, ManaActivationOption, PlayerOption
 from resolve.engine.concede import concede
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.cards import CardDiscarded
@@ -51,6 +51,7 @@ from tests.casting_support import (
     activate_with_priority,
     answered,
     cast,
+    choose_targets,
     pass_,
     records,
     reverse,
@@ -159,14 +160,15 @@ def test_733_1_reversal_after_a_library_action_is_an_engine_error() -> None:
 
 
 def test_733_2_passes_before_a_reversed_cast_still_count() -> None:
-    """P0 passes in their upkeep; P1 tries to cast Test Shock with no mana, and it's reversed;
-    P1 still has priority, and when they pass the upkeep ends (117.4: P0's pass counts)."""
+    """P0 passes in their upkeep; P1 tries to cast Test Shock (targeting P0, 601.2c) with no
+    mana, and it's reversed; P1 still has priority, and when they pass the upkeep ends (117.4:
+    P0's pass counts)."""
     scenario = Scenario(2)
     scenario.library(P0, ["Forest"])
     (shock,) = scenario.hand(P1, ["Test Shock"])
     scenario.at(Step.UPKEEP, number=3)
     state = scenario.build()
-    run_script(state, pass_(P0), cast(shock, P1))
+    run_script(state, pass_(P0), cast(shock, P1), choose_targets(PlayerOption(P0)))
     request = request_of(state)
     assert request.player == P1 and request.kind is DecisionKind.PRIORITY_ACTION
     turn = state.turn
