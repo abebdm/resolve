@@ -22,14 +22,18 @@ import pytest
 from resolve.agents.scripted import choose
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import CastSpellOption, ChooseOne, PlayLandOption
+from resolve.events.permanents import PermanentDestroyed
+from resolve.events.spells import SpellResolved
 from resolve.rules import defaults, legality
 from resolve.rules.legality import Action, CastAction, Permission, PlayLand, Prohibition
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.spell import COMMANDER, FROM_HAND, NORMAL
+from resolve.state.spell import COMMANDER, FROM_HAND, NORMAL, TargetObject
 from resolve.state.turn import Phase, Step
+from resolve.state.zones import Zone
+from tests.casting_support import pass_, records
 from tests.game_fixtures import request_of
-from tests.scenario import Scenario, run_script
+from tests.scenario import Scenario, names, run_script
 from tests.seams import patch, patch_permissions
 
 P0, P1 = PlayerId(0), PlayerId(1)
@@ -233,3 +237,52 @@ def test_101_2_an_effects_permission_alone_allows_a_cast(monkeypatch: pytest.Mon
     space = request_of(state).space
     assert isinstance(space, ChooseOne)
     assert CastSpellOption(bears, NORMAL, FROM_HAND) in space.options
+
+
+def test_701_8a_a_permanent_on_the_battlefield_may_be_destroyed() -> None:
+    """Destroying is a legality question (``DestroyAction``): the rules allow destroying a
+    permanent (701.8a), nothing else."""
+    scenario = Scenario(2)
+    (ring,) = scenario.battlefield(P1, ["Sol Ring"])
+    (card,) = scenario.hand(P1, ["Sol Ring"])
+    state = scenario.build()
+    assert legality.allowed(state, legality.DestroyAction(P0, ring)).allowed
+    assert not legality.allowed(state, legality.DestroyAction(P0, card)).allowed
+
+
+def test_101_2_a_prohibition_on_destroying_keeps_the_permanent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test Shatter ("Destroy target artifact") resolves against Sol Ring while a prohibition
+    forbids destroying it (as indestructible will, 702.12b, M2.8): Sol Ring stays, and the spell
+    still resolved (the target was legal)."""
+    scenario = Scenario(2)
+    (spell,) = scenario.stack(P0, ["Test Shatter"])
+    (ring,) = scenario.battlefield(P1, ["Sol Ring"])
+    scenario.targets(spell, [TargetObject(ring)])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    original = legality.prohibitions
+
+    def forbid(state: GameState, action: Action) -> tuple[Prohibition, ...]:
+        if isinstance(action, legality.DestroyAction):
+            return (Prohibition("702.12b", "it is indestructible"),)
+        return original(state, action)
+
+    monkeypatch.setattr(legality, "prohibitions", forbid)
+    run_script(state, pass_(P0), pass_(P1))
+    assert ring in state.battlefield and records(state, PermanentDestroyed) == []
+    assert [r.spell for r in records(state, SpellResolved)] == [spell]
+
+
+def test_701_8a_test_shatter_destroys_an_artifact() -> None:
+    scenario = Scenario(2)
+    (spell,) = scenario.stack(P0, ["Test Shatter"])
+    (ring,) = scenario.battlefield(P1, ["Sol Ring"])
+    scenario.targets(spell, [TargetObject(ring)])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, pass_(P0), pass_(P1))
+    (destroyed,) = records(state, PermanentDestroyed)
+    assert destroyed.obj == ring and destroyed.rules == ("701.8a",)
+    assert names(state, Zone.graveyard(P1)) == ["Sol Ring"]

@@ -12,8 +12,10 @@ from resolve.decisions.spaces import (
     ChooseOne,
     ColorOption,
     ManaActivationOption,
+    ObjectOption,
     Option,
     PassOption,
+    PlayerOption,
 )
 from resolve.engine.payment import PAY
 from resolve.events.base import AnswerRecord
@@ -58,6 +60,13 @@ def counts(*amounts: int) -> Step:
 def reverse(*activations: ManaActivationOption) -> Choose:
     """733.1: which of the mana abilities activated during the action to reverse."""
     return choose(*activations, kind=DecisionKind.REVERSE_MANA_ABILITIES)
+
+
+def choose_targets(*targets: ObjectId | PlayerOption, player: PlayerId | None = None) -> Choose:
+    """601.2c: the targets for one instance of the word "target": objects by ID, players as
+    ``PlayerOption``."""
+    chosen = [t if isinstance(t, PlayerOption) else ObjectOption(t) for t in targets]
+    return choose(*chosen, player=player, kind=DecisionKind.CHOOSE_TARGETS)
 
 
 def choose_color(color: Color) -> Choose:
