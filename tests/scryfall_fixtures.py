@@ -301,6 +301,8 @@ TEST_RAPTOR = vanilla("Test Raptor", "{1}{G}", 2.0, "Dinosaur", ("2", "2"), "G")
 
 # Invented cards for the other kinds of mana symbol (107.4).
 TEST_MOX = spell("Test Mox", "{0}", 0.0, "Artifact", [], "")
+# {C} in a cost needs colorless mana (107.4c); no implemented card has it yet.
+TEST_EMBER = spell("Test Ember", "{1}{C}", 2.0, "Artifact", [], "")
 TEST_GOLD = spell("Test Gold", "{W}{B}", 2.0, "Sorcery", ["W", "B"])
 TEST_GROWTH = spell("Test Growth", "{X}{G}", 1.0, "Sorcery", ["G"])
 TEST_HYBRID = spell("Test Hybrid", "{2/W}{2/W}", 4.0, "Sorcery", ["W"])

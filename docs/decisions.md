@@ -19,6 +19,56 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-22: M2.5's "done when": payable casts reversed, judged by a cross-checked planner
+- **Decision:** the plan's M2.5 criterion "the auto-paying seats reverse far fewer casts than the
+  random ones" is replaced, by the user, with: **of the casts that could be paid when their
+  payment began, the auto-paying seats reverse none and the random seats reverse some.**
+  `tools.fuzz.PayableCasts` judges each cast at its first payment decision: payable if that
+  decision is `PAY_COSTS` (601.2h asks only when the pool pays in two or more ways) or if the
+  auto-payer's planner finds a plan for its `ACTIVATE_MANA_ABILITIES`; a cast asking nothing is
+  payable if it is cast. The summary line `Reversed casts:` gives, per kind of seat, the reversed
+  casts of all attempts and of the payable ones; `test_a_default_run_...` checks the criterion.
+- **Why:** the inner random agent casts whatever priority offers, mostly with no way to pay
+  (in 30 sample games about nine attempts in ten), and every seat reverses those, so the raw
+  reversal counts were about equal (44 of 45 against 61 of 66 in the quick run's first games)
+  although the auto-payer cast every payable spell. Because "payable" is judged by the planner
+  itself, `tests/agents/test_autopay_brute_force.py` checks it against an exhaustive search
+  through the engine (every answer to every payment decision, on copies of the state) on random
+  boards (up to six permanents, some tapped or summoning-sick, a pool of up to two units, some
+  restricted, an opponent's permanents and mana, a spell cast or a Signet activated with
+  priority): the planner must find a plan whenever the search finds a payment, and its plan must
+  complete the action. The search's completeness rests on assumptions stated in its docstring.
+  150 boards by default, 20 000 with `pytest --thorough` (`tests/conftest.py`). The search found
+  two faults in the first version, each now a regression test in `test_autopay.py`: a Signet's
+  {1} paid with another Signet's mana wasn't planned (the planner now tries each activation
+  order of the Signets it plans); and paying a Signet's {1} from a pool holding the spell's
+  {R} could spend the {R}, because `choose_payment` can't see the lands the outer payment will
+  still tap (it now keeps colored symbols payable first: a later land pays any generic symbol,
+  but a colored one only with its color).
+- **Rules:** 601.2g-h, 605.3a, 602.2b, 106.6, 107.4a-c, 118.3, 733.1.
+- **Where:** `tools/fuzz.py` (`PayableCasts`, `FuzzResult.payable_reversed`, `GameStats`,
+  `summary_lines`), `resolve.agents.autopay` (`_try`), `docs/plans/m2.md` (M2.5).
+
+### 2026-10-22: Payments under way and permanents' abilities are in the view
+- **Decision (approved by the user):** `PlayerView.payments` lists the payments under way,
+  outermost first (a spell's total cost, then the mana cost of a mana ability activated while
+  paying it): payer, cost, purpose, and `spendable`, the mana restrictions (among the payer's
+  pool and the mana their permanents' abilities add) that allow spending on it, evaluated by the
+  engine. `ObjectView.abilities` gives each permanent's abilities as `AbilityView`s: index, text,
+  the mana part of the cost and the mana it adds now (`ManaOutput`: fixed types, or a choice of
+  types such as Command Tower's identity colors, and the restriction). Tasks say what they are
+  paying through `Task.payment_under_way()`; `view_for` walks the task stack from the bottom.
+- **Why:** an agent sees only views (rule 4), and the plan didn't say how the auto-payer learns
+  the cost it pays: `PAY_COSTS` gives only the total, the spell's record gets its total cost only
+  at 601.2i, a nested request names only the Signet, and `ManaRestriction.allows` needs the
+  state. All of it is public (400.2: the battlefield and the stack; 601.2a, 602.2a: what is being
+  cast or activated is announced), so every player may see it. The alternatives were a payment
+  context on the request (only the deciding player would see it) and giving the auto-payer the
+  state (breaks rule 4).
+- **Rules:** 400.2, 601.2a, 601.2f-h, 602.2a-b, 605.3a, 106.6, 903.4.
+- **Where:** `resolve.engine.view`, `resolve.tasks.Task.payment_under_way`
+  (`CastSpell`, `ActivateManaAbility`), design.md §9 and §17.7.
+
 ### 2026-10-21: Identical mana in 733.1's dependency check
 - **Decision:** when a player reverses some of the mana abilities activated during an illegal
   action, 733.1 refuses to reverse one "unless mana from those abilities ... was spent on another

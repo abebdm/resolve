@@ -136,6 +136,10 @@ class ActivateManaAbility(Task):
             raise EngineError("ActivateManaAbility hasn't begun")
         return self.ability
 
+    def payment_under_way(self) -> PayCosts | None:
+        """602.2b: the ability's mana cost, while it is being paid."""
+        return self.payment if self.stage is ActivationStage.PAY else None
+
     def _payment(self) -> PayCosts:
         if self.payment is None:
             raise EngineError("ActivateManaAbility is paying without a payment")

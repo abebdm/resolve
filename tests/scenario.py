@@ -58,7 +58,7 @@ from resolve.state.config import GameConfig
 from resolve.state.game import Card, GameState, create_object, zone_list
 from resolve.state.ids import CardId, ObjectId, PlayerId
 from resolve.state.invariants import check_invariants, check_pure_data
-from resolve.state.mana import Mana, ManaType
+from resolve.state.mana import Mana, ManaRestriction, ManaType
 from resolve.state.spell import FROM_HAND, NORMAL, CastChoices
 from resolve.state.turn import Phase, Step, TurnState, gives_priority, segment_of
 from resolve.state.zones import BATTLEFIELD, COMMAND, EXILE, STACK, Zone, ZoneKind
@@ -239,9 +239,14 @@ class Scenario:
         state.objects[obj].damage = amount
         return self
 
-    def mana(self, player: PlayerId, *mana: ManaType) -> Scenario:
-        """Add unspent mana of these types to ``player``'s mana pool (106.4), with no source."""
-        self._open().player(player).mana_pool.extend(Mana(mana_type) for mana_type in mana)
+    def mana(
+        self, player: PlayerId, *mana: ManaType, restriction: ManaRestriction | None = None
+    ) -> Scenario:
+        """Add unspent mana of these types to ``player``'s mana pool (106.4), with no source and
+        ``restriction`` (106.6), if any."""
+        self._open().player(player).mana_pool.extend(
+            Mana(mana_type, None, restriction) for mana_type in mana
+        )
         return self
 
     def card_of(self, obj: ObjectId) -> CardId:

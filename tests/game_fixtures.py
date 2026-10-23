@@ -69,8 +69,8 @@ def database() -> CardDatabase:
 
 def scenario_registry() -> CardRegistry:
     """``registry()`` plus the other basic lands, the vanilla creatures, the mana rocks, mana
-    creatures and nonbasic lands, the fixture instant, sorcery, split card, nonbasic Forest and
-    Test Raptor: the scenario builder's default."""
+    creatures and nonbasic lands, the fixture instant, sorcery, split card, nonbasic Forest,
+    Test Raptor, Test Mox ({0}) and Test Ember ({1}{C}): the scenario builder's default."""
     extra = (
         "Test Shock",
         "Test Ponder",
@@ -83,6 +83,8 @@ def scenario_registry() -> CardRegistry:
         "Test Star",
         "Test Wagon",
         "Test Raptor",
+        "Test Mox",
+        "Test Ember",
     )
     lands = (basic_lands.PLAINS, basic_lands.ISLAND, basic_lands.SWAMP, basic_lands.MOUNTAIN)
     creatures = vanilla_creatures.DEFINITIONS
@@ -105,7 +107,7 @@ def scenario_database() -> CardDatabase:
     extra += [fx.GRIZZLY_BEARS, fx.SAVANNAH_LIONS, fx.HILL_GIANT, fx.ZERO_TOUGHNESS]
     extra += [fx.STAR_CREATURE, fx.VEHICLE, fx.SOL_RING, fx.ARCANE_SIGNET, fx.SELESNYA_SIGNET]
     extra += [fx.COMMAND_TOWER, fx.TEMPLE_OF_THE_FALSE_GOD, fx.AVACYNS_PILGRIM]
-    extra += [fx.IXALLIS_LOREKEEPER, fx.TEST_RAPTOR]
+    extra += [fx.IXALLIS_LOREKEEPER, fx.TEST_RAPTOR, fx.TEST_MOX, fx.TEST_EMBER]
     lands = [fx.PLAINS, fx.ISLAND, fx.SWAMP, fx.MOUNTAIN]
     return CardDatabase(parse_oracle_cards([*fx.default_cards(), *lands, *extra]))
 

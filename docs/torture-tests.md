@@ -39,7 +39,7 @@ most likely to expose a design that took one.
 | Volrath's Shapeshifter | an object with the full text of another card (613, 612) | M5 | M2 definitions as data | not yet |
 | Spellweaver Helix | linked abilities; casting a copy; matching names (607, 707.12) | M5 | M2 card-less spell objects | not yet |
 | Painter's Servant + Grindstone | color-changing in layer 5; repeated mill (613, 701.17) | M5 | | not yet |
-| Mycosynth Lattice + March of the Machines | type-changing, 0 toughness, spending mana as though any type (613, 118.14) | M5 | M2 payment check | not yet |
+| Mycosynth Lattice + March of the Machines | type-changing, 0 toughness, spending mana as though any type (613, 118.14) | M5 | M2 payment check; the auto-payer's planner (M2.5) matches mana to symbols by 107.4 alone, so M5 gives the view what "as though any type" allows and the planner reads it | not yet |
 | Necrotic Ooze | gaining the activated abilities of cards in graveyards (613) | M5 | | not yet |
 | Dark Depths + Thespian's Stage | a copy with an exception; the legend rule (707.9, 704.5j) | M5 | | not yet |
 | Platinum Angel + Abyssal Persecutor | "you can't lose" and "your opponents can't win" (104.3, 101.2) | M5 | M2.1 `can_lose_game`, M2 `allowed` | not yet |

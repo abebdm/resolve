@@ -30,6 +30,7 @@ from resolve.state.ids import ObjectId, PlayerId
 
 if TYPE_CHECKING:
     from resolve.decisions.request import DecisionRequest
+    from resolve.engine.payment import PayCosts
     from resolve.state.game import GameState
 
 
@@ -56,6 +57,11 @@ class Task(ABC):
     def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
         """Continue with the validated answer to the decision this task asked for."""
         raise EngineError(f"{type(self).__name__} doesn't ask for decisions")
+
+    def payment_under_way(self) -> PayCosts | None:
+        """The cost this task is paying now (601.2g-h, 602.2b), if any; the views show it
+        (``PlayerView.payments``). The default: none."""
+        return None
 
 
 @dataclass(frozen=True)

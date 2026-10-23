@@ -39,8 +39,10 @@ the engine to read mana costs (every kind of mana symbol), and so a card's color
 added the typed words a text-changing effect will need and an answer space for paying mana; games
 still play exactly as before. Its fourth step added casting (choosing how to cast, paying mana,
 undoing an illegal cast) and resolving permanent spells. Its fifth step added the mana
-abilities of the target decks' mana sources and summoning sickness. **Next:** a helper that pays
-mana automatically for players and the random test players (M2.5). Details: "Current status" in [`CLAUDE.md`](CLAUDE.md).
+abilities of the target decks' mana sources and summoning sickness. Its sixth step added a
+helper that pays mana automatically, for people at the terminal (`--autopay`) and for half the
+random test players. **Next:** targets and the first spells that do something when they resolve
+(M2.6). Details: "Current status" in [`CLAUDE.md`](CLAUDE.md).
 
 Resolve is unofficial Fan Content permitted under the Wizards of the Coast Fan Content Policy. It
 is not approved or endorsed by Wizards. Portions of the materials used are property of Wizards of

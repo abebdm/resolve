@@ -52,10 +52,10 @@ from resolve.decisions.spaces import (
     PlayerOption,
     PlayLandOption,
 )
-from resolve.engine.view import ObjectView, PlayerView
+from resolve.engine.view import ObjectView, PaymentView, PlayerView
 from resolve.events.base import AnswerRecord, LogEntry
 from resolve.state.ids import ObjectId
-from resolve.state.mana import describe_mana
+from resolve.state.mana import ForAbility, ForSpell, describe_mana
 from resolve.state.spell import describe_variant
 from resolve.state.zones import ZoneKind
 
@@ -124,6 +124,16 @@ def _named(view: PlayerView, obj: ObjectId) -> str:
     return describe_object(known) if known is not None else f"object #{obj}"
 
 
+def _payment(view: PlayerView, payment: PaymentView) -> str:
+    """``"{1}{G} for Grizzly Bears #4 (player 0)"`` (601.2g-h, 602.2b)."""
+    match payment.purpose:
+        case ForSpell(spell=spell):
+            paid_for = _named(view, spell)
+        case ForAbility(source=source, ability=ability):
+            paid_for = f"ability {ability} of {_named(view, source)}"
+    return f"{payment.cost.text} for {paid_for} (player {payment.payer})"
+
+
 def describe_turn(view: PlayerView) -> str | None:
     """``"Turn 3, player 1's turn: draw step; player 0 has priority."``, or ``None``."""
     turn = view.turn
@@ -181,6 +191,8 @@ def render_view(view: PlayerView, *, recent_log: int = RECENT_LOG) -> str:
     turn = describe_turn(view)
     if turn is not None:
         lines.append(turn)
+    if view.payments:
+        lines.append("Paying: " + "; ".join(_payment(view, p) for p in view.payments) + ".")
     if view.result is not None:
         if view.result.is_draw:
             lines.append("Game over: a draw.")

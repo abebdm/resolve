@@ -226,6 +226,8 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
 - [x] Mana abilities beyond basic lands (605): "any color in your commander's color identity",
   activation conditions, mana costs on mana abilities, creatures' mana abilities and summoning
   sickness (302.6), restricted mana (Ixalli's Lorekeeper) (M2.4).
+- [x] The agent-side auto-payer (design.md §6: convenience outside the engine), and the public
+  payments and abilities in the views it plans from (M2.5).
 - [ ] The first primitives: damage, destroy, exile, draw, life gain, counter target spell.
 - [ ] Cards: 14 from the target decks, 8 keyword example cards and the torture tests Decimate
   and Cryptic Command (`docs/plans/m2.md` §7).
@@ -493,6 +495,18 @@ completes a step (CLAUDE.md, "Documentation requirements").
   Avacyn's Pilgrim, Ixalli's Lorekeeper (`mana_creatures`), Command Tower, Temple of the False
   God (`nonbasic_lands`); the fixture decks use the real Llanowar Elves. The fuzz recipes hold
   them all; the summary counts reversed mana ability activations apart from reversed casts.
+- **Done (M2.5, the agent-side auto-payer):** `resolve.agents.autopay` (`AutoPayAgent`,
+  `plan_payment`, `choose_payment`, `choose_color`): answers 601.2g-h, 106.1a and 733.1 payment
+  decisions from the view alone, for `request.for_player` (723.5a); the views' public payment
+  information: `PlayerView.payments` (`PaymentView`, from `Task.payment_under_way`, with the
+  restrictions the engine says allow spending, 106.6) and `ObjectView.abilities` (`AbilityView`,
+  `ManaOutput`) in `resolve.engine.view`; `play_cli.py --autopay` (`seat_agents`); the renderer's
+  `Paying:` line. The fuzz harness's odd seats are `AutoPayAgent(RandomAgent)`; `PayableCasts`
+  judges each cast at its first payment decision, and the summary's `Reversed casts:` line
+  compares the seats on payable casts; the view oracle checks abilities and payments. Tests:
+  `tests/agents/test_autopay.py`, `tests/agents/test_autopay_brute_force.py` (the planner
+  against a search through the engine; `pytest --thorough`, `tests/conftest.py`),
+  `tests/engine/test_view_abilities_and_payments.py`.
 
 ---
 
@@ -639,7 +653,7 @@ earlier milestones must leave room for every row in this map.
 | 720 | Omen Cards | M2 | S | casting and resolution; 720.4 normal characteristics M2.2 ✓ (plan corrected: not a 109.3 gap); 720.3 variant gap M2.3 ✓ |
 | 721 | Station Cards | M4 | S |  |
 | 722 | Preparation Cards | M5 | S | 722.4 normal characteristics M2.2 ✓ (plan corrected); 722.3 variant gap M2.3 ✓ |
-| 723 | Controlling Another Player | M9 (seam M2.1 ✓) | X | `deciding_player`, `DecisionRequest.for_player`, `knows_identity`, `concede(by=)`: seams in place |
+| 723 | Controlling Another Player | M9 (seam M2.1 ✓) | X | `deciding_player`, `DecisionRequest.for_player`, `knows_identity`, `concede(by=)`: seams in place; the auto-payer pays with `for_player`'s resources (723.5a, M2.5 ✓) |
 | 724 | Ending Turns and Phases | M3 (turn frame M2.1 ✓) | X | the turn frame is `TakeTurn` on the task stack (`turn_frame_index`) |
 | 725 | The Monarch | M7 | S | D (Regal Behemoth) |
 | 726 | The Initiative | M7 | S |  |

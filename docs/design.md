@@ -410,6 +410,13 @@ choose…".
   (`PlayerLeftGame`) names the objects that left from the other zones and counts the library.
 - The library order is hidden from everyone, except where knowledge was gained (for example by scry).
 - The event log is filtered per viewer by each entry's visibility.
+- **Public game information an agent needs to act** is in the view, computed by the engine:
+  each permanent's abilities (`ObjectView.abilities`: index, text, the mana part of the cost
+  and the mana a mana ability adds now, 400.2), and the payments under way
+  (`PlayerView.payments`, outermost first: payer, cost, purpose and the mana restrictions that
+  allow spending on it, 601.2a, 601.2f-h, 106.6). Tasks report what they are paying through
+  `Task.payment_under_way()`. The auto-payer (§6, "Convenience lives outside the engine") plans
+  from these alone (M2.5; docs/decisions.md, 2026-10-22).
 - Agents (including the AI) only ever see `PlayerView`s. This is required for fair networked play and
   for AI with imperfect information.
 
@@ -756,7 +763,9 @@ sign-off.*
 *Provisional: designed in M2's plan; built in M2.2 to M2.4. That milestone's plan may revise it,
 with the user's sign-off. M2.3 built `PayCosts` (`resolve.engine.payment`) for generic, colored
 and {C} mana; the action being paid for holds it in a field (§5, "Reversing illegal actions").
-M2.4 added mana abilities' mana costs and restricted mana (106.6).*
+M2.4 added mana abilities' mana costs and restricted mana (106.6). M2.5 shows the payments
+under way in the view (`PlayerView.payments`, §9), for the agent-side auto-payer
+(`resolve.agents.autopay`).*
 
 `PayCosts(payer, cost, purpose)` pays the costs of spells (`ForSpell`), of abilities
 (`ForAbility`) and later of effects. Its decisions go through `deciding_player`, and it uses only
