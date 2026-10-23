@@ -309,6 +309,33 @@ TEST_HYBRID = spell("Test Hybrid", "{2/W}{2/W}", 4.0, "Sorcery", ["W"])
 TEST_TWO_TONE = spell("Test Two-Tone", "{1}{W/U}{W/U}", 3.0, "Sorcery", ["W", "U"])
 TEST_PHYREXIAN = spell("Test Phyrexian", "{1}{W/P}{W/P}", 3.0, "Sorcery", ["W"])
 TEST_SNOW = spell("Test Snow", "{S}{S}", 2.0, "Snow Artifact", [])
+# Real removal spells of M2.6 (Oracle text from the 2026-10-22 snapshot, tools/excerpts/cards.json).
+SWORDS_TO_PLOWSHARES = spell(
+    "Swords to Plowshares", "{W}", 1.0, "Instant", ["W"],
+    "Exile target creature. Its controller gains life equal to its power.",
+)  # fmt: skip
+CHANDRAS_IGNITION = spell(
+    "Chandra's Ignition", "{3}{R}{R}", 5.0, "Sorcery", ["R"],
+    "Target creature you control deals damage equal to its power to each other creature and each "
+    "opponent.",
+)  # fmt: skip
+DECIMATE = spell(
+    "Decimate", "{2}{R}{G}", 4.0, "Sorcery", ["G", "R"],
+    "Destroy target artifact, target creature, target enchantment, and target land. (You can't "
+    "cast this spell unless you have legal choices for all its targets.)",
+)  # fmt: skip
+
+# Invented cards for targets, damage and destruction (M2.6).
+TEST_WALL = vanilla("Test Wall", "{1}{W}", 2.0, "Wall", ("0", "4"), "W")
+TEST_SHATTER = spell("Test Shatter", "{1}{R}", 2.0, "Instant", ["R"], "Destroy target artifact.")
+TEST_TOTEM = spell("Test Totem", "{1}", 1.0, "Enchantment", [], "")
+TEST_ARTIFACT_LAND_CREATURE: dict[str, Any] = {
+    **vanilla("Test Artifact Land Creature", "", 0.0, "Construct", ("1", "1"), "C"),
+    "type_line": "Artifact Land Creature — Construct",
+    "colors": [],
+    "color_identity": [],
+}
+
 # Mana costs that don't follow 107.4 (an Un-set half-mana symbol): loads, but can't be played.
 TEST_HALF = spell("Test Half", "{HW}", 0.5, "Creature — Elf", ["W"])
 

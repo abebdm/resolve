@@ -1,9 +1,12 @@
 """Abilities (113) that card definitions are built from.
 
-So far: activated mana abilities (605.1a), such as basic lands' intrinsic "{T}: Add [mana]"
-(305.6, ``intrinsic_mana_ability``), with costs (``resolve.cards.primitives.costs``), an effect
-(``AddMana``, ``AddManaOfAnyColor``) and an optional activation condition (602.5,
-``resolve.cards.primitives.conditions``).
+So far:
+
+- activated mana abilities (605.1a), such as basic lands' intrinsic "{T}: Add [mana]" (305.6,
+  ``intrinsic_mana_ability``), with costs (``resolve.cards.primitives.costs``), an effect
+  (``AddMana``, ``AddManaOfAnyColor``) and an optional activation condition (602.5,
+  ``resolve.cards.primitives.conditions``);
+- spell abilities (113.3a): ``resolve.cards.primitives.spells``.
 """
 
 from __future__ import annotations
@@ -80,3 +83,4 @@ class ActivatedManaAbility(Ability):
 def intrinsic_mana_ability(land_type: str) -> ActivatedManaAbility:
     """305.6: a land with this basic land type's intrinsic "{T}: Add [mana symbol]"."""
     return ActivatedManaAbility((TapSelfCost(),), AddMana((BASIC_LAND_MANA[land_type],)))
+

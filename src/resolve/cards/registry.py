@@ -15,6 +15,7 @@ import pkgutil
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
+from resolve.cards.primitives.spells import SpellAbility
 from resolve.cards.primitives.base import Ability
 from resolve.data.cards import CardData
 from resolve.values import Immutable
@@ -28,6 +29,8 @@ class CardDefinition(Immutable):
     - ``abilities``: its printed abilities (113), built from primitives
       (``resolve.cards.primitives``), in printed order. Abilities a rule gives an object, such
       as a basic land type's mana ability (305.6), aren't listed: ``characteristics`` adds them.
+    - ``spell``: an instant's or sorcery's spell ability (113.3a), what it does as it resolves;
+      ``None`` for other cards.
 
     More fields (costs, static effects, ...) arrive with later primitives. A definition is
     deeply immutable data (``Immutable``): game states store the definitions of their cards,
@@ -36,6 +39,7 @@ class CardDefinition(Immutable):
 
     name: str
     abilities: tuple[Ability, ...] = ()
+    spell: SpellAbility | None = None
 
 
 class RegistryError(Exception):

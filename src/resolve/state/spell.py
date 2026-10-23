@@ -12,7 +12,9 @@ effect that allows it (601.3), with the zone it allows casting from and its timi
 - ``CastChoices``: the record a spell carries on the stack (``GameObject.spell``): its variant,
   permission and the zone it was cast from (601.2a), then the total cost locked in (601.2f) and the
   mana spent (601.2h). A permanent spell's record passes to the permanent it becomes, as
-  ``GameObject.cast_record`` (400.7d). Modes, X and targets join it with their steps (M2.6, M2.7).
+  ``GameObject.cast_record`` (400.7d). Its targets (601.2c) are ``TargetObject`` and
+  ``TargetPlayer`` values, one tuple per instance of the word "target"; modes and X join it in
+  M2.7.
 
 Everything here is Immutable: a record is replaced, never changed, as each choice is made.
 """
@@ -23,7 +25,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from resolve.data.mana_cost import ManaCost
-from resolve.state.ids import ObjectId
+from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana
 from resolve.state.zones import Zone, ZoneKind
 from resolve.values import Immutable
@@ -150,6 +152,31 @@ COMMANDER = CastPermission("903.8", ZoneKind.COMMAND)
 """A player may cast a commander they own from the command zone (903.8)."""
 
 
+# --- Targets -----------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class TargetObject(Immutable):
+    """An object chosen as a target (115.1): a permanent (115.2), or a spell on the stack.
+
+    An object that changes zones becomes a new object (400.7), so a target that left the zone it
+    was in when it was targeted no longer exists under this ID (608.2b).
+    """
+
+    object: ObjectId
+
+
+@dataclass(frozen=True)
+class TargetPlayer(Immutable):
+    """A player chosen as a target (115.1)."""
+
+    player: PlayerId
+
+
+Target = TargetObject | TargetPlayer
+"""An object or player chosen as a target (115.1)."""
+
+
 # --- The record of a spell ---------------------------------------------------------------------
 
 
@@ -159,6 +186,9 @@ class CastChoices(Immutable):
 
     - ``variant``, ``permission``: as chosen before the card moved (601.2a, 601.3e).
     - ``cast_from``: the zone the card came from (601.2a).
+    - ``targets``: the targets chosen (601.2c), one tuple per instance of the word "target", in
+      the order the spell's text has them (``TargetSpec``); a tuple may be empty when the
+      instance allows zero targets (115.6). Empty until chosen, and for a spell without targets.
     - ``total_cost``: the mana part of the total cost, locked in (601.2f); ``None`` until then.
     - ``mana_spent``: the mana spent to pay it (601.2h, 400.7d).
     """
@@ -168,3 +198,9 @@ class CastChoices(Immutable):
     cast_from: Zone
     total_cost: ManaCost | None = None
     mana_spent: tuple[Mana, ...] = ()
+    targets: tuple[tuple[Target, ...], ...] = ()
+
+    @property
+    def targeted(self) -> bool:
+        """Whether the spell is targeted: at least one target was chosen (115.6)."""
+        return any(self.targets)

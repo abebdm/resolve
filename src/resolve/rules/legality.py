@@ -10,9 +10,11 @@ Every legality question is an ``Action`` value. ``allowed(state, action)`` works
 4. Any applicable prohibition wins (101.2). Adding or removing abilities is not a prohibition
    (101.2a).
 
-Playing a land and casting a spell exist so far; targeting, countering and destroying join
-them from M2.6 to M2.8, attacking and blocking in M3, and activating abilities in M4 (until then
-a mana ability's own conditions decide: 602.5 in ``ActivatedManaAbility.can_activate``). A
+Playing a land, casting a spell, targeting (``TargetAction``, through
+``resolve.rules.targeting.target_problem``) and destroying (``DestroyAction``) exist so far;
+countering joins them in M2.8, attacking and blocking in M3, and activating abilities in M4
+(until then a mana ability's own conditions decide: 602.5 in
+``ActivatedManaAbility.can_activate``). A
 function that asks the question calls ``legality.allowed`` through the module, so a test or an
 effect that replaces ``permissions`` or ``prohibitions`` is obeyed everywhere.
 """
@@ -22,12 +24,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from resolve.cards.primitives.targets import TargetSpec
 from resolve.data.types import CardType
-from resolve.effects.characteristics import characteristics
-from resolve.errors import EngineError
+from resolve.effects.characteristics import Characteristics, characteristics
+from resolve.errors import EngineError, NotImplementedRule
 from resolve.rules import defaults
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.spell import CastPermission, CastVariant
+from resolve.state.spell import CastPermission, CastVariant, Target
 from resolve.state.zones import Zone
 from resolve.values import Immutable
 
@@ -64,6 +67,35 @@ class CastAction(Action):
 
 
 @dataclass(frozen=True)
+class Targeter(Immutable):
+    """A spell or ability choosing or checking its targets (115.1): ``obj``, the spell (or, from
+    M4, the ability) on the stack, or the card about to become one; ``controller``, who controls
+    it (109.5); ``characteristics``, which protection and "hexproof from" judge it by (the
+    spell's own, or an ability's source's last known information, 113.7a; 702.16b, 702.11d)."""
+
+    controller: PlayerId
+    obj: ObjectId
+    characteristics: Characteristics
+
+
+@dataclass(frozen=True)
+class TargetAction(Action):
+    """``targeter`` chooses (601.2c) or keeps (608.2b) ``candidate`` as a target for the instance
+    of "target" ``spec``. ``player`` is the targeter's controller."""
+
+    targeter: Targeter
+    spec: TargetSpec
+    candidate: Target
+
+
+@dataclass(frozen=True)
+class DestroyAction(Action):
+    """The permanent ``obj`` is destroyed (701.8a) by an effect ``player`` controls."""
+
+    obj: ObjectId
+
+
+@dataclass(frozen=True)
 class Permission(Immutable):
     """A rule or effect that allows an action: the CR ``rule`` and what it lets the player do."""
 
@@ -95,6 +127,10 @@ def permissions(state: GameState, action: Action) -> tuple[Permission, ...]:
         return _land_play_permissions(state, action)
     if isinstance(action, CastAction):
         return _cast_permissions(state, action)
+    if isinstance(action, TargetAction):
+        return _target_permissions(state, action)
+    if isinstance(action, DestroyAction):
+        return _destroy_permissions(state, action)
     raise EngineError(f"no rule of legality covers {action!r}")
 
 
@@ -104,6 +140,12 @@ def prohibitions(state: GameState, action: Action) -> tuple[Prohibition, ...]:
         return _land_play_prohibitions(state, action)
     if isinstance(action, CastAction):
         # 101.2: "can't cast" effects (Kutzil's Flanker, M5; split second, M9) forbid it here.
+        return ()
+    if isinstance(action, TargetAction):
+        # Shroud, hexproof and protection (702.18a, 702.11b-d, 702.16b) forbid it here (M2.8).
+        return ()
+    if isinstance(action, DestroyAction):
+        # Indestructible (702.12b) forbids it here (M2.8).
         return ()
     raise EngineError(f"no rule of legality covers {action!r}")
 
@@ -128,6 +170,10 @@ def _basis(action: Action) -> tuple[str, ...]:
         return ("305.1", "116.2a")
     if isinstance(action, CastAction):
         return ("601.3", "117.1a")
+    if isinstance(action, TargetAction):
+        return ("115.1", "115.2")
+    if isinstance(action, DestroyAction):
+        return ("701.8a",)
     return ("101.2",)
 
 
@@ -171,3 +217,11 @@ def _cast_permissions(state: GameState, action: CastAction) -> tuple[Permission,
     return (
         Permission(action.permission.rule, f"cast a spell from the {action.permission.zone.value}"),
     )
+
+
+def _target_permissions(state: GameState, action: TargetAction) -> tuple[Permission, ...]:
+    raise NotImplementedRule("115.2: whether a target is legal (M2.6, stub)")
+
+
+def _destroy_permissions(state: GameState, action: DestroyAction) -> tuple[Permission, ...]:
+    raise NotImplementedRule("701.8a: whether a permanent can be destroyed (M2.6, stub)")
