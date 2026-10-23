@@ -84,7 +84,9 @@ def test_120_3_damage_marks_creatures_and_costs_players_life() -> None:
     assert state.battlefield == [giant, wall] and state.objects[wall].damage == 3
     assert state.objects[giant].damage == 0
     assert [p.life for p in state.players] == [20, 17, 17]
-    assert names(state, Zone.graveyard(P0)) == ["Grizzly Bears", "Chandra's Ignition"]
+    # The spell went to the graveyard as it finished resolving (608.2n), before the state-based
+    # actions destroyed the Bears (704.3): the Bears are on top (listed last).
+    assert names(state, Zone.graveyard(P0)) == ["Chandra's Ignition", "Grizzly Bears"]
 
 
 def test_chandras_ignition_illegal_target_means_no_damage() -> None:
@@ -125,7 +127,7 @@ def test_120_8_zero_damage_isnt_dealt() -> None:
 
 
 def test_chandras_ignition_targets_only_your_creatures() -> None:
-    """"Target creature you control": only P0's creatures are offered, not P1's."""
+    """ "Target creature you control": only P0's creatures are offered, not P1's."""
     scenario = Scenario(2)
     (ignition,) = scenario.hand(P0, ["Chandra's Ignition"])
     giant, bears = scenario.battlefield(P0, ["Hill Giant", "Grizzly Bears"])

@@ -25,8 +25,8 @@ from resolve.cards.primitives.spells import Mode, SpellAbility
 from resolve.cards.primitives.targets import ANY_TARGET, target
 from resolve.cards.primitives.values import Fixed
 from resolve.cards.registry import CardDefinition, CardRegistry
-from resolve.data.types import CardType
 from resolve.data.cards import CardDatabase, parse_card, parse_oracle_cards
+from resolve.data.types import CardType
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer, DecisionRequest
 from resolve.decisions.spaces import (

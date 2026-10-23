@@ -160,9 +160,11 @@ def cast_options(state: GameState, player: PlayerId) -> tuple[CastSpellOption, .
     The variants come from the card's layout: a half of a split card (709.3), either face of a
     modal double-faced card (712.11b), an omen's normal part or its Omen (720.3), an adventurer
     or its Adventure (715.3); every other card is cast normally. Each is checked on its own
-    characteristics (601.3e). The cost isn't checked: an unpayable cast is reversed (733).
+    characteristics (601.3e). The cost isn't checked: an unpayable cast is reversed (733). A
+    spell that couldn't choose a legal target for every instance of the word "target" isn't
+    offered (601.2c, ``targeting.can_choose_targets``): casting it could only be reversed.
     """
-    from resolve.rules import legality
+    from resolve.rules import legality, targeting
 
     candidates = [*state.player(player).hand, *state.command]
     for other in state.players:
@@ -176,7 +178,9 @@ def cast_options(state: GameState, player: PlayerId) -> tuple[CastSpellOption, .
         for permission in cast_permissions(state, player, obj):
             for variant in _layout_variants(state, obj):
                 action = legality.CastAction(player, obj, variant, permission)
-                if legality.allowed(state, action).allowed:
+                if legality.allowed(state, action).allowed and targeting.can_choose_targets(
+                    state, player, obj, variant
+                ):
                     options.append(CastSpellOption(obj, variant, permission))
     return tuple(options)
 

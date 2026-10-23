@@ -15,8 +15,8 @@ import pkgutil
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 
-from resolve.cards.primitives.spells import SpellAbility
 from resolve.cards.primitives.base import Ability
+from resolve.cards.primitives.spells import SpellAbility
 from resolve.data.cards import CardData
 from resolve.values import Immutable
 

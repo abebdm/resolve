@@ -48,7 +48,67 @@ The "{T}: Add [mana symbol]" a land has for each basic land type. Never put it i
 - **Example:** Forest (`resolve.cards.definitions.basic_lands`), whose definition has no
   abilities.
 
+### `SpellAbility`, `Mode`, `ModeChoice` (`resolve.cards.primitives.spells`)
+An instant's or sorcery's spell ability, in `CardDefinition.spell`: one `Mode` (its instances of
+"target" and its effects, in the order written) or, for a modal spell, several with a
+`ModeChoice` (chosen from M2.7; until then a modal spell raises the 700.2 gap). The engine reads it
+as `characteristics(...).spell_ability`. `text` is written from the primitives.
+- **Rules:** 113.3a, 115.1a, 601.2c, 608.2c; 700.2 (`ModeChoice(minimum, maximum, repeatable)`).
+- **Parameters:** `Mode(targets: tuple[TargetSpec, ...], effects: tuple[Effect, ...], cost=None)`
+  (`cost`: room for spree); `SpellAbility(modes, choose: ModeChoice | None = None)`.
+- **Example:** Swords to Plowshares (`resolve.cards.definitions.removal`):
+  `SpellAbility((Mode((target(CardType.CREATURE),), (Exile((TargetRef(0),)),
+  GainLife(ControllerOf(TargetRef(0)), PowerOf(TargetRef(0))))),))`.
+
 ## Effects
+
+Spells' effects are `Effect` values (`resolve.cards.primitives.base`): `tasks(state, context)`
+gives the engine tasks that apply the effect now, with its references and values evaluated as it
+applies (608.2h, `resolve.effects.evaluation`); nothing when there is nothing to do.
+`describe(phrasing)` writes its text. `ResolveSpell` applies them one at a time, in order
+(608.2c). Mana abilities' effects (`AddMana`, `AddManaOfAnyColor`) give events directly.
+
+### `DealDamage` (`resolve.cards.primitives.effects`)
+"[Source] deals [amount] damage to [recipients]": one `DamageDealt` to every recipient at once,
+each object or player once; only creatures, planeswalkers and battles (120.1a) and players still in
+the game. 0 (or less, 107.1b) deals nothing (120.8). The event's `apply` gives the results (120.3a
+life loss, 120.3e marked damage; 120.3c and 120.3h raise until counters exist, M4); infect, wither,
+lifelink and deathtouch plug in there.
+- **Rules:** 120.1, 120.1a, 120.2b, 120.3, 120.4b, 120.8, 107.1b, 113.7a.
+- **Parameters:** `amount: Value`, `to: tuple[TargetRef | EachCreature | EachOpponent, ...]`,
+  `source: ObjectRef = ThisObject()` (the object that deals the damage: the spell, or "target
+  creature you control").
+- **Example:** Chandra's Ignition: `DealDamage(PowerOf(TargetRef(0)), (EachCreature(except_=
+  TargetRef(0)), EachOpponent()), source=TargetRef(0))`; Test Shock (tests):
+  `DealDamage(Fixed(2), (TargetRef(0),))` with `ANY_TARGET`.
+
+### `Destroy` (`resolve.cards.primitives.effects`)
+"Destroy [objects]": every permanent referred to, once each, that `legality.allowed(DestroyAction)`
+permits (indestructible will refuse, M2.8), to its owner's graveyard at once.
+- **Rules:** 701.8a, 702.12b (from M2.8).
+- **Parameters:** `objects: tuple[ObjectRef, ...]`.
+- **Example:** Decimate: `Destroy(tuple(TargetRef(i) for i in range(4)))`; Test Shatter (tests).
+
+### `Exile` (`resolve.cards.primitives.effects`)
+"Exile [objects]": every object referred to moves to exile from wherever it is, at once, as a new
+object (`ObjectExiled`).
+- **Rules:** 701.13a, 406.3, 400.7.
+- **Parameters:** `objects: tuple[ObjectRef, ...]`.
+- **Example:** Swords to Plowshares: `Exile((TargetRef(0),))`.
+
+### `GainLife` (`resolve.cards.primitives.effects`)
+"[Player] gains [amount] life": each player referred to (still in the game) gains it
+(`LifeGained`); 0 or less is no event.
+- **Rules:** 119.3, 119.10, 107.1b.
+- **Parameters:** `player: PlayerRef`, `amount: Value`.
+- **Example:** Swords to Plowshares: `GainLife(ControllerOf(TargetRef(0)), PowerOf(TargetRef(0)))`.
+
+### `DrawCards` (`resolve.cards.primitives.effects`)
+"[Player] draws [count] cards": each player referred to draws, one card at a time (the engine's
+`DrawCards` task).
+- **Rules:** 121.1, 121.2, 107.1b.
+- **Parameters:** `count: Value = Fixed(1)`, `player: PlayerRef = You()`.
+- **Example:** Test Ponder (tests): `DrawCards()`, "Draw a card."
 
 ### `AddMana` (`resolve.cards.primitives.effects`)
 "Add [mana]": the controller adds these mana units, with the ability's object as their source.
@@ -115,7 +175,37 @@ for no mana cost (202.3a, not the same as `{0}`) or a cost that doesn't follow 1
 
 ## Targets and filters
 
-*None yet.*
+### `TargetSpec`, `ANY_TARGET`, `target(*card_types, you_control=False)` (`resolve.cards.primitives.targets`)
+One instance of the word "target": the permanents (`objects: ObjectFilter`), players (`players:
+PlayerFilter`) and spells (`spells: SpellFilter`) it may choose, and how many (`minimum` to
+`maximum`, distinct). Legality is only ever decided by `resolve.rules.targeting.target_problem`.
+- **Rules:** 115.1, 115.2 (permanents unless it says otherwise), 115.3, 115.4 (`ANY_TARGET`:
+  creature, planeswalker or battle, or player), 115.6 (`minimum=0`), 601.2c.
+- **Example:** Decimate: `(target(CardType.ARTIFACT), target(CardType.CREATURE),
+  target(CardType.ENCHANTMENT), target(CardType.LAND))`; Chandra's Ignition:
+  `target(CardType.CREATURE, you_control=True)`.
+
+### `ObjectFilter`, `PlayerFilter`, `SpellFilter` (`resolve.cards.primitives.targets`)
+What a target may be: a permanent with at least one of `card_types` (none: any), controlled by
+the spell's controller if `controller=You()`; a player, or only an opponent
+(`opponents_only=True`); a spell on the stack. `matches(state, x, you)`; `text`.
+- **Rules:** 115.1, 115.2, 109.5, 102.2.
+- **Example:** `ObjectFilter((CardType.CREATURE,), You())` ("creature you control").
+
+### References: `ThisObject`, `TargetRef`, `You`, `ControllerOf`, `EachCreature`, `EachOpponent` (`resolve.cards.primitives.refs`)
+What a definition points at, resolved by `resolve.effects.evaluation` as the effect applies:
+the spell itself (201.5); the legal targets of instance `index` (608.2b); its controller (109.5);
+an object's controller, from last known information if it left (608.2h); every creature on the
+battlefield but `except_` ("each other creature"); each opponent still in the game (800.4a).
+- **Rules:** 201.5, 109.5, 108.4, 115.10, 608.2b, 608.2h, 800.4a.
+- **Example:** Swords to Plowshares's `ControllerOf(TargetRef(0))`.
+
+### Values: `Fixed`, `PowerOf` (`resolve.cards.primitives.values`)
+Numbers as expressions, evaluated by `resolve.effects.evaluation.evaluate` when the effect applies:
+a printed number (never negative); an object's power (last known if it left; nothing for an
+illegal target). X (M2.7), counts and "greatest power" (M2.10) join them.
+- **Rules:** 107.1b, 208.1, 608.2h, 608.2b.
+- **Example:** `PowerOf(TargetRef(0))` in Swords to Plowshares and Chandra's Ignition.
 
 ## Triggers
 

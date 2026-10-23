@@ -362,4 +362,3 @@ def move_object(
     return create_object(
         state, card=old.card, owner=old.owner, zone=zone, controller=controller, bottom=bottom
     )
-

@@ -16,17 +16,10 @@ Task: implement step M2.6 of `docs/plans/m2.md` (user prompt in the session; bra
   Creature); `Scenario.targets`; excerpt updated (14 cards).
 
 ## In progress
-- Tests first written and run: 41 fail for the right reason (no target choice, the 608.2c gap,
-  the stubs): tests/rules/test_115_targets.py (all 11), test_608_resolving.py (6 new),
-  tests/cards/test_swords_to_plowshares.py (6), test_chandras_ignition.py (7),
-  test_decimate.py (5), test_608_2h_last_known_information.py (forgetting), test_101_2_legality
-  (3 destroy), test_spell_primitives (Destroy), the destination seam test. Passing at once
-  (written with their code): primitive texts/filters/evaluate, the event tests, LKI recording.
-
-## Next
-- Wire: `CastSpell` targets stage, `cast_options` 601.2c filter, `ResolveTopOfStack` +
-  `ResolveSpell`, `target_problem` permissions, last_known clearing in `PriorityRound`, view/text
-  targets, fuzz stats (damage, didn't resolve), docs, test review, PR.
+- Implementation done (targets stage, cast_options filter, ResolveSpell, target_problem,
+  last_known clearing, text renderer, fuzz stats); docs updated (decisions, primitives, howto,
+  roadmap, torture tests, design §17, verification, plan handoff, CLAUDE.md, README).
+- Running the full suite; then the test-reviewer, then the PR.
 
 ## Decisions not yet in the docs
 - The spell ability is `CardDefinition.spell`, read through `Characteristics.spell_ability`.

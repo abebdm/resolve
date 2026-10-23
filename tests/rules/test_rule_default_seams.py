@@ -60,12 +60,19 @@ from resolve.state.game import GameState, next_in_turn_order, players_in_game, t
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.invariants import invariant_violations
 from resolve.state.mana import Mana, ManaType
-from resolve.state.spell import COMMANDER, FROM_HAND, NORMAL, CastPermission, TargetObject, TargetPlayer
+from resolve.state.spell import (
+    COMMANDER,
+    FROM_HAND,
+    NORMAL,
+    CastPermission,
+    TargetObject,
+    TargetPlayer,
+)
 from resolve.state.turn import TURN_SEQUENCE, Phase, Segment, Step
 from resolve.state.zones import EXILE, Zone, ZoneKind
 from resolve.tasks import Done, Task, TaskResult
-from tests.game_fixtures import answer, decks, pass_until, request_of
 from tests.casting_support import pass_
+from tests.game_fixtures import answer, decks, pass_until, request_of
 from tests.scenario import Scenario, names, run_script
 from tests.seams import (
     patch,

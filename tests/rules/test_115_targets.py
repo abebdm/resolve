@@ -48,7 +48,7 @@ from resolve.events.spells import BecameTargets, SpellDidNotResolve
 from resolve.rules import legality, targeting
 from resolve.rules.legality import Targeter, Verdict
 from resolve.state.game import GameState
-from resolve.state.ids import PlayerId
+from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import ManaType
 from resolve.state.spell import Target, TargetObject, TargetPlayer
 from resolve.state.turn import Phase
@@ -129,16 +129,14 @@ def test_601_2c_a_spell_with_no_legal_target_isnt_offered() -> None:
     isn't offered; Chandra's Ignition ("target creature you control") isn't offered while only
     an opponent controls a creature. Test Shock always can target a player."""
     scenario = Scenario(2)
-    swords, ignition, shock = scenario.hand(
-        P0, ["Swords to Plowshares", "Chandra's Ignition", "Test Shock"]
-    )
+    _, _, shock = scenario.hand(P0, ["Swords to Plowshares", "Chandra's Ignition", "Test Shock"])
     scenario.graveyard(P0, ["Grizzly Bears"])
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
     assert [o.object for o in casts(state)] == [shock]
 
     scenario = Scenario(2)
-    swords, ignition, shock = scenario.hand(
+    swords, _, shock = scenario.hand(
         P0, ["Swords to Plowshares", "Chandra's Ignition", "Test Shock"]
     )
     scenario.battlefield(P1, ["Savannah Lions"])
@@ -181,9 +179,7 @@ def test_601_2c_becoming_a_target_is_logged_publicly() -> None:
     run_script(state, cast(shock, P0), choose_targets(PlayerOption(P1)))
     view = view_for(state, P1)
     logged = [entry.record for entry in view.log]
-    assert any(
-        isinstance(r, BecameTargets) and r.targets == ((TargetPlayer(P1),),) for r in logged
-    )
+    assert any(isinstance(r, BecameTargets) and r.targets == ((TargetPlayer(P1),),) for r in logged)
     assert not any(
         isinstance(r, AnswerRecord) and r.kind is DecisionKind.CHOOSE_TARGETS for r in logged
     )
@@ -216,9 +212,28 @@ def _pair_registry() -> tuple[CardDatabase, CardRegistry]:
 
 
 def test_115_3_one_instance_cant_choose_the_same_object_twice() -> None:
-    """"Destroy two target artifacts": the two must be different artifacts (115.3), so an answer
-    naming one twice is refused, and with a single artifact the spell isn't offered."""
+    """ "Destroy two target artifacts": the two must be different artifacts (115.3), so an answer
+    naming one twice is refused; with exactly two artifacts both are chosen without asking, and
+    with a single artifact the spell isn't offered."""
     database, registry = _pair_registry()
+    scenario = Scenario(2, database=database, registry=registry)
+    (twin,) = scenario.hand(P0, ["Test Twin Shatter"])
+    ring, signet, other = scenario.battlefield(P1, ["Sol Ring", "Arcane Signet", "Sol Ring"])
+    scenario.mana(P0, R)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(twin, P0))
+    assert target_options(state) == (ObjectOption(ring), ObjectOption(signet), ObjectOption(other))
+    space = request_of(state).space
+    assert isinstance(space, ChooseSubset) and (space.minimum, space.maximum) == (2, 2)
+    with pytest.raises(InvalidAnswer):
+        submit(state, answer(state, PickMany((0, 0))))
+    run_script(state, choose_targets(ring, signet))
+    (spell,) = state.stack
+    record = state.objects[spell].spell
+    assert record is not None
+    assert record.targets == ((TargetObject(ring), TargetObject(signet)),)
+
     scenario = Scenario(2, database=database, registry=registry)
     (twin,) = scenario.hand(P0, ["Test Twin Shatter"])
     ring, signet = scenario.battlefield(P1, ["Sol Ring", "Arcane Signet"])
@@ -226,12 +241,6 @@ def test_115_3_one_instance_cant_choose_the_same_object_twice() -> None:
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
     run_script(state, cast(twin, P0))
-    assert target_options(state) == (ObjectOption(ring), ObjectOption(signet))
-    space = request_of(state).space
-    assert isinstance(space, ChooseSubset) and (space.minimum, space.maximum) == (2, 2)
-    with pytest.raises(InvalidAnswer):
-        submit(state, answer(state, PickMany((0, 0))))
-    run_script(state, choose_targets(ring, signet))
     (spell,) = state.stack
     record = state.objects[spell].spell
     assert record is not None
@@ -268,7 +277,7 @@ def test_115_2_a_permanent_target_must_be_on_the_battlefield() -> None:
     spec = TargetSpec(ObjectFilter((CardType.CREATURE,)))
     targeter = Targeter(P0, spell, characteristics(state, spell))
     assert targeting.target_problem(state, targeter, spec, TargetObject(bears)) is None
-    for candidate in (TargetObject(dead), TargetObject(bears + 100), TargetPlayer(P1)):
+    for candidate in (TargetObject(dead), TargetObject(ObjectId(bears + 100)), TargetPlayer(P1)):
         problem = targeting.target_problem(state, targeter, spec, candidate)
         assert isinstance(problem, Verdict) and not problem.allowed
 

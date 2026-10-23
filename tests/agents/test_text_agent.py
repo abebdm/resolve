@@ -60,6 +60,8 @@ from resolve.state.spell import (
     AlternativeKind,
     Back,
     Half,
+    TargetObject,
+    TargetPlayer,
 )
 from resolve.state.turn import Phase
 from resolve.state.turn import Step as TurnStep
@@ -376,3 +378,17 @@ def test_render_view_shows_the_payments_under_way() -> None:
     idle = Scenario(2)
     idle.battlefield(P0, ["Selesnya Signet"])
     assert "Paying:" not in render_view(view_for(idle.build(), P1))
+
+
+def test_render_view_shows_each_spells_targets() -> None:
+    """601.2c: targets are announced, so every player sees them on the stack."""
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    swords, shock = scenario.stack(P0, ["Swords to Plowshares", "Test Shock"])
+    scenario.targets(swords, [TargetObject(bears)])
+    scenario.targets(shock, [TargetPlayer(P1)])
+    text = render_view(view_for(scenario.build(), P1))
+    assert (
+        f"  Stack (top last): Test Shock #{shock} (targeting player 1 (you)), "
+        f"Swords to Plowshares #{swords} (targeting Grizzly Bears #{bears})"
+    ) in text

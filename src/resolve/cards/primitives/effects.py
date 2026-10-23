@@ -110,6 +110,10 @@ ManaEffect = AddMana | AddManaOfAnyColor
 
 # --- Effects of spells (609) -------------------------------------------------------------------
 
+_THIS_OBJECT = ThisObject()
+_YOU = You()
+_ONE = Fixed(1)
+
 
 @dataclass(frozen=True)
 class DealDamage(Effect):
@@ -125,7 +129,7 @@ class DealDamage(Effect):
 
     amount: Value
     to: tuple[DamageRecipient, ...]
-    source: ObjectRef = ThisObject()
+    source: ObjectRef = _THIS_OBJECT
 
     def __post_init__(self) -> None:
         if not self.to:
@@ -222,7 +226,9 @@ class Exile(Effect):
         found: list[ObjectId] = []
         for ref in self.objects:
             found += [o for o in evaluation.objects(state, ref, context) if o not in found]
-        events = [ObjectExiled(obj=obj, rules=("701.13a",)) for obj in found if obj in state.objects]
+        events = [
+            ObjectExiled(obj=obj, rules=("701.13a",)) for obj in found if obj in state.objects
+        ]
         return (ApplyEvents(tuple(events)),) if events else ()
 
     def describe(self, phrasing: Phrasing) -> str:
@@ -266,8 +272,8 @@ class DrawCards(Effect):
     """ "[Player] draws [count] cards" (121.1): each player referred to draws, one card at a time
     (121.2), the count evaluated as it applies (608.2h; 0 if negative, 107.1b)."""
 
-    count: Value = Fixed(1)
-    player: PlayerRef = You()
+    count: Value = _ONE
+    player: PlayerRef = _YOU
 
     def tasks(self, state: GameState, context: Context) -> tuple[Task, ...]:
         from resolve.effects import evaluation

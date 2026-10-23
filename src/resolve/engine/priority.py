@@ -23,6 +23,8 @@ abilities of the permanents the player controls, in battlefield order and abilit
   illegal and reversed (733.2).
 - When all players pass in succession with objects on the stack, the top one resolves
   (``ResolveTopOfStack``, 405.5, 608.1), and then the active player receives priority (117.3b).
+- A player about to receive priority with the stack empty: the last known information of
+  objects that left their zones is forgotten (608.2h, ``GameState.last_known``).
 """
 
 from __future__ import annotations
@@ -125,6 +127,9 @@ class PriorityRound(Task):
             self.stage = Stage.CHECK
             return self.run(state)
         turn.priority = player
+        if not state.stack:
+            # 608.2h: nothing left to resolve can ask for last known information any more.
+            state.last_known.clear()
         return NeedDecision(
             player=player,
             kind=DecisionKind.PRIORITY_ACTION,

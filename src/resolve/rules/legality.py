@@ -27,11 +27,11 @@ from typing import TYPE_CHECKING
 from resolve.cards.primitives.targets import TargetSpec
 from resolve.data.types import CardType
 from resolve.effects.characteristics import Characteristics, characteristics
-from resolve.errors import EngineError, NotImplementedRule
+from resolve.errors import EngineError
 from resolve.rules import defaults
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.spell import CastPermission, CastVariant, Target
-from resolve.state.zones import Zone
+from resolve.state.spell import CastPermission, CastVariant, Target, TargetObject, TargetPlayer
+from resolve.state.zones import Zone, ZoneKind
 from resolve.values import Immutable
 
 if TYPE_CHECKING:
@@ -142,7 +142,10 @@ def prohibitions(state: GameState, action: Action) -> tuple[Prohibition, ...]:
         # 101.2: "can't cast" effects (Kutzil's Flanker, M5; split second, M9) forbid it here.
         return ()
     if isinstance(action, TargetAction):
-        # Shroud, hexproof and protection (702.18a, 702.11b-d, 702.16b) forbid it here (M2.8).
+        # 115.5: a spell or ability on the stack is an illegal target for itself. Shroud,
+        # hexproof and protection (702.18a, 702.11b-d, 702.16b) join it here in M2.8.
+        if action.candidate == TargetObject(action.targeter.obj):
+            return (Prohibition("115.5", "a spell or ability can't target itself"),)
         return ()
     if isinstance(action, DestroyAction):
         # Indestructible (702.12b) forbids it here (M2.8).
@@ -220,8 +223,35 @@ def _cast_permissions(state: GameState, action: CastAction) -> tuple[Permission,
 
 
 def _target_permissions(state: GameState, action: TargetAction) -> tuple[Permission, ...]:
-    raise NotImplementedRule("115.2: whether a target is legal (M2.6, stub)")
+    # 115.1: the spell's text says what it may target. In order: the kind and zone (115.2, 115.4;
+    # 800.4a; 608.2b: an object that left its zone is a new object, so its old ID is gone), the
+    # filter, and 115.5 (not itself).
+    spec, you = action.spec, action.targeter.controller
+    match action.candidate:
+        case TargetPlayer(player=player):
+            if spec.players is None or state.player(player).left_game:
+                return ()
+            if not spec.players.matches(state, player, you):
+                return ()
+            return (Permission("115.1", f"target {spec.players.text}s"),)
+        case TargetObject(object=obj):
+            game_object = state.objects.get(obj)
+            if game_object is None:
+                return ()
+            if game_object.zone.kind is ZoneKind.BATTLEFIELD:
+                if spec.objects is None or not spec.objects.matches(state, obj, you):
+                    return ()
+                return (Permission("115.2", f"target a {spec.objects.text}"),)
+            if game_object.zone.kind is ZoneKind.STACK:
+                if spec.spells is None or not spec.spells.matches(state, obj, you):
+                    return ()
+                return (Permission("115.2", "target a spell"),)
+            return ()  # 115.2: no spec targets cards in other zones yet (M4)
 
 
 def _destroy_permissions(state: GameState, action: DestroyAction) -> tuple[Permission, ...]:
-    raise NotImplementedRule("701.8a: whether a permanent can be destroyed (M2.6, stub)")
+    # 701.8a: destroying moves a permanent from the battlefield to its owner's graveyard.
+    obj = state.objects.get(action.obj)
+    if obj is None or obj.zone.kind is not ZoneKind.BATTLEFIELD:
+        return ()
+    return (Permission("701.8a", "destroy a permanent"),)

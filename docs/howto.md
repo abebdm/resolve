@@ -141,7 +141,11 @@ drive decisions with a script.
    only the decisions that really come: tapping the only lands that pay asks no `pay()` and no
    `counts`. Give mana with lands, or `scenario.mana(player, ...)` (units with no source, which
    form one class each type; `restriction=` gives them a 106.6 restriction). `scenario.stack(controller, names)` puts spells on the stack as
-   if cast from their owner's hand; when all players pass, the top one resolves.
+   if cast from their owner's hand; `scenario.targets(spell, [TargetObject(obj)], ...)` gives one
+   its targets, one list per instance of "target" (a spell with targets needs them before it
+   resolves); when all players pass, the top one resolves. While casting, answer a 601.2c target
+   question with `choose_targets(obj, PlayerOption(player), ...)`; an instance whose only answer is
+   every legal target isn't asked.
    `choose_color(Color.GREEN)` answers "one mana of any color" (asked only with two or more
    colors). A mana ability with a mana cost (Selesnya Signet) asks its own
    `ACTIVATE_MANA_ABILITIES` (answer with `activate(...)`/`pay()`) and, if it fails, its own
@@ -211,7 +215,8 @@ override either.
    game (min, average, max); endings by type (decked, life total, concession, draw, rules gap,
    then any other, named by the rule of the last loss); lands played, mana abilities activated
    (counted by the mana they added) and mana ability activations reversed (a mana cost that
-   couldn't be paid); spells cast, resolved and reversed; `Reversed casts:`, for the auto-pay
+   couldn't be paid); spells cast, resolved, not resolved (608.2b) and reversed; damage dealt;
+   `Reversed casts:`, for the auto-pay
    seats and the random seats, the reversed casts of all attempts and of the payable ones (a cast
    that could be paid when its payment began, `PayableCasts`; the auto-pay seats should reverse
    none); casts per card; gaps by rule; formats; games per second.
@@ -395,7 +400,12 @@ files.
    its mana cost, colors and mana value, which come from the card data, 202). Write every color
    word, land type and subtype the definition uses as a typed word (`ColorWord`,
    `LandTypeWord`, `SubtypeWord`) and refer to the card's own name only through `ThisObject()`;
-   a card name that must appear is a `NameRef` (612.2).
+   a card name that must appear is a `NameRef` (612.2). An instant or sorcery gets
+   `spell=SpellAbility((Mode(targets, effects),))` (`resolve.cards.primitives.spells`): one
+   `TargetSpec` per instance of the word "target" in the order of its text, its effects in the
+   order written, referring to targets with `TargetRef(i)` and to numbers with values
+   (`Fixed`, `PowerOf`). Its `text` is written from the primitives; the card test checks it
+   equals the Oracle text without reminder text.
 3. Add a Scryfall-format record to `tests/scryfall_fixtures.py` if tests need the card, and to
    `scenario_database()` / `scenario_registry()` in `tests/game_fixtures.py` for scenarios.
 4. Write `tests/cards/test_<card or group>.py`: the computed characteristics, each ability in
@@ -412,6 +422,10 @@ files.
    a frozen `Immutable` dataclass holding only data, whose methods produce events (never
    change the state directly). Base classes that definitions name go in `base.py`, which imports
    nothing from the engine, so `CardDefinition` can refer to them without import cycles.
+   A spell's effect subclasses `Effect` (`base.py`): `tasks(state, context)` returns the engine
+   tasks that apply it now (usually one `ApplyEvents`; nothing when there is nothing to do), and
+   evaluates its references and values through `resolve.effects.evaluation` as it applies
+   (608.2h); `describe(phrasing)` writes its text. Never call `move_object` or change the state.
 3. Raise `NotImplementedRule` for the parts of its rules that aren't supported yet (as
    `Event.redo` does for events a mana ability can't cause yet, 733.1). A primitive that reads
    the engine (`characteristics`, `resolve.rules.commander`) imports it inside the method, as

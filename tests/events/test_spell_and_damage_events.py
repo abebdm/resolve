@@ -17,7 +17,7 @@ from resolve.events.permanents import ObjectExiled
 from resolve.events.pipeline import ApplyEvents
 from resolve.events.spells import BecameTargets, SpellDidNotResolve, SpellResolved
 from resolve.state.game import GameState, move_object
-from resolve.state.ids import PlayerId
+from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.spell import TargetObject, TargetPlayer
 from resolve.state.zones import EXILE, Zone
 from tests import scryfall_fixtures as fx
@@ -49,7 +49,9 @@ def test_120_3_damage_marks_creatures_and_takes_life() -> None:
     state = scenario.build()
     apply(
         state,
-        DamageDealt(source=shock, to_objects=((bears, 2),), to_players=((P2, 3),), rules=("120.3",)),
+        DamageDealt(
+            source=shock, to_objects=((bears, 2),), to_players=((P2, 3),), rules=("120.3",)
+        ),
     )
     assert state.objects[bears].damage == 3 and state.player(P2).life == 17
     assert state.player(P1).life == 20
@@ -76,7 +78,7 @@ def test_damage_refuses_impossible_events() -> None:
         DamageDealt(source=shock, to_players=((P1, 0),), rules=("120.8",)),
         DamageDealt(source=shock, to_objects=((ring, 1),), rules=("120.1a",)),
         DamageDealt(source=shock, to_objects=((card, 1),), rules=("120.1a",)),
-        DamageDealt(source=shock + 100, to_players=((P1, 1),), rules=("120.3",)),
+        DamageDealt(source=ObjectId(shock + 100), to_players=((P1, 1),), rules=("120.3",)),
     ]
     for event in bad:
         with pytest.raises(EngineError):

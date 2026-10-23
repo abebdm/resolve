@@ -56,7 +56,7 @@ from resolve.engine.view import ObjectView, PaymentView, PlayerView
 from resolve.events.base import AnswerRecord, LogEntry
 from resolve.state.ids import ObjectId
 from resolve.state.mana import ForAbility, ForSpell, describe_mana
-from resolve.state.spell import describe_variant
+from resolve.state.spell import Target, TargetObject, TargetPlayer, describe_variant
 from resolve.state.zones import ZoneKind
 
 # How many of the newest log entries ``render_view`` shows.
@@ -151,6 +151,25 @@ def _zone_line(label: str, objects: tuple[ObjectView, ...]) -> str:
     return f"  {label}: {shown}"
 
 
+def _stack_line(view: PlayerView) -> str:
+    """The stack, each spell with its targets (601.2c): ``Test Shock #5 (targeting player 1)``."""
+    shown: list[str] = []
+    for obj in view.stack:
+        text = describe_object(obj)
+        targets = () if obj.spell is None else obj.spell.targets
+        chosen = [_target(view, target) for instance in targets for target in instance]
+        shown.append(text + (f" (targeting {', '.join(chosen)})" if chosen else ""))
+    return f"  Stack (top last): {', '.join(shown) if shown else '(empty)'}"
+
+
+def _target(view: PlayerView, target: Target) -> str:
+    match target:
+        case TargetObject(object=obj):
+            return _named(view, obj)
+        case TargetPlayer(player=player):
+            return f"player {player}" + (" (you)" if player == view.viewer else "")
+
+
 def render_log_entry(entry: LogEntry) -> str:
     """One log entry: the event or answer with its fields and its CR rules."""
     record = entry.record
@@ -185,7 +204,7 @@ def render_view(view: PlayerView, *, recent_log: int = RECENT_LOG) -> str:
         lines.append(_zone_line("hand", summary.hand))
         lines.append(_zone_line("graveyard (top last)", summary.graveyard))
     lines.append(_zone_line("Battlefield", view.battlefield))
-    lines.append(_zone_line("Stack (top last)", view.stack))
+    lines.append(_stack_line(view))
     lines.append(_zone_line("Exile", view.exile))
     lines.append(_zone_line("Command zone", view.command))
     turn = describe_turn(view)

@@ -8,8 +8,9 @@ stages and never gives priority itself; its caller does (601.2i, 117.3c):
 |------------|-----------------|---------------------------------------------------------------|
 | ``PROPOSE``| 601.2a          | takes a checkpoint (733); ``SpellProposed``: the card moves to |
 |            |                 | the top of the stack as a new object, with its record          |
-| ``ANNOUNCE``| 601.2b-d       | modes, X, hybrid and Phyrexian symbols, targets and division:  |
-|            |                 | none exist yet (M2.6, M2.7, M4, M9), so each is a gap           |
+| ``ANNOUNCE``| 601.2b-d       | targets (``CHOOSE_TARGETS``, then ``BecameTargets``); modes, X,|
+|            |                 | hybrid and Phyrexian symbols and division are gaps (M2.7, M4,  |
+|            |                 | M9)                                                            |
 | ``CHECK``  | 601.2e, 601.6   | ``legality.allowed`` again for the proposed spell               |
 | ``TOTAL``  | 601.2f          | the total cost: the mana cost (cost modifiers: M2.9, M7)        |
 | ``PAY``    | 601.2g-h        | ``PayCosts``: mana abilities, then the payment                 |
@@ -20,6 +21,15 @@ Other variants than ``NORMAL`` and casting a commander from the command zone are
 before anything moves: 709.3 (split halves), 702.102 (fuse), 712.11a-b (back faces), 715.3
 (adventures), 720.3 (Omens), 718.3 (prototype), 722.3 (prepare spells), 708.4 (face down) and
 903.8 (the commander tax, M7).
+
+**Targets (601.2c).** For each instance of the word "target" in the spell's text, in order, the
+caster chooses from the legal targets (``targeting.legal_targets``) as many as the instance
+allows (``CHOOSE_TARGETS``, a ``ChooseSubset``: no object or player twice, 115.3). An instance
+whose only possible answer is every legal target (one creature for "target creature") isn't
+asked. Once all are chosen they become the spell's targets (``BecameTargets``, public). An
+instance with fewer legal targets than it needs makes the cast illegal: it is reversed. Priority
+doesn't offer such a spell (``defaults.cast_options``), so that happens only if the targets
+changed meanwhile.
 
 **Reversal (733.1).** If the spell can't be cast (601.2e) or its cost can't be paid (601.2h,
 118.3), the player chooses which of the mana abilities they activated while paying to reverse
@@ -45,9 +55,18 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
+from resolve.cards.primitives.spells import SpellAbility
+from resolve.cards.primitives.targets import TargetSpec
 from resolve.data.mana_cost import ManaCost, SymbolKind
 from resolve.decisions.kinds import DecisionKind
-from resolve.decisions.spaces import AnswerValue, ChooseSubset, PickMany
+from resolve.decisions.spaces import (
+    AnswerValue,
+    ChooseSubset,
+    ObjectOption,
+    Option,
+    PickMany,
+    PlayerOption,
+)
 from resolve.effects.characteristics import characteristics
 from resolve.engine import reversal
 from resolve.engine.payment import Paid, PayCosts, PaymentStep, Unpayable
@@ -55,8 +74,9 @@ from resolve.engine.reversal import activations_made
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.mana import ManaSpent
 from resolve.events.pipeline import ApplyEvents
-from resolve.events.spells import ActionReversed, SpellCast, SpellProposed
-from resolve.rules import legality
+from resolve.events.spells import ActionReversed, BecameTargets, SpellCast, SpellProposed
+from resolve.rules import legality, targeting
+from resolve.rules.legality import Targeter
 from resolve.state.checkpoint import Checkpoint, take_checkpoint
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import ForSpell, Mana
@@ -70,6 +90,9 @@ from resolve.state.spell import (
     Fused,
     Half,
     Normal,
+    Target,
+    TargetObject,
+    TargetPlayer,
 )
 from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
 
@@ -106,6 +129,7 @@ class CastSpell(Task):
     - ``spell``: the spell's object on the stack, once proposed (601.2a).
     - ``checkpoint``: the game as it was before the proposal (733.1).
     - ``total``: the locked-in mana part of the total cost (601.2f).
+    - ``chosen``: the targets chosen so far, per instance of "target" (601.2c).
     - ``payment``: the payment in progress (601.2g-h).
     - ``spent``: the mana spent (601.2h).
     """
@@ -117,6 +141,7 @@ class CastSpell(Task):
     stage: CastStage = CastStage.PROPOSE
     spell: ObjectId | None = None
     checkpoint: Checkpoint | None = None
+    chosen: tuple[tuple[Target, ...], ...] = ()
     total: ManaCost | None = None
     payment: PayCosts | None = None
     spent: tuple[Mana, ...] = ()
@@ -180,9 +205,34 @@ class CastSpell(Task):
                 raise NotImplementedRule(
                     "601.2b: announcing how hybrid and Phyrexian mana symbols will be paid (M9)"
                 )
-        # 601.2b-d: modes, targets and division come with spell abilities (M2.6, M2.7, M4).
+        # 601.2b: modes (M2.7). 601.2d: division (M4).
+        chars = characteristics(state, self.spell)
+        specs = _target_specs(chars.spell_ability)
+        targeter = Targeter(self.player, self.spell, chars)
+        while len(self.chosen) < len(specs):
+            # 601.2c: the targets of the next instance of "target", in the order of the text.
+            spec = specs[len(self.chosen)]
+            legal = targeting.legal_targets(state, targeter, spec)
+            if len(legal) < spec.minimum:
+                self.stage = CastStage.REVERSE  # 601.2c can't be done: the cast is illegal
+                return self.run(state)
+            most = min(spec.maximum, len(legal))
+            if spec.minimum == most == len(legal):
+                self.chosen += (legal,)  # the only possible choice isn't asked
+                continue
+            return NeedDecision(
+                player=self.player,
+                kind=DecisionKind.CHOOSE_TARGETS,
+                space=ChooseSubset(tuple(_option(t) for t in legal), spec.minimum, most),
+                prompt=f"Choose {spec.text} for {chars.name}.",
+                rules=("601.2c", "115.1"),
+                source=self.spell,
+            )
         self.stage = CastStage.CHECK
-        return self.run(state)
+        if not specs:
+            return self.run(state)
+        became = BecameTargets(spell=self.spell, targets=self.chosen, rules=("601.2c", "115.1"))
+        return Push((ApplyEvents((became,)), self))
 
     def _check(self, state: GameState) -> TaskResult:
         # 601.2e, 601.6: the proposed spell must still be legal to cast.
@@ -298,6 +348,12 @@ class CastSpell(Task):
 
     def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
         match self.stage:
+            case CastStage.ANNOUNCE:
+                if not isinstance(request.space, ChooseSubset) or not isinstance(answer, PickMany):
+                    raise EngineError(f"CastSpell can't resume with {answer!r}")
+                chosen = tuple(_target(option) for option in request.space.chosen(answer))
+                self.chosen += (chosen,)
+                return self.run(state)
             case CastStage.PAY:
                 return self._paying(state, self._payment().resume(state, request, answer))
             case CastStage.REVERSE:
@@ -306,6 +362,33 @@ class CastSpell(Task):
                 return self._reverse(state, _kept(len(activations_made(self.payment)), answer))
             case _:
                 raise EngineError(f"CastSpell asked nothing in its {self.stage.value} stage")
+
+
+def _target_specs(ability: SpellAbility | None) -> tuple[TargetSpec, ...]:
+    """The spell's instances of the word "target", in the order of its text (601.2c)."""
+    if ability is None:
+        return ()
+    if ability.choose is not None:
+        raise NotImplementedRule("700.2: choosing the modes of a modal spell (M2.7)")
+    return ability.modes[0].targets
+
+
+def _option(target: Target) -> ObjectOption | PlayerOption:
+    match target:
+        case TargetObject(object=obj):
+            return ObjectOption(obj)
+        case TargetPlayer(player=player):
+            return PlayerOption(player)
+
+
+def _target(option: Option) -> Target:
+    match option:
+        case ObjectOption(object=obj):
+            return TargetObject(obj)
+        case PlayerOption(player=player):
+            return TargetPlayer(player)
+        case _:
+            raise EngineError(f"{option!r} isn't a target")
 
 
 def _kept(count: int, answer: PickMany) -> tuple[int, ...]:

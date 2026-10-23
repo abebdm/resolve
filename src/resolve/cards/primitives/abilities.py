@@ -83,4 +83,3 @@ class ActivatedManaAbility(Ability):
 def intrinsic_mana_ability(land_type: str) -> ActivatedManaAbility:
     """305.6: a land with this basic land type's intrinsic "{T}: Add [mana symbol]"."""
     return ActivatedManaAbility((TapSelfCost(),), AddMana((BASIC_LAND_MANA[land_type],)))
-

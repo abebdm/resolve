@@ -109,10 +109,18 @@ from resolve.engine.view import ObjectView, PlayerView
 from resolve.errors import DeckError, InvalidAnswer, NotImplementedRule
 from resolve.events.base import AnswerRecord, LogEntry
 from resolve.events.cards import CardDrawn, CardsPutOnBottom
+from resolve.events.damage import DamageDealt
 from resolve.events.game import PlayerLost
 from resolve.events.mana import ManaAdded
 from resolve.events.permanents import LandPlayed
-from resolve.events.spells import ActionReversed, PermanentSpellResolved, SpellCast, SpellProposed
+from resolve.events.spells import (
+    ActionReversed,
+    PermanentSpellResolved,
+    SpellCast,
+    SpellDidNotResolve,
+    SpellProposed,
+    SpellResolved,
+)
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState, players_in_game
 from resolve.state.ids import ObjectId, PlayerId
@@ -736,8 +744,8 @@ class GameStats:
     - ``mana_abilities``: mana abilities activated, counted by the mana they added
       (``ManaAdded``, 605.3a, 106.4).
     - ``casts``: spells cast (``SpellCast``, 601.2i), per card name, sorted by name.
-    - ``resolved``: spells resolved (``PermanentSpellResolved``, 608.3a); ``reversed``: illegal
-      casts reversed (``ActionReversed`` of a card, 733.1).
+    - ``resolved``: spells resolved (``PermanentSpellResolved``, 608.3a; ``SpellResolved``,
+      608.2n); ``reversed``: illegal casts reversed (``ActionReversed`` of a card, 733.1).
     - ``abilities_reversed``: mana ability activations reversed because their mana cost couldn't
       be paid (``ActionReversed`` of a source, 733.1).
     - ``autopay_casts``, ``autopay_reversed``: the spells cast and the casts reversed by the
@@ -746,6 +754,9 @@ class GameStats:
       be paid when their payment began (``PayableCasts``), by every seat and by the auto-paying
       ones.
     - ``gap``: the rule of the gap the game stopped at, if any.
+    - ``did_not_resolve``: spells whose every target was illegal (``SpellDidNotResolve``,
+      608.2b).
+    - ``damage``: the damage dealt in all (``DamageDealt``, 120.3).
     """
 
     answers: int
@@ -763,6 +774,8 @@ class GameStats:
     autopay_reversed: int = 0
     payable_reversed: int = 0
     autopay_payable_reversed: int = 0
+    did_not_resolve: int = 0
+    damage: int = 0
 
     @staticmethod
     def of(result: FuzzResult) -> GameStats:
@@ -783,7 +796,9 @@ class GameStats:
                     ).items()
                 )
             ),
-            resolved=sum(isinstance(record, PermanentSpellResolved) for record in records),
+            resolved=sum(
+                isinstance(record, PermanentSpellResolved | SpellResolved) for record in records
+            ),
             reversed=sum(
                 isinstance(record, ActionReversed) and record.card is not None for record in records
             ),
@@ -804,6 +819,8 @@ class GameStats:
             ),
             payable_reversed=len(result.payable_reversed),
             autopay_payable_reversed=sum(is_autopay_seat(p) for p in result.payable_reversed),
+            did_not_resolve=sum(isinstance(record, SpellDidNotResolve) for record in records),
+            damage=sum(record.total for record in records if isinstance(record, DamageDealt)),
         )
 
 
@@ -841,7 +858,9 @@ def summary_lines(games: Sequence[GameStats]) -> list[str]:
         f"{sum(game.mana_abilities for game in games)} mana abilities activated, "
         f"{sum(game.abilities_reversed for game in games)} reversed.",
         f"Spells: {sum(casts.values())} cast, {sum(game.resolved for game in games)} resolved, "
+        f"{sum(game.did_not_resolve for game in games)} didn't resolve, "
         f"{sum(game.reversed for game in games)} reversed.",
+        f"Damage: {sum(game.damage for game in games)} dealt.",
         f"Reversed casts: auto-pay seats {autopay_reversed} of {autopay_reversed + autopay_cast} "
         f"attempts, {autopay_payable} of {autopay_payable + autopay_cast} payable; random seats "
         f"{random_reversed} of {random_reversed + random_cast}, {random_payable} of "

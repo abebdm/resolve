@@ -216,8 +216,8 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
   (701.8), exile (701.13); and "can't be countered" (113.6g).
 - [x] Create the keyword table: widened into the rules coverage map at the end of this file
   (M2.0).
-- [ ] Resolution (608), including checking targets again on resolution (608.2b) and partial
-  fizzling; last known information (608.2h).
+- [x] Resolution (608), including checking targets again on resolution (608.2b) and partial
+  fizzling; last known information (608.2h) (M2.6; modes resolve in M2.7).
 - [ ] Mana payment details and the general cost model: generic, colored, {C}, X and restricted
   mana (106.6), with slots for hybrid, Phyrexian, snow and non-mana costs; cost increases and
   reductions in 601.2f's order.
@@ -228,7 +228,8 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
   sickness (302.6), restricted mana (Ixalli's Lorekeeper) (M2.4).
 - [x] The agent-side auto-payer (design.md §6: convenience outside the engine), and the public
   payments and abilities in the views it plans from (M2.5).
-- [ ] The first primitives: damage, destroy, exile, draw, life gain, counter target spell.
+- [ ] The first primitives: damage, destroy, exile, draw, life gain (M2.6), counter target spell
+  (M2.8).
 - [ ] Cards: 14 from the target decks, 8 keyword example cards and the torture tests Decimate
   and Cryptic Command (`docs/plans/m2.md` §7).
 
@@ -507,7 +508,28 @@ completes a step (CLAUDE.md, "Documentation requirements").
   `tests/agents/test_autopay.py`, `tests/agents/test_autopay_brute_force.py` (the planner
   against a search through the engine; `pytest --thorough`, `tests/conftest.py`),
   `tests/engine/test_view_abilities_and_payments.py`.
-
+- **Done (M2.6, targets, last known information, values and the first effects):** spell
+  abilities (`resolve.cards.primitives.spells`: `SpellAbility`, `Mode`, `ModeChoice`;
+  `CardDefinition.spell`, read as `Characteristics.spell_ability`); targets
+  (`resolve.cards.primitives.targets`: `TargetSpec`, `ObjectFilter`, `PlayerFilter`,
+  `SpellFilter`, `ANY_TARGET`, `target`), references and values (`refs`: `ThisObject`,
+  `TargetRef`, `You`, `ControllerOf`, `EachCreature`, `EachOpponent`, `Phrasing`; `values`:
+  `Fixed`, `PowerOf`), effects (`Effect` in `base`; `DealDamage`, `Destroy`, `Exile`,
+  `GainLife`, `DrawCards` in `effects`); `resolve.effects.evaluation` (`Context`, `Timing`,
+  `information`, `objects`, `players`, `evaluate`; 608.2h); last known information
+  (`resolve.state.last_known.LastKnown`, `GameState.last_known`, recorded by `move_object`,
+  cleared at the empty-stack priority); `resolve.rules.targeting` (`target_problem` on
+  `legality.allowed(TargetAction)`, with `Targeter`; 115.5 a prohibition; `legal_targets`,
+  `can_choose_targets`), `legality.DestroyAction`; `CastChoices.targets` (`TargetObject`,
+  `TargetPlayer`); `CastSpell`'s 601.2c (`CHOOSE_TARGETS`, `BecameTargets`); `cast_options`
+  leaves out spells without legal targets; instant and sorcery resolution
+  (`resolution.ResolveSpell`; 608.2b `SpellDidNotResolve`, 608.2n/608.2m `SpellResolved`);
+  events `DamageDealt` (`resolve.events.damage`: the 120.3 results), `LifeGained`
+  (`resolve.events.life`), `ObjectExiled`; the text renderer's targets; the fuzz summary's
+  "didn't resolve" and `Damage:` line. Cards: Swords to Plowshares, Chandra's Ignition, Decimate
+  (`resolve.cards.definitions.removal`, in the excerpt); fixtures Test Shock and Test Ponder (real
+  definitions now), Test Shatter, Test Wall, Test Totem, Test Artifact Land Creature;
+  `Scenario.targets`, `casting_support.choose_targets`.
 ---
 
 ## Rules coverage map
@@ -550,14 +572,14 @@ earlier milestones must leave room for every row in this map.
 | 110 | Permanents | M1 ✓; statuses with their mechanics | E |  |
 | 111 | Tokens | M4 | E | D (Regisaur Alpha, Generous Gift) |
 | 112 | Spells | M2 (spells on the stack with their record: M2.3 ✓); copies M5 | E |  |
-| 113 | Abilities | M2 (spell abilities, 113.6); M4; M5 | E |  |
+| 113 | Abilities | M2 (spell abilities 113.3a: M2.6 ✓; 113.6 M2.8); M4; M5 | E |  |
 | 114 | Emblems | M4 | E | with planeswalkers |
-| 115 | Targets | M2; 115.7 M5 | E |  |
+| 115 | Targets | M2 (115.1-115.6, 115.10: M2.6 ✓; shroud, hexproof and protection M2.8); 115.7 M5 | E | `target_problem` (M2.6 ✓) |
 | 116 | Special Actions | M1 ✓ (116.2a); the others with their mechanics | E | 116.2i out of scope (Planechase); 116.2j is for conspiracy cards (315) |
 | 117 | Timing and Priority | M1 ✓, M2 (117.1a casting, 117.3b-c, 117.4 with the stack: M2.3 ✓; flash M2.8) | E |  |
 | 118 | Costs | M2 (mana: paying generic, colored and {C} mana M2.3 ✓; mana costs of mana abilities, restricted mana M2.4 ✓; X M2.7; reductions M2.9); M4 (other costs, 118.12) | E |  |
-| 119 | Life | M2 | E |  |
-| 120 | Damage | M2 (noncombat), M3 (combat), M4 (120.3b-d, 120.3g) | E |  |
+| 119 | Life | M2 (gaining life, 119.3, 119.10: M2.6 ✓); paying life M4 | E |  |
+| 120 | Damage | M2 (noncombat: 120.1-120.2, 120.3a, 120.3e, 120.4b, 120.8: M2.6 ✓), M3 (combat), M4 (120.3b-d, 120.3g-h) | E | the 120.3 table is `DamageDealt.apply` |
 | 121 | Drawing a Card | M1 ✓; 121.6 M6 | E |  |
 | 122 | Counters | M4 | E | D |
 | 123 | Stickers | M5 (stickers change names, abilities, power and toughness: 123.6-123.8); M7 (sticker sheets chosen before the game, 123.2) | S | Unfinity: 47 cards that use stickers and 48 sticker sheets are Commander-legal |
@@ -616,15 +638,15 @@ earlier milestones must leave room for every row in this map.
 | 513 | End Step | M1 ✓ | E |  |
 | 514 | Cleanup Step | M1 ✓; 514.2 effects ending M5 | E |  |
 | 600 | General | — | — | nothing to implement |
-| 601 | Casting Spells | M2 (M2.3 ✓: 601.2a, 601.2e-i, 601.3, 601.3e variants and permissions, 601.6; 601.2b-c M2.6-M2.7; 601.2d M4; 601.3b M6) | E | gaps per variant: 709.3, 712.11a-b, 715.3, 718.3, 720.3, 722.3, 708.4, 702.102; 903.8 |
+| 601 | Casting Spells | M2 (M2.3 ✓: 601.2a, 601.2e-i, 601.3, 601.3e variants and permissions, 601.6; 601.2c M2.6 ✓; 601.2b M2.7; 601.2d M4; 601.3b M6) | E | gaps per variant: 709.3, 712.11a-b, 715.3, 718.3, 720.3, 722.3, 708.4, 702.102; 903.8 |
 | 602 | Activating Activated Abilities | M4 (for mana abilities, 602.2b mana costs and 602.5 "activate only if": M2.4 ✓) | E |  |
 | 603 | Handling Triggered Abilities | M4 | E |  |
 | 604 | Handling Static Abilities | M5 (M2: keyword and cost-reduction statics) | E |  |
 | 605 | Mana Abilities | M1 ✓, M2 (605.3a while casting: M2.3 ✓; 605.2, 605.3a while paying a mana ability's cost, 605.3c: M2.4 ✓); 605.1b M4 | E |  |
 | 606 | Loyalty Abilities | M4 | E |  |
 | 607 | Linked Abilities | M4 | E | D (hideaway) |
-| 608 | Resolving Spells and Abilities | M2 (608.1, 608.3a: M2.3 ✓; 608.2 M2.6) | E | `resolved_spell_destination` (608.2n) in place (M2.3 ✓) |
-| 609 | Effects | M2 | E |  |
+| 608 | Resolving Spells and Abilities | M2 (608.1, 608.3a: M2.3 ✓; 608.2a-c, 608.2h, 608.2m-n: M2.6 ✓; 608.2g M2.10); 608.2d-f, 608.2i, 608.2k M4 | E | `resolved_spell_destination` (608.2n) in place (M2.3 ✓), called from M2.6 ✓ |
+| 609 | Effects | M2 (one-shot effects of spells: M2.6 ✓) | E |  |
 | 610 | One-Shot Effects | M2; 610.3 M4 | E |  |
 | 611 | Continuous Effects | M5 | E |  |
 | 612 | Text-Changing Effects | M5 (typed words and `rewrite_words`: M2.2 ✓) | X |  |
@@ -892,12 +914,12 @@ earlier milestones must leave room for every row in this map.
 | 701.5 | Cast | M2 | E |  |
 | 701.6 | Counter | M2 | E | ward uses it (M4) |
 | 701.7 | Create | M4 | E | D (tokens) |
-| 701.8 | Destroy | M2 | E |  |
+| 701.8 | Destroy | M2 (M2.6 ✓; indestructible M2.8) | E | `allowed(DestroyAction)` |
 | 701.9 | Discard | M1 ✓ | E |  |
 | 701.10 | Double | M4 (counters), M5 (power and toughness) | E | D |
 | 701.11 | Triple | M5 | S |  |
 | 701.12 | Exchange | M5 | E |  |
-| 701.13 | Exile | M2 | E |  |
+| 701.13 | Exile | M2 (M2.6 ✓) | E |  |
 | 701.14 | Fight | M4 | E | D |
 | 701.15 | Goad | M5 | E | common in Commander; needs durations |
 | 701.16 | Investigate | M4 | E | Clue tokens |

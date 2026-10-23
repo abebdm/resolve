@@ -22,7 +22,7 @@ from resolve.data.cards import load_card_excerpt
 from resolve.decisions.spaces import CastSpellOption
 from resolve.events.life import LifeGained
 from resolve.events.permanents import ObjectExiled
-from resolve.state.ids import PlayerId
+from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import ManaType
 from resolve.state.spell import TargetObject
 from resolve.state.turn import Phase, Step
@@ -47,7 +47,7 @@ def test_its_definition_is_its_oracle_text() -> None:
 
 
 def swords_on(target: str, *, controller: PlayerId = P1, owner: PlayerId | None = None,
-              damage: int = 0) -> tuple[Scenario, int, int]:  # fmt: skip
+              damage: int = 0) -> tuple[Scenario, ObjectId, ObjectId]:  # fmt: skip
     """P0's Swords to Plowshares on the stack, targeting a creature ``controller`` controls."""
     scenario = Scenario(2)
     (spell,) = scenario.stack(P0, ["Swords to Plowshares"])
@@ -68,7 +68,7 @@ def test_608_2h_swords_uses_last_known_power() -> None:
     (gained,) = records(state, LifeGained)
     assert (gained.player, gained.amount) == (P1, 3)
     assert state.player(P1).life == 23 and state.player(P0).life == 20
-    assert state.last_known[giant].characteristics.power == 3
+    assert giant not in state.objects
 
 
 def test_608_2h_its_controller_gains_the_life() -> None:
@@ -93,7 +93,7 @@ def test_608_2h_its_controller_is_read_from_last_known_information() -> None:
     assert (state.player(P0).life, state.player(P1).life) == (20, 22)
     (exiled,) = state.exile
     assert state.objects[exiled].controller is None and state.objects[exiled].owner == P0
-    assert state.last_known[bears].controller == P1
+    assert bears not in state.objects
 
 
 def test_119_10_gaining_zero_life_is_no_event() -> None:

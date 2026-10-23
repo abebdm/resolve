@@ -136,7 +136,8 @@ def evaluate(state: GameState, value: Value, context: Context) -> int | None:
             found = objects(state, ref, context)
             if not found:
                 return None
-            if len(found) > 1:
+            if len(found) != 1:
                 raise EngineError(f"{value!r} refers to {len(found)} objects")
-            known = information(state, found[0])
+            (obj,) = found
+            known = information(state, obj)
             return None if known is None else known.characteristics.power

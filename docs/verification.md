@@ -37,13 +37,15 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
    games, and the summary at the end. Check that:
    - the first line starts `Run: thorough preset;`, the summary says `100 games passed`, and
      nothing says `FAILED:`;
-   - `Endings:` shows `concession` games and many `rules gap` games, with `life total x0` and
-     `draw x0` (nothing in M2.3's decks can change a life total); `decked` may be 0, since most
-     games stop at the 508.1 gap once a creature resolves (M2.11 settles the final
-     expectations);
-   - `Spells:` shows casts, resolutions and reversals above zero; `Casts per card:` lists the
-     excerpt's cards (Sol Ring, the Signets, the mana creatures and the vanilla creatures; the
-     lands are played, not cast); `Gaps:` lists only `508.1` and `903.8`;
+   - `Endings:` shows `concession` games and many `rules gap` games, with `draw x0`; `life
+     total` may be above 0 (Chandra's Ignition, from M2.6); `decked` may be 0, since most games
+     stop at the 508.1 gap once a creature resolves (M2.11 settles the final expectations);
+   - `Spells:` shows casts, resolutions and reversals above zero ("didn't resolve" may be 0:
+     random agents rarely leave a spell without its targets); `Damage:` may be 0 (Chandra's
+     Ignition costs five and is seldom cast by random agents); `Casts per card:` lists the
+     excerpt's cards (Sol Ring, the Signets, the mana creatures and the vanilla creatures, and
+     from M2.6 some of the removal spells; the lands are played, not cast); `Gaps:` lists only
+     `508.1` and `903.8`;
    - `Turns per game:` reaches a maximum of several tens of turns, and `Played:` shows
      thousands of lands and mana abilities, and some reversed mana ability activations
      (Selesnya Signet activated with nothing to pay its {1});
