@@ -29,6 +29,7 @@ from resolve.data.cards import load_card_excerpt
 from resolve.decisions.spaces import CastSpellOption, ObjectOption
 from resolve.engine.concede import concede
 from resolve.events.damage import DamageDealt
+from resolve.events.game import PlayerLost
 from resolve.events.permanents import PermanentDestroyed
 from resolve.events.spells import SpellDidNotResolve, SpellResolved
 from resolve.state.ids import PlayerId
@@ -189,3 +190,36 @@ def test_608_2n_a_resolved_sorcery_goes_to_its_owners_graveyard() -> None:
     run_script(state, pass_(P0), pass_(P1))
     assert names(state, Zone.graveyard(P0)) == ["Chandra's Ignition"] and state.stack == []
     assert state.player(P1).life == 17
+
+
+def test_608_2b_a_target_another_player_controls_now_is_illegal() -> None:
+    """The ruling's other example: the creature is controlled by another player when Chandra's
+    Ignition resolves (P1 controls the Hill Giant, which P0 owns). "Target creature you control"
+    is judged against the spell's controller (109.5), so the target is illegal: no damage."""
+    scenario = Scenario(2)
+    (spell,) = scenario.stack(P0, ["Chandra's Ignition"])
+    (giant,) = scenario.battlefield(P1, ["Hill Giant"], owner=P0)
+    scenario.battlefield(P0, ["Grizzly Bears"])
+    scenario.targets(spell, [TargetObject(giant)])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, pass_(P0), pass_(P1))
+    assert [r.spell for r in records(state, SpellDidNotResolve)] == [spell]
+    assert records(state, DamageDealt) == []
+    assert [p.life for p in state.players] == [20, 20]
+
+
+def test_704_5a_two_opponents_at_zero_lose_together() -> None:
+    """Three players, P1 and P2 at 3 life: both reach 0 from the one damage event and lose at the
+    same state-based action check (704.5a, 704.3); P0 wins (104.2a)."""
+    scenario = Scenario(3)
+    (spell,) = scenario.stack(P0, ["Chandra's Ignition"])
+    (giant,) = scenario.battlefield(P0, ["Hill Giant"])
+    scenario.targets(spell, [TargetObject(giant)])
+    scenario.life(P1, 3).life(P2, 3)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, pass_(P0), pass_(P1), pass_(P2))
+    lost = records(state, PlayerLost)
+    assert [r.player for r in lost] == [P1, P2] and all("704.5a" in r.rules for r in lost)
+    assert state.result is not None and state.result.winners == (P0,)

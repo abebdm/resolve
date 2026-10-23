@@ -286,3 +286,17 @@ def test_701_8a_test_shatter_destroys_an_artifact() -> None:
     (destroyed,) = records(state, PermanentDestroyed)
     assert destroyed.obj == ring and destroyed.rules == ("701.8a",)
     assert names(state, Zone.graveyard(P1)) == ["Sol Ring"]
+
+
+def test_701_8a_a_destroyed_permanent_goes_to_its_owners_graveyard() -> None:
+    """P1 controls a Sol Ring that P0 owns; Test Shatter destroys it into P0's graveyard
+    (701.8a), not its controller's."""
+    scenario = Scenario(2)
+    (spell,) = scenario.stack(P1, ["Test Shatter"])
+    (ring,) = scenario.battlefield(P1, ["Sol Ring"], owner=P0)
+    scenario.targets(spell, [TargetObject(ring)])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, pass_(P0), pass_(P1))
+    assert names(state, Zone.graveyard(P0)) == ["Sol Ring"]
+    assert names(state, Zone.graveyard(P1)) == ["Test Shatter"]

@@ -22,9 +22,11 @@ when targets are offered, when they're chosen and when the spell resolves (608.2
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
+
 import pytest
 
-from resolve.cards.primitives.effects import Destroy
+from resolve.cards.primitives.effects import Destroy, DrawCards
 from resolve.cards.primitives.refs import TargetRef
 from resolve.cards.primitives.spells import Mode, SpellAbility
 from resolve.cards.primitives.targets import ObjectFilter, SpellFilter, TargetSpec
@@ -56,7 +58,7 @@ from resolve.state.zones import Zone
 from tests import scryfall_fixtures as fx
 from tests.casting_support import cast, choose_targets, options, pass_, records
 from tests.game_fixtures import answer, request_of, scenario_database, scenario_registry
-from tests.scenario import Scenario, run_script
+from tests.scenario import Scenario, names, run_script
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 W, R = ManaType.WHITE, ManaType.RED
@@ -188,6 +190,16 @@ def test_601_2c_becoming_a_target_is_logged_publicly() -> None:
     assert spell_view.spell.targets == ((TargetPlayer(P1),),)
 
 
+def _with(
+    records: Sequence[Mapping[str, object]], definitions: list[CardDefinition]
+) -> tuple[CardDatabase, CardRegistry]:
+    """The scenario cards plus these invented ones."""
+    base = scenario_registry()
+    registry = CardRegistry([*(base.get(n) for n in base.names()), *definitions])
+    cards = [*scenario_database().cards(), *parse_oracle_cards(records)]
+    return CardDatabase(cards), registry
+
+
 def _pair_registry() -> tuple[CardDatabase, CardRegistry]:
     """Test Twin Shatter, invented: "Destroy two target artifacts." One instance of "target"
     that chooses two."""
@@ -204,11 +216,7 @@ def _pair_registry() -> tuple[CardDatabase, CardRegistry]:
             )
         ),
     )
-    base = scenario_registry()
-    registry = CardRegistry([*(base.get(n) for n in base.names()), definition])
-    database = scenario_database()
-    cards = [*database.cards(), *parse_oracle_cards([record])]
-    return CardDatabase(cards), registry
+    return _with([record], [definition])
 
 
 def test_115_3_one_instance_cant_choose_the_same_object_twice() -> None:
@@ -352,3 +360,90 @@ def test_101_2_targeting_is_a_legality_question(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(legality, "prohibitions", forbid)
     problem = targeting.target_problem(state, targeter, spec, TargetObject(bears))
     assert problem is not None and problem.rules == ("101.2", "702.18a")
+
+
+def _glance() -> tuple[CardDatabase, CardRegistry]:
+    """Test Glance, invented: "Destroy up to one target artifact. Draw a card." (115.6: it may
+    choose no target)."""
+    record = fx.spell("Test Glance", "{R}", 1.0, "Instant", ["R"],
+                      "Destroy up to one target artifact. Draw a card.")  # fmt: skip
+    definition = CardDefinition(
+        "Test Glance",
+        spell=SpellAbility(
+            (
+                Mode(
+                    (TargetSpec(ObjectFilter((CardType.ARTIFACT,)), minimum=0, maximum=1),),
+                    (Destroy((TargetRef(0),)), DrawCards()),
+                ),
+            )
+        ),
+    )
+    return _with([record], [definition])
+
+
+def test_115_6_up_to_one_target_is_asked_even_with_one_candidate() -> None:
+    """ "Up to one target artifact" with one artifact: zero or one may be chosen, so the question
+    is asked (minimum 0, maximum 1). Choosing none, the spell isn't targeted (115.6): it resolves
+    and draws a card, and Sol Ring stays."""
+    database, registry = _glance()
+    scenario = Scenario(2, database=database, registry=registry)
+    (glance,) = scenario.hand(P0, ["Test Glance"])
+    (ring,) = scenario.battlefield(P1, ["Sol Ring"])
+    scenario.library(P0, ["Forest"])
+    scenario.mana(P0, R)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(glance, P0))
+    assert target_options(state) == (ObjectOption(ring),)
+    space = request_of(state).space
+    assert isinstance(space, ChooseSubset) and (space.minimum, space.maximum) == (0, 1)
+    run_script(state, choose_targets())
+    (spell,) = state.stack
+    record = state.objects[spell].spell
+    assert record is not None and record.targets == ((),) and not record.targeted
+    run_script(state, pass_(P0), pass_(P1))
+    assert records(state, SpellDidNotResolve) == [] and ring in state.battlefield
+    assert names(state, Zone.hand(P0)) == ["Forest"]
+
+
+def test_115_6_up_to_one_target_with_none_on_the_battlefield_is_offered() -> None:
+    database, registry = _glance()
+    scenario = Scenario(2, database=database, registry=registry)
+    (glance,) = scenario.hand(P0, ["Test Glance"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    assert [o.object for o in casts(scenario.build())] == [glance]
+
+
+def test_608_2b_up_to_one_target_chosen_and_gone_doesnt_resolve() -> None:
+    """Test Glance chose Sol Ring, which is gone as it resolves: it was targeted and every target
+    is illegal, so it doesn't resolve and draws nothing (608.2b)."""
+    database, registry = _glance()
+    scenario = Scenario(2, database=database, registry=registry)
+    (glance,) = scenario.stack(P0, ["Test Glance"])
+    (ring,) = scenario.battlefield(P1, ["Sol Ring"])
+    scenario.targets(glance, [TargetObject(ring)])
+    (shatter,) = scenario.stack(P1, ["Test Shatter"])
+    scenario.targets(shatter, [TargetObject(ring)])
+    scenario.library(P0, ["Forest"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, pass_(P0), pass_(P1), pass_(P0), pass_(P1))
+    assert [r.spell for r in records(state, SpellDidNotResolve)] == [glance]
+    assert state.player(P0).hand == []
+
+
+def test_115_4_any_target_includes_a_planeswalker() -> None:
+    walker = {**fx.spell("Test Walker", "{2}", 2.0, "Planeswalker — Test", []), "loyalty": "3"}
+    database, registry = _with([walker], [CardDefinition("Test Walker")])
+    scenario = Scenario(2, database=database, registry=registry)
+    (shock,) = scenario.hand(P0, ["Test Shock"])
+    (planeswalker,) = scenario.battlefield(P1, ["Test Walker"])
+    scenario.mana(P0, R)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(shock, P0))
+    assert target_options(state) == (
+        ObjectOption(planeswalker),
+        PlayerOption(P0),
+        PlayerOption(P1),
+    )

@@ -49,8 +49,9 @@ def test_608_2h_a_spell_leaving_the_stack_records_its_record() -> None:
 
 
 def test_608_2h_other_zones_record_nothing() -> None:
-    """Only the battlefield and the stack (design.md §17.9): a card moving from a hand to a
-    graveyard leaves no last known information."""
+    """A card moving from a hand (a hidden zone) to a graveyard leaves no last known information.
+    The engine records it for the battlefield and the stack only so far (design.md §17.9); 608.2h
+    covers every public zone, so M4 (effects on graveyard cards) extends it."""
     scenario = Scenario(2)
     (card,) = scenario.hand(P0, ["Grizzly Bears"])
     state = scenario.build()

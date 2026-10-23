@@ -193,8 +193,10 @@ def test_608_2b_a_player_who_left_is_an_illegal_target() -> None:
     assert names(state, Zone.graveyard(P0)) == ["Test Shock"]
 
 
-def test_115_6_a_spell_without_targets_isnt_checked() -> None:
-    """608.2b applies to a spell with targets; Test Ponder has none and always resolves."""
+def test_608_2b_a_spell_with_no_instance_of_target_isnt_checked() -> None:
+    """608.2b applies to a spell that specifies targets; Test Ponder has no instance of the word
+    "target" and always resolves. (A spell that requires targets but chose none, 115.6:
+    ``test_115_6_up_to_one_target_is_asked_even_with_one_candidate``.)"""
     scenario = Scenario(2)
     scenario.stack(P0, ["Test Ponder"])
     scenario.library(P0, ["Forest"])

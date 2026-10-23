@@ -35,7 +35,9 @@ from resolve.cards.primitives.values import Fixed, PowerOf
 from resolve.data.types import CardType
 from resolve.effects.evaluation import Context, Timing, evaluate, players
 from resolve.engine.drawing import DrawCards as DrawTask
+from resolve.engine.loop import run
 from resolve.errors import NotImplementedRule
+from resolve.events.cards import CardDrawn
 from resolve.events.damage import DamageDealt
 from resolve.events.life import LifeGained
 from resolve.events.permanents import ObjectExiled, PermanentDestroyed
@@ -44,7 +46,8 @@ from resolve.state.game import move_object
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.spell import Target, TargetObject, TargetPlayer
 from resolve.state.zones import EXILE, Zone
-from tests.scenario import Scenario
+from tests.engine_support import Hold
+from tests.scenario import Scenario, names
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 CREATURE = target(CardType.CREATURE)
@@ -243,11 +246,16 @@ def test_119_gain_life_gains_or_does_nothing() -> None:
 
 
 def test_121_draw_cards_draws_one_at_a_time() -> None:
+    """ "Draw two cards": two separate draw events, one card each (121.2), top card first."""
     scenario = Scenario(2)
     (spell,) = scenario.stack(P0, ["Test Ponder"])
+    top, second, _ = scenario.library(P0, ["Forest", "Plains", "Island"])
     state = scenario.build()
     (task,) = DrawCards(Fixed(2)).tasks(state, context(spell))
-    assert isinstance(task, DrawTask) and (task.player, task.count) == (P0, 2)
+    assert isinstance(task, DrawTask) and task.rules == ("121.1", "121.2")
+    state.tasks = [Hold(), task]
+    run(state)
+    draws = [e.record for e in state.event_log if isinstance(e.record, CardDrawn)]
+    assert [(d.player, d.drawn_from) for d in draws] == [(P0, top), (P0, second)]
+    assert names(state, Zone.hand(P0)) == ["Forest", "Plains"]
     assert DrawCards(Fixed(0)).tasks(state, context(spell)) == ()
-    assert task.rules == ("121.1", "121.2")
-    assert Zone.hand(P0) != Zone.hand(P1)

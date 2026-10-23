@@ -14,14 +14,20 @@ information from the battlefield (608.2h). Exiling moves it to exile as a new ob
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
+
+import pytest
 
 from resolve.cards.definitions.removal import SWORDS_TO_PLOWSHARES
 from resolve.cards.registry import default_registry
 from resolve.data.cards import load_card_excerpt
 from resolve.decisions.spaces import CastSpellOption
+from resolve.effects.characteristics import Characteristics
 from resolve.events.life import LifeGained
 from resolve.events.permanents import ObjectExiled
+from resolve.state import last_known
+from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import ManaType
 from resolve.state.spell import TargetObject
@@ -134,3 +140,40 @@ def test_304_1_it_is_an_instant_cast_in_an_opponents_turn() -> None:
     run_script(state, cast(swords, P0), choose_targets(lions), pass_(P0), pass_(P1))
     assert names(state, EXILE) == ["Savannah Lions"] and bears in state.battlefield
     assert state.player(P1).life == 22
+
+
+def test_608_2c_the_creature_is_exiled_before_the_life_is_gained() -> None:
+    """The instructions are followed in the order written (608.2c): the exile is logged before
+    the life gain."""
+    scenario, _, _ = swords_on("Grizzly Bears")
+    state = scenario.build()
+    run_script(state, pass_(P0), pass_(P1))
+    order = [
+        type(e.record) for e in state.event_log if isinstance(e.record, ObjectExiled | LifeGained)
+    ]
+    assert order == [ObjectExiled, LifeGained]
+
+
+def test_608_2h_the_power_is_the_creatures_on_the_battlefield_not_the_exiled_cards(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Stand-in for an effect that changes power (M5): while on the battlefield the Hill Giant's
+    power reads 5; the exiled card's is its printed 3. Its controller gains 5, the power it had
+    as it last existed on the battlefield (the ruling; 608.2h)."""
+    original = last_known.characteristics
+
+    def pumped(state: GameState, obj: ObjectId) -> Characteristics:
+        chars = original(state, obj)
+        on_battlefield = state.objects[obj].zone.kind is ZoneKind.BATTLEFIELD
+        if on_battlefield and chars.name == "Hill Giant":
+            return replace(chars, power_text="5")
+        return chars
+
+    monkeypatch.setattr(last_known, "characteristics", pumped)
+    scenario, _, _ = swords_on("Hill Giant")
+    state = scenario.build()
+    run_script(state, pass_(P0), pass_(P1))
+    (gained,) = records(state, LifeGained)
+    assert (gained.player, gained.amount) == (P1, 5)
+    (exiled,) = state.exile
+    assert original(state, exiled).power == 3

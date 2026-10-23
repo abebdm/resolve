@@ -24,19 +24,21 @@ from resolve.cards.registry import default_registry
 from resolve.data.cards import load_card_excerpt
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import CastSpellOption, ObjectOption
+from resolve.engine.concede import concede
 from resolve.events.base import AnswerRecord
 from resolve.events.permanents import PermanentDestroyed
-from resolve.events.spells import SpellDidNotResolve, SpellResolved
+from resolve.events.spells import ActionReversed, BecameTargets, SpellDidNotResolve, SpellResolved
 from resolve.state.ids import PlayerId
 from resolve.state.mana import ManaType
 from resolve.state.spell import TargetObject
 from resolve.state.turn import Phase
 from resolve.state.zones import Zone
 from tests.casting_support import cast, choose_targets, options, pass_, records
+from tests.game_fixtures import request_of
 from tests.rules.test_115_targets import target_options
 from tests.scenario import Scenario, names, run_script
 
-P0, P1 = PlayerId(0), PlayerId(1)
+P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 R, G, W = ManaType.RED, ManaType.GREEN, ManaType.WHITE
 EXCERPT = Path(__file__).resolve().parents[2] / "tools" / "excerpts" / "cards.json"
 TEXT = "Destroy target artifact, target creature, target enchantment, and target land."
@@ -179,3 +181,82 @@ def test_608_2b_decimate_with_every_target_gone_doesnt_resolve() -> None:
     run_script(state, pass_(P0), pass_(P1))
     assert [r.spell for r in records(state, SpellDidNotResolve)] == [first]
     assert len(records(state, PermanentDestroyed)) == 2
+
+
+def test_608_2b_an_illegal_target_still_on_the_battlefield_isnt_affected() -> None:
+    """Decimate's "target creature" is Arcane Signet, which isn't a creature (as a creature that
+    stopped being one would be). The other targets are legal, so Decimate resolves (608.2b), but
+    the illegal target isn't affected: Sol Ring, Test Totem and the Forest are destroyed, the
+    Signet stays."""
+    scenario = Scenario(2)
+    (decimate,) = scenario.stack(P0, ["Decimate"])
+    ring, signet, totem, forest = scenario.battlefield(
+        P1, ["Sol Ring", "Arcane Signet", "Test Totem", "Forest"]
+    )
+    scenario.targets(
+        decimate,
+        [TargetObject(ring)],
+        [TargetObject(signet)],
+        [TargetObject(totem)],
+        [TargetObject(forest)],
+    )
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, pass_(P0), pass_(P1))
+    assert records(state, SpellDidNotResolve) == []
+    assert [r.obj for r in records(state, PermanentDestroyed)] == [ring, totem, forest]
+    assert state.battlefield == [signet]
+
+
+def test_608_2b_only_the_first_instance_illegal_still_resolves() -> None:
+    """Decimate targets Sol Ring (the artifact), Grizzly Bears, Test Totem and a Forest; P1
+    destroys Sol Ring in response with Test Shatter. The first instance's target is illegal, the
+    other three are legal: Decimate resolves and destroys them (608.2b: "for every instance")."""
+    scenario = Scenario(2)
+    (decimate,) = scenario.stack(P0, ["Decimate"])
+    ring, bears, totem, forest = scenario.battlefield(
+        P1, ["Sol Ring", "Grizzly Bears", "Test Totem", "Forest"]
+    )
+    scenario.targets(
+        decimate,
+        [TargetObject(ring)],
+        [TargetObject(bears)],
+        [TargetObject(totem)],
+        [TargetObject(forest)],
+    )
+    (shatter,) = scenario.stack(P1, ["Test Shatter"])
+    scenario.targets(shatter, [TargetObject(ring)])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, pass_(P0), pass_(P1), pass_(P0), pass_(P1))
+    assert records(state, SpellDidNotResolve) == []
+    assert [r.obj for r in records(state, PermanentDestroyed)] == [ring, bears, totem, forest]
+    assert state.battlefield == []
+
+
+def test_601_2c_a_cast_whose_targets_vanish_is_reversed() -> None:
+    """Three players. P0 casts Decimate: P1 has two artifacts (so the first instance is asked), a
+    creature and a land; the only enchantment is P2's. P2 concedes while P0 chooses: their Totem
+    leaves the game with them (800.4a), so the enchantment instance has no legal target and the
+    cast is illegal (601.2c): it is reversed (733.1). Decimate is back in P0's hand and P0 has
+    priority."""
+    scenario = Scenario(3)
+    (decimate,) = scenario.hand(P0, ["Decimate"])
+    ring, signet, _, _ = scenario.battlefield(
+        P1, ["Sol Ring", "Arcane Signet", "Grizzly Bears", "Forest"]
+    )
+    scenario.battlefield(P2, ["Test Totem"])
+    scenario.mana(P0, R, G, W, W)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(decimate, P0))
+    assert target_options(state) == (ObjectOption(ring), ObjectOption(signet))
+    concede(state, P2)
+    assert target_options(state) == (ObjectOption(ring), ObjectOption(signet))
+    run_script(state, choose_targets(ring))
+    assert state.stack == [] and state.player(P0).hand == [decimate]
+    (reversed_,) = records(state, ActionReversed)
+    assert reversed_.card == decimate
+    assert records(state, BecameTargets) == []
+    request = request_of(state)
+    assert request.player == P0 and request.kind is DecisionKind.PRIORITY_ACTION
