@@ -54,7 +54,8 @@ An instant's or sorcery's spell ability, in `CardDefinition.spell`: one `Mode` (
 `ModeChoice`. The engine reads it as `characteristics(...).spell_ability`. `text` is written from
 the primitives (a modal spell's: the instruction to choose, then a bulleted line per mode).
 `ModeChoice.combinations(legal)` lists every choice of modes among the legal ones (700.2a), each
-once, its modes in printed order with a repeated mode listed that many times (700.2d);
+once, its modes in printed order with a repeated mode listed that many times (700.2d; a minimum
+of 0 is a 700.2 gap);
 `SpellAbility.chosen(modes)` gives the modes a record's `modes` follow (its one mode if it isn't
 modal), `instances(modes)` their instances of "target" in turn (601.2c, 700.2c).
 - **Rules:** 113.3a, 115.1a, 601.2b, 601.2c, 608.2c; 700.2, 700.2a, 700.2c, 700.2d

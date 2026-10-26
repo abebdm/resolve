@@ -32,7 +32,10 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   modes (`CastChoices.modes`, through the public `ModesChosen`, refused if already set: 700.2f),
   and `CastChoices.targets` lists the instances of each chosen mode in turn. `ResolveTopOfStack`
   checks every target once (608.2b) and gives `ResolveSpell` one `Instruction` per effect with
-  its own mode's targets, so `TargetRef(i)` indexes into that mode.
+  its own mode's targets, so `TargetRef(i)` indexes into that mode. A `ModeChoice` whose minimum
+  is 0 raises `NotImplementedRule("700.2")` when its choices are listed: whether a modal spell may
+  be cast with no mode isn't settled for spells (700.2b covers triggered abilities), and no
+  implemented card has "choose up to" or "any number".
 - **Why:** 700.2d says a repeated mode is "treated as if that mode appeared that many times in
   sequence", and 608.2c (and the Confluence ruling) that the modes are followed in printed order,
   so the order in which a player names the modes carries nothing: offering permutations would

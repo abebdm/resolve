@@ -348,6 +348,11 @@ TEST_COMMAND = spell(
     "Choose two \u2014\n\u2022 Destroy target artifact.\n\u2022 Destroy target enchantment.\n"
     "\u2022 Draw a card.",
 )  # fmt: skip
+TEST_TWIN_BLAZE = spell(
+    "Test Twin Blaze", "{X}{X}{R}", 1.0, "Instant", ["R"],
+    "Test Twin Blaze deals X damage to any target.",
+)  # fmt: skip
+TEST_ARTIFACT_TOTEM = spell("Test Artifact Totem", "{2}", 2.0, "Artifact Enchantment", [], "")
 
 # Mana costs that don't follow 107.4 (an Un-set half-mana symbol): loads, but can't be played.
 TEST_HALF = spell("Test Half", "{HW}", 0.5, "Creature — Elf", ["W"])

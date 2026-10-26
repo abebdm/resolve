@@ -15,6 +15,7 @@ from resolve.cards.primitives.base import Ability, Effect
 from resolve.cards.primitives.refs import Phrasing, sentence
 from resolve.cards.primitives.targets import TargetSpec
 from resolve.cards.primitives.values import Fixed
+from resolve.errors import NotImplementedRule
 from resolve.values import Immutable
 
 
@@ -64,6 +65,10 @@ class ModeChoice(Immutable):
         number of times if ``repeatable``. A mode chosen more than once is that mode that many
         times in sequence (700.2d), so the order among its repetitions isn't a separate choice:
         their targets are chosen in order (601.2c)."""
+        if self.minimum == 0:
+            # Whether a modal spell may be cast with no mode chosen isn't settled by 700.2 or
+            # 601.2b (700.2b removes a triggered ability with none); no implemented card has it.
+            raise NotImplementedRule("700.2: choosing zero modes of a modal spell")
         pick = (
             itertools.combinations_with_replacement if self.repeatable else itertools.combinations
         )
@@ -71,7 +76,6 @@ class ModeChoice(Immutable):
             chosen
             for count in range(self.minimum, self.maximum + 1)
             for chosen in pick(modes, count)
-            if chosen
         )
 
     def text(self, modes: int) -> str:

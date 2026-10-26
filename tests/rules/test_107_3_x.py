@@ -41,6 +41,7 @@ from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import ManaType
 from resolve.state.spell import TargetPlayer
 from resolve.state.turn import Phase
+from resolve.state.turn import Step as TurnStep
 from resolve.state.zones import Zone
 from tests.casting_support import activate, cast, choose_targets, choose_x, pass_, records
 from tests.game_fixtures import answer, request_of
@@ -177,3 +178,58 @@ def test_601_2g_the_payment_under_way_is_the_total_with_x() -> None:
     run_script(state, *(activate(m) for m in mountains))  # then "pay" is the only answer
     (cast_event,) = records(state, SpellCast)
     assert cast_event.total_cost == parse_mana_cost("{2}{R}")
+
+
+def test_107_3a_the_caster_announces_x_even_out_of_turn() -> None:
+    """Three players, P0's upkeep: P1 casts Test Blaze after P0 passes; the value of X is chosen
+    by the spell's controller (107.3a), so P1 is asked."""
+    scenario = Scenario(3)
+    (blaze,) = scenario.hand(P1, ["Test Blaze"])
+    scenario.mana(P1, R, R)
+    scenario.at(TurnStep.UPKEEP)
+    state = scenario.build()
+    run_script(state, pass_(P0), cast(blaze, P1))
+    request = request_of(state)
+    assert request.kind is DecisionKind.CHOOSE_X
+    assert (request.player, request.for_player) == (P1, P1)
+
+
+def test_733_1_a_reversed_cast_forgets_its_x() -> None:
+    """After an X too large to pay is reversed, casting Test Blaze again asks X again (the
+    reversal restores the game, 733.1), and the new value is the one used."""
+    scenario, blaze = _blaze(R, R)
+    state = scenario.build()
+    run_script(state, cast(blaze, P0), choose_x(5), choose_targets(OPPONENT))
+    assert blaze in state.player(P0).hand
+    run_script(state, cast(blaze, P0))
+    assert request_of(state).kind is DecisionKind.CHOOSE_X
+    run_script(state, choose_x(1), choose_targets(OPPONENT))
+    (cast_event,) = records(state, SpellCast)
+    assert cast_event.total_cost == parse_mana_cost("{1}{R}")
+    (spell,) = state.stack
+    record = state.objects[spell].spell
+    assert record is not None and record.x == 1
+
+
+def test_202_3e_mana_value_with_x_zero_and_two_xs() -> None:
+    """On the stack, Test Blaze with X = 0 has mana value 1; Test Twin Blaze ({X}{X}{R}) with
+    X = 3 has 7, each {X} counting the value (107.3a, 202.3e)."""
+    scenario = Scenario(2)
+    blaze, twin = scenario.stack(P0, ["Test Blaze", "Test Twin Blaze"])
+    scenario.x(blaze, 0).x(twin, 3)
+    state = scenario.build()
+    assert characteristics(state, blaze).mana_value == 1
+    assert characteristics(state, twin).mana_value == 7
+    record = state.objects[twin].spell
+    assert record is not None and record.total_cost == parse_mana_cost("{6}{R}")
+
+
+def test_601_2b_x_is_public() -> None:
+    """The value of X is announced (601.2b): every player's view of the spell shows it."""
+    scenario, blaze = _blaze(R, R, R)
+    state = scenario.build()
+    run_script(state, cast(blaze, P0), choose_x(2))
+    (spell,) = state.stack
+    for player in (P0, P1):
+        (seen,) = [o for o in view_for(state, player).stack if o.id == spell]
+        assert seen.spell is not None and seen.spell.x == 2

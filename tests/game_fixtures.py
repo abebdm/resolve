@@ -76,6 +76,8 @@ TEST_BLAZE = CardDefinition(
     "Test Blaze",
     spell=SpellAbility((Mode((ANY_TARGET,), (DealDamage(X(), (TargetRef(0),)),)),)),
 )
+# Test Twin Blaze ({X}{X}{R}) deals X damage to any target.
+TEST_TWIN_BLAZE = CardDefinition("Test Twin Blaze", spell=TEST_BLAZE.spell)
 # Choose two — • Destroy target artifact. • Destroy target enchantment. • Draw a card.
 TEST_COMMAND = CardDefinition(
     "Test Command",
@@ -128,6 +130,7 @@ def scenario_registry() -> CardRegistry:
         "Test Wall",
         "Test Totem",
         "Test Artifact Land Creature",
+        "Test Artifact Totem",
     )
     lands = (basic_lands.PLAINS, basic_lands.ISLAND, basic_lands.SWAMP, basic_lands.MOUNTAIN)
     creatures = vanilla_creatures.DEFINITIONS
@@ -144,6 +147,7 @@ def scenario_registry() -> CardRegistry:
             TEST_PONDER,
             TEST_SHATTER,
             TEST_BLAZE,
+            TEST_TWIN_BLAZE,
             TEST_COMMAND,
             *map(CardDefinition, extra),
         ]
@@ -159,7 +163,8 @@ def scenario_database() -> CardDatabase:
     extra += [fx.IXALLIS_LOREKEEPER, fx.TEST_RAPTOR, fx.TEST_MOX, fx.TEST_EMBER]
     extra += [fx.SWORDS_TO_PLOWSHARES, fx.CHANDRAS_IGNITION, fx.DECIMATE, fx.TEST_WALL]
     extra += [fx.TEST_SHATTER, fx.TEST_TOTEM, fx.TEST_ARTIFACT_LAND_CREATURE]
-    extra += [fx.FIERY_CONFLUENCE, fx.TEST_BLAZE, fx.TEST_COMMAND]
+    extra += [fx.FIERY_CONFLUENCE, fx.TEST_BLAZE, fx.TEST_TWIN_BLAZE, fx.TEST_COMMAND]
+    extra += [fx.TEST_ARTIFACT_TOTEM]
     lands = [fx.PLAINS, fx.ISLAND, fx.SWAMP, fx.MOUNTAIN]
     return CardDatabase(parse_oracle_cards([*fx.default_cards(), *lands, *extra]))
 

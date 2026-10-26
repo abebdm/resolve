@@ -32,11 +32,14 @@ from __future__ import annotations
 
 import pytest
 
+from resolve.cards.primitives.spells import ModeChoice
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import CastSpellOption, ChooseOne, ModesOption, ObjectOption, Pick
 from resolve.engine.api import submit
-from resolve.errors import EngineError, InvalidAnswer
+from resolve.engine.view import view_for
+from resolve.errors import EngineError, InvalidAnswer, NotImplementedRule
 from resolve.events.base import AnswerRecord
+from resolve.events.cards import CardDrawn
 from resolve.events.damage import DamageDealt
 from resolve.events.permanents import PermanentDestroyed
 from resolve.events.pipeline import ApplyEvents
@@ -45,20 +48,21 @@ from resolve.events.spells import (
     BecameTargets,
     ModesChosen,
     SpellCast,
+    SpellDidNotResolve,
     SpellResolved,
 )
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import ManaType
 from resolve.state.spell import TargetObject
-from resolve.state.turn import Phase
+from resolve.state.turn import Phase, Step
 from resolve.state.zones import Zone
 from tests.casting_support import cast, choose_modes, choose_targets, options, pass_, records
 from tests.game_fixtures import answer, request_of
 from tests.rules.test_115_targets import target_options
 from tests.scenario import Scenario, names, run_script
 
-P0, P1 = PlayerId(0), PlayerId(1)
+P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 R, U = ManaType.RED, ManaType.BLUE
 
 
@@ -245,7 +249,9 @@ def test_700_2_modes_cant_change_after_casting() -> None:
     """Fiery Confluence cast with "1 damage to each creature" three times while an artifact is on
     the battlefield. The modes are asked once, as it is cast, and recorded; they can't be chosen
     again (a second ModesChosen is refused), and the spell resolves with exactly those modes:
-    three damage events of 1, nothing destroyed."""
+    three damage events of 1, nothing destroyed. (No effect can ask for modes again yet: the
+    refused second ModesChosen is the engine's guard; copies keeping their modes, 700.2g, are
+    M5's tests.)"""
     scenario, confluence, (bears, ring) = _confluence("Sol Ring")
     state = scenario.build()
     run_script(state, cast(confluence, P0), choose_modes(0, 0, 0))
@@ -294,3 +300,125 @@ def test_733_1_a_modal_spell_that_cant_be_paid_is_reversed() -> None:
     assert state.stack == []
     assert confluence in state.player(P0).hand
     assert len(records(state, ActionReversed)) == 1 and not records(state, SpellCast)
+
+
+def test_601_2b_the_caster_chooses_the_modes_even_out_of_turn() -> None:
+    """Three players, P0's upkeep: P1 casts the instant Test Command after P0 passes. The modes
+    are announced by the spell's controller (601.2b, 700.2a), so P1 is asked, not the active
+    player."""
+    scenario = Scenario(3)
+    (command,) = scenario.hand(P1, ["Test Command"])
+    scenario.battlefield(P2, ["Sol Ring", "Test Totem"])
+    scenario.mana(P1, U, U)
+    scenario.at(Step.UPKEEP)
+    state = scenario.build()
+    run_script(state, pass_(P0), cast(command, P1))
+    request = request_of(state)
+    assert request.kind is DecisionKind.CHOOSE_MODES
+    assert (request.player, request.for_player) == (P1, P1)
+
+
+def test_608_2c_test_command_destroys_then_draws() -> None:
+    """Test Command with "destroy target artifact" and "draw a card", targeting Sol Ring: as it
+    resolves the ring is destroyed, then its controller, P0, draws one card; P1 draws none."""
+    scenario = Scenario(2)
+    (command,) = scenario.stack(P0, ["Test Command"])
+    (ring,) = scenario.battlefield(P1, ["Sol Ring"])
+    scenario.library(P0, ["Forest", "Forest"])
+    scenario.library(P1, ["Forest"])
+    scenario.modes(command, 0, 2).targets(command, [TargetObject(ring)])
+    scenario.at(Step.UPKEEP)
+    state = scenario.build()
+    hands = (len(state.player(P0).hand), len(state.player(P1).hand))
+    run_script(state, pass_(P0), pass_(P1))
+    assert [r.obj for r in records(state, PermanentDestroyed)] == [ring]
+    assert (len(state.player(P0).hand), len(state.player(P1).hand)) == (hands[0] + 1, hands[1])
+    log = [e.record for e in state.event_log]
+    destroyed = next(i for i, r in enumerate(log) if isinstance(r, PermanentDestroyed))
+    drawn = next(i for i, r in enumerate(log) if isinstance(r, CardDrawn))
+    assert destroyed < drawn
+
+
+def test_608_2b_test_command_with_its_only_target_gone_draws_nothing() -> None:
+    """The same Test Command, but Test Shatter destroys Sol Ring in response: the spell's only
+    target is illegal, so it doesn't resolve at all and the "draw a card" mode doesn't happen
+    either (608.2b)."""
+    scenario = Scenario(2)
+    (command,) = scenario.stack(P0, ["Test Command"])
+    (shatter,) = scenario.stack(P1, ["Test Shatter"])
+    (ring,) = scenario.battlefield(P1, ["Sol Ring"])
+    scenario.library(P0, ["Forest"])
+    scenario.modes(command, 0, 2).targets(command, [TargetObject(ring)])
+    scenario.targets(shatter, [TargetObject(ring)])
+    scenario.at(Step.UPKEEP)
+    state = scenario.build()
+    hand = len(state.player(P0).hand)
+    run_script(state, pass_(P0), pass_(P1), pass_(P0), pass_(P1))
+    assert state.stack == []
+    (failed,) = records(state, SpellDidNotResolve)
+    assert failed.spell == command
+    assert records(state, CardDrawn) == [] and len(state.player(P0).hand) == hand
+
+
+def test_601_2c_one_object_may_be_the_target_of_two_modes() -> None:
+    """Test Command with an artifact enchantment as the only artifact and the only enchantment:
+    both destroy modes are legal and each has one choice, so the object is the target of both
+    instances (601.2c, 115.3) without being asked. It is destroyed once; the second instance
+    finds it gone and does nothing."""
+    scenario = Scenario(2)
+    (command,) = scenario.hand(P0, ["Test Command"])
+    (totem,) = scenario.battlefield(P1, ["Test Artifact Totem"])
+    scenario.mana(P0, U, U)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(command, P0))
+    assert {o.modes for o in _modes_offered(state)} == {(0, 1), (0, 2), (1, 2)}
+    run_script(state, choose_modes(0, 1))
+    assert DecisionKind.CHOOSE_TARGETS not in [r.kind for r in records(state, AnswerRecord)]
+    (spell,) = state.stack
+    record = state.objects[spell].spell
+    assert record is not None
+    assert record.targets == ((TargetObject(totem),), (TargetObject(totem),))
+    run_script(state, pass_(P0), pass_(P1))
+    assert [r.obj for r in records(state, PermanentDestroyed)] == [totem]
+    assert names(state, Zone.graveyard(P1)) == ["Test Artifact Totem"]
+
+
+def test_601_2b_the_modes_are_public() -> None:
+    """The modes are announced (601.2b): every player's view of the spell shows them."""
+    scenario, confluence, _ = _confluence("Sol Ring")
+    state = scenario.build()
+    run_script(state, cast(confluence, P0), choose_modes(0, 1, 1))
+    (spell,) = state.stack
+    for player in (P0, P1):
+        (seen,) = [o for o in view_for(state, player).stack if o.id == spell]
+        assert seen.spell is not None and seen.spell.modes == (0, 1, 1)
+
+
+def test_700_2d_each_creature_means_every_players_creatures() -> None:
+    """Three players; "1 damage to each creature" damages every creature on the battlefield, the
+    caster's own included (608.2c: "each creature" has no controller), once per repetition."""
+    scenario = Scenario(3)
+    (confluence,) = scenario.stack(P0, ["Fiery Confluence"])
+    scenario.modes(confluence, 0, 0, 1)
+    (own,) = scenario.battlefield(P0, ["Test Wall"])
+    (bears,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    (lions,) = scenario.battlefield(P2, ["Savannah Lions"])
+    scenario.at(Step.UPKEEP)
+    state = scenario.build()
+    life = state.player(P1).life
+    run_script(state, pass_(P0), pass_(P1), pass_(P2))
+    damage = records(state, DamageDealt)
+    assert [d.to_objects for d in damage[:2]] == [((own, 1), (bears, 1), (lions, 1))] * 2
+    assert damage[2].to_players == ((P1, 2), (P2, 2))
+    assert state.battlefield == [own] and state.objects[own].damage == 2
+    assert [state.player(p).life for p in (P0, P1, P2)] == [life, life - 2, life - 2]
+
+
+def test_700_2_choosing_zero_modes_is_a_gap() -> None:
+    """A spell that may choose zero modes ("choose up to one", "choose any number"): whether it
+    may be cast with none isn't settled by 700.2 or 601.2b for spells (700.2b covers only
+    triggered abilities), and no implemented card has it, so it is a gap."""
+    with pytest.raises(NotImplementedRule) as gap:
+        ModeChoice(0, 2).combinations((0, 1))
+    assert gap.value.rule == "700.2"
