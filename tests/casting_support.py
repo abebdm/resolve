@@ -12,6 +12,8 @@ from resolve.decisions.spaces import (
     ChooseOne,
     ColorOption,
     ManaActivationOption,
+    ModesOption,
+    Number,
     ObjectOption,
     Option,
     PassOption,
@@ -67,6 +69,16 @@ def choose_targets(*targets: ObjectId | PlayerOption, player: PlayerId | None = 
     ``PlayerOption``."""
     chosen = [t if isinstance(t, PlayerOption) else ObjectOption(t) for t in targets]
     return choose(*chosen, player=player, kind=DecisionKind.CHOOSE_TARGETS)
+
+
+def choose_modes(*modes: int, player: PlayerId | None = None) -> Choose:
+    """601.2b, 700.2: the modes of a modal spell, by index from 0 in printed order."""
+    return choose(ModesOption(modes), player=player, kind=DecisionKind.CHOOSE_MODES)
+
+
+def choose_x(value: int, player: PlayerId | None = None) -> Step:
+    """601.2b, 107.3a: the value announced for X."""
+    return Step(Number(value), player=player, kind=DecisionKind.CHOOSE_X)
 
 
 def choose_color(color: Color) -> Choose:

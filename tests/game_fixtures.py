@@ -21,9 +21,9 @@ from resolve.cards.definitions import (
 )
 from resolve.cards.primitives.effects import DealDamage, Destroy, DrawCards
 from resolve.cards.primitives.refs import TargetRef
-from resolve.cards.primitives.spells import Mode, SpellAbility
+from resolve.cards.primitives.spells import Mode, ModeChoice, SpellAbility
 from resolve.cards.primitives.targets import ANY_TARGET, target
-from resolve.cards.primitives.values import Fixed
+from resolve.cards.primitives.values import X, Fixed
 from resolve.cards.registry import CardDefinition, CardRegistry
 from resolve.data.cards import CardDatabase, parse_card, parse_oracle_cards
 from resolve.data.types import CardType
@@ -69,6 +69,24 @@ TEST_PONDER = CardDefinition("Test Ponder", spell=SpellAbility((Mode((), (DrawCa
 TEST_SHATTER = CardDefinition(
     "Test Shatter",
     spell=SpellAbility((Mode((target(CardType.ARTIFACT),), (Destroy((TargetRef(0),)),)),)),
+)
+
+# Test Blaze deals X damage to any target.
+TEST_BLAZE = CardDefinition(
+    "Test Blaze",
+    spell=SpellAbility((Mode((ANY_TARGET,), (DealDamage(X(), (TargetRef(0),)),)),)),
+)
+# Choose two — • Destroy target artifact. • Destroy target enchantment. • Draw a card.
+TEST_COMMAND = CardDefinition(
+    "Test Command",
+    spell=SpellAbility(
+        (
+            Mode((target(CardType.ARTIFACT),), (Destroy((TargetRef(0),)),)),
+            Mode((target(CardType.ENCHANTMENT),), (Destroy((TargetRef(0),)),)),
+            Mode((), (DrawCards(),)),
+        ),
+        ModeChoice(2, 2),
+    ),
 )
 
 
@@ -125,6 +143,8 @@ def scenario_registry() -> CardRegistry:
             TEST_SHOCK,
             TEST_PONDER,
             TEST_SHATTER,
+            TEST_BLAZE,
+            TEST_COMMAND,
             *map(CardDefinition, extra),
         ]
     )
@@ -139,6 +159,7 @@ def scenario_database() -> CardDatabase:
     extra += [fx.IXALLIS_LOREKEEPER, fx.TEST_RAPTOR, fx.TEST_MOX, fx.TEST_EMBER]
     extra += [fx.SWORDS_TO_PLOWSHARES, fx.CHANDRAS_IGNITION, fx.DECIMATE, fx.TEST_WALL]
     extra += [fx.TEST_SHATTER, fx.TEST_TOTEM, fx.TEST_ARTIFACT_LAND_CREATURE]
+    extra += [fx.FIERY_CONFLUENCE, fx.TEST_BLAZE, fx.TEST_COMMAND]
     lands = [fx.PLAINS, fx.ISLAND, fx.SWAMP, fx.MOUNTAIN]
     return CardDatabase(parse_oracle_cards([*fx.default_cards(), *lands, *extra]))
 

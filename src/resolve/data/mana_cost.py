@@ -160,6 +160,15 @@ class ManaCost(Immutable):
         with ``x`` for each {X} (202.3e)."""
         return sum(symbol.mana_value(x) for symbol in self.symbols)
 
+    @property
+    def has_x(self) -> bool:
+        """Whether the cost has an {X} (107.3a)."""
+        return any(symbol.kind is SymbolKind.VARIABLE for symbol in self.symbols)
+
+    def with_x(self, x: int) -> ManaCost:
+        """This cost with the announced value ``x`` in place of each {X} (107.3a, 601.2f)."""
+        raise NotImplementedError("107.3a")
+
 
 def parse_mana_cost(text: str) -> ManaCost:
     """Parse Scryfall's text for a mana cost; ``ManaCostError`` if it doesn't follow 107.4.

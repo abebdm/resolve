@@ -1,5 +1,5 @@
-"""Events of casting and resolving spells (601.2, 608, 733): proposing and casting, targets,
-resolving or not resolving, and reversal."""
+"""Events of casting and resolving spells (601.2, 608, 733): proposing and casting, modes, X,
+targets, resolving or not resolving, and reversal."""
 
 from __future__ import annotations
 
@@ -104,6 +104,48 @@ class PermanentSpellResolved(Event):
         new = move_object(state, self.spell, BATTLEFIELD, controller=obj.controller)
         new.cast_record = record
         return replace(self, permanent=new.id)
+
+
+def _spell_being_cast(state: GameState, spell: ObjectId) -> CastChoices:
+    obj = state.object(spell)
+    if obj.spell is None or obj.zone.kind is not ZoneKind.STACK:
+        raise EngineError(f"object {spell} isn't a spell being cast")
+    return obj.spell
+
+
+@dataclass(frozen=True, kw_only=True)
+class ModesChosen(Event):
+    """The controller of the modal spell ``spell`` announces its modes (601.2b, 700.2a):
+    ``modes`` by index from 0 in printed order, a mode chosen more than once listed that many
+    times (700.2d). They join its record and can't change afterwards (700.2f, 700.2g). Public:
+    the choice is announced."""
+
+    spell: ObjectId
+    modes: tuple[int, ...]
+
+    def apply(self, state: GameState) -> None:
+        record = _spell_being_cast(state, self.spell)
+        if record.modes:
+            raise EngineError(f"spell {self.spell} already has its modes")
+        state.object(self.spell).spell = replace(record, modes=self.modes)
+
+
+@dataclass(frozen=True, kw_only=True)
+class XAnnounced(Event):
+    """The controller of the spell ``spell`` announces the value of X, ``x`` (601.2b, 107.3a):
+    while the spell is on the stack, every X in its mana cost is that value (107.3a, 202.3e).
+    It joins the spell's record. Public: the value is announced."""
+
+    spell: ObjectId
+    x: int
+
+    def apply(self, state: GameState) -> None:
+        record = _spell_being_cast(state, self.spell)
+        if record.x is not None:
+            raise EngineError(f"spell {self.spell} already has a value for X")
+        if self.x < 0:
+            raise EngineError("X can't be negative (107.1b, 107.3a)")
+        state.object(self.spell).spell = replace(record, x=self.x)
 
 
 @dataclass(frozen=True, kw_only=True)

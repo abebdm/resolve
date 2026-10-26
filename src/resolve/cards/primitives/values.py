@@ -6,9 +6,10 @@ when: on announcement (601.2b, 113.7a) or on resolution, once per effect as it a
 - ``Fixed(n)``: a number printed in the text.
 - ``PowerOf(ref)``: the power of an object (208.1), as it last existed if it has left its zone
   (608.2h); nothing if the object is an illegal target (608.2b).
+- ``X()``: the value of X (107.3): for a spell, the value announced for it as it was cast
+  (107.3a, 601.2b).
 
-X (107.3, M2.7), counts and "the greatest power among" (M2.10) and arithmetic join them with
-their cards. 107.1b: an effect that uses a negative result as an amount uses 0 instead; the
+Counts and "the greatest power among" (M2.10) and arithmetic join them with their cards. 107.1b: an effect that uses a negative result as an amount uses 0 instead; the
 effects apply that (``DealDamage``, ``GainLife``, ``DrawCards``).
 """
 
@@ -49,5 +50,17 @@ class PowerOf(Immutable):
         return f"{phrasing.possessive(self.object)} power"
 
 
-Value = Fixed | PowerOf
+@dataclass(frozen=True)
+class X(Immutable):
+    """The value of X in the text (107.3): for a spell with {X} in its mana cost, the value its
+    controller announced as it was cast (107.3a, 601.2b). Every X on an object has that value
+    (107.3i)."""
+
+    @property
+    def word(self) -> str:
+        """``"X"``, as card text writes it."""
+        return "X"
+
+
+Value = Fixed | PowerOf | X
 """A number in a definition."""

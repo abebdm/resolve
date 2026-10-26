@@ -12,9 +12,9 @@ effect that allows it (601.3), with the zone it allows casting from and its timi
 - ``CastChoices``: the record a spell carries on the stack (``GameObject.spell``): its variant,
   permission and the zone it was cast from (601.2a), then the total cost locked in (601.2f) and the
   mana spent (601.2h). A permanent spell's record passes to the permanent it becomes, as
-  ``GameObject.cast_record`` (400.7d). Its targets (601.2c) are ``TargetObject`` and
-  ``TargetPlayer`` values, one tuple per instance of the word "target"; modes and X join it in
-  M2.7.
+  ``GameObject.cast_record`` (400.7d). It holds the modes chosen (700.2, 601.2b), the value
+  announced for X (107.3a, 601.2b) and the targets (601.2c): ``TargetObject`` and
+  ``TargetPlayer`` values, one tuple per instance of the word "target".
 
 Everything here is Immutable: a record is replaced, never changed, as each choice is made.
 """
@@ -186,8 +186,14 @@ class CastChoices(Immutable):
 
     - ``variant``, ``permission``: as chosen before the card moved (601.2a, 601.3e).
     - ``cast_from``: the zone the card came from (601.2a).
-    - ``targets``: the targets chosen (601.2c), one tuple per instance of the word "target", in
-      the order the spell's text has them (``TargetSpec``); a tuple may be empty when the
+    - ``modes``: the modes chosen for a modal spell (601.2b, 700.2), by index from 0 in printed
+      order, a mode chosen more than once listed that many times in sequence (700.2d). Empty
+      until chosen, and for a spell that isn't modal.
+    - ``x``: the value announced for X (601.2b, 107.3a); ``None`` until announced, and for a
+      spell without X.
+    - ``targets``: the targets chosen (601.2c), one tuple per instance of the word "target": the
+      instances of each chosen mode in turn (601.2c, 700.2c: only the chosen modes' instances),
+      each mode's in the order its text has them (``TargetSpec``); a tuple may be empty when the
       instance allows zero targets (115.6). Empty until chosen, and for a spell without targets.
     - ``total_cost``: the mana part of the total cost, locked in (601.2f); ``None`` until then.
     - ``mana_spent``: the mana spent to pay it (601.2h, 400.7d).
@@ -199,6 +205,8 @@ class CastChoices(Immutable):
     total_cost: ManaCost | None = None
     mana_spent: tuple[Mana, ...] = ()
     targets: tuple[tuple[Target, ...], ...] = ()
+    modes: tuple[int, ...] = ()
+    x: int | None = None
 
     @property
     def targeted(self) -> bool:

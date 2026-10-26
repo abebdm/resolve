@@ -42,11 +42,15 @@ class Mode(Immutable):
 @dataclass(frozen=True)
 class ModeChoice(Immutable):
     """How many modes a modal spell chooses (700.2): from ``minimum`` to ``maximum``, the same
-    mode more than once if ``repeatable`` (700.2d). Chosen in M2.7."""
+    mode more than once if ``repeatable`` (700.2d)."""
 
     minimum: int
     maximum: int
     repeatable: bool = False
+
+    def combinations(self, modes: tuple[int, ...]) -> tuple[tuple[int, ...], ...]:
+        """Every choice of modes among ``modes`` (the legal ones, 700.2a)."""
+        raise NotImplementedRule("700.2: choosing the modes of a modal spell (M2.7)")
 
 
 @dataclass(frozen=True)
@@ -66,6 +70,18 @@ class SpellAbility(Ability):
             raise ValueError("a spell ability needs at least one mode")
         if self.choose is None and len(self.modes) != 1:
             raise ValueError("a nonmodal spell ability has exactly one mode")
+
+    def chosen(self, modes: tuple[int, ...]) -> tuple[Mode, ...]:
+        """The modes that a spell with this ability and the record's ``modes`` follows, in order
+        (608.2c, 700.2d): its one mode if it isn't modal."""
+        if self.choose is None:
+            return self.modes
+        return tuple(self.modes[index] for index in modes)
+
+    def instances(self, modes: tuple[int, ...]) -> tuple[TargetSpec, ...]:
+        """The instances of the word "target" of the chosen ``modes``, in order (601.2c, 700.2c):
+        each chosen mode's, in turn."""
+        return tuple(spec for mode in self.chosen(modes) for spec in mode.targets)
 
     @property
     def text(self) -> str:

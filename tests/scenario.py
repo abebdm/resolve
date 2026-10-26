@@ -204,6 +204,28 @@ class Scenario:
         obj.spell = replace(obj.spell, targets=tuple(tuple(chosen) for chosen in instances))
         return self
 
+    def modes(self, spell: ObjectId, *modes: int) -> Scenario:
+        """Give the modal spell ``spell`` on the stack its modes (601.2b, 700.2): by index from 0
+        in printed order, a repeated mode listed that many times (700.2d)."""
+        state = self._open()
+        obj = state.object(spell)
+        if obj.spell is None:
+            raise ScenarioError(f"object {spell} isn't a spell on the stack")
+        obj.spell = replace(obj.spell, modes=tuple(modes))
+        return self
+
+    def x(self, spell: ObjectId, value: int) -> Scenario:
+        """Give the spell ``spell`` on the stack the announced value ``value`` for X (601.2b,
+        107.3a), and the total cost with that value in place of {X} (601.2f)."""
+        state = self._open()
+        obj = state.object(spell)
+        if obj.spell is None:
+            raise ScenarioError(f"object {spell} isn't a spell on the stack")
+        cost = obj.spell.total_cost
+        total = None if cost is None else cost.with_x(value)
+        obj.spell = replace(obj.spell, x=value, total_cost=total)
+        return self
+
     def exile(self, owner: PlayerId, names: Sequence[str]) -> list[ObjectId]:
         """Put cards owned by ``owner`` into exile (406), face up."""
         return [self.add(name, owner=owner, zone=EXILE) for name in names]
