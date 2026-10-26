@@ -41,6 +41,7 @@ from resolve.decisions.spaces import (
     Distribute,
     ManaActivationOption,
     ManaOption,
+    ModesOption,
     NamedOption,
     Number,
     ObjectOption,
@@ -115,6 +116,12 @@ def describe_option(option: Option, view: PlayerView) -> str:
             return mana.type.symbol + source + restriction
         case ManaActivationOption(object=obj, ability=index):
             return f"reverse ability {index} of {_named(view, obj)}"
+        case ModesOption(modes=modes):
+            numbers = [str(mode + 1) for mode in modes]  # 700.2: as the bullets are printed
+            listed = (
+                numbers[0] if len(numbers) == 1 else ", ".join(numbers[:-1]) + " and " + numbers[-1]
+            )
+            return ("mode " if len(numbers) == 1 else "modes ") + listed
         case ColorOption(color=color):
             return color.name.lower()
 

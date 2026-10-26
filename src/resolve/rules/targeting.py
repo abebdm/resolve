@@ -12,18 +12,21 @@ and whose prohibitions are the rules' own, a spell or ability targeting itself (
 from M2.8, the candidate's shroud, hexproof and protection (702.18a, 702.11b-d, 702.16b).
 
 It is used when a spell's targets are chosen (601.2c: ``legal_targets``, and
-``can_choose_targets`` for the spells priority offers), when it resolves (608.2b), and from M4
-and M5 by abilities and by changing targets (115.7). Everything calls it through the module
-(``targeting.target_problem``), so a test that replaces it is obeyed everywhere.
+``can_choose_targets`` for the spells priority offers), when its modes are chosen (700.2a: a mode
+without enough legal targets can't be, ``legal_modes`` and ``mode_choices``), when it resolves
+(608.2b), and from M4 and M5 by abilities and by changing targets (115.7). Everything calls it
+through the module (``targeting.target_problem``), so a test that replaces it is obeyed
+everywhere.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from resolve.cards.primitives.spells import SpellAbility
 from resolve.cards.primitives.targets import TargetSpec
 from resolve.effects.characteristics import variant_characteristics
-from resolve.errors import NotImplementedRule
+from resolve.errors import EngineError
 from resolve.rules import legality, targeting
 from resolve.rules.legality import Targeter, Verdict
 from resolve.state.game import players_in_game
@@ -61,19 +64,46 @@ def legal_targets(state: GameState, targeter: Targeter, spec: TargetSpec) -> tup
     )
 
 
+def legal_modes(state: GameState, targeter: Targeter, ability: SpellAbility) -> tuple[int, ...]:
+    """The modes of the modal ``ability`` that may be chosen now (700.2a), by index in printed
+    order: those whose every instance of "target" has at least its minimum of legal targets
+    (601.2c). Each instance is judged alone (115.3, 700.2d: a repeated mode may choose the same
+    target again), so one mode's legality doesn't depend on the others chosen."""
+    return tuple(
+        index
+        for index, mode in enumerate(ability.modes)
+        if all(
+            len(targeting.legal_targets(state, targeter, spec)) >= spec.minimum
+            for spec in mode.targets
+        )
+    )
+
+
+def mode_choices(
+    state: GameState, targeter: Targeter, ability: SpellAbility
+) -> tuple[tuple[int, ...], ...]:
+    """Every choice of modes the controller of the modal ``ability`` may make now (601.2b,
+    700.2a, 700.2d): the combinations of its legal modes its ``ModeChoice`` allows."""
+    if ability.choose is None:
+        raise EngineError("a spell that isn't modal has no modes to choose")
+    return ability.choose.combinations(targeting.legal_modes(state, targeter, ability))
+
+
 def can_choose_targets(
     state: GameState, player: PlayerId, card: ObjectId, variant: CastVariant
 ) -> bool:
     """Whether ``player`` could choose legal targets for every instance of "target" the card
     ``card`` requires if cast as ``variant`` now (601.2c): at least each instance's minimum.
-    Different instances may choose the same object (115.3), so each is judged alone."""
+    Different instances may choose the same object (115.3), so each is judged alone. A modal
+    spell needs some legal choice of modes (700.2a, 601.2b); the targets of the modes not chosen
+    don't count (700.2c)."""
     characteristics = variant_characteristics(state, card, variant)
     ability = characteristics.spell_ability
     if ability is None:
         return True
-    if ability.choose is not None:
-        raise NotImplementedRule("700.2: choosing the modes of a modal spell (M2.7)")
     targeter = Targeter(player, card, characteristics)
+    if ability.choose is not None:
+        return bool(targeting.mode_choices(state, targeter, ability))
     return all(
         len(legal_targets(state, targeter, spec)) >= spec.minimum
         for spec in ability.modes[0].targets

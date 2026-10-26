@@ -9,8 +9,9 @@ when: on announcement (601.2b, 113.7a) or on resolution, once per effect as it a
 - ``X()``: the value of X (107.3): for a spell, the value announced for it as it was cast
   (107.3a, 601.2b).
 
-Counts and "the greatest power among" (M2.10) and arithmetic join them with their cards. 107.1b: an effect that uses a negative result as an amount uses 0 instead; the
-effects apply that (``DealDamage``, ``GainLife``, ``DrawCards``).
+Counts and "the greatest power among" (M2.10) and arithmetic join them with their cards.
+107.1b: an effect that uses a negative result as an amount uses 0 instead; the effects apply
+that (``DealDamage``, ``GainLife``, ``DrawCards``).
 """
 
 from __future__ import annotations

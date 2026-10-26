@@ -8,16 +8,16 @@ https://claude.ai/code/session_019NjyT5tmWx2kXf97h4y35b). Branch `claude/eloquen
 - Checked M2.6 is merged into `main` (PR #33).
 - Downloaded the Scryfall snapshot (2026-10-26) for Fiery Confluence's Oracle text and rulings.
 
-## In progress
-
-- Tests first, then the implementation.
+- Tests first (confirmed failing on the 700.2/601.2b gaps, the `with_x` stub and X's text).
+- Implementation: `CastSpell` stages `MODES`, `X`, `TARGETS`; `targeting.legal_modes`,
+  `mode_choices`; modal resolution (`Instruction`); `X` value; `ManaCost.with_x`/`has_x`;
+  mana value with X on the stack; Fiery Confluence; text agent's `ModesOption`.
+- Fuzz-summary test widened to five games (the first four no longer had a payable cast reversed
+  by a random seat); brute-force auto-pay search includes Test Blaze.
 
 ## Next
 
-- Stages `MODES`, `X` in `CastSpell`; `ModesOption`; `X` value; `ModesChosen`, `XAnnounced`;
-  modal resolution; `characteristics` mana value with X; total cost with X substituted.
-- Fiery Confluence (definition, excerpt, card tests), Test Blaze, Test Command fixtures.
-- Checks, fuzz, test-reviewer, docs, PR.
+- Full suite, pyright, quick fuzz, gaps tool; test-reviewer; docs; PR.
 
 ## Decisions so far (not yet in docs)
 

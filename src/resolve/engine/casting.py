@@ -8,11 +8,14 @@ stages and never gives priority itself; its caller does (601.2i, 117.3c):
 |------------|-----------------|---------------------------------------------------------------|
 | ``PROPOSE``| 601.2a          | takes a checkpoint (733); ``SpellProposed``: the card moves to |
 |            |                 | the top of the stack as a new object, with its record          |
-| ``ANNOUNCE``| 601.2b-d       | targets (``CHOOSE_TARGETS``, then ``BecameTargets``); modes, X,|
-|            |                 | hybrid and Phyrexian symbols and division are gaps (M2.7, M4,  |
-|            |                 | M9)                                                            |
+| ``MODES``  | 601.2b, 700.2   | a modal spell's modes (``CHOOSE_MODES``, then ``ModesChosen``)  |
+| ``X``      | 601.2b, 107.3a  | the value of X (``CHOOSE_X``, then ``XAnnounced``); hybrid and  |
+|            |                 | Phyrexian announcements are a gap (M9)                          |
+| ``TARGETS``| 601.2c          | targets (``CHOOSE_TARGETS``, then ``BecameTargets``); division  |
+|            |                 | is a gap (601.2d, M4)                                           |
 | ``CHECK``  | 601.2e, 601.6   | ``legality.allowed`` again for the proposed spell               |
-| ``TOTAL``  | 601.2f          | the total cost: the mana cost (cost modifiers: M2.9, M7)        |
+| ``TOTAL``  | 601.2f          | the total cost: the mana cost with X's value (cost modifiers:   |
+|            |                 | M2.9, M7)                                                       |
 | ``PAY``    | 601.2g-h        | ``PayCosts``: mana abilities, then the payment                 |
 | ``CAST``   | 601.2i          | ``SpellCast``; passing in succession starts over (117.4)        |
 | ``REVERSE``| 733.1           | the cast is illegal: reverse it                                 |
@@ -22,9 +25,25 @@ before anything moves: 709.3 (split halves), 702.102 (fuse), 712.11a-b (back fac
 (adventures), 720.3 (Omens), 718.3 (prototype), 722.3 (prepare spells), 708.4 (face down) and
 903.8 (the commander tax, M7).
 
-**Targets (601.2c).** For each instance of the word "target" in the spell's text, in order, the
-caster chooses from the legal targets (``targeting.legal_targets``) as many as the instance
-allows (``CHOOSE_TARGETS``, a ``ChooseSubset``: no object or player twice, 115.3). An instance
+**Modes (601.2b, 700.2).** A modal spell's controller chooses its modes: ``CHOOSE_MODES``, a
+``ChooseOne`` of ``ModesOption`` values, every choice its ``ModeChoice`` allows among the modes
+that may be chosen (``targeting.mode_choices``; 700.2a: a mode needing targets it can't have
+can't be), each choice once, its modes in printed order with a repeated mode listed that many
+times (700.2d). With one possible choice nothing is asked. The choice is announced
+(``ModesChosen``, public) and can't change (700.2f). With no possible choice the cast is illegal
+and reversed (priority doesn't offer such a spell, ``defaults.cast_options``).
+
+**X (601.2b, 107.3a).** If the mana cost has {X}, the caster announces its value: ``CHOOSE_X``, a
+``ChooseNumber`` from 0 (107.1b) with no upper bound; a value too large to pay is found out by
+paying, and the cast reversed (733.1). It is announced (``XAnnounced``, public), and the total
+cost (601.2f) has it in place of each {X} (``ManaCost.with_x``). Casting without paying the mana
+cost (107.3b: X must be 0) arrives with M2.10's permissions; X defined by the text (107.3c) with
+the first card that has it.
+
+**Targets (601.2c).** For each instance of the word "target" in the spell's text (of a modal
+spell, in each chosen mode in turn, 700.2c), in order, the caster chooses from the legal targets
+(``targeting.legal_targets``) as many as the instance allows (``CHOOSE_TARGETS``, a
+``ChooseSubset``: no object or player twice, 115.3). An instance
 whose only possible answer is every legal target (one creature for "target creature") isn't
 asked. Once all are chosen they become the spell's targets (``BecameTargets``, public). An
 instance with fewer legal targets than it needs makes the cast illegal: it is reversed. Priority
@@ -61,9 +80,14 @@ from resolve.data.mana_cost import ManaCost, SymbolKind
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import (
     AnswerValue,
+    ChooseNumber,
+    ChooseOne,
     ChooseSubset,
+    ModesOption,
+    Number,
     ObjectOption,
     Option,
+    Pick,
     PickMany,
     PlayerOption,
 )
@@ -74,7 +98,14 @@ from resolve.engine.reversal import activations_made
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.mana import ManaSpent
 from resolve.events.pipeline import ApplyEvents
-from resolve.events.spells import ActionReversed, BecameTargets, SpellCast, SpellProposed
+from resolve.events.spells import (
+    ActionReversed,
+    BecameTargets,
+    ModesChosen,
+    SpellCast,
+    SpellProposed,
+    XAnnounced,
+)
 from resolve.rules import legality, targeting
 from resolve.rules.legality import Targeter
 from resolve.state.checkpoint import Checkpoint, take_checkpoint
@@ -84,6 +115,7 @@ from resolve.state.spell import (
     Alternative,
     AlternativeKind,
     Back,
+    CastChoices,
     CastPermission,
     CastVariant,
     FaceDown,
@@ -114,7 +146,9 @@ class CastStage(Enum):
     """Where ``CastSpell`` is (601.2a-i, 733.1)."""
 
     PROPOSE = "propose"
-    ANNOUNCE = "announce"
+    MODES = "modes"
+    X = "x"
+    TARGETS = "targets"
     CHECK = "check"
     TOTAL = "total"
     PAY = "pay"
@@ -152,8 +186,12 @@ class CastSpell(Task):
         match self.stage:
             case CastStage.PROPOSE:
                 return self._propose(state)
-            case CastStage.ANNOUNCE:
-                return self._announce(state)
+            case CastStage.MODES:
+                return self._modes(state)
+            case CastStage.X:
+                return self._x(state)
+            case CastStage.TARGETS:
+                return self._targets(state)
             case CastStage.CHECK:
                 return self._check(state)
             case CastStage.TOTAL:
@@ -178,7 +216,7 @@ class CastSpell(Task):
             raise EngineError(f"player {self.player} may not begin to cast object {self.card}")
         # 733.1: the game as it was before the proposal, to return to if the cast is illegal.
         self.checkpoint = take_checkpoint(state)
-        self.stage = CastStage.ANNOUNCE
+        self.stage = CastStage.MODES
         proposed = SpellProposed(
             player=self.player,
             card=self.card,
@@ -188,7 +226,7 @@ class CastSpell(Task):
         )
         return Push((ApplyEvents((proposed,)), self))
 
-    def _announce(self, state: GameState) -> TaskResult:
+    def _modes(self, state: GameState) -> TaskResult:
         if self.spell is None:
             self.spell = state.stack[-1]  # 601.2a: the topmost object
             obj = state.objects[self.spell]
@@ -196,18 +234,61 @@ class CastSpell(Task):
                 raise EngineError(
                     f"object {self.spell} isn't the spell player {self.player} proposed"
                 )
-        cost = characteristics(state, self.spell).mana_cost
-        if cost is not None:
-            kinds = {symbol.kind for symbol in cost.symbols}
-            if SymbolKind.VARIABLE in kinds:
-                raise NotImplementedRule("601.2b: announcing the value of X (M2.7)")
-            if kinds & set(_ANNOUNCED):
-                raise NotImplementedRule(
-                    "601.2b: announcing how hybrid and Phyrexian mana symbols will be paid (M9)"
-                )
-        # 601.2b: modes (M2.7). 601.2d: division (M4).
         chars = characteristics(state, self.spell)
-        specs = _target_specs(chars.spell_ability)
+        ability = chars.spell_ability
+        self.stage = CastStage.X
+        if ability is None or ability.choose is None:
+            return self.run(state)
+        # 601.2b, 700.2a: the choices of modes that may be made now.
+        targeter = Targeter(self.player, self.spell, chars)
+        choices = targeting.mode_choices(state, targeter, ability)
+        if not choices:
+            self.stage = CastStage.REVERSE  # 601.2b can't be done: the cast is illegal
+            return self.run(state)
+        if len(choices) == 1:
+            return self._announce_modes(choices[0])  # the only possible choice isn't asked
+        self.stage = CastStage.MODES
+        return NeedDecision(
+            player=self.player,
+            kind=DecisionKind.CHOOSE_MODES,
+            space=ChooseOne(tuple(ModesOption(chosen) for chosen in choices)),
+            prompt=f"Choose the modes of {chars.name}: {ability.choose.text(len(ability.modes))}",
+            rules=("601.2b", "700.2", "700.2a", "700.2d"),
+            source=self.spell,
+        )
+
+    def _announce_modes(self, modes: tuple[int, ...]) -> TaskResult:
+        assert self.spell is not None
+        self.stage = CastStage.X
+        chosen = ModesChosen(spell=self.spell, modes=modes, rules=("601.2b", "700.2"))
+        return Push((ApplyEvents((chosen,)), self))
+
+    def _x(self, state: GameState) -> TaskResult:
+        assert self.spell is not None
+        record = self._record(state)
+        cost = characteristics(state, self.spell).mana_cost
+        if cost is not None and cost.has_x and record.x is None:
+            # 601.2b, 107.3a: the caster announces the value of X; any number from 0 (107.1b).
+            return NeedDecision(
+                player=self.player,
+                kind=DecisionKind.CHOOSE_X,
+                space=ChooseNumber(0, None),
+                prompt=f"Choose the value of X for {characteristics(state, self.spell).name}.",
+                rules=("601.2b", "107.3a"),
+                source=self.spell,
+            )
+        if cost is not None and {symbol.kind for symbol in cost.symbols} & set(_ANNOUNCED):
+            raise NotImplementedRule(
+                "601.2b: announcing how hybrid and Phyrexian mana symbols will be paid (M9)"
+            )
+        self.stage = CastStage.TARGETS
+        return self.run(state)
+
+    def _targets(self, state: GameState) -> TaskResult:
+        assert self.spell is not None
+        # 601.2d: division (M4).
+        chars = characteristics(state, self.spell)
+        specs = _target_specs(chars.spell_ability, self._record(state).modes)
         targeter = Targeter(self.player, self.spell, chars)
         while len(self.chosen) < len(specs):
             # 601.2c: the targets of the next instance of "target", in the order of the text.
@@ -234,6 +315,13 @@ class CastSpell(Task):
         became = BecameTargets(spell=self.spell, targets=self.chosen, rules=("601.2c", "115.1"))
         return Push((ApplyEvents((became,)), self))
 
+    def _record(self, state: GameState) -> CastChoices:
+        assert self.spell is not None
+        record = state.objects[self.spell].spell
+        if record is None:
+            raise EngineError(f"object {self.spell} is no longer a spell being cast")
+        return record
+
     def _check(self, state: GameState) -> TaskResult:
         # 601.2e, 601.6: the proposed spell must still be legal to cast.
         assert self.spell is not None
@@ -247,12 +335,18 @@ class CastSpell(Task):
 
     def _total(self, state: GameState) -> TaskResult:
         assert self.spell is not None
-        # 601.2f: the total cost is the mana cost (cost increases and reductions: M2.9, M7).
+        # 601.2f: the total cost is the mana cost, with the announced value in place of each
+        # {X} (107.3a) (cost increases and reductions: M2.9, M7).
         cost = characteristics(state, self.spell).mana_cost
         if cost is None:
             # 118.6: an object with no mana cost can't be cast by paying it.
             self.stage = CastStage.REVERSE
             return self.run(state)
+        x = self._record(state).x
+        if cost.has_x:
+            if x is None:
+                raise EngineError(f"spell {self.spell} has {{X}} but no value announced")
+            cost = cost.with_x(x)
         self.total = cost
         self.payment = PayCosts(self.player, cost, ForSpell(self.spell))
         self.stage = CastStage.PAY
@@ -348,7 +442,20 @@ class CastSpell(Task):
 
     def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
         match self.stage:
-            case CastStage.ANNOUNCE:
+            case CastStage.MODES:
+                if not isinstance(request.space, ChooseOne) or not isinstance(answer, Pick):
+                    raise EngineError(f"CastSpell can't resume with {answer!r}")
+                option = request.space.chosen(answer)
+                if not isinstance(option, ModesOption):
+                    raise EngineError(f"{option!r} isn't a choice of modes")
+                return self._announce_modes(option.modes)
+            case CastStage.X:
+                if not isinstance(answer, Number):
+                    raise EngineError(f"CastSpell can't resume with {answer!r}")
+                assert self.spell is not None
+                announced = XAnnounced(spell=self.spell, x=answer.value, rules=("601.2b", "107.3a"))
+                return Push((ApplyEvents((announced,)), self))
+            case CastStage.TARGETS:
                 if not isinstance(request.space, ChooseSubset) or not isinstance(answer, PickMany):
                     raise EngineError(f"CastSpell can't resume with {answer!r}")
                 chosen = tuple(_target(option) for option in request.space.chosen(answer))
@@ -364,13 +471,12 @@ class CastSpell(Task):
                 raise EngineError(f"CastSpell asked nothing in its {self.stage.value} stage")
 
 
-def _target_specs(ability: SpellAbility | None) -> tuple[TargetSpec, ...]:
-    """The spell's instances of the word "target", in the order of its text (601.2c)."""
+def _target_specs(ability: SpellAbility | None, modes: tuple[int, ...]) -> tuple[TargetSpec, ...]:
+    """The spell's instances of the word "target", in the order of its text (601.2c): of a modal
+    spell, those of the chosen ``modes`` only, each mode's in turn (700.2c, 700.2d)."""
     if ability is None:
         return ()
-    if ability.choose is not None:
-        raise NotImplementedRule("700.2: choosing the modes of a modal spell (M2.7)")
-    return ability.modes[0].targets
+    return ability.instances(modes)
 
 
 def _option(target: Target) -> ObjectOption | PlayerOption:

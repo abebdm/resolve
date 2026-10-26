@@ -23,7 +23,7 @@ from resolve.cards.primitives.effects import DealDamage, Destroy, DrawCards
 from resolve.cards.primitives.refs import TargetRef
 from resolve.cards.primitives.spells import Mode, ModeChoice, SpellAbility
 from resolve.cards.primitives.targets import ANY_TARGET, target
-from resolve.cards.primitives.values import X, Fixed
+from resolve.cards.primitives.values import Fixed, X
 from resolve.cards.registry import CardDefinition, CardRegistry
 from resolve.data.cards import CardDatabase, parse_card, parse_oracle_cards
 from resolve.data.types import CardType

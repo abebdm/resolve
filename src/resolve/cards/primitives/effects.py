@@ -23,7 +23,7 @@ from resolve.cards.primitives.refs import (
     ThisObject,
     You,
 )
-from resolve.cards.primitives.values import Fixed, PowerOf, Value
+from resolve.cards.primitives.values import Fixed, PowerOf, Value, X
 from resolve.data.types import CardType, Color
 from resolve.events.mana import ManaAdded
 from resolve.state.ids import ObjectId, PlayerId
@@ -171,6 +171,8 @@ class DealDamage(Effect):
         match self.amount:
             case Fixed(value=number):
                 amount = f"{number} damage"
+            case X():
+                amount = "X damage"
             case PowerOf() as power:
                 amount = f"damage equal to {power.describe(phrasing)}"
         recipients = [_recipient_text(r, self.source, phrasing) for r in self.to]
@@ -263,6 +265,8 @@ class GainLife(Effect):
         match self.amount:
             case Fixed(value=number):
                 return f"{player} {verb} {number} life"
+            case X():
+                return f"{player} {verb} X life"
             case PowerOf() as power:
                 return f"{player} {verb} life equal to {power.describe(phrasing)}"
 
@@ -291,7 +295,7 @@ class DrawCards(Effect):
         match self.count:
             case Fixed(value=1):
                 cards = "a card"
-            case Fixed() as count:
+            case Fixed() | X() as count:
                 cards = f"{count.word} cards"
             case PowerOf() as power:
                 cards = f"cards equal to {power.describe(phrasing)}"

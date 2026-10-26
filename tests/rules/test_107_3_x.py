@@ -42,7 +42,7 @@ from resolve.state.mana import ManaType
 from resolve.state.spell import TargetPlayer
 from resolve.state.turn import Phase
 from resolve.state.zones import Zone
-from tests.casting_support import activate, cast, choose_targets, choose_x, pass_, pay, records
+from tests.casting_support import activate, cast, choose_targets, choose_x, pass_, records
 from tests.game_fixtures import answer, request_of
 from tests.scenario import Scenario, run_script
 
@@ -174,6 +174,6 @@ def test_601_2g_the_payment_under_way_is_the_total_with_x() -> None:
     for player in (P0, P1):
         (payment,) = view_for(state, player).payments
         assert payment.cost == parse_mana_cost("{2}{R}")
-    run_script(state, *(activate(m) for m in mountains), pay())
+    run_script(state, *(activate(m) for m in mountains))  # then "pay" is the only answer
     (cast_event,) = records(state, SpellCast)
     assert cast_event.total_cost == parse_mana_cost("{2}{R}")

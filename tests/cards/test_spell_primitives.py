@@ -31,7 +31,7 @@ from resolve.cards.primitives.targets import (
     TargetSpec,
     target,
 )
-from resolve.cards.primitives.values import X, Fixed, PowerOf
+from resolve.cards.primitives.values import Fixed, PowerOf, X
 from resolve.data.types import CardType
 from resolve.effects.evaluation import Context, Timing, evaluate, players
 from resolve.engine.drawing import DrawCards as DrawTask
