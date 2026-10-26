@@ -11,8 +11,9 @@ of things it may choose (permanents through an ``ObjectFilter``, players through
   separate instances may choose the same one (Decimate).
 
 Whether a candidate is legal is decided by ``resolve.rules.targeting.target_problem`` alone, at
-601.2c and again at 608.2b; the filters' ``matches`` are its second step. Room is kept for
-conditional targets (601.2c: only with a mode or cost, M2.7) and for overload's "each" (M4).
+601.2c and again at 608.2b; the filters' ``matches`` are its second step. A modal spell's targets
+are its chosen modes' (700.2c: ``SpellAbility.instances``); room is kept for targets that depend
+on a cost paid (601.2c: kicker, M6) and for overload's "each" (M4).
 """
 
 from __future__ import annotations

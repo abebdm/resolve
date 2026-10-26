@@ -19,6 +19,66 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-26: M2.7: a choice of modes is a multiset in printed order
+- **Decision:** `CHOOSE_MODES` is a `ChooseOne` of `ModesOption(modes)`, one option per choice
+  `ModeChoice.combinations` allows among the legal modes: `itertools.combinations` (no repeats,
+  700.2d) or `combinations_with_replacement` (repeats allowed), for each count from the minimum
+  to the maximum, smallest first. Each lists the indices of its modes in printed order, a
+  repeated mode that many times (Fiery Confluence: 10 choices with an artifact on the
+  battlefield, 4 without). A mode is legal if each of its instances of "target" has at least its
+  minimum of legal targets, each judged alone (700.2a, 115.3), so a mode's legality doesn't depend
+  on the others chosen. With one choice nothing is asked; with none the spell isn't offered
+  (`can_choose_targets`) and a cast that reaches the stage is reversed. The record keeps the
+  modes (`CastChoices.modes`, through the public `ModesChosen`, refused if already set: 700.2f),
+  and `CastChoices.targets` lists the instances of each chosen mode in turn. `ResolveTopOfStack`
+  checks every target once (608.2b) and gives `ResolveSpell` one `Instruction` per effect with
+  its own mode's targets, so `TargetRef(i)` indexes into that mode.
+- **Why:** 700.2d says a repeated mode is "treated as if that mode appeared that many times in
+  sequence", and 608.2c (and the Confluence ruling) that the modes are followed in printed order,
+  so the order in which a player names the modes carries nothing: offering permutations would
+  give several answers for one outcome (design.md §6). The ruling's "if the same mode is chosen
+  more than once, you choose their relative order" matters only through what differs between
+  the repetitions, their targets, so that order is the order their targets are chosen.
+  design.md §17.8 keeps mode combinations enumerated (the largest real case is small).
+- **Rules:** 601.2b, 601.2c, 608.2b, 608.2c, 700.2, 700.2a, 700.2c, 700.2d, 700.2f; Fiery
+  Confluence's rulings (2015-11-04).
+- **Where:** `resolve.cards.primitives.spells` (`ModeChoice.combinations`, `SpellAbility.chosen`,
+  `instances`), `resolve.rules.targeting` (`legal_modes`, `mode_choices`, `can_choose_targets`),
+  `resolve.engine.casting` (`MODES` stage), `resolve.engine.resolution` (`Instruction`),
+  `resolve.events.spells.ModesChosen`, `resolve.decisions.spaces.ModesOption`.
+
+### 2026-10-26: M2.7: X is any number from 0, and the total cost has its value
+- **Decision:** a spell whose mana cost has {X} asks `CHOOSE_X`, a `ChooseNumber(0, None)`, after
+  the modes and before the targets; the value is announced publicly (`XAnnounced`) into
+  `CastChoices.x`. The total cost (601.2f) is `ManaCost.with_x(x)`: the generic amounts and the
+  {X}s added up into one generic symbol where the first of them was, a 0 left out unless nothing
+  else is in the cost (`{X}{R}` with 3 is `{3}{R}`, with 0 `{R}`). `SpellCast.total_cost`,
+  `PayCosts.cost` and so `PaymentView.cost` are that total; `mana_need` still raises 107.3a for
+  an {X} that reaches it (no announced value: an engine bug or a later milestone's case, such as
+  107.3h). On the stack the mana value counts X as the announced value (202.3e), off it as 0. The
+  value `X()` reads the record (or its last known information); with no value announced it raises
+  107.3f.
+- **Why:** 107.1b forbids negative choices and 107.3a sets no maximum; what can be paid is found
+  out by paying, and an unpayable cast is reversed (733.1), as for every other cost, rather than
+  having the engine predict payability (which cost reductions, M2.9, would complicate). Merging
+  the generic amounts gives the cost a player would write, and the same `ManaNeed` either way.
+  107.3b (X must be 0 when the spell is cast without paying its mana cost) needs M2.10's
+  permission and is left to it; 107.3c (X defined by the text) to the first card that has it.
+- **Rules:** 107.1b, 107.1c, 107.3a, 107.3b, 107.3c, 107.3f, 202.3e, 601.2b, 601.2f, 733.1.
+- **Where:** `resolve.engine.casting` (`X` and `TOTAL` stages), `resolve.data.mana_cost`
+  (`has_x`, `with_x`), `resolve.effects.characteristics` (`_x_on_stack`),
+  `resolve.effects.evaluation`, `resolve.cards.primitives.values.X`,
+  `resolve.events.spells.XAnnounced`.
+
+### 2026-10-26: M2.7: the fuzz summary test reads the default run's first five games
+- **Decision:** `test_a_default_run_plays_turns_lands_and_spells_and_reports_them` runs the
+  default run's first five games (2 to 6 players, all standard) instead of four; its assertions
+  are unchanged, and the averages divide by the number of games.
+- **Why:** with Fiery Confluence in both recipes the decks changed, and the first four games no
+  longer contained a payable cast that a random seat reversed, which the test asserts (M2.5's
+  "done when"). The fifth game has one. The full quick run still shows it (1 of 7).
+- **Where:** `tests/fuzz/test_fuzz_summary.py`.
+
 ### 2026-10-23: M2.6: a spell ability is part of the definition, read through characteristics
 - **Decision:** an instant's or sorcery's spell ability (113.3a) is `CardDefinition.spell`, a
   `SpellAbility` (`resolve.cards.primitives.spells`) of one `Mode` (targets, effects) or, from

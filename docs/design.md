@@ -663,8 +663,9 @@ Their order with replacement effects is settled in M6 (614).
 it, with the user's sign-off. M2.3 built the variants, the permissions `FROM_HAND` and
 `COMMANDER`, `cast_options`, `variant_characteristics` and `CastSpell` (601.2a, 601.2e-i);
 variants other than normal raise their rules' gaps. M2.6 built the targets stage (601.2c: one
-`CHOOSE_TARGETS` per instance of "target", `BecameTargets`); modes, X, division and hybrid arrive
-in M2.7, M4 and M9.*
+`CHOOSE_TARGETS` per instance of "target", `BecameTargets`); M2.7 the modes (601.2b, 700.2:
+`CHOOSE_MODES`, a `ChooseOne` of `ModesOption` multisets) and X (`CHOOSE_X`, a `ChooseNumber`;
+the total cost has its value). Division and hybrid arrive in M4 and M9.*
 
 Every way of casting that changes a spell's characteristics is chosen **before** the card moves
 to the stack, and castability is checked on the chosen characteristics only (601.3e):
@@ -716,7 +717,8 @@ Built in M2.3, and moved to §5 ("Reversing illegal actions").
 milestone's plan may revise it, with the user's sign-off. M2.3 built `GameObject.spell` and
 `CastChoices` (variant, permission, the zone cast from, total cost, mana spent) and
 `ObjectView.spell`; M2.6 added the targets (`CastChoices.targets`, per instance of "target");
-modes and X join the record in M2.7.*
+M2.7 added the modes (`CastChoices.modes`; the targets list each chosen mode's instances in
+turn) and X (`CastChoices.x`).*
 
 A spell is its card's object on the stack, with `GameObject.spell: CastChoices`. That record is
 Immutable and replaced as each choice is made. It holds every decision 707.10 copies:

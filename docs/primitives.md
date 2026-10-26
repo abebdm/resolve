@@ -51,14 +51,21 @@ The "{T}: Add [mana symbol]" a land has for each basic land type. Never put it i
 ### `SpellAbility`, `Mode`, `ModeChoice` (`resolve.cards.primitives.spells`)
 An instant's or sorcery's spell ability, in `CardDefinition.spell`: one `Mode` (its instances of
 "target" and its effects, in the order written) or, for a modal spell, several with a
-`ModeChoice` (chosen from M2.7; until then a modal spell raises the 700.2 gap). The engine reads it
-as `characteristics(...).spell_ability`. `text` is written from the primitives.
-- **Rules:** 113.3a, 115.1a, 601.2c, 608.2c; 700.2 (`ModeChoice(minimum, maximum, repeatable)`).
+`ModeChoice`. The engine reads it as `characteristics(...).spell_ability`. `text` is written from
+the primitives (a modal spell's: the instruction to choose, then a bulleted line per mode).
+`ModeChoice.combinations(legal)` lists every choice of modes among the legal ones (700.2a), each
+once, its modes in printed order with a repeated mode listed that many times (700.2d);
+`SpellAbility.chosen(modes)` gives the modes a record's `modes` follow (its one mode if it isn't
+modal), `instances(modes)` their instances of "target" in turn (601.2c, 700.2c).
+- **Rules:** 113.3a, 115.1a, 601.2b, 601.2c, 608.2c; 700.2, 700.2a, 700.2c, 700.2d
+  (`ModeChoice(minimum, maximum, repeatable)`).
 - **Parameters:** `Mode(targets: tuple[TargetSpec, ...], effects: tuple[Effect, ...], cost=None)`
   (`cost`: room for spree); `SpellAbility(modes, choose: ModeChoice | None = None)`.
-- **Example:** Swords to Plowshares (`resolve.cards.definitions.removal`):
+- **Examples:** Swords to Plowshares (`resolve.cards.definitions.removal`):
   `SpellAbility((Mode((target(CardType.CREATURE),), (Exile((TargetRef(0),)),
-  GainLife(ControllerOf(TargetRef(0)), PowerOf(TargetRef(0))))),))`.
+  GainLife(ControllerOf(TargetRef(0)), PowerOf(TargetRef(0))))),))`. Fiery Confluence (same
+  module): three modes and `ModeChoice(3, 3, repeatable=True)`; `TargetRef(0)` in its third mode
+  is that mode's own target.
 
 ## Effects
 
@@ -169,9 +176,12 @@ A mana cost as data: every symbol of 107.4 (colored, {C}, generic, {X}, hybrid, 
 colorless hybrid, Phyrexian, hybrid Phyrexian, snow) in printed order, with `text`, `colors`
 (202.2, WUBRG order) and `mana_value(x=0)` (202.3). `CardFace.cost` holds the parsed cost, `None`
 for no mana cost (202.3a, not the same as `{0}`) or a cost that doesn't follow 107.4
-(`ManaCostError`). Paying a cost is M2.3's `TotalCost` and `PayCosts`.
-- **Rules:** 107.4, 202.1-202.3, 202.3e-g.
-- **Example:** `parse_mana_cost("{2/W}{2/W}").mana_value() == 4` (Test Hybrid in the tests).
+(`ManaCostError`). `has_x`; `with_x(x)` is the cost with the announced value in place of each
+{X}, its generic amounts added up into one symbol (the total cost of 601.2f, which `PayCosts`
+pays). Paying a cost is M2.3's `PayCosts`.
+- **Rules:** 107.3a, 107.4, 202.1-202.3, 202.3e-g, 601.2f.
+- **Example:** `parse_mana_cost("{2/W}{2/W}").mana_value() == 4` (Test Hybrid in the tests);
+  `parse_mana_cost("{X}{R}").with_x(3) == parse_mana_cost("{3}{R}")` (Test Blaze).
 
 ## Targets and filters
 
@@ -200,12 +210,15 @@ battlefield but `except_` ("each other creature"); each opponent still in the ga
 - **Rules:** 201.5, 109.5, 108.4, 115.10, 608.2b, 608.2h, 800.4a.
 - **Example:** Swords to Plowshares's `ControllerOf(TargetRef(0))`.
 
-### Values: `Fixed`, `PowerOf` (`resolve.cards.primitives.values`)
+### Values: `Fixed`, `PowerOf`, `X` (`resolve.cards.primitives.values`)
 Numbers as expressions, evaluated by `resolve.effects.evaluation.evaluate` when the effect applies:
 a printed number (never negative); an object's power (last known if it left; nothing for an
-illegal target). X (M2.7), counts and "greatest power" (M2.10) join them.
-- **Rules:** 107.1b, 208.1, 608.2h, 608.2b.
-- **Example:** `PowerOf(TargetRef(0))` in Swords to Plowshares and Chandra's Ignition.
+illegal target); `X()`, the value announced for the spell as it was cast (from its record,
+`CastChoices.x`, or its last known information; X only in the text, 107.3f, is a gap). Counts and
+"greatest power" (M2.10) join them.
+- **Rules:** 107.1b, 107.3a, 107.3i, 208.1, 608.2h, 608.2b.
+- **Example:** `PowerOf(TargetRef(0))` in Swords to Plowshares and Chandra's Ignition;
+  `DealDamage(X(), (TargetRef(0),))` in Test Blaze (`tests/game_fixtures.py`).
 
 ## Triggers
 
