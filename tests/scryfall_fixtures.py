@@ -432,6 +432,17 @@ TEST_GOLD_SHOCK = spell(
     "Test Gold Shock", "{R}{W}", 2.0, "Instant", ["R", "W"],
     "Test Gold Shock deals 2 damage to any target.",
 )  # fmt: skip
+# Real cost reducers of M2.9 (Oracle text from the 2026-10-26 snapshot, tools/excerpts/cards.json).
+EMERALD_MEDALLION = spell(
+    "Emerald Medallion", "{2}", 2.0, "Artifact", [], "Green spells you cast cost {1} less to cast."
+)
+KINJALLIS_CALLER: dict[str, Any] = {
+    **vanilla("Kinjalli's Caller", "{W}", 1.0, "Human Cleric", ("0", "3"), "W"),
+    "oracle_id": "oid-kinjallis-caller",
+    "oracle_text": "Dinosaur spells you cast cost {1} less to cast.",
+}
+# An invented cost increaser (601.2f: increases are applied before reductions).
+TEST_THORN = spell("Test Thorn", "{2}", 2.0, "Artifact", [], "Spells cost {1} more to cast.")
 # An adventurer card (715.2): a creature with an Adventure (an instant that draws a card).
 _ADVENTURER = {
     **vanilla("Test Adventurer", "{1}{W}", 2.0, "Human Knight", ("2", "2"), "W"),

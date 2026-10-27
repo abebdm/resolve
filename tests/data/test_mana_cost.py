@@ -154,6 +154,45 @@ def test_107_3a_the_announced_x_replaces_each_x(text: str, x: int, total: str) -
     assert not cost.has_x and parse_mana_cost(text).has_x == ("X" in text)
 
 
+@pytest.mark.parametrize(
+    ("text", "generic"),
+    [("{1}{G}", 1), ("{G}", 0), ("{0}", 0), ("{3}{R}", 3), ("{1}{C}", 1), ("{X}{1}{R}", 1)],
+)
+def test_107_4b_the_generic_amount_of_a_cost(text: str, generic: int) -> None:
+    """107.4b: a generic symbol is that much generic mana; {X} isn't counted until announced."""
+    assert parse_mana_cost(text).generic == generic
+
+
+@pytest.mark.parametrize(
+    ("text", "amount", "total"),
+    [
+        ("{1}{G}", 0, "{G}"),
+        ("{1}{G}", 3, "{3}{G}"),
+        ("{G}", 1, "{1}{G}"),  # a generic symbol is added in front of the colored ones
+        ("{2}", 0, "{0}"),  # 601.2f, 118.7: reduced to nothing, it is {0}
+        ("{0}", 2, "{2}"),
+        ("{1}{C}", 0, "{C}"),  # 118.7a: the colorless part stays
+        ("{2}{W}{U}", 1, "{1}{W}{U}"),
+    ],
+)
+def test_601_2f_a_cost_with_another_generic_amount(text: str, amount: int, total: str) -> None:
+    """601.2f: a total cost whose generic part increases and reductions changed; the colored and
+    colorless symbols stay as printed (118.7a)."""
+    assert parse_mana_cost(text).with_generic(amount) == parse_mana_cost(total)
+
+
+def test_a_negative_generic_amount_is_refused() -> None:
+    """601.2f: a cost can't be reduced below {0}; callers stop at 0."""
+    with pytest.raises(ValueError):
+        parse_mana_cost("{1}{G}").with_generic(-1)
+
+
+def test_with_generic_refuses_an_unannounced_x() -> None:
+    """601.2f: X is announced (601.2b) before the total is worked out (``with_x`` first)."""
+    with pytest.raises(ValueError):
+        parse_mana_cost("{X}{G}").with_generic(1)
+
+
 # --- 202.2: colors ----------------------------------------------------------------------------
 
 

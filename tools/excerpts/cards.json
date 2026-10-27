@@ -445,6 +445,38 @@
         "U"
       ],
       "keywords": []
+    },
+    {
+      "object": "card",
+      "oracle_id": "d683024d-8fe7-4509-851b-7655fadc1de7",
+      "name": "Emerald Medallion",
+      "layout": "normal",
+      "mana_cost": "{2}",
+      "cmc": 2.0,
+      "type_line": "Artifact",
+      "oracle_text": "Green spells you cast cost {1} less to cast.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": []
+    },
+    {
+      "object": "card",
+      "oracle_id": "bba6075b-8bbb-4496-80a9-bfa7f003d1e8",
+      "name": "Kinjalli's Caller",
+      "layout": "normal",
+      "mana_cost": "{W}",
+      "cmc": 1.0,
+      "type_line": "Creature — Human Cleric",
+      "oracle_text": "Dinosaur spells you cast cost {1} less to cast.",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": [],
+      "power": "0",
+      "toughness": "3"
     }
   ],
   "rulings": [
@@ -580,6 +612,55 @@
       "source": "wotc",
       "published_at": "2022-12-08",
       "comment": "Use the power of the creature from when it was last on the battlefield to determine how much life is gained."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "bba6075b-8bbb-4496-80a9-bfa7f003d1e8",
+      "source": "wotc",
+      "published_at": "2017-09-29",
+      "comment": "To determine the total cost of a Dinosaur spell, start with the mana cost or alternative cost you're paying, add any cost increases, then apply any cost reductions. The mana value of the creature remains unchanged, no matter what the total cost to cast it was."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "bba6075b-8bbb-4496-80a9-bfa7f003d1e8",
+      "source": "wotc",
+      "published_at": "2018-01-19",
+      "comment": "If an effect refers to a \"[subtype] spell\" or \"[subtype] card,\" it refers only to a spell or card that has that subtype. For example, March of the Drowned is a card that benefits Pirates and features Pirates in its illustration, but it isn't a Pirate card."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "d683024d-8fe7-4509-851b-7655fadc1de7",
+      "source": "wotc",
+      "published_at": "2023-07-28",
+      "comment": "If there are additional costs to cast a spell, or if the cost to cast a spell is increased by an effect (such as the one created by Thalia, Guardian of Thraben's ability), apply those increases before applying cost reductions."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "d683024d-8fe7-4509-851b-7655fadc1de7",
+      "source": "wotc",
+      "published_at": "2023-07-28",
+      "comment": "If a spell you cast has {X} in its mana cost, you choose the value of X before calculating the spell's total cost."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "d683024d-8fe7-4509-851b-7655fadc1de7",
+      "source": "wotc",
+      "published_at": "2023-07-28",
+      "comment": "The ability doesn't change the mana cost or mana value of any spell. It changes only the total cost you pay."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "d683024d-8fe7-4509-851b-7655fadc1de7",
+      "source": "wotc",
+      "published_at": "2023-07-28",
+      "comment": "The ability can't reduce the amount of colored mana you pay for a spell. It reduces only the generic mana component of that cost."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "d683024d-8fe7-4509-851b-7655fadc1de7",
+      "source": "wotc",
+      "published_at": "2023-07-28",
+      "comment": "The cost reduction can apply to alternative costs such as flashback costs."
     },
     {
       "object": "ruling",

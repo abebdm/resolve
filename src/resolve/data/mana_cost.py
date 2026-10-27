@@ -186,6 +186,16 @@ class ManaCost(Immutable):
             rest.insert(first, ManaSymbol(SymbolKind.GENERIC, number=amount))
         return ManaCost(tuple(rest))
 
+    @property
+    def generic(self) -> int:
+        """The generic amount of the cost: its generic symbols added up (107.4b); {X} counts
+        only once announced (``with_x``)."""
+        raise NotImplementedError
+
+    def with_generic(self, amount: int) -> ManaCost:
+        """This cost with ``amount`` generic mana in place of its generic symbols (601.2f)."""
+        raise NotImplementedError
+
 
 def parse_mana_cost(text: str) -> ManaCost:
     """Parse Scryfall's text for a mana cost; ``ManaCostError`` if it doesn't follow 107.4.

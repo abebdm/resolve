@@ -10,9 +10,12 @@ game with ``new_game``; to set up a board state directly, use the scenario build
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from resolve.cards.definitions import (
     basic_lands,
+    cost_reducers,
     counterspells,
     keyword_examples,
     mana_creatures,
@@ -31,6 +34,7 @@ from resolve.cards.keywords import (
     Protection,
     protection_from_each_color,
 )
+from resolve.cards.primitives.cost_modifiers import CostModifier, ModifierStep, SpellCostModifier
 from resolve.cards.primitives.effects import DealDamage, Destroy, DrawCards
 from resolve.cards.primitives.refs import TargetRef
 from resolve.cards.primitives.spells import Mode, ModeChoice, SpellAbility
@@ -40,6 +44,7 @@ from resolve.cards.primitives.values import Fixed, X
 from resolve.cards.primitives.words import ColorWord
 from resolve.cards.registry import CardDefinition, CardRegistry
 from resolve.data.cards import CardDatabase, parse_card, parse_oracle_cards
+from resolve.data.mana_cost import ManaCost
 from resolve.data.types import CardType, Color
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer, DecisionRequest
@@ -62,6 +67,9 @@ from resolve.state.config import GameConfig
 from resolve.state.game import GameState
 from resolve.state.turn import Phase, Step
 from tests import scryfall_fixtures as fx
+
+if TYPE_CHECKING:
+    from resolve.state.ids import ObjectId, PlayerId
 
 FOREST = DeckCard(parse_card(fx.FOREST), (basic_lands.FOREST,))
 ELVES = DeckCard(parse_card(fx.LLANOWAR_ELVES), (mana_creatures.LLANOWAR_ELVES,))
@@ -130,6 +138,41 @@ TEST_ADVENTURER = CardDefinition("Test Adventurer")
 TEST_QUEST = CardDefinition("Test Quest", spell=TEST_PONDER.spell)
 
 
+@dataclass(frozen=True)
+class IncreaseGeneric(CostModifier):
+    """Test-only: increase a cost by ``amount`` generic mana (601.2f). The first real increase is
+    the commander tax (903.8, M7)."""
+
+    amount: int
+
+    @property
+    def step(self) -> ModifierStep:
+        return ModifierStep.INCREASE
+
+    def apply(self, cost: ManaCost) -> ManaCost:
+        return cost.with_generic(cost.generic + self.amount)
+
+
+@dataclass(frozen=True)
+class SpellCostIncrease(SpellCostModifier):
+    """Test-only: "Spells cost {1} more to cast." (601.2f), for every spell, whoever casts it."""
+
+    def modifier(
+        self, state: GameState, source: ObjectId, spell: ObjectId, caster: PlayerId
+    ) -> CostModifier | None:
+        return IncreaseGeneric(1)
+
+    @property
+    def text(self) -> str:
+        return "Spells cost {1} more to cast."
+
+
+# Spells cost {1} more to cast.
+TEST_THORN = CardDefinition("Test Thorn", abilities=(SpellCostIncrease(),))
+# Test Growth ({X}{G}): a green sorcery with {X} and no text.
+TEST_GROWTH = CardDefinition("Test Growth")
+
+
 def registry() -> CardRegistry:
     """A registry implementing the fixture cards used by these decks."""
     return CardRegistry(
@@ -153,7 +196,8 @@ def scenario_registry() -> CardRegistry:
     Shatter), sorcery (Test Ponder), split card, nonbasic Forest, Test Raptor, Test Mox ({0}),
     Test Ember ({1}{C}), Test Wall (0/4), Test Totem (an enchantment), Test Artifact Land
     Creature, the keyword example cards, Cryptic Command and M2.8's keyword fixtures (and an
-    adventurer, Test Adventurer // Test Quest): the scenario builder's default."""
+    adventurer, Test Adventurer // Test Quest), the cost reducers, Test Thorn (a cost increase)
+    and Test Growth ({X}{G}): the scenario builder's default."""
     extra = (
         "Test Spark",
         "Test Frost",
@@ -200,6 +244,9 @@ def scenario_registry() -> CardRegistry:
             TEST_GOLD_SHOCK,
             TEST_ADVENTURER,
             TEST_QUEST,
+            *cost_reducers.DEFINITIONS,
+            TEST_THORN,
+            TEST_GROWTH,
             *map(CardDefinition, extra),
         ]
     )
@@ -221,7 +268,8 @@ def scenario_database() -> CardDatabase:
     extra += [fx.CRYPTIC_COMMAND, fx.TEST_REDPROOF_BEAR, fx.TEST_MULTIPROOF_KNIGHT]
     extra += [fx.TEST_PRISMATIC_KNIGHT, fx.TEST_UNTOUCHABLE, fx.TEST_TWIN_FLASH]
     extra += [fx.TEST_INDESTRUCTIBLE_WISP, fx.TEST_STUBBORN_SPELL, fx.TEST_GOLD_SHOCK]
-    extra += [fx.TEST_ADVENTURER]
+    extra += [fx.TEST_ADVENTURER, fx.EMERALD_MEDALLION, fx.KINJALLIS_CALLER, fx.TEST_THORN]
+    extra += [fx.TEST_GROWTH]
     lands = [fx.PLAINS, fx.ISLAND, fx.SWAMP, fx.MOUNTAIN]
     return CardDatabase(parse_oracle_cards([*fx.default_cards(), *lands, *extra]))
 
