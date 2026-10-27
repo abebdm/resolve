@@ -28,12 +28,17 @@ most likely to expose a design that took one.
 | Sylvan Library | cards drawn this turn; pay life or put cards back (608.2i, 119) | M4 | look-back history | not yet |
 | Force of Will | an alternative cost of life and exiling a card from hand (118.9) | M4 | M2 cost model | not yet |
 | Mana Drain | a delayed trigger that adds mana at a later main phase (603.7) | M4 | M2 mana pool | not yet |
+| Blood Artist + a board wipe | "dies" triggers look back in time: every creature dying at once is seen, Blood Artist included (603.10a) | M4 | | not yet |
+| Felidar Sovereign / Emperor Crocodile | an intervening "if" checked when it triggers and again on resolution; a state trigger that doesn't trigger again while it's on the stack (603.4, 603.8) | M4 | | not yet |
 | Doubling Season + a planeswalker | a planeswalker entering with loyalty counters, doubled by a replacement effect (614.1c, 306.5b, 122.6) | M6 | M4 counters and planeswalkers | not yet |
 | Chains of Mephistopheles | replacing draws, and the order of several draw replacements (614, 616, 121.6) | M6 | | not yet |
 | Laboratory Maniac + an empty library | a replacement of losing for drawing from an empty library (614, 704.5b) | M6 | M2.1 `can_lose_game` | not yet |
 | Aven Mindcensor | searching only part of a zone (701.23f) | M6 | M4 searching | not yet |
 | Hullbreacher / Notion Thief | replacing opponents' draws (614) | M6 | | not yet |
 | Humility + Opalescence | layers 4, 6 and 7b; dependency and timestamps (613.8) | M5 | | not yet |
+| Tarmogoyf | a characteristic-defining ability that works in every zone, applied first in its layer (604.3, 613.3, 613.4a) | M5 | | not yet |
+| Overrun + Glorious Anthem | a resolved effect changes only the objects there when it resolved; a static ability's effect has no fixed set (611.2c, 611.3a) | M5 | | not yet |
+| Twisted Image on a creature with counters and an anthem | switching power and toughness after every other layer 7 change (613.4d) | M5 | | not yet |
 | Blood Moon + Urborg, Tomb of Yawgmoth | a layer 4 dependency; an ability removed by a type change (613.8) | M5 | | not yet |
 | Mind Bend | changing color words and land types (612) | M5 | M2 typed words (M2.2 ✓) | not yet |
 | Volrath's Shapeshifter | an object with the full text of another card (613, 612) | M5 | M2 definitions as data | not yet |
@@ -54,7 +59,10 @@ most likely to expose a design that took one.
 | Pithing Needle | naming any card (201.4) | M5 | M4 `ChooseCardName` | not yet |
 | Gilded Drake | exchanging control, with a fallback if it can't (701.12) | M5 | | not yet |
 | Time Walk / Relentless Assault | an extra turn; an extra combat phase (500.7, 500.8) | M3 | M2.1 `TurnState.segments` | not yet |
+| Lure + a creature that attacks each combat if able + Ghostly Prison | obeying as many attack and block requirements as possible without breaking a restriction or being made to pay a cost (508.1c-d, 509.1c) | M3 | | not yet |
+| Basilisk Collar on a creature with trample | deathtouch makes 1 damage lethal when assigning trample damage among several blockers (702.2c, 702.19b) | M3 | M2.6 damage events | not yet |
 | Worldgorger Dragon | linked exile and return; a mandatory loop ending the game in a draw (607, 610.3, 104.4b) | M7 | M4 linked abilities | not yet |
+| A commander that dies, is bounced or is stolen | its owner's choice to move it to the command zone, as a state-based action or a replacement (903.9a-b); commander damage counted per commander, whoever controls it (903.10a) | M7 | M2.1 `commander_damage_threshold` | not yet |
 | Teferi's Protection | phasing out; a player with protection from everything; "your life total can't change" (702.26, 702.16j, 101.2) | M9 | M2 `allowed`, `player_abilities` | not yet |
 | Sundial of the Infinite | ending the turn: the stack exiled, straight to cleanup (724) | M9 | M2.1 turn frame | not yet |
 | Mindslaver | controlling another player's turn and what that player sees (723) | M9 | M2.1 `deciding_player`, `knows_identity` | not yet |
@@ -65,3 +73,6 @@ most likely to expose a design that took one.
 | Bonecrusher Giant | casting an Adventure, then casting the creature from exile (715) | M9 | M2 cast variants and destinations | not yet |
 | Ixidron | face-down permanents; hidden information (708) | M9 | M2 visibility | not yet |
 | Golgothian Sylex | a name "originally printed" in a set (206.3b) | M9 | | not yet |
+| Gemrazer (mutate) | a merged permanent: the top card's characteristics, and every card moving when it leaves (702.140, 730) | M9 | M5 layers, 400.7 identity | not yet |
+| Bruna, the Fading Light + Gisela, the Broken Blade | melding two permanents into one card pair, and what happens when it leaves (701.42, 712.4) | M9 | M5 identity | not yet |
+| Benalish Hero (banding) | banding; the defending player assigning an attacker's combat damage (702.22) | M9 | M3 damage assignment | not yet |
