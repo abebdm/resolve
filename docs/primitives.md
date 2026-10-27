@@ -184,8 +184,8 @@ word used as a color, a land type used as a land type and a creature or other su
 one are rewritable; a card name (`NameRef`) never is.
 - **Rules:** 612.2, 612.2a, 205.3.
 - **Parameters:** `ColorWord(color)`, `LandTypeWord(name)`, `SubtypeWord(name)`, `NameRef(name)`.
-- **Example:** none yet in a definition (a mana Medallion's "green" will be `ColorWord(Color.GREEN)`); the
-  unit tests in `tests/rules/test_612_typed_words.py`.
+- **Example:** Emerald Medallion's "green", `ColorQuality(ColorWord(Color.GREEN))`; Kinjalli's
+  Caller's `SubtypeWord("Dinosaur")`; the unit tests in `tests/rules/test_612_typed_words.py`.
 
 ### `rewrite_words(value, mapping)` (`resolve.cards.primitives.words`)
 Walks an Immutable value (dataclass fields and tuples, at any depth) and replaces each typed word
@@ -203,8 +203,10 @@ colorless hybrid, Phyrexian, hybrid Phyrexian, snow) in printed order, with `tex
 for no mana cost (202.3a, not the same as `{0}`) or a cost that doesn't follow 107.4
 (`ManaCostError`). `has_x`; `with_x(x)` is the cost with the announced value in place of each
 {X}, its generic amounts added up into one symbol (the total cost of 601.2f, which `PayCosts`
-pays). Paying a cost is M2.3's `PayCosts`.
-- **Rules:** 107.3a, 107.4, 202.1-202.3, 202.3e-g, 601.2f.
+pays). `generic` is the generic amount; `with_generic(n)` the cost with `n` generic mana in place
+of its generic symbols (cost modifiers, 601.2f: `{0}` when nothing is left; refused below 0 or
+with an unannounced {X}). Paying a cost is M2.3's `PayCosts`.
+- **Rules:** 107.3a, 107.4, 107.4b, 202.1-202.3, 202.3e-g, 601.2f.
 - **Example:** `parse_mana_cost("{2/W}{2/W}").mana_value() == 4` (Test Hybrid in the tests);
   `parse_mana_cost("{X}{R}").with_x(3) == parse_mana_cost("{3}{R}")` (Test Blaze).
 
@@ -295,6 +297,30 @@ control can't be countered" from a permanent is a continuous effect (M5).
 - **Rules:** 113.6g, 101.2.
 - **Example:** Test Stubborn Spell (tests): `abilities=(CantBeCountered(),)`.
 
+### `SpellCostReduction(spells, amount=1)` (`resolve.cards.primitives.cost_modifiers`)
+"[Quality] spells you cast cost {N} less to cast.": a static ability of a permanent (113.6: it
+functions only on the battlefield). For a spell its controller casts with the quality `spells`
+(a `Quality` of `resolve.cards.keywords`, judged on the spell's characteristics on the stack),
+`modifier(state, source, spell, caster)` gives `ReduceGeneric(amount)`; otherwise `None`. Its
+text uses the quality's `adjective` ("Green spells", "Dinosaur spells").
+- **Rules:** 601.2f, 118.7a, 113.6, 205.3, 202.3 (the mana value isn't changed).
+- **Parameters:** `spells: Quality`, `amount: int` (generic mana).
+- **Example:** Emerald Medallion: `SpellCostReduction(ColorQuality(ColorWord(Color.GREEN)))`;
+  Kinjalli's Caller: `SpellCostReduction(SubtypeQuality(SubtypeWord("Dinosaur")))`.
+
+### `SpellCostModifier`, `CostModifier`, `ModifierStep`, `ReduceGeneric` (`resolve.cards.primitives.cost_modifiers`)
+The 601.2f pipeline's parts. A `SpellCostModifier` is a static ability whose `modifier(...)`
+gives the `CostModifier` it applies to a spell being cast, or `None`. A `CostModifier` is data
+with a `step` (`ModifierStep.INCREASE`, `REDUCTION`, `TOTAL`: additional costs and increases,
+then reductions, then effects on the total) and `apply(cost) -> cost`. `ReduceGeneric(amount)`
+reduces only the generic part, never below nothing (118.7a). `resolve.rules.costs` gathers the
+modifiers of the permanents on the battlefield (`spell_cost_modifiers`) and applies them in
+order (`spell_total_cost`), which `CastSpell`'s `TOTAL` stage locks in.
+- **Rules:** 601.2f, 601.8, 118.7, 118.7a, 113.6.
+- **Example:** `ReduceGeneric(1).apply(parse_mana_cost("{1}{G}")) == parse_mana_cost("{G}")`;
+  the test-only increase `IncreaseGeneric` and Test Thorn's `SpellCostIncrease`
+  (`tests/game_fixtures.py`).
+
 ## Replacement and prevention effects
 
 *None yet.*
@@ -345,9 +371,10 @@ them; from `Everything()`, by nothing. Targeting is a prohibition of
 
 ### Qualities: `ColorQuality`, `MulticoloredQuality`, `MonocoloredQuality`, `CardTypeQuality`, `SubtypeQuality`, `Everything`, `each_color()` (`resolve.cards.keywords.qualities`)
 What protection and "hexproof from" are from: `matches(characteristics)` over the targeting
-spell's characteristics or an ability's source's (113.7a), and `text` ("red", "artifacts",
-"Elves"). Colors and subtypes are typed words (612.2). Room is kept for a player (702.16k) and a
+spell's characteristics or an ability's source's (113.7a), `text` ("red", "artifacts",
+"Elves") and `adjective`, the form before a noun ("green", "artifact", "Elf"; empty for
+`Everything`), which `SpellCostReduction` uses. Colors and subtypes are typed words (612.2). Room is kept for a player (702.16k) and a
 name (702.16a).
 - **Rules:** 702.16a, 702.16j, 105.2b, 105.2c, 702.16h (`each_color`).
 - **Example:** Nacatl Savage's `CardTypeQuality(CardType.ARTIFACT)`; Test Multiproof Knight
-  (tests): `MulticoloredQuality()`.
+  (tests): `MulticoloredQuality()`; Emerald Medallion's "green spells".

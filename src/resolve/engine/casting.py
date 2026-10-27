@@ -14,8 +14,8 @@ stages and never gives priority itself; its caller does (601.2i, 117.3c):
 | ``TARGETS``| 601.2c          | targets (``CHOOSE_TARGETS``, then ``BecameTargets``); division  |
 |            |                 | is a gap (601.2d, M4)                                           |
 | ``CHECK``  | 601.2e, 601.6   | ``legality.allowed`` again for the proposed spell               |
-| ``TOTAL``  | 601.2f          | the total cost: the mana cost with X's value (cost modifiers:   |
-|            |                 | M2.9, M7)                                                       |
+| ``TOTAL``  | 601.2f          | the total cost: the mana cost with X's value, plus increases,   |
+|            |                 | minus reductions (``costs.spell_total_cost``); locked in        |
 | ``PAY``    | 601.2g-h        | ``PayCosts``: mana abilities, then the payment                 |
 | ``CAST``   | 601.2i          | ``SpellCast``; passing in succession starts over (117.4)        |
 | ``REVERSE``| 733.1           | the cast is illegal: reverse it                                 |
@@ -106,7 +106,7 @@ from resolve.events.spells import (
     SpellProposed,
     XAnnounced,
 )
-from resolve.rules import legality, targeting
+from resolve.rules import costs, legality, targeting
 from resolve.rules.legality import Targeter
 from resolve.state.checkpoint import Checkpoint, take_checkpoint
 from resolve.state.ids import ObjectId, PlayerId
@@ -336,7 +336,7 @@ class CastSpell(Task):
     def _total(self, state: GameState) -> TaskResult:
         assert self.spell is not None
         # 601.2f: the total cost is the mana cost, with the announced value in place of each
-        # {X} (107.3a) (cost increases and reductions: M2.9, M7).
+        # {X} (107.3a), plus increases, minus reductions; then it is locked in (601.8).
         cost = characteristics(state, self.spell).mana_cost
         if cost is None:
             # 118.6: an object with no mana cost can't be cast by paying it.
@@ -347,6 +347,7 @@ class CastSpell(Task):
             if x is None:
                 raise EngineError(f"spell {self.spell} has {{X}} but no value announced")
             cost = cost.with_x(x)
+        cost = costs.spell_total_cost(state, self.spell, self.player, cost)
         self.total = cost
         self.payment = PayCosts(self.player, cost, ForSpell(self.spell))
         self.stage = CastStage.PAY

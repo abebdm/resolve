@@ -24,7 +24,6 @@ from typing import TYPE_CHECKING
 from resolve.cards.keywords.qualities import Quality
 from resolve.cards.primitives.base import Ability
 from resolve.data.mana_cost import ManaCost
-from resolve.errors import NotImplementedRule
 from resolve.values import Immutable
 
 if TYPE_CHECKING:
@@ -59,7 +58,9 @@ class CostModifier(Immutable, ABC):
 
 @dataclass(frozen=True)
 class ReduceGeneric(CostModifier):
-    """Reduce a cost by ``amount`` generic mana (118.7a)."""
+    """Reduce a cost by ``amount`` generic mana (118.7a): its colored and colorless symbols stay,
+    and its generic part stops at nothing (601.2f: ``{0}`` if nothing else is left). Generic
+    reductions give the same total in any order, so 601.2f's "in any order" asks nothing."""
 
     amount: int
 
@@ -68,7 +69,8 @@ class ReduceGeneric(CostModifier):
         return ModifierStep.REDUCTION
 
     def apply(self, cost: ManaCost) -> ManaCost:
-        raise NotImplementedRule("118.7a: reducing a cost by generic mana")
+        # 118.7a: only the generic component; 601.2f: never below nothing ({0}).
+        return cost.with_generic(max(0, cost.generic - self.amount))
 
 
 @dataclass(frozen=True)
@@ -85,7 +87,11 @@ class SpellCostModifier(Ability, ABC):
 
 @dataclass(frozen=True)
 class SpellCostReduction(SpellCostModifier):
-    """ "[Quality] spells you cast cost {N} less to cast." (601.2f, 118.7a)."""
+    """ "[Quality] spells you cast cost {N} less to cast." (601.2f, 118.7a): a spell with the
+    quality ``spells`` (a color, a subtype: 205.3, "a Dinosaur spell" has that subtype) that the
+    ability's controller casts costs ``amount`` less generic mana. A permanent's ability, so it
+    functions only on the battlefield (113.6). It changes the total cost, never the mana cost or
+    mana value (202.3, 118.7)."""
 
     spells: Quality
     amount: int = 1
@@ -93,7 +99,15 @@ class SpellCostReduction(SpellCostModifier):
     def modifier(
         self, state: GameState, source: ObjectId, spell: ObjectId, caster: PlayerId
     ) -> CostModifier | None:
-        raise NotImplementedRule("601.2f: cost reductions")
+        from resolve.effects.characteristics import characteristics
+
+        # "You": the controller of the ability's source; the spell is judged by its
+        # characteristics on the stack, as it is being cast (601.2f).
+        if state.object(source).controller != caster:
+            return None
+        if not self.spells.matches(characteristics(state, spell)):
+            return None
+        return ReduceGeneric(self.amount)
 
     @property
     def text(self) -> str:

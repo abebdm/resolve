@@ -369,14 +369,14 @@ def numbers(pattern: str, text: str) -> tuple[float, ...]:
 # The excerpt's cards, by hand: the noncreature ones, and the creatures.
 NONCREATURES = [
     "Arcane Signet", "Cancel", "Chandra's Ignition", "Command Tower", "Cryptic Command",
-    "Darksteel Relic", "Decimate", "Fiery Confluence", "Selesnya Signet", "Sol Ring",
-    "Swords to Plowshares", "Temple of the False God",
+    "Darksteel Relic", "Decimate", "Emerald Medallion", "Fiery Confluence", "Selesnya Signet",
+    "Sol Ring", "Swords to Plowshares", "Temple of the False God",
 ]  # fmt: skip
 # Repentant Blacksmith is left out (``FUZZ_EXCLUSIONS``: 702.16e until M6).
 CREATURES = [
     "Ashcoat Bear", "Avacyn's Pilgrim", "Darksteel Myr", "Gladecover Scout", "Grizzly Bears",
-    "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper", "Llanowar Elves", "Nacatl Savage",
-    "Savannah Lions",
+    "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper", "Kinjalli's Caller", "Llanowar Elves",
+    "Nacatl Savage", "Savannah Lions",
 ]  # fmt: skip
 
 
@@ -393,15 +393,16 @@ def expected_deck(recipe: str, copies: int) -> Counter[str]:
 def test_the_recipes_hold_the_excerpt_minus_the_exclusions() -> None:
     assert fuzz_tool.recipe_cards("spells") == (
         "Arcane Signet", "Cancel", "Chandra's Ignition", "Command Tower", "Cryptic Command",
-        "Darksteel Relic", "Decimate", "Fiery Confluence", "Selesnya Signet", "Sol Ring",
-        "Swords to Plowshares", "Temple of the False God",
+        "Darksteel Relic", "Decimate", "Emerald Medallion", "Fiery Confluence", "Selesnya Signet",
+        "Sol Ring", "Swords to Plowshares", "Temple of the False God",
     )  # fmt: skip
     assert fuzz_tool.recipe_cards("creatures") == (
         "Arcane Signet", "Ashcoat Bear", "Avacyn's Pilgrim", "Cancel", "Chandra's Ignition",
         "Command Tower", "Cryptic Command", "Darksteel Myr", "Darksteel Relic", "Decimate",
-        "Fiery Confluence", "Gladecover Scout", "Grizzly Bears", "Hill Giant", "Humble Budoka",
-        "Ixalli's Lorekeeper", "Llanowar Elves", "Nacatl Savage", "Savannah Lions",
-        "Selesnya Signet", "Sol Ring", "Swords to Plowshares", "Temple of the False God",
+        "Emerald Medallion", "Fiery Confluence", "Gladecover Scout", "Grizzly Bears", "Hill Giant",
+        "Humble Budoka", "Ixalli's Lorekeeper", "Kinjalli's Caller", "Llanowar Elves",
+        "Nacatl Savage", "Savannah Lions", "Selesnya Signet", "Sol Ring", "Swords to Plowshares",
+        "Temple of the False God",
     )  # fmt: skip
     assert list(fuzz_tool.FUZZ_EXCLUSIONS) == ["Repentant Blacksmith"]
     for recipe in fuzz_tool.RECIPES:

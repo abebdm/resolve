@@ -174,27 +174,38 @@ class ManaCost(Immutable):
             return self
         if x < 0:
             raise ValueError("X can't be negative (107.1b)")
-        generic = (SymbolKind.GENERIC, SymbolKind.VARIABLE)
-        amount = sum(
-            s.number if s.kind is SymbolKind.GENERIC else x
-            for s in self.symbols
-            if s.kind in generic
-        )
-        first = next(i for i, s in enumerate(self.symbols) if s.kind in generic)
-        rest = [s for s in self.symbols if s.kind not in generic]
-        if amount or not rest:
-            rest.insert(first, ManaSymbol(SymbolKind.GENERIC, number=amount))
-        return ManaCost(tuple(rest))
+        amount = sum(s.number if s.kind is SymbolKind.GENERIC else x for s in self._generics())
+        return self._merged(amount, (SymbolKind.GENERIC, SymbolKind.VARIABLE))
 
     @property
     def generic(self) -> int:
         """The generic amount of the cost: its generic symbols added up (107.4b); {X} counts
         only once announced (``with_x``)."""
-        raise NotImplementedError
+        return sum(s.number for s in self.symbols if s.kind is SymbolKind.GENERIC)
 
     def with_generic(self, amount: int) -> ManaCost:
-        """This cost with ``amount`` generic mana in place of its generic symbols (601.2f)."""
-        raise NotImplementedError
+        """This cost with ``amount`` generic mana in place of its generic symbols, as cost
+        increases and reductions make it (601.2f, 118.7a): one generic symbol where the first
+        was (in front if there was none), left out when 0 unless nothing else is in the cost
+        (601.2f: reduced to nothing, it is ``{0}``). The other symbols are unchanged. Refused
+        for a cost with an unannounced {X} (601.2b comes first: ``with_x``) and for an amount
+        below 0 (601.2f: a cost can't be reduced to less than {0})."""
+        if self.has_x:
+            raise ValueError("X is announced before the total cost is determined (601.2b)")
+        if amount < 0:
+            raise ValueError("a cost can't be reduced to less than {0} (601.2f)")
+        return self._merged(amount, (SymbolKind.GENERIC,))
+
+    def _generics(self) -> list[ManaSymbol]:
+        return [s for s in self.symbols if s.kind in (SymbolKind.GENERIC, SymbolKind.VARIABLE)]
+
+    def _merged(self, amount: int, replaced: tuple[SymbolKind, ...]) -> ManaCost:
+        """The symbols of the kinds ``replaced`` merged into one generic symbol of ``amount``."""
+        first = next((i for i, s in enumerate(self.symbols) if s.kind in replaced), 0)
+        rest = [s for s in self.symbols if s.kind not in replaced]
+        if amount or not rest:
+            rest.insert(first, ManaSymbol(SymbolKind.GENERIC, number=amount))
+        return ManaCost(tuple(rest))
 
 
 def parse_mana_cost(text: str) -> ManaCost:
