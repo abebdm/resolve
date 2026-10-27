@@ -110,6 +110,7 @@ def target_choices(state: GameState) -> tuple[Option, ...]:
         return request.space.options
     became = records(state, BecameTargets)
     assert became, f"no targets were chosen; the game asks for {request.kind.value}"
+    assert became[-1].spell == state.stack[-1], "the spell being cast chose no targets"
     chosen = became[-1].targets[-1]
     return tuple(
         ObjectOption(t.object) if isinstance(t, TargetObject) else PlayerOption(t.player)

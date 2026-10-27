@@ -23,23 +23,31 @@ from collections.abc import Callable
 
 import pytest
 
-from resolve.cards.keywords import Hexproof
+from resolve.agents.scripted import ScriptError
+from resolve.cards.keywords import ColorQuality, Hexproof, Shroud
 from resolve.cards.primitives.base import Ability
 from resolve.cards.primitives.targets import TargetSpec
-from resolve.decisions.spaces import CastSpellOption, ObjectOption, PlayerOption
+from resolve.cards.primitives.words import ColorWord
+from resolve.data.types import Color
+from resolve.decisions.kinds import DecisionKind
+from resolve.decisions.spaces import CastSpellOption, ObjectOption, PickMany, PlayerOption
 from resolve.effects.characteristics import characteristics
+from resolve.engine.api import submit
+from resolve.errors import InvalidAnswer, NotImplementedRule
 from resolve.events.damage import DamageDealt
 from resolve.events.spells import SpellDidNotResolve
-from resolve.rules import defaults, legality, targeting
+from resolve.rules import legality, targeting
 from resolve.rules.legality import Targeter
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import ManaType
-from resolve.state.spell import TargetObject
+from resolve.state.spell import TargetObject, TargetPlayer
 from resolve.state.turn import Phase
 from resolve.state.zones import Zone
-from tests.casting_support import cast, options, pass_, records, target_choices
+from tests.casting_support import cast, choose_targets, options, pass_, records, target_choices
+from tests.game_fixtures import answer, request_of
 from tests.scenario import Scenario, names, run_script
+from tests.seams import patch
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 W, R = ManaType.WHITE, ManaType.RED
@@ -174,7 +182,7 @@ def test_702_11c_a_player_with_hexproof(monkeypatch: pytest.MonkeyPatch) -> None
     Shock offers every creature and P0 but not P1 (702.11c); P1's own Test Shock may still target
     P1. In three players P2 is still a legal target of P0's. This is also the seam test of
     ``player_abilities``: the targeting check reads players' abilities only through it."""
-    monkeypatch.setattr(defaults, "player_abilities", _player_hexproof(P1))
+    patch(monkeypatch, "player_abilities", _player_hexproof(P1))
     scenario = Scenario(3)
     (shock,) = scenario.hand(P0, ["Test Shock"])
     (bears,) = scenario.battlefield(P1, ["Grizzly Bears"])
@@ -241,3 +249,80 @@ def test_702_11b_the_prohibition_is_hexproofs_rule() -> None:
     assert [p.rule for p in forbidden] == ["702.11b"]
     mine = legality.TargetAction(P0, Targeter(P0, swords, chars), spec, TargetObject(scout))
     assert legality.prohibitions(state, mine) == ()
+
+
+def test_702_11b_hexproof_follows_the_controller_not_the_owner() -> None:
+    """P1 controls a Gladecover Scout P0 owns. "Your opponents" are its controller's (702.11b,
+    108.4): P0's Swords to Plowshares can't target it (P0 is P1's opponent), P1's can."""
+    for caster, offered in ((P0, False), (P1, True)):
+        scenario = Scenario(2)
+        (scout,) = scenario.battlefield(P1, ["Gladecover Scout"], owner=P0)
+        scenario.battlefield(P1, ["Grizzly Bears", "Savannah Lions"])
+        (swords,) = scenario.hand(caster, ["Swords to Plowshares"])
+        scenario.mana(caster, W)
+        scenario.at(Phase.PRECOMBAT_MAIN, active=caster)
+        state = scenario.build()
+        run_script(state, cast(swords, caster))
+        assert (ObjectOption(scout) in target_choices(state)) is offered
+
+
+def test_702_11b_an_illegal_target_answer_is_rejected() -> None:
+    """P1's Swords to Plowshares offers P0's Grizzly Bears and Savannah Lions, not P0's
+    Gladecover Scout; an answer naming the Scout is refused (601.2c) and the question stays."""
+    scenario = Scenario(2)
+    scout, bears, lions = scenario.battlefield(
+        P0, ["Gladecover Scout", "Grizzly Bears", "Savannah Lions"]
+    )
+    (swords,) = scenario.hand(P1, ["Swords to Plowshares"])
+    scenario.mana(P1, W)
+    scenario.at(Phase.PRECOMBAT_MAIN, active=P1)
+    state = scenario.build()
+    run_script(state, cast(swords, P1))
+    assert target_choices(state) == (ObjectOption(bears), ObjectOption(lions))
+    with pytest.raises(ScriptError):
+        run_script(state, choose_targets(scout, player=P1))
+    with pytest.raises(InvalidAnswer):
+        submit(state, answer(state, PickMany((2,))))  # no third option: the Scout isn't one
+    assert request_of(state).kind is DecisionKind.CHOOSE_TARGETS
+
+
+def test_702_11d_hexproof_from_a_quality_on_a_player_is_a_gap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """702.11d defines "hexproof from [quality]" for a permanent only, and no card gives it to a
+    player: with ``player_abilities`` giving P1 hexproof from red, judging P0's Test Shock
+    against P1 raises the gap."""
+    red = Hexproof(ColorQuality(ColorWord(Color.RED)))
+    patch(monkeypatch, "player_abilities", lambda state, who: (red,) if who == P1 else ())
+    scenario = Scenario(2)
+    scenario.hand(P0, ["Test Shock"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    with pytest.raises(NotImplementedRule) as gap:
+        scenario.build()  # priority lists the castable spells, judging their targets
+    assert gap.value.rule == "702.11d"
+
+
+def test_702_18a_a_player_with_shroud_and_redundant_instances(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With ``player_abilities`` giving P1 shroud twice, neither P0's nor P1's own Test Shock may
+    target P1 (702.18a: "permanent or player", no exception for its controller), and the two
+    instances forbid it once (702.18b)."""
+    patch(
+        monkeypatch,
+        "player_abilities",
+        lambda state, who: (Shroud(), Shroud()) if who == P1 else (),
+    )
+    for caster in (P0, P1):
+        scenario = Scenario(2)
+        (shock,) = scenario.hand(caster, ["Test Shock"])
+        (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+        scenario.mana(caster, R)
+        scenario.at(Phase.PRECOMBAT_MAIN, active=caster)
+        state = scenario.build()
+        run_script(state, cast(shock, caster))
+        assert target_choices(state) == (ObjectOption(bears), PlayerOption(P0))
+        spell = state.stack[0]
+        targeter = Targeter(caster, spell, characteristics(state, spell))
+        action = legality.TargetAction(caster, targeter, _spec(state), TargetPlayer(P1))
+        assert [p.rule for p in legality.prohibitions(state, action)] == ["702.18a"]

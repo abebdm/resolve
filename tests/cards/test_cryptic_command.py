@@ -26,7 +26,7 @@ from resolve.cards.definitions.counterspells import CRYPTIC_COMMAND
 from resolve.cards.registry import default_registry
 from resolve.data.cards import load_card_excerpt
 from resolve.decisions.kinds import DecisionKind
-from resolve.decisions.spaces import ChooseOne, ModesOption
+from resolve.decisions.spaces import ChooseOne, ModesOption, ObjectOption
 from resolve.events.cards import CardDrawn
 from resolve.events.permanents import PermanentTapped
 from resolve.events.spells import (
@@ -41,7 +41,7 @@ from resolve.state.mana import ManaType
 from resolve.state.spell import TargetObject
 from resolve.state.turn import Phase
 from resolve.state.zones import Zone
-from tests.casting_support import answered, cast, choose_modes, pass_, records
+from tests.casting_support import answered, cast, choose_modes, pass_, records, target_choices
 from tests.game_fixtures import request_of
 from tests.scenario import Scenario, names, run_script
 
@@ -193,3 +193,81 @@ def test_cryptic_command_bounce_goes_to_the_owners_hand() -> None:
     assert lions not in state.objects
     assert names(state, Zone.hand(P2)) == ["Savannah Lions"]
     assert state.player(P1).hand == [] and names(state, Zone.hand(P0)) == ["Forest"]
+
+
+def test_cryptic_command_the_counter_mode_is_offered_with_a_spell_to_counter() -> None:
+    """P1's Grizzly Bears is on the stack and P0 has a Test Totem (an enchantment): every mode has
+    a legal target, so all six pairs of different modes are offered (ruling 1, 700.2a). Choosing
+    counter and draw, the counter's only legal target is the Bears (115.2: not a permanent or
+    player; 115.5: not Cryptic Command itself), so it is chosen without asking."""
+    scenario = Scenario(2)
+    (bears,) = scenario.stack(P1, ["Grizzly Bears"])
+    (cryptic,) = scenario.hand(P0, [NAME])
+    scenario.battlefield(P0, ["Test Totem"])
+    scenario.mana(P0, U, U, U, U)
+    scenario.at(Phase.PRECOMBAT_MAIN, priority=P0, passed=[P1])
+    state = scenario.build()
+    run_script(state, cast(cryptic, P0))
+    space = request_of(state).space
+    assert isinstance(space, ChooseOne)
+    pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
+    assert space.options == tuple(ModesOption(pair) for pair in pairs)
+    run_script(state, choose_modes(0, 3))
+    assert target_choices(state) == (ObjectOption(bears),)
+    _resolve_all(state)
+    assert [c.spell for c in records(state, SpellCountered)] == [bears]
+
+
+def test_cryptic_command_counter_and_tap_with_the_spell_gone_does_nothing() -> None:
+    """Modes counter (P1's Grizzly Bears) and tap all creatures P0's opponents control. P0's
+    Cancel counters the Bears first; Cryptic Command's only target is illegal, so it doesn't
+    resolve and nothing is tapped (ruling 2, 608.2b), though tapping has no target."""
+    scenario = Scenario(2)
+    (bears,) = scenario.stack(P1, ["Grizzly Bears"])
+    (cryptic,) = scenario.stack(P0, [NAME])
+    (cancel,) = scenario.stack(P0, ["Cancel"])
+    (lions,) = scenario.battlefield(P1, ["Savannah Lions"])
+    scenario.modes(cryptic, 0, 2).targets(cryptic, [TargetObject(bears)])
+    scenario.targets(cancel, [TargetObject(bears)])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    _resolve_all(state)
+    assert [f.spell for f in records(state, SpellDidNotResolve)] == [cryptic]
+    assert records(state, PermanentTapped) == [] and not state.objects[lions].tapped
+
+
+def test_cryptic_command_bounce_target_gone_still_counters() -> None:
+    """Modes counter (P1's Grizzly Bears) and return target permanent (P1's Sol Ring). P1's Test
+    Shatter destroys the Sol Ring in response; the counter's target is still legal, so Cryptic
+    Command resolves and counters the Bears (608.2b)."""
+    scenario = Scenario(2)
+    (bears,) = scenario.stack(P1, ["Grizzly Bears"])
+    (cryptic,) = scenario.stack(P0, [NAME])
+    (shatter,) = scenario.stack(P1, ["Test Shatter"])
+    (ring,) = scenario.battlefield(P1, ["Sol Ring"])
+    scenario.modes(cryptic, 0, 1).targets(cryptic, [TargetObject(bears)], [TargetObject(ring)])
+    scenario.targets(shatter, [TargetObject(ring)])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    _resolve_all(state)
+    assert [c.spell for c in records(state, SpellCountered)] == [bears]
+    assert cryptic in [r.spell for r in records(state, SpellResolved)]
+    assert state.battlefield == [] and names(state, Zone.graveyard(P1)) == [
+        "Sol Ring", "Test Shatter", "Grizzly Bears"
+    ]  # fmt: skip
+
+
+def test_cryptic_command_taps_by_controller_not_owner() -> None:
+    """ "Creatures your opponents control" is judged by control (108.4): a Grizzly Bears P0
+    controls but P1 owns stays untapped; a Savannah Lions P1 controls but P0 owns is tapped."""
+    scenario = Scenario(2)
+    (cryptic,) = scenario.stack(P0, [NAME])
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"], owner=P1)
+    (lions,) = scenario.battlefield(P1, ["Savannah Lions"], owner=P0)
+    scenario.library(P0, ["Forest"])
+    scenario.modes(cryptic, 2, 3)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    _resolve_all(state)
+    assert [e.obj for e in records(state, PermanentTapped)] == [lions]
+    assert state.objects[lions].tapped and not state.objects[bears].tapped

@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from resolve.decisions.spaces import ObjectOption
 from resolve.events.damage import DamageDealt
+from resolve.events.life import LifeGained
 from resolve.events.permanents import ObjectExiled, PermanentDestroyed, PutIntoGraveyard
 from resolve.events.spells import SpellResolved
 from resolve.rules import legality
@@ -94,10 +95,12 @@ def test_702_12_exile_still_works() -> None:
     scenario.targets(swords, [TargetObject(myr)])
     scenario.at(Phase.PRECOMBAT_MAIN, active=P1)
     state = scenario.build()
+    life = state.player(P0).life
     run_script(state, pass_(P1), pass_(P0))
     (exiled,) = records(state, ObjectExiled)
     assert exiled.obj == myr and names(state, EXILE) == ["Darksteel Myr"]
     assert state.battlefield == []
+    assert state.player(P0).life == life and records(state, LifeGained) == []
 
 
 def test_702_12_indestructible_doesnt_stop_targeting() -> None:

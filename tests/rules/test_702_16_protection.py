@@ -181,3 +181,54 @@ def test_702_16b_a_player_with_protection(monkeypatch: pytest.MonkeyPatch) -> No
     state = scenario.build()
     run_script(state, cast(shock, P0))
     assert target_choices(state) == (PlayerOption(P0),)
+
+
+def test_702_16b_a_multicolored_spell_with_the_color() -> None:
+    """Test Gold Shock is red and white (105.2c), so it has the quality "red": it can't target
+    Repentant Blacksmith (protection from red), whoever casts it (702.16b)."""
+    assert not offered(P1, "Test Gold Shock", "Repentant Blacksmith", (R, W))
+    assert not offered(P0, "Test Gold Shock", "Repentant Blacksmith", (R, W))
+
+
+def test_702_16j_damage_from_any_source_is_a_gap_until_m6() -> None:
+    """Test Untouchable has protection from everything: all damage to it would be prevented
+    (702.16j), even from a green source. P1's Chandra's Ignition targeting
+    P1's Grizzly Bears (green) would deal 2 damage to it: the 702.16e gap."""
+    scenario = Scenario(2)
+    (ignition,) = scenario.stack(P1, ["Chandra's Ignition"])
+    (bears,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    scenario.battlefield(P0, ["Test Untouchable"])
+    scenario.targets(ignition, [TargetObject(bears)])
+    scenario.at(Phase.PRECOMBAT_MAIN, active=P1)
+    state = scenario.build()
+    with pytest.raises(NotImplementedRule) as gap:
+        _burn(state)
+    assert gap.value.rule == "702.16e"
+
+
+def test_702_16e_damage_to_a_player_with_protection_is_a_gap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With ``defaults.player_abilities`` giving P0 protection from red, P1's Fiery Confluence
+    (red; 2 damage to each opponent, three times) would deal damage protection prevents: the
+    702.16e gap. This is the damage seam of ``player_abilities`` (the targeting seam is in
+    test_702_11_hexproof.py). Without the patch the same spell deals P0 6 damage."""
+    red = Protection(ColorQuality(ColorWord(Color.RED)))
+
+    def build() -> GameState:
+        scenario = Scenario(2)
+        (confluence,) = scenario.stack(P1, ["Fiery Confluence"])
+        scenario.modes(confluence, 1, 1, 1)
+        scenario.at(Phase.PRECOMBAT_MAIN, active=P1)
+        return scenario.build()
+
+    state = build()
+    life = state.player(P0).life
+    _burn(state)
+    assert state.player(P0).life == life - 6
+
+    patch(monkeypatch, "player_abilities", lambda state, who: (red,) if who == P0 else ())
+    state = build()
+    with pytest.raises(NotImplementedRule) as gap:
+        _burn(state)
+    assert gap.value.rule == "702.16e"

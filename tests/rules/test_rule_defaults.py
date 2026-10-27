@@ -46,7 +46,7 @@ CITATIONS = {
     "cast_permissions": ["601.3", "903.8"],
     "cast_options": ["601.3", "117.1a"],
     "has_sorcery_timing": ["117.1a", "307.1"],
-    "may_cast_now": ["117.1a"],
+    "may_cast_now": ["117.1a", "702.8a"],
     "resolved_spell_destination": ["608.2n"],
     "maximum_hand_size": ["402.2"],
     "draw_step_draws": ["504.1"],
@@ -136,13 +136,15 @@ def test_117_1a_sorcery_timing_is_the_active_players_main_phase_with_an_empty_st
 
 def test_117_1a_an_instant_may_be_cast_whenever_a_sorcery_needs_sorcery_timing() -> None:
     """117.1a: a player may cast an instant whenever they have priority; 307.1, 301.1, 302.1: any
-    other spell only with sorcery timing."""
+    other spell only with sorcery timing; 702.8a: a card with flash (Ashcoat Bear) whenever an
+    instant could be."""
     scenario = Scenario(2)
-    shock, ponder, bears, forest = scenario.hand(
-        P0, ["Test Shock", "Test Ponder", "Grizzly Bears", "Forest"]
+    shock, ponder, bears, forest, ashcoat = scenario.hand(
+        P0, ["Test Shock", "Test Ponder", "Grizzly Bears", "Forest", "Ashcoat Bear"]
     )
     scenario.at(Step.UPKEEP)
     state = scenario.build()
+    assert defaults.may_cast_now(state, P0, ashcoat)
     assert defaults.may_cast_now(state, P0, shock)
     assert not defaults.may_cast_now(state, P0, ponder)
     assert not defaults.may_cast_now(state, P0, bears)
