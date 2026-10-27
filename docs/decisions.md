@@ -19,6 +19,35 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-27: M2.9: cost modifiers come from battlefield statics, applied by step without asking
+- **Decision:** the total cost (601.2f) is worked out by `resolve.rules.costs.spell_total_cost`
+  in `CastSpell`'s `TOTAL` stage: the mana cost with X's value (601.2b first), then every
+  `CostModifier` by `ModifierStep` (increases, then reductions, then effects on the total),
+  each step's modifiers in battlefield order. The modifiers are those that the
+  `SpellCostModifier` abilities of permanents on the battlefield give for the spell
+  (`spell_cost_modifiers`), judged on the spell's characteristics on the stack and its
+  caster. The total is stored (`CastSpell.total`, `PayCosts.cost`, `CastChoices.total_cost`)
+  and never recomputed. A reduction is a modifier of the generic part only (`ReduceGeneric`,
+  `ManaCost.with_generic`), so it can't touch colored or colorless symbols and stops at
+  nothing (`{0}`).
+- **Why:** 601.2f lets the player apply reductions in any order. With generic reductions only,
+  every order gives the same total (the generic part is `max(0, generic + increases -
+  reductions)`), so a question would have identical answers (design.md §6's canonical answers);
+  a reduction whose order matters (118.7b-e: colored, colorless or hybrid amounts) must add
+  that choice with its first card. 113.6 makes a permanent's abilities function only on the
+  battlefield, so the Medallion on the stack, in a hand or in a graveyard reduces nothing;
+  abilities that function from other zones (113.6b, "this spell costs {1} less", Ghalta) join
+  the gathering with their cards (M4). "You cast" is judged as the caster being the
+  controller of the ability's source. The first real increase is the commander tax (M7); the
+  tests use a test-only one (Test Thorn, `tests/game_fixtures.py`) to check the order.
+  `Quality` gained `adjective` ("green", "Dinosaur") so the reduction's text reuses the
+  qualities of protection rather than a parallel spell filter.
+- **Rules:** 601.2f, 601.8, 118.7, 118.7a, 113.6, 202.3, 205.3; the rulings of Emerald
+  Medallion (2023-07-28) and Kinjalli's Caller.
+- **Where:** `resolve.rules.costs`, `resolve.cards.primitives.cost_modifiers`,
+  `resolve.engine.casting` (`_total`), `resolve.data.mana_cost` (`generic`, `with_generic`),
+  `resolve.cards.keywords.qualities` (`adjective`).
+
 ### 2026-10-27: M2.8: a countered spell goes to its owner's graveyard, not where it would resolve to
 - **Decision (approved by the user, 2026-10-27; revises design.md §17.12 and the M2.6 handoff
   note):** a countered spell is moved to its owner's graveyard by `SpellCountered`, an ordinary

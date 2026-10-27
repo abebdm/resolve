@@ -745,7 +745,11 @@ Room is kept for three more kinds of stack object:
 
 *Provisional: designed in M2's plan; built in M2 (mana), M4 (other costs), M9 (hybrid,
 Phyrexian, snow, payment alternatives). Each milestone's plan may revise it, with the user's
-sign-off.*
+sign-off. M2.9 built the 601.2f pipeline for spells (`resolve.rules.costs`: `CostModifier`
+values with a `ModifierStep`, gathered from the `SpellCostModifier` abilities of permanents on
+the battlefield; `ReduceGeneric`, `SpellCostReduction`); the total is locked in by `CastSpell`.
+Reductions whose order matters (118.7b-e) and so need the player's choice arrive with their
+first card.*
 
 - `ManaCost` holds every symbol of 107.4: colored, {C}, generic, {X}, hybrid, monocolored
   hybrid, Phyrexian and snow.

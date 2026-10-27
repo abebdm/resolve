@@ -41,15 +41,16 @@ touches. Read more when a section points you to another.
 ## Current status
 
 **Current milestone: M2 (Spells and the stack), in progress: the plan is approved
-(`docs/plans/m2.md`); M2.0 to M2.8 are done (documentation, the rule defaults, mana costs and
+(`docs/plans/m2.md`); M2.0 to M2.9 are done (documentation, the rule defaults, mana costs and
 characteristics, casting and resolving permanent spells, mana abilities beyond basic lands and
 summoning sickness, the agent-side auto-payer, targets with last known information and the first
-effects, modes and X, evergreen keywords and countering with Cryptic Command). M0 (Skeleton) and M1 (Turn structure) are complete.** What each completed
+effects, modes and X, evergreen keywords and countering with Cryptic Command, cost reductions).
+M0 (Skeleton) and M1 (Turn structure) are complete.** What each completed
 step built, and where, is in `docs/roadmap.md`, "What's built".
 
 - **Known violations of rule 12:** none. Every default of `docs/plans/m2.md` §5.1 comes from a
   function in `resolve.rules.defaults` (how to add or change one: `docs/howto.md`).
-- **Next:** M2.9 (cost reductions), then M2.10 onward.
+- **Next:** M2.10 (casting during resolution, without paying the mana cost), then M2.11.
 
 Do not start a milestone unless the user asks.
 

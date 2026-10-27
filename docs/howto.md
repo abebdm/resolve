@@ -467,6 +467,28 @@ files.
    `tests/cards/test_keyword_primitives.py`; add it to `docs/primitives.md` ("Keywords") and tick
    its coverage-map row.
 
+### Add a cost increase or reduction
+
+1. Read 601.2f and 118.7 (`uv run python tools/rule.py 601.2f`, `118.7`) and the card's
+   rulings. Search `docs/primitives.md` ("Static abilities"): a "[quality] spells you cast cost
+   {N} less" card is `SpellCostReduction(quality, N)` with a quality of
+   `resolve.cards.keywords.qualities` (Emerald Medallion, Kinjalli's Caller).
+2. Otherwise write a `SpellCostModifier` ability in `resolve.cards.primitives.cost_modifiers`:
+   `modifier(state, source, spell, caster)` returns the `CostModifier` it applies to that spell,
+   or `None`. A new kind of change is a `CostModifier` with its `step` (`INCREASE` with
+   additional costs, `REDUCTION`, `TOTAL` for "directly affects the total") and `apply(cost)`
+   working on `ManaCost` (`generic`, `with_generic`). A reduction by colored, colorless or
+   hybrid mana (118.7b-e) needs the player's choice of order in `resolve.rules.costs` first:
+   today the modifiers of a step are applied in battlefield order without asking, which is
+   right only while every reduction is generic (docs/decisions.md, 2026-10-27, "M2.9").
+3. `resolve.rules.costs.spell_cost_modifiers` gathers the abilities of permanents on the
+   battlefield (113.6). An ability that works from another zone ("this spell costs {1} less",
+   113.6b) must be added there.
+4. Test the total through `view_for(state, player).payments[0].cost` (while paying) and
+   `SpellCast.total_cost`: the order (increases first: Test Thorn, `tests/game_fixtures.py`),
+   X announced first, the mana value unchanged (202.3), whose spells it applies to, and the
+   zones it doesn't work from (`tests/rules/test_601_2f_cost_modifiers.py`).
+
 ### Update to a new Comprehensive Rules version
 
 The CR is pinned (`docs/rules/README.md`). A new version changes, adds, removes and renumbers
