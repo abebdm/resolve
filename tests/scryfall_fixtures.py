@@ -354,6 +354,101 @@ TEST_TWIN_BLAZE = spell(
 )  # fmt: skip
 TEST_ARTIFACT_TOTEM = spell("Test Artifact Totem", "{2}", 2.0, "Artifact Enchantment", [], "")
 
+
+# Real keyword example cards and Cryptic Command of M2.8 (Oracle text from the 2026-10-26 snapshot,
+# tools/excerpts/cards.json).
+def keyword_creature(
+    name: str, cost: str, cmc: float, subtype: str, pt: tuple[str, str], color: str, text: str
+) -> dict[str, Any]:
+    """A creature whose only rules text is a keyword."""
+    return {**vanilla(name, cost, cmc, subtype, pt, color), "oracle_text": text}
+
+
+ASHCOAT_BEAR = keyword_creature(
+    "Ashcoat Bear", "{1}{G}", 2.0, "Bear", ("2", "2"), "G",
+    "Flash (You may cast this spell any time you could cast an instant.)",
+)  # fmt: skip
+GLADECOVER_SCOUT = keyword_creature(
+    "Gladecover Scout", "{G}", 1.0, "Elf Scout", ("1", "1"), "G",
+    "Hexproof (This creature can't be the target of spells or abilities your opponents control.)",
+)  # fmt: skip
+HUMBLE_BUDOKA = keyword_creature(
+    "Humble Budoka", "{1}{G}", 2.0, "Human Monk", ("2", "2"), "G",
+    "Shroud (This creature can't be the target of spells or abilities.)",
+)  # fmt: skip
+DARKSTEEL_RELIC = spell(
+    "Darksteel Relic", "{0}", 0.0, "Artifact", [],
+    "Indestructible (Effects that say \"destroy\" don't destroy this artifact.)",
+)  # fmt: skip
+DARKSTEEL_MYR: dict[str, Any] = {
+    **keyword_creature(
+        "Darksteel Myr", "{3}", 3.0, "Myr", ("0", "1"), "C",
+        "Indestructible (Damage and effects that say \"destroy\" don't destroy this creature. If "
+        "its toughness is 0 or less, it still dies.)",
+    ),
+    "type_line": "Artifact Creature \u2014 Myr",
+    "colors": [],
+    "color_identity": [],
+}  # fmt: skip
+REPENTANT_BLACKSMITH = keyword_creature(
+    "Repentant Blacksmith", "{1}{W}", 2.0, "Human", ("1", "2"), "W", "Protection from red"
+)
+NACATL_SAVAGE = keyword_creature(
+    "Nacatl Savage", "{1}{G}", 2.0, "Cat Warrior", ("2", "1"), "G", "Protection from artifacts"
+)
+CANCEL = spell("Cancel", "{1}{U}{U}", 3.0, "Instant", ["U"], "Counter target spell.")
+CRYPTIC_COMMAND = spell(
+    "Cryptic Command", "{1}{U}{U}{U}", 4.0, "Instant", ["U"],
+    "Choose two \u2014\n\u2022 Counter target spell.\n"
+    "\u2022 Return target permanent to its owner's hand.\n"
+    "\u2022 Tap all creatures your opponents control.\n\u2022 Draw a card.",
+)  # fmt: skip
+
+# Invented cards for keywords and countering (M2.8).
+TEST_REDPROOF_BEAR = keyword_creature(
+    "Test Redproof Bear", "{1}{G}", 2.0, "Bear", ("2", "2"), "G", "Hexproof from red"
+)
+TEST_MULTIPROOF_KNIGHT = keyword_creature(
+    "Test Multiproof Knight", "{1}{W}", 2.0, "Knight", ("2", "2"), "W",
+    "Protection from multicolored",
+)  # fmt: skip
+TEST_PRISMATIC_KNIGHT = keyword_creature(
+    "Test Prismatic Knight", "{1}{W}", 2.0, "Knight", ("2", "2"), "W", "Protection from each color"
+)
+TEST_UNTOUCHABLE = keyword_creature(
+    "Test Untouchable", "{1}{G}", 2.0, "Spirit", ("1", "1"), "G", "Protection from everything"
+)
+TEST_TWIN_FLASH = keyword_creature(
+    "Test Twin Flash", "{1}{G}", 2.0, "Bear", ("2", "2"), "G", "Flash\nFlash"
+)
+TEST_INDESTRUCTIBLE_WISP = keyword_creature(
+    "Test Indestructible Wisp", "{G}", 1.0, "Spirit", ("1", "0"), "G", "Indestructible"
+)
+TEST_STUBBORN_SPELL = spell(
+    "Test Stubborn Spell", "{1}{R}", 2.0, "Instant", ["R"],
+    "This spell can't be countered.\nTest Stubborn Spell deals 1 damage to any target.",
+)  # fmt: skip
+TEST_GOLD_SHOCK = spell(
+    "Test Gold Shock", "{R}{W}", 2.0, "Instant", ["R", "W"],
+    "Test Gold Shock deals 2 damage to any target.",
+)  # fmt: skip
+# An adventurer card (715.2): a creature with an Adventure (an instant that draws a card).
+_ADVENTURER = {
+    **vanilla("Test Adventurer", "{1}{W}", 2.0, "Human Knight", ("2", "2"), "W"),
+    "object": "card_face",
+}
+_QUEST = {**spell("Test Quest", "{W}", 1.0, "Instant \u2014 Adventure", ["W"], "Draw a card."),
+          "object": "card_face"}  # fmt: skip
+TEST_ADVENTURER: dict[str, Any] = {
+    **vanilla("Test Adventurer", "{1}{W}", 2.0, "Human Knight", ("2", "2"), "W"),
+    "oracle_id": "oid-test-adventurer",
+    "name": "Test Adventurer // Test Quest",
+    "layout": "adventure",
+    "mana_cost": "{1}{W} // {W}",
+    "type_line": "Creature \u2014 Human Knight // Instant \u2014 Adventure",
+    "card_faces": [_ADVENTURER, _QUEST],
+}
+
 # Mana costs that don't follow 107.4 (an Un-set half-mana symbol): loads, but can't be played.
 TEST_HALF = spell("Test Half", "{HW}", 0.5, "Creature — Elf", ["W"])
 

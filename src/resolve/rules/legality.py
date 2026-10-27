@@ -96,6 +96,13 @@ class DestroyAction(Action):
 
 
 @dataclass(frozen=True)
+class CounterAction(Action):
+    """The spell ``spell`` is countered (701.6a) by a spell or ability ``player`` controls."""
+
+    spell: ObjectId
+
+
+@dataclass(frozen=True)
 class Permission(Immutable):
     """A rule or effect that allows an action: the CR ``rule`` and what it lets the player do."""
 
@@ -131,6 +138,10 @@ def permissions(state: GameState, action: Action) -> tuple[Permission, ...]:
         return _target_permissions(state, action)
     if isinstance(action, DestroyAction):
         return _destroy_permissions(state, action)
+    if isinstance(action, CounterAction):
+        from resolve.errors import NotImplementedRule
+
+        raise NotImplementedRule("701.6a: countering a spell")
     raise EngineError(f"no rule of legality covers {action!r}")
 
 

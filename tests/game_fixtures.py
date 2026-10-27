@@ -13,20 +13,34 @@ from collections.abc import Callable, Sequence
 
 from resolve.cards.definitions import (
     basic_lands,
+    counterspells,
+    keyword_examples,
     mana_creatures,
     mana_rocks,
     nonbasic_lands,
     removal,
     vanilla_creatures,
 )
+from resolve.cards.keywords import (
+    ColorQuality,
+    Everything,
+    Flash,
+    Hexproof,
+    Indestructible,
+    MulticoloredQuality,
+    Protection,
+    protection_from_each_color,
+)
 from resolve.cards.primitives.effects import DealDamage, Destroy, DrawCards
 from resolve.cards.primitives.refs import TargetRef
 from resolve.cards.primitives.spells import Mode, ModeChoice, SpellAbility
+from resolve.cards.primitives.statics import CantBeCountered
 from resolve.cards.primitives.targets import ANY_TARGET, target
 from resolve.cards.primitives.values import Fixed, X
+from resolve.cards.primitives.words import ColorWord
 from resolve.cards.registry import CardDefinition, CardRegistry
 from resolve.data.cards import CardDatabase, parse_card, parse_oracle_cards
-from resolve.data.types import CardType
+from resolve.data.types import CardType, Color
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer, DecisionRequest
 from resolve.decisions.spaces import (
@@ -91,6 +105,30 @@ TEST_COMMAND = CardDefinition(
     ),
 )
 
+# The fixture cards of M2.8's keywords (docs/plans/m2.md §7).
+_RED = ColorQuality(ColorWord(Color.RED))
+TEST_REDPROOF_BEAR = CardDefinition("Test Redproof Bear", abilities=(Hexproof(_RED),))
+TEST_MULTIPROOF_KNIGHT = CardDefinition(
+    "Test Multiproof Knight", abilities=(Protection(MulticoloredQuality()),)
+)
+TEST_PRISMATIC_KNIGHT = CardDefinition(
+    "Test Prismatic Knight", abilities=protection_from_each_color()
+)
+TEST_UNTOUCHABLE = CardDefinition("Test Untouchable", abilities=(Protection(Everything()),))
+TEST_TWIN_FLASH = CardDefinition("Test Twin Flash", abilities=(Flash(), Flash()))
+TEST_INDESTRUCTIBLE_WISP = CardDefinition("Test Indestructible Wisp", abilities=(Indestructible(),))
+# This spell can't be countered. Test Stubborn Spell deals 1 damage to any target.
+TEST_STUBBORN_SPELL = CardDefinition(
+    "Test Stubborn Spell",
+    abilities=(CantBeCountered(),),
+    spell=SpellAbility((Mode((ANY_TARGET,), (DealDamage(Fixed(1), (TargetRef(0),)),)),)),
+)
+# Test Gold Shock ({R}{W}) deals 2 damage to any target.
+TEST_GOLD_SHOCK = CardDefinition("Test Gold Shock", spell=TEST_SHOCK.spell)
+# An adventurer (715.2): Test Adventurer, a vanilla creature, and Test Quest, "Draw a card."
+TEST_ADVENTURER = CardDefinition("Test Adventurer")
+TEST_QUEST = CardDefinition("Test Quest", spell=TEST_PONDER.spell)
+
 
 def registry() -> CardRegistry:
     """A registry implementing the fixture cards used by these decks."""
@@ -113,8 +151,9 @@ def scenario_registry() -> CardRegistry:
     """``registry()`` plus the other basic lands, the vanilla creatures, the mana rocks, mana
     creatures and nonbasic lands, the removal spells, the fixture instants (Test Shock, Test
     Shatter), sorcery (Test Ponder), split card, nonbasic Forest, Test Raptor, Test Mox ({0}),
-    Test Ember ({1}{C}), Test Wall (0/4), Test Totem (an enchantment) and Test Artifact Land
-    Creature: the scenario builder's default."""
+    Test Ember ({1}{C}), Test Wall (0/4), Test Totem (an enchantment), Test Artifact Land
+    Creature, the keyword example cards, Cryptic Command and M2.8's keyword fixtures (and an
+    adventurer, Test Adventurer // Test Quest): the scenario builder's default."""
     extra = (
         "Test Spark",
         "Test Frost",
@@ -149,6 +188,18 @@ def scenario_registry() -> CardRegistry:
             TEST_BLAZE,
             TEST_TWIN_BLAZE,
             TEST_COMMAND,
+            *keyword_examples.DEFINITIONS,
+            *counterspells.DEFINITIONS,
+            TEST_REDPROOF_BEAR,
+            TEST_MULTIPROOF_KNIGHT,
+            TEST_PRISMATIC_KNIGHT,
+            TEST_UNTOUCHABLE,
+            TEST_TWIN_FLASH,
+            TEST_INDESTRUCTIBLE_WISP,
+            TEST_STUBBORN_SPELL,
+            TEST_GOLD_SHOCK,
+            TEST_ADVENTURER,
+            TEST_QUEST,
             *map(CardDefinition, extra),
         ]
     )
@@ -165,6 +216,12 @@ def scenario_database() -> CardDatabase:
     extra += [fx.TEST_SHATTER, fx.TEST_TOTEM, fx.TEST_ARTIFACT_LAND_CREATURE]
     extra += [fx.FIERY_CONFLUENCE, fx.TEST_BLAZE, fx.TEST_TWIN_BLAZE, fx.TEST_COMMAND]
     extra += [fx.TEST_ARTIFACT_TOTEM]
+    extra += [fx.ASHCOAT_BEAR, fx.GLADECOVER_SCOUT, fx.HUMBLE_BUDOKA, fx.DARKSTEEL_RELIC]
+    extra += [fx.DARKSTEEL_MYR, fx.REPENTANT_BLACKSMITH, fx.NACATL_SAVAGE, fx.CANCEL]
+    extra += [fx.CRYPTIC_COMMAND, fx.TEST_REDPROOF_BEAR, fx.TEST_MULTIPROOF_KNIGHT]
+    extra += [fx.TEST_PRISMATIC_KNIGHT, fx.TEST_UNTOUCHABLE, fx.TEST_TWIN_FLASH]
+    extra += [fx.TEST_INDESTRUCTIBLE_WISP, fx.TEST_STUBBORN_SPELL, fx.TEST_GOLD_SHOCK]
+    extra += [fx.TEST_ADVENTURER]
     lands = [fx.PLAINS, fx.ISLAND, fx.SWAMP, fx.MOUNTAIN]
     return CardDatabase(parse_oracle_cards([*fx.default_cards(), *lands, *extra]))
 

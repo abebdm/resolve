@@ -6,18 +6,18 @@
       "oracle_cards": {
         "type": "oracle_cards",
         "file": "oracle-cards.jsonl.gz",
-        "updated_at": "2026-10-26T09:01:56.442+00:00",
-        "size": 25110502,
-        "sha256": "0d03f926f16a761a85976076dd2e33d3fc1f535651ef919ed8d2944ca1ea5885",
-        "source": "https://data.scryfall.io/oracle-cards/oracle-cards-20261026090156.jsonl.gz"
+        "updated_at": "2026-10-26T21:01:59.922+00:00",
+        "size": 25135745,
+        "sha256": "081a50ef82c767523f955e914153cf988ff045a72e3765b6aa2382567f9eb53a",
+        "source": "https://data.scryfall.io/oracle-cards/oracle-cards-20261026210159.jsonl.gz"
       },
       "rulings": {
         "type": "rulings",
         "file": "rulings.jsonl.gz",
-        "updated_at": "2026-10-26T09:00:32.536+00:00",
+        "updated_at": "2026-10-26T21:00:34.988+00:00",
         "size": 5422271,
-        "sha256": "c7fd71cc034b83dc8d91f476a71f8c497e9103eb192bebdb81e246bb1baaa5b0",
-        "source": "https://data.scryfall.io/rulings/rulings-20261026090032.jsonl.gz"
+        "sha256": "f340b483b578935870ae0243ef666ec9988aaf9fe15784309e875897b128901a",
+        "source": "https://data.scryfall.io/rulings/rulings-20261026210034.jsonl.gz"
       }
     }
   },
@@ -274,6 +274,177 @@
         "R"
       ],
       "keywords": []
+    },
+    {
+      "object": "card",
+      "oracle_id": "e6d13c0d-23ed-41f5-a726-f18d4bb44c9a",
+      "name": "Ashcoat Bear",
+      "layout": "normal",
+      "mana_cost": "{1}{G}",
+      "cmc": 2.0,
+      "type_line": "Creature — Bear",
+      "oracle_text": "Flash (You may cast this spell any time you could cast an instant.)",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [
+        "Flash"
+      ],
+      "power": "2",
+      "toughness": "2"
+    },
+    {
+      "object": "card",
+      "oracle_id": "385c1208-bfea-44e2-b236-4f38bc90db9f",
+      "name": "Gladecover Scout",
+      "layout": "normal",
+      "mana_cost": "{G}",
+      "cmc": 1.0,
+      "type_line": "Creature — Elf Scout",
+      "oracle_text": "Hexproof (This creature can't be the target of spells or abilities your opponents control.)",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [
+        "Hexproof"
+      ],
+      "power": "1",
+      "toughness": "1"
+    },
+    {
+      "object": "card",
+      "oracle_id": "9508efe6-0528-4a13-9961-c2a1b05085a6",
+      "name": "Humble Budoka",
+      "layout": "normal",
+      "mana_cost": "{1}{G}",
+      "cmc": 2.0,
+      "type_line": "Creature — Human Monk",
+      "oracle_text": "Shroud (This creature can't be the target of spells or abilities.)",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [
+        "Shroud"
+      ],
+      "power": "2",
+      "toughness": "2"
+    },
+    {
+      "object": "card",
+      "oracle_id": "2bda1fb1-528c-4e66-89f1-bb1a85e9181e",
+      "name": "Darksteel Relic",
+      "layout": "normal",
+      "mana_cost": "{0}",
+      "cmc": 0.0,
+      "type_line": "Artifact",
+      "oracle_text": "Indestructible (Effects that say \"destroy\" don't destroy this artifact.)",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [
+        "Indestructible"
+      ]
+    },
+    {
+      "object": "card",
+      "oracle_id": "f90fe86c-5cca-483b-93c2-6e856fa01c88",
+      "name": "Darksteel Myr",
+      "layout": "normal",
+      "mana_cost": "{3}",
+      "cmc": 3.0,
+      "type_line": "Artifact Creature — Myr",
+      "oracle_text": "Indestructible (Damage and effects that say \"destroy\" don't destroy this creature. If its toughness is 0 or less, it still dies.)",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [
+        "Indestructible"
+      ],
+      "power": "0",
+      "toughness": "1"
+    },
+    {
+      "object": "card",
+      "oracle_id": "a83073a2-e63d-4105-8bad-9612e411fc85",
+      "name": "Repentant Blacksmith",
+      "layout": "normal",
+      "mana_cost": "{1}{W}",
+      "cmc": 2.0,
+      "type_line": "Creature — Human",
+      "oracle_text": "Protection from red",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": [
+        "Protection"
+      ],
+      "power": "1",
+      "toughness": "2"
+    },
+    {
+      "object": "card",
+      "oracle_id": "475412c9-8960-4085-bd8f-5f8a7c7485b9",
+      "name": "Nacatl Savage",
+      "layout": "normal",
+      "mana_cost": "{1}{G}",
+      "cmc": 2.0,
+      "type_line": "Creature — Cat Warrior",
+      "oracle_text": "Protection from artifacts",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [
+        "Protection"
+      ],
+      "power": "2",
+      "toughness": "1"
+    },
+    {
+      "object": "card",
+      "oracle_id": "7d00fb28-ea6c-49a9-b4af-ffb38860a9a7",
+      "name": "Cancel",
+      "layout": "normal",
+      "mana_cost": "{1}{U}{U}",
+      "cmc": 3.0,
+      "type_line": "Instant",
+      "oracle_text": "Counter target spell.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": []
+    },
+    {
+      "object": "card",
+      "oracle_id": "a3e51a35-09df-4189-b131-08a21e6a557d",
+      "name": "Cryptic Command",
+      "layout": "normal",
+      "mana_cost": "{1}{U}{U}{U}",
+      "cmc": 4.0,
+      "type_line": "Instant",
+      "oracle_text": "Choose two —\n• Counter target spell.\n• Return target permanent to its owner's hand.\n• Tap all creatures your opponents control.\n• Draw a card.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": []
     }
   ],
   "rulings": [
@@ -370,10 +541,31 @@
     },
     {
       "object": "ruling",
+      "oracle_id": "475412c9-8960-4085-bd8f-5f8a7c7485b9",
+      "source": "wotc",
+      "published_at": "2009-02-01",
+      "comment": "“Protection from artifacts” means the following: -- Nacatl Savage can't be blocked by artifact creatures. -- Nacatl Savage can't be equipped. It also can't be enchanted by Auras that have somehow become artifacts in addition to enchantments. -- Nacatl Savage can't be targeted by abilities from artifact sources. -- All damage that would be dealt to Nacatl Savage by artifact sources is prevented."
+    },
+    {
+      "object": "ruling",
       "oracle_id": "a3ce0fa9-8742-4e2c-a8a0-00fc009f998a",
       "source": "wotc",
       "published_at": "2023-11-10",
       "comment": "A \"Dinosaur source\" is any object with the creature type Dinosaur. This means you could spend the mana to activate an ability of a Dinosaur you control or a Dinosaur card in your hand or graveyard, for example."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "a3e51a35-09df-4189-b131-08a21e6a557d",
+      "source": "wotc",
+      "published_at": "2017-11-17",
+      "comment": "You choose both modes as you cast Cryptic Command. You must choose two different modes."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "a3e51a35-09df-4189-b131-08a21e6a557d",
+      "source": "wotc",
+      "published_at": "2017-11-17",
+      "comment": "Look at both chosen modes to determine how many targets Cryptic Command has, if any. If it has at least one target, and all its targets are illegal when it tries to resolve, then it won’t resolve and none of its effects will happen. For example, if you choose the second and fourth modes, and the permanent is an illegal target when Cryptic Command tries to resolve, you won’t draw a card."
     },
     {
       "object": "ruling",

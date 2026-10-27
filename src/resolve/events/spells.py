@@ -188,6 +188,19 @@ class SpellDidNotResolve(Event):
 
 
 @dataclass(frozen=True, kw_only=True)
+class SpellCountered(Event):
+    """The spell ``spell`` is countered (701.6a)."""
+
+    spell: ObjectId
+    moved: ObjectId | None = None
+
+    def apply(self, state: GameState) -> Event:
+        from resolve.errors import NotImplementedRule
+
+        raise NotImplementedRule("701.6a: countering a spell")
+
+
+@dataclass(frozen=True, kw_only=True)
 class SpellResolved(Event):
     """The instant or sorcery spell ``spell`` has followed its instructions (608.2c); as the
     final part of its resolution it is put into ``destination`` (608.2n: its owner's graveyard

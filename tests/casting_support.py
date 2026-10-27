@@ -10,6 +10,7 @@ from resolve.decisions.spaces import (
     Amounts,
     CastSpellOption,
     ChooseOne,
+    ChooseSubset,
     ColorOption,
     ManaActivationOption,
     ModesOption,
@@ -21,9 +22,10 @@ from resolve.decisions.spaces import (
 )
 from resolve.engine.payment import PAY
 from resolve.events.base import AnswerRecord
+from resolve.events.spells import BecameTargets
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.spell import FROM_HAND, NORMAL, CastPermission, CastVariant
+from resolve.state.spell import FROM_HAND, NORMAL, CastPermission, CastVariant, TargetObject
 from tests.game_fixtures import request_of
 
 
@@ -95,6 +97,24 @@ def options(state: GameState) -> tuple[Option, ...]:
     space = request_of(state).space
     assert isinstance(space, ChooseOne)
     return space.options
+
+
+def target_choices(state: GameState) -> tuple[Option, ...]:
+    """The targets a spell being cast may choose for its latest instance of the word "target"
+    (601.2c): the options of the pending ``CHOOSE_TARGETS`` decision, or, when that instance
+    wasn't asked because its only possible answer was every legal target (docs/decisions.md,
+    2026-10-23), the targets it chose."""
+    request = request_of(state)
+    if request.kind is DecisionKind.CHOOSE_TARGETS:
+        assert isinstance(request.space, ChooseSubset)
+        return request.space.options
+    became = records(state, BecameTargets)
+    assert became, f"no targets were chosen; the game asks for {request.kind.value}"
+    chosen = became[-1].targets[-1]
+    return tuple(
+        ObjectOption(t.object) if isinstance(t, TargetObject) else PlayerOption(t.player)
+        for t in chosen
+    )
 
 
 def records[T](state: GameState, kind: type[T]) -> list[T]:
