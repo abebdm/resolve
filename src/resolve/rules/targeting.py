@@ -8,8 +8,9 @@ whether ``candidate`` may be (or still is) a target of ``targeter`` for the inst
    player still in the game, 800.4a; an object still in the zone it was targeted in, 608.2b);
 2. the spec's filter;
 
-and whose prohibitions are the rules' own, a spell or ability targeting itself (115.5), and,
-from M2.8, the candidate's shroud, hexproof and protection (702.18a, 702.11b-d, 702.16b).
+and whose prohibitions are the rules' own, a spell or ability targeting itself (115.5), and the
+candidate's shroud, hexproof and protection (702.18a, 702.11b-d, 702.16b, 702.16j; a permanent's
+from its characteristics, a player's from ``defaults.player_abilities``).
 
 It is used when a spell's targets are chosen (601.2c: ``legal_targets``, and
 ``can_choose_targets`` for the spells priority offers), when its modes are chosen (700.2a: a mode

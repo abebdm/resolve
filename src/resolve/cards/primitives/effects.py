@@ -2,9 +2,9 @@
 
 Mana abilities' effects (``AddMana``, ``AddManaOfAnyColor``, 605.1a) give their events
 directly. Spells' effects are ``Effect`` values (``DealDamage``, ``Destroy``, ``Exile``,
-``GainLife``, ``DrawCards``), applied one at a time in the order written (608.2c) by
-``resolve.engine.resolution.ResolveSpell``; each evaluates its references and values as it
-applies (608.2h, ``resolve.effects.evaluation``).
+``GainLife``, ``DrawCards``, ``CounterSpell``, ``ReturnToHand``, ``TapAll``), applied one at
+a time in the order written (608.2c) by ``resolve.engine.resolution.ResolveSpell``; each
+evaluates its references and values as it applies (608.2h, ``resolve.effects.evaluation``).
 """
 
 from __future__ import annotations
@@ -300,6 +300,102 @@ class DrawCards(Effect):
             case PowerOf() as power:
                 cards = f"cards equal to {power.describe(phrasing)}"
         return f"draw {cards}" if player == "you" else f"{player} draws {cards}"
+
+
+@dataclass(frozen=True)
+class CounterSpell(Effect):
+    """ "Counter [spells]" (701.6a): each spell referred to that is still on the stack is removed
+    from it and put into its owner's graveyard (``SpellCountered``); it doesn't resolve and none
+    of its effects happen, and its costs aren't refunded (701.6b). A spell that can't be
+    countered (``legality.allowed(CounterAction)``: 113.6g, ``CantBeCountered``) stays, though
+    it could be targeted (101.2)."""
+
+    spells: tuple[ObjectRef, ...]
+
+    def __post_init__(self) -> None:
+        if not self.spells:
+            raise ValueError("CounterSpell needs at least one spell")
+
+    def tasks(self, state: GameState, context: Context) -> tuple[Task, ...]:
+        from resolve.effects import evaluation
+        from resolve.events.pipeline import ApplyEvents
+        from resolve.events.spells import SpellCountered
+        from resolve.rules import legality
+
+        found: list[ObjectId] = []
+        for ref in self.spells:
+            found += [o for o in evaluation.objects(state, ref, context) if o not in found]
+        events = [
+            SpellCountered(spell=spell, rules=("701.6a",))
+            for spell in found
+            if legality.allowed(state, legality.CounterAction(context.controller, spell)).allowed
+        ]
+        return (ApplyEvents(tuple(events)),) if events else ()
+
+    def describe(self, phrasing: Phrasing) -> str:
+        """``"counter target spell"``."""
+        return "counter " + _listed([phrasing.object(ref) for ref in self.spells])
+
+
+@dataclass(frozen=True)
+class ReturnToHand(Effect):
+    """ "Return [permanents] to [their] owner's hand": each permanent referred to moves to its
+    owner's hand (400.3: a card goes only to its owner's hand), as a new object (400.7), all at
+    once."""
+
+    objects: tuple[ObjectRef, ...]
+
+    def __post_init__(self) -> None:
+        if not self.objects:
+            raise ValueError("ReturnToHand needs at least one object")
+
+    def tasks(self, state: GameState, context: Context) -> tuple[Task, ...]:
+        from resolve.events.permanents import ReturnedToHand
+        from resolve.events.pipeline import ApplyEvents
+
+        events = [
+            ReturnedToHand(obj=obj, rules=("400.3", "400.7"))
+            for obj in _permanents(state, self.objects, context)
+        ]
+        return (ApplyEvents(tuple(events)),) if events else ()
+
+    def describe(self, phrasing: Phrasing) -> str:
+        """``"return target permanent to its owner's hand"``."""
+        (ref,) = self.objects
+        return f"return {phrasing.object(ref)} to {phrasing.possessive(ref)} owner's hand"
+
+
+@dataclass(frozen=True)
+class TapAll(Effect):
+    """ "Tap all [creatures]" (701.26a): every permanent of the group when the effect applies
+    (608.2h) that is untapped becomes tapped, all at once; one already tapped stays as it is
+    (701.26a: only an untapped permanent can become tapped). Not targeted (115.10)."""
+
+    group: EachCreature
+
+    def tasks(self, state: GameState, context: Context) -> tuple[Task, ...]:
+        from resolve.effects import evaluation
+        from resolve.events.permanents import PermanentTapped
+        from resolve.events.pipeline import ApplyEvents
+
+        events = [
+            PermanentTapped(obj=obj, rules=("701.26a",))
+            for obj in evaluation.each_creature(state, self.group, context)
+            if not state.objects[obj].tapped
+        ]
+        return (ApplyEvents(tuple(events)),) if events else ()
+
+    def describe(self, phrasing: Phrasing) -> str:
+        """``"tap all creatures your opponents control"``."""
+        group = self.group
+        noun = "all creatures" if group.except_ is None else "all other creatures"
+        match group.controlled_by:
+            case None:
+                return f"tap {noun}"
+            case You():
+                return f"tap {noun} you control"
+            case EachOpponent():
+                return f"tap {noun} your opponents control"
 
 
 DamageRecipient = TargetRef | EachCreature | EachOpponent

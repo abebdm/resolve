@@ -9,9 +9,10 @@ these values, which ``resolve.effects.evaluation`` resolves as an effect applies
 - ``You``: the controller of the spell or ability (109.5).
 - ``ControllerOf(ref)``: the controller of an object (108.4), as it last existed if it has left
   its zone (608.2h).
-- Groups, chosen as the effect applies (115.10, 608.2h): ``EachCreature(except_)`` (every
-  creature on the battlefield, "each other creature" with an exception) and ``EachOpponent``
-  (102.2, those still in the game: 800.4a).
+- Groups, chosen as the effect applies (115.10, 608.2h): ``EachCreature(except_,
+  controlled_by)`` (every creature on the battlefield, "each other creature" with an exception,
+  "creatures your opponents control" with a controller) and ``EachOpponent`` (102.2, those
+  still in the game: 800.4a).
 
 ``Phrasing`` writes the text of a spell ability from these, the first mention of a target in
 full ("target creature you control") and later ones as "it".
@@ -60,17 +61,20 @@ class ControllerOf(Immutable):
 
 
 @dataclass(frozen=True)
-class EachCreature(Immutable):
-    """ "Each creature": every creature on the battlefield when the effect applies (608.2h),
-    but ``except_`` ("each other creature", 115.10: not targets)."""
-
-    except_: ObjectRef | None = None
-
-
-@dataclass(frozen=True)
 class EachOpponent(Immutable):
     """ "Each opponent": every opponent (102.2) of the controller still in the game when the
     effect applies (800.4a, 608.2h)."""
+
+
+@dataclass(frozen=True)
+class EachCreature(Immutable):
+    """ "Each creature": every creature on the battlefield when the effect applies (608.2h),
+    but ``except_`` ("each other creature", 115.10: not targets), and only those controlled by
+    ``controlled_by`` if given ("creatures you control": ``You``; "creatures your opponents
+    control": ``EachOpponent``, 108.4)."""
+
+    except_: ObjectRef | None = None
+    controlled_by: You | EachOpponent | None = None
 
 
 ObjectRef = ThisObject | TargetRef

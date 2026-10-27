@@ -204,16 +204,17 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
   - total the cost;
   - activate mana abilities;
   - pay costs.
-- [ ] Timing rules for sorceries, instants and permanents; flash.
-- [ ] One permission and prohibition system for every legality check, where "can't" beats "can"
-  (101.2).
+- [x] Timing rules for sorceries, instants and permanents (M2.3); flash (M2.8).
+- [x] One permission and prohibition system for every legality check, where "can't" beats "can"
+  (101.2): playing lands, casting, targeting, destroying and countering (M2.1 to M2.8); later
+  milestones add their actions.
 - [x] Reversing an illegal action (733) by checkpoint and restore (M2.3), with the dependency
   check between kept mana abilities (M2.4).
-- [ ] Evergreen keywords whose rules live here: flash (702.8), hexproof (702.11), shroud (702.18),
-  indestructible (702.12), and the targeting part of protection (702.16). Design targeting so these
-  restrictions fit naturally.
-- [ ] Evergreen keyword actions whose rules live here: cast (701.5), counter (701.6), destroy
-  (701.8), exile (701.13); and "can't be countered" (113.6g).
+- [x] Evergreen keywords whose rules live here: flash (702.8), hexproof (702.11), shroud (702.18),
+  indestructible (702.12), and the targeting part of protection (702.16) (M2.8). Design targeting
+  so these restrictions fit naturally.
+- [x] Evergreen keyword actions whose rules live here: cast (701.5), counter (701.6), destroy
+  (701.8), exile (701.13); and "can't be countered" (113.6g) (M2.3 to M2.8).
 - [x] Create the keyword table: widened into the rules coverage map at the end of this file
   (M2.0).
 - [x] Resolution (608), including checking targets again on resolution (608.2b) and partial
@@ -228,10 +229,12 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
   sickness (302.6), restricted mana (Ixalli's Lorekeeper) (M2.4).
 - [x] The agent-side auto-payer (design.md §6: convenience outside the engine), and the public
   payments and abilities in the views it plans from (M2.5).
-- [ ] The first primitives: damage, destroy, exile, draw, life gain (M2.6), counter target spell
+- [x] The first primitives: damage, destroy, exile, draw, life gain (M2.6), counter target spell
   (M2.8).
 - [ ] Cards: 14 from the target decks, 8 keyword example cards and the torture tests Decimate
-  and Cryptic Command (`docs/plans/m2.md` §7).
+  and Cryptic Command (`docs/plans/m2.md` §7). Done: 11 target-deck cards, the 8 keyword
+  example cards, Decimate and Cryptic Command (M2.8); left: Emerald Medallion and Kinjalli's
+  Caller (M2.9), Rishkar's Expertise (M2.10).
 
 Moved out of M2 by the plan: dividing (601.2d), reductions from a count or from targets
 (Ghalta, Hamza, Savage Stomp), overload, casting from the graveyard, exile and the library top,
@@ -542,6 +545,27 @@ completes a step (CLAUDE.md, "Documentation requirements").
   `ModesOption`. Cards: Fiery Confluence (`resolve.cards.definitions.removal`, in the excerpt);
   fixtures Test Blaze ({X}) and Test Command (choose two); `Scenario.modes`, `Scenario.x`,
   `casting_support.choose_modes`, `choose_x`.
+- **Done (M2.8, evergreen keywords, counter, Cryptic Command):** the keyword abilities `Flash`,
+  `Hexproof(quality)`, `Shroud`, `Indestructible`, `Protection(quality)`,
+  `protection_from_each_color`, `has_keyword`, `keywords` (`resolve.cards.keywords.evergreen`)
+  and the qualities `ColorQuality`, `MulticoloredQuality`, `MonocoloredQuality`,
+  `CardTypeQuality`, `SubtypeQuality`, `Everything` (`resolve.cards.keywords.qualities`); the
+  prohibitions in `resolve.rules.legality` (targeting: shroud, hexproof, "hexproof from",
+  protection, from a permanent's characteristics or `defaults.player_abilities`; destroying:
+  indestructible; countering: `CounterAction` and `CantBeCountered`,
+  `resolve.cards.primitives.statics`); flash in `defaults.may_cast_now`; 704.5g through
+  `allowed(DestroyAction)`; protection's damage prevention a gap (`NotImplementedRule("702.16e")`
+  in `DamageDealt.apply`); effects `CounterSpell`, `ReturnToHand`, `TapAll`, and
+  `EachCreature.controlled_by`; events `SpellCountered` (to the owner's graveyard, never
+  `resolved_spell_destination`) and `ReturnedToHand` (`resolve.events.permanents`); the fuzz
+  summary's "countered" count and `FUZZ_EXCLUSIONS` (Repentant Blacksmith, 702.16e). Cards: the
+  keyword example cards Ashcoat Bear, Gladecover Scout, Humble Budoka, Darksteel Relic,
+  Darksteel Myr, Repentant Blacksmith, Nacatl Savage and Cancel
+  (`resolve.cards.definitions.keyword_examples`) and Cryptic Command
+  (`resolve.cards.definitions.counterspells`), in the excerpt; fixtures Test Redproof Bear, Test
+  Multiproof Knight, Test Prismatic Knight, Test Untouchable, Test Twin Flash, Test
+  Indestructible Wisp, Test Stubborn Spell, Test Gold Shock, Test Adventurer // Test Quest;
+  `Scenario.stack(variant=)`, `casting_support.target_choices`.
 ---
 
 ## Rules coverage map
@@ -572,7 +596,7 @@ earlier milestones must leave room for every row in this map.
 | CR | Name | Milestone | Tier | Notes |
 |---|---|---|---|---|
 | 100 | General | M0 ✓ | E |  |
-| 101 | The Magic Golden Rules | M1 ✓ (101.4); 101.2 system M2 (skeleton M2.1 ✓, casting M2.3 ✓); 101.1, 101.3 with each effect | E | `allowed` (design.md §17.2); land plays are its first action |
+| 101 | The Magic Golden Rules | M1 ✓ (101.4); 101.2 system M2 (skeleton M2.1 ✓, casting M2.3 ✓, targeting and destroying M2.6 ✓, keyword prohibitions and countering M2.8 ✓); 101.1, 101.3 with each effect | E | `allowed` (design.md §17.2); land plays are its first action |
 | 102 | Players | M1 ✓ | E | teams (102.3-102.4): out of scope with the team variants |
 | 103 | Starting the Game | M1 ✓; 103.6 M5; 103.2b M7 | E | `opening_hand_actions`, `mulligan_options`, `starting_life`, `starting_hand_size`: default functions in place (M2.1 ✓) |
 | 104 | Ending the Game | M1 ✓; 104.3c-d M4, M7; 104.4b M7; alternative wins and losses M5 | E | `can_lose_game`: default function in place (M2.1 ✓) |
@@ -584,11 +608,11 @@ earlier milestones must leave room for every row in this map.
 | 110 | Permanents | M1 ✓; statuses with their mechanics | E |  |
 | 111 | Tokens | M4 | E | D (Regisaur Alpha, Generous Gift) |
 | 112 | Spells | M2 (spells on the stack with their record: M2.3 ✓); copies M5 | E |  |
-| 113 | Abilities | M2 (spell abilities 113.3a: M2.6 ✓; 113.6 M2.8); M4; M5 | E |  |
+| 113 | Abilities | M2 (spell abilities 113.3a: M2.6 ✓; 113.6 M2.8 ✓: permanents' abilities only on the battlefield, 113.6g can't be countered); M4; M5 | E | `CantBeCountered` |
 | 114 | Emblems | M4 | E | with planeswalkers |
-| 115 | Targets | M2 (115.1-115.6, 115.10: M2.6 ✓; shroud, hexproof and protection M2.8); 115.7 M5 | E | `target_problem` (M2.6 ✓) |
+| 115 | Targets | M2 (115.1-115.6, 115.10: M2.6 ✓; shroud, hexproof and protection M2.8 ✓); 115.7 M5 | E | `target_problem` (M2.6 ✓) |
 | 116 | Special Actions | M1 ✓ (116.2a); the others with their mechanics | E | 116.2i out of scope (Planechase); 116.2j is for conspiracy cards (315) |
-| 117 | Timing and Priority | M1 ✓, M2 (117.1a casting, 117.3b-c, 117.4 with the stack: M2.3 ✓; flash M2.8) | E |  |
+| 117 | Timing and Priority | M1 ✓, M2 (117.1a casting, 117.3b-c, 117.4 with the stack: M2.3 ✓; flash M2.8 ✓) | E |  |
 | 118 | Costs | M2 (mana: paying generic, colored and {C} mana M2.3 ✓; mana costs of mana abilities, restricted mana M2.4 ✓; X M2.7; reductions M2.9); M4 (other costs, 118.12) | E |  |
 | 119 | Life | M2 (gaining life, 119.3, 119.10: M2.6 ✓); paying life M4 | E |  |
 | 120 | Damage | M2 (noncombat: 120.1-120.2, 120.3a, 120.3e, 120.4b, 120.8: M2.6 ✓), M3 (combat), M4 (120.3b-d, 120.3g-h) | E | the 120.3 table is `DamageDealt.apply` |
@@ -625,7 +649,7 @@ earlier milestones must leave room for every row in this map.
 | 313 | Vanguards | out of scope | — | Vanguard |
 | 314 | Schemes | out of scope | — | Archenemy |
 | 315 | Conspiracies | M7 | X | used only in limited play (315.1); 25 conspiracy cards are banned rather than never legal, so they are in scope |
-| 400 | General | M0 ✓; 400.7 exceptions with their mechanics; 400.11 M7 | E |  |
+| 400 | General | M0 ✓ (400.3 returning to the owner's hand: M2.8 ✓); 400.7 exceptions with their mechanics; 400.11 M7 | E |  |
 | 401 | Library | M1 ✓ | E |  |
 | 402 | Hand | M1 ✓; modifiers M5 | E | D (Reliquary Tower); `maximum_hand_size`: default function in place (M2.1 ✓) |
 | 403 | Battlefield | M1 ✓ | E |  |
@@ -668,7 +692,7 @@ earlier milestones must leave room for every row in this map.
 | 616 | Interaction of Replacement and/or Prevention Effects | M6 | E |  |
 | 700 | General | M2 (700.2, 700.2a, 700.2c-d, 700.2f: M2.7 ✓; 700.2b M4 with triggered abilities; 700.2e, 700.2g-i with their cards); the others with their mechanics | E |  |
 | 703 | Turn-Based Actions | M1 ✓, M3 | E |  |
-| 704 | State-Based Actions | M1 ✓ (704.5a, b, f, g); 704.5c, d, i, j, m, n, p, q, r, z M4; 704.5e M5; 704.5h M3; 704.5k, s, t, u, v-y M9 | E | 704.5j is the legend rule; 704.5u is space sculptor |
+| 704 | State-Based Actions | M1 ✓ (704.5a, b, f, g; 704.5g and indestructible: M2.8 ✓); 704.5c, d, i, j, m, n, p, q, r, z M4; 704.5e M5; 704.5h M3; 704.5k, s, t, u, v-y M9 | E | 704.5j is the legend rule; 704.5u is space sculptor |
 | 705 | Flipping a Coin | M2 | S |  |
 | 706 | Rolling a Die | M2 | S |  |
 | 707 | Copying Objects | M5 | E | D (Sunfrill Imitator, offspring, myriad) |
@@ -727,17 +751,17 @@ earlier milestones must leave room for every row in this map.
 | 702.5 | Enchant | M4 | E | Aura spells' targets use M2's targeting |
 | 702.6 | Equip | M4 | E | D |
 | 702.7 | First Strike | M3 | E | D |
-| 702.8 | Flash | M2 | E |  |
+| 702.8 | Flash | M2 (M2.8 ✓) | E | `Flash`, read by `may_cast_now` |
 | 702.9 | Flying | M3 | E | D |
 | 702.10 | Haste | M3 | E | D; the 302.6 hook is `defaults.can_tap_for_cost` (M2.4 ✓); the attack half shares its test |
-| 702.11 | Hexproof | M2 | E | D; including "hexproof from" |
-| 702.12 | Indestructible | M2 | E | D |
+| 702.11 | Hexproof | M2 (M2.8 ✓) | E | D; including "hexproof from"; a player's from `player_abilities` |
+| 702.12 | Indestructible | M2 (M2.8 ✓) | E | D |
 | 702.13 | Intimidate | M3 | E | retired evergreen |
 | 702.14 | Landwalk | M3 | E | retired evergreen |
 | 702.15 | Lifelink | M3 | E | D; noncombat damage too |
-| 702.16 | Protection | M2 (targeting); M3 (blocking); M4 (enchant, equip); M6 (damage) | E | D |
+| 702.16 | Protection | M2 (targeting: M2.8 ✓); M3 (blocking); M4 (enchant, equip); M6 (damage: `NotImplementedRule("702.16e")` until then) | E | D; a player as the quality (702.16k) with its first card |
 | 702.17 | Reach | M3 | E | D |
-| 702.18 | Shroud | M2 | E | D |
+| 702.18 | Shroud | M2 (M2.8 ✓) | E | D |
 | 702.19 | Trample | M3 | E | D |
 | 702.20 | Vigilance | M3 | E | D |
 | 702.21 | Ward | M4 | E | D; M2 logs the targets chosen |
@@ -924,9 +948,9 @@ earlier milestones must leave room for every row in this map.
 | 701.3 | Attach | M4 | E |  |
 | 701.4 | Behold | M4 | S | a cost |
 | 701.5 | Cast | M2 | E |  |
-| 701.6 | Counter | M2 | E | ward uses it (M4) |
+| 701.6 | Counter | M2 (M2.8 ✓) | E | ward uses it (M4); `CounterSpell`, `SpellCountered` |
 | 701.7 | Create | M4 | E | D (tokens) |
-| 701.8 | Destroy | M2 (M2.6 ✓; indestructible M2.8) | E | `allowed(DestroyAction)` |
+| 701.8 | Destroy | M2 (M2.6 ✓; indestructible M2.8 ✓) | E | `allowed(DestroyAction)` |
 | 701.9 | Discard | M1 ✓ | E |  |
 | 701.10 | Double | M4 (counters), M5 (power and toughness) | E | D |
 | 701.11 | Triple | M5 | S |  |
@@ -944,7 +968,7 @@ earlier milestones must leave room for every row in this map.
 | 701.23 | Search | M4 | E | D |
 | 701.24 | Shuffle | M1 ✓ | E |  |
 | 701.25 | Surveil | M4 | E |  |
-| 701.26 | Tap and Untap | M1 ✓ | E |  |
+| 701.26 | Tap and Untap | M1 ✓ (tapping by an effect, `TapAll`: M2.8 ✓) | E |  |
 | 701.27 | Transform | M4 | E | D |
 | 701.28 | Convert | M5 | X |  |
 | 701.29 | Fateseal | M4 | X |  |

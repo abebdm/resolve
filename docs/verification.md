@@ -40,8 +40,9 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
    - `Endings:` shows `concession` games and many `rules gap` games, with `draw x0`; `life
      total` may be above 0 (Chandra's Ignition, from M2.6); `decked` may be 0, since most games
      stop at the 508.1 gap once a creature resolves (M2.11 settles the final expectations);
-   - `Spells:` shows casts, resolutions and reversals above zero ("didn't resolve" may be 0:
-     random agents rarely leave a spell without its targets); `Damage:` may be 0 (Chandra's
+   - `Spells:` shows casts, resolutions and reversals above zero ("didn't resolve" and
+     "countered" may be 0: random agents rarely leave a spell without its targets, and seldom
+     have the mana for Cancel or Cryptic Command in response, from M2.8); `Damage:` may be 0 (Chandra's
      Ignition costs five and is seldom cast by random agents); `Casts per card:` lists the
      excerpt's cards (Sol Ring, the Signets, the mana creatures and the vanilla creatures, and
      from M2.6 some of the removal spells; the lands are played, not cast); `Gaps:` lists only

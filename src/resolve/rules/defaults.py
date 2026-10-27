@@ -15,7 +15,8 @@ The functions and their defaults:
 | ``cast_permissions``             | 601.3, 903.8         | from the hand; commanders            |
 | ``cast_options``                 | 601.3, 117.1a        | each permission and layout variant   |
 | ``has_sorcery_timing``           | 117.1a, 307.1        | own main phase, empty stack          |
-| ``may_cast_now``                 | 117.1a               | instants any time, others sorcery    |
+| ``may_cast_now``                 | 117.1a, 702.8a       | instants and flash any time, others  |
+|                                  |                      | sorcery                              |
 | ``resolved_spell_destination``   | 608.2n               | the owner's graveyard                |
 | ``maximum_hand_size``            | 402.2                | seven                                |
 | ``draw_step_draws``              | 504.1                | one card                             |
@@ -228,17 +229,22 @@ def may_cast_now(
     whenever the player has priority (304.1), any other spell only with sorcery timing (301.1,
     302.1, 307.1).
 
-    A land is never cast (305.9). Flash (702.8) plugs in here; "as though it had flash" (601.3b,
-    M6) and "during this resolution" (608.2g, M2.10) are permissions' timings.
+    A land is never cast (305.9). A card with flash may be cast any time an instant could
+    (702.8a), from whatever zone a permission allows; its flash is read from the variant's
+    characteristics, so a granted flash (M5) counts too. "As though it had flash" (601.3b, M6)
+    and "during this resolution" (608.2g, M2.10) are permissions' timings.
     """
-    types = variant_characteristics(state, obj, variant).card_types
+    from resolve.cards.keywords import Flash, has_keyword
+
+    chars = variant_characteristics(state, obj, variant)
+    types = chars.card_types
     if CardType.LAND in types or not any(card_type in SPELL_TYPES for card_type in types):
         return False
     match permission.timing:
         case CastTiming.NORMAL:
             # 601.2e: a spell whose proposal is checked again doesn't stand in its own way.
             proposed = obj if state.objects[obj].spell is not None else None
-            if CardType.INSTANT in types:
+            if CardType.INSTANT in types or has_keyword(chars, Flash):  # 304.1, 702.8a
                 return True
             if proposed is None:
                 return has_sorcery_timing(state, player)
@@ -250,11 +256,13 @@ def may_cast_now(
 
 
 def resolved_spell_destination(state: GameState, spell: ObjectId) -> Zone:
-    """Where an instant or sorcery spell goes as the final part of its resolution (608.2n), and a
-    countered spell (701.6): its owner's graveyard.
+    """Where an instant or sorcery spell goes as the final part of its resolution (608.2n): its
+    owner's graveyard.
 
-    Adventures (715.3d), Omens (720.3d), buyback (702.27) and flashback-style replacements (M6)
-    change it.
+    Adventures (715.3d), Omens (720.3d) and buyback (702.27a) change it; each applies only as the
+    spell resolves. A countered spell (701.6a) and one that doesn't resolve (608.2b) always go to
+    their owner's graveyard and don't come here; replacement effects (Rest in Peace, flashback's
+    exile: M6) change those zone changes in the event pipeline.
     """
     return Zone.graveyard(state.object(spell).owner)
 

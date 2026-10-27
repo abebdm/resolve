@@ -12,6 +12,7 @@ from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.zones import ZoneKind
 
 if TYPE_CHECKING:
+    from resolve.effects.characteristics import Characteristics
     from resolve.state.game import GameState
 
 
@@ -26,6 +27,9 @@ class DamageDealt(Event):
 
     - to a player: they lose that much life (120.3a, 119.3);
     - to a creature: that much damage is marked on it (120.3e).
+
+    Protection's prevention (702.16e) belongs to the prevention stage (M6); until then damage it
+    would prevent raises ``NotImplementedRule("702.16e")`` here, before anything changes.
 
     The results that change with the source's abilities plug in here with their keywords:
     infect (120.3b, 120.3d), wither (120.3d) and lifelink (120.3f); none can exist yet. Damage to
@@ -46,8 +50,10 @@ class DamageDealt(Event):
             raise EngineError("a damage event needs a recipient")
         if any(amount < 1 for _, amount in (*self.to_objects, *self.to_players)):
             raise EngineError("0 damage isn't dealt (120.8)")
-        if information(state, self.source) is None:
+        known = information(state, self.source)
+        if known is None:
             raise EngineError(f"nothing is known of the damage source {self.source}")
+        _protection_gap(state, known.characteristics, self)
         marked: list[tuple[ObjectId, int]] = []
         for obj, amount in self.to_objects:
             game_object = state.object(obj)
@@ -73,3 +79,23 @@ class DamageDealt(Event):
     def total(self) -> int:
         """The damage dealt in all (for statistics)."""
         return sum(amount for _, amount in (*self.to_objects, *self.to_players))
+
+
+def _protection_gap(state: GameState, source: Characteristics, event: DamageDealt) -> None:
+    """702.16e: damage a source with the quality would deal to a permanent or player with
+    protection from it is prevented (702.16j: from everything, all damage). Prevention is the
+    replacement stage's (615, M6), so until then such damage is a gap; damage from any other
+    source is dealt as normal."""
+    from resolve.cards.keywords import Protection
+    from resolve.effects.characteristics import characteristics
+    from resolve.rules import defaults
+
+    recipients = [characteristics(state, obj).abilities for obj, _ in event.to_objects]
+    recipients += [defaults.player_abilities(state, player) for player, _ in event.to_players]
+    for abilities in recipients:
+        for ability in abilities:
+            if isinstance(ability, Protection) and ability.quality.matches(source):
+                raise NotImplementedRule(
+                    "702.16e: preventing damage from a source with a quality a permanent or "
+                    "player has protection from (M6)"
+                )

@@ -37,6 +37,7 @@ from resolve.events.spells import (
     ActionReversed,
     PermanentSpellResolved,
     SpellCast,
+    SpellCountered,
     SpellDidNotResolve,
     SpellResolved,
 )
@@ -185,7 +186,7 @@ def test_the_summary_lines() -> None:
         "Endings: decked x1, life total x0, concession x1, draw x0, rules gap x0, "
         "other (704.5c) x1.",
         "Played: 5 lands, 9 mana abilities activated, 0 reversed.",
-        "Spells: 0 cast, 0 resolved, 0 didn't resolve, 0 reversed.",
+        "Spells: 0 cast, 0 resolved, 0 didn't resolve, 0 countered, 0 reversed.",
         "Damage: 0 dealt.",
         "Reversed casts: auto-pay seats 0 of 0 attempts, 0 of 0 payable; random seats 0 of 0, "
         "0 of 0 payable.",
@@ -202,9 +203,9 @@ def test_the_summary_counts_spells_casts_per_card_and_gaps() -> None:
         ),
         GameStats(5, 0, 1, RULES_GAP, 0, 0, (), 0, 1, "508.1"),
     ]
-    games[1] = replace(games[1], did_not_resolve=2, damage=7)
+    games[1] = replace(games[1], did_not_resolve=2, damage=7, countered=1)
     assert summary_lines(games)[5:] == [
-        "Spells: 4 cast, 3 resolved, 2 didn't resolve, 5 reversed.",
+        "Spells: 4 cast, 3 resolved, 2 didn't resolve, 1 countered, 5 reversed.",
         "Damage: 7 dealt.",
         "Reversed casts: auto-pay seats 0 of 0 attempts, 0 of 0 payable; random seats 5 of 9, "
         "0 of 4 payable.",
@@ -367,11 +368,14 @@ def numbers(pattern: str, text: str) -> tuple[float, ...]:
 
 # The excerpt's cards, by hand: the noncreature ones, and the creatures.
 NONCREATURES = [
-    "Arcane Signet", "Chandra's Ignition", "Command Tower", "Decimate", "Fiery Confluence",
-    "Selesnya Signet", "Sol Ring", "Swords to Plowshares", "Temple of the False God",
+    "Arcane Signet", "Cancel", "Chandra's Ignition", "Command Tower", "Cryptic Command",
+    "Darksteel Relic", "Decimate", "Fiery Confluence", "Selesnya Signet", "Sol Ring",
+    "Swords to Plowshares", "Temple of the False God",
 ]  # fmt: skip
+# Repentant Blacksmith is left out (``FUZZ_EXCLUSIONS``: 702.16e until M6).
 CREATURES = [
-    "Avacyn's Pilgrim", "Grizzly Bears", "Hill Giant", "Ixalli's Lorekeeper", "Llanowar Elves",
+    "Ashcoat Bear", "Avacyn's Pilgrim", "Darksteel Myr", "Gladecover Scout", "Grizzly Bears",
+    "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper", "Llanowar Elves", "Nacatl Savage",
     "Savannah Lions",
 ]  # fmt: skip
 
@@ -388,16 +392,18 @@ def expected_deck(recipe: str, copies: int) -> Counter[str]:
 
 def test_the_recipes_hold_the_excerpt_minus_the_exclusions() -> None:
     assert fuzz_tool.recipe_cards("spells") == (
-        "Arcane Signet", "Chandra's Ignition", "Command Tower", "Decimate", "Fiery Confluence",
-        "Selesnya Signet", "Sol Ring", "Swords to Plowshares", "Temple of the False God",
+        "Arcane Signet", "Cancel", "Chandra's Ignition", "Command Tower", "Cryptic Command",
+        "Darksteel Relic", "Decimate", "Fiery Confluence", "Selesnya Signet", "Sol Ring",
+        "Swords to Plowshares", "Temple of the False God",
     )  # fmt: skip
     assert fuzz_tool.recipe_cards("creatures") == (
-        "Arcane Signet", "Avacyn's Pilgrim", "Chandra's Ignition", "Command Tower", "Decimate",
-        "Fiery Confluence", "Grizzly Bears", "Hill Giant", "Ixalli's Lorekeeper", "Llanowar Elves",
-        "Savannah Lions", "Selesnya Signet", "Sol Ring", "Swords to Plowshares",
-        "Temple of the False God",
+        "Arcane Signet", "Ashcoat Bear", "Avacyn's Pilgrim", "Cancel", "Chandra's Ignition",
+        "Command Tower", "Cryptic Command", "Darksteel Myr", "Darksteel Relic", "Decimate",
+        "Fiery Confluence", "Gladecover Scout", "Grizzly Bears", "Hill Giant", "Humble Budoka",
+        "Ixalli's Lorekeeper", "Llanowar Elves", "Nacatl Savage", "Savannah Lions",
+        "Selesnya Signet", "Sol Ring", "Swords to Plowshares", "Temple of the False God",
     )  # fmt: skip
-    assert fuzz_tool.FUZZ_EXCLUSIONS == {}
+    assert list(fuzz_tool.FUZZ_EXCLUSIONS) == ["Repentant Blacksmith"]
     for recipe in fuzz_tool.RECIPES:
         for copies in (8, 2):
             deck = fuzz_tool.recipe_deck(recipe, copies)
@@ -436,7 +442,7 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
     answers: list[int] = []
     turns: list[int] = []
     lands = mana = cast = resolved = reversed_ = abilities_reversed = 0
-    did_not_resolve = damage = 0
+    did_not_resolve = damage = countered = 0
     casts: Counter[str] = Counter()
     gaps: Counter[str] = Counter()
     endings: Counter[str] = Counter()
@@ -468,6 +474,7 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
             1 for record in records if isinstance(record, PermanentSpellResolved | SpellResolved)
         )
         did_not_resolve += sum(1 for record in records if isinstance(record, SpellDidNotResolve))
+        countered += sum(1 for record in records if isinstance(record, SpellCountered))
         damage += sum(record.total for record in records if isinstance(record, DamageDealt))
         reversed_ += sum(
             1
@@ -520,8 +527,10 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
         r"Played: (\d+) lands, (\d+) mana abilities activated, (\d+) reversed\.", text
     ) == (lands, mana, abilities_reversed)
     assert numbers(
-        r"Spells: (\d+) cast, (\d+) resolved, (\d+) didn't resolve, (\d+) reversed\.", text
-    ) == (cast, resolved, did_not_resolve, reversed_)
+        r"Spells: (\d+) cast, (\d+) resolved, (\d+) didn't resolve, (\d+) countered, "
+        r"(\d+) reversed\.",
+        text,
+    ) == (cast, resolved, did_not_resolve, countered, reversed_)
     assert numbers(r"Damage: (\d+) dealt\.", text) == (damage,)
     payable_reversed = Counter(
         "auto-pay" if player % 2 else "random"

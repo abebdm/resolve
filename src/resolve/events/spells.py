@@ -1,5 +1,5 @@
-"""Events of casting and resolving spells (601.2, 608, 733): proposing and casting, modes, X,
-targets, resolving or not resolving, and reversal."""
+"""Events of casting and resolving spells (601.2, 608, 701.6, 733): proposing and casting,
+modes, X, targets, resolving, not resolving or being countered, and reversal."""
 
 from __future__ import annotations
 
@@ -180,6 +180,27 @@ class SpellDidNotResolve(Event):
     def apply(self, state: GameState) -> Event:
         if self.moved is not None:
             raise EngineError("a spell is proposed to fail without its outcome")
+        obj = state.object(self.spell)
+        if obj.spell is None or obj.zone.kind is not ZoneKind.STACK:
+            raise EngineError(f"object {self.spell} isn't a spell on the stack")
+        moved = move_object(state, self.spell, Zone.graveyard(obj.owner))
+        return replace(self, moved=moved.id)
+
+
+@dataclass(frozen=True, kw_only=True)
+class SpellCountered(Event):
+    """The spell ``spell`` is countered (701.6a): it is removed from the stack and put into its
+    owner's graveyard, as a new object (400.7, recorded as ``moved``); it doesn't resolve and none
+    of its effects happen. Its costs aren't refunded (701.6b). Always the owner's graveyard,
+    never ``resolved_spell_destination`` (which is only "as it resolves": 715.3d, 720.3d,
+    702.27a); a replacement effect (M6) changes this event. Public."""
+
+    spell: ObjectId
+    moved: ObjectId | None = None
+
+    def apply(self, state: GameState) -> Event:
+        if self.moved is not None:
+            raise EngineError("a counter is proposed without its outcome")
         obj = state.object(self.spell)
         if obj.spell is None or obj.zone.kind is not ZoneKind.STACK:
             raise EngineError(f"object {self.spell} isn't a spell on the stack")

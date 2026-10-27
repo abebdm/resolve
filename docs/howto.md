@@ -146,7 +146,10 @@ drive decisions with a script.
    its targets, one list per instance of "target" (a spell with targets needs them before it
    resolves); when all players pass, the top one resolves. While casting, answer a 601.2c target
    question with `choose_targets(obj, PlayerOption(player), ...)`; an instance whose only answer is
-   every legal target isn't asked. A modal spell asks its modes first, `choose_modes(0, 0, 2)`
+   every legal target isn't asked, so to check what a spell may target read
+   `casting_support.target_choices(state)` (the options if asked, else what was chosen).
+   `scenario.stack(..., variant=Alternative(AlternativeKind.ADVENTURE))` puts a spell cast as
+   another variant on the stack. A modal spell asks its modes first, `choose_modes(0, 0, 2)`
    (indices from 0 in printed order, a repeated mode listed that many times; not asked when only
    one choice is legal), then X if its cost has {X}, `choose_x(3)`, then the targets of each
    chosen mode in turn. On the stack, `scenario.modes(spell, 0, 0, 2)` and `scenario.x(spell, 3)`
@@ -443,6 +446,27 @@ files.
    what it refuses, the events it produces, and its `text`.
 5. Add its entry to `docs/primitives.md` (name and module, one line, the rules, an example).
 
+### Add a keyword ability
+
+1. Read the keyword's rule (`uv run python tools/rule.py 702.N`) and its coverage-map row.
+2. Write it as a frozen `Ability` dataclass in `src/resolve/cards/keywords/` (`evergreen.py`
+   for M2's), with its `text` as printed ("Protection from red"), and export it from
+   `resolve.cards.keywords`. A keyword with a parameter takes a quality
+   (`resolve.cards.keywords.qualities`) or a value; "from A and from B" and "from each ..." are
+   separate abilities (702.16g-h: `protection_from_each_color()`).
+3. Put what it does where the rule it changes is decided, reading it only from computed
+   characteristics (`has_keyword(characteristics(state, obj), Kind)`, `keywords(...)`) or, for a
+   player, `defaults.player_abilities`, never from the definition: a prohibition in
+   `resolve.rules.legality` (hexproof, indestructible), a rule default in `defaults` (flash in
+   `may_cast_now`), or the damage event's results (120.3, `DamageDealt.apply`). Raise
+   `NotImplementedRule` for parts whose system is a later milestone's (702.16e).
+4. Give it an example card (a real card whose only text is the keyword, in
+   `definitions/keyword_examples.py` and the excerpt) and fixtures for its variants.
+5. Test it in `tests/rules/test_702_N_<name>.py` (what it stops, what it doesn't: untargeted
+   effects, its controller, multiplayer, redundant instances), and its text in
+   `tests/cards/test_keyword_primitives.py`; add it to `docs/primitives.md` ("Keywords") and tick
+   its coverage-map row.
+
 ### Update to a new Comprehensive Rules version
 
 The CR is pinned (`docs/rules/README.md`). A new version changes, adds, removes and renumbers
@@ -532,5 +556,4 @@ in `docs/verification.md`, and test both presets' values (`test_the_presets`). S
 
 Expected recipes, written when each task is first done:
 
-- Add a keyword ability
 - Fix a rules bug

@@ -49,6 +49,7 @@ from resolve.agents.driver import play
 from resolve.agents.scripted import ScriptedAgent, ScriptStep
 from resolve.cards.registry import CardRegistry
 from resolve.data.cards import CardDatabase
+from resolve.effects.characteristics import variant_characteristics
 from resolve.engine.deck import Deck, DeckCard
 from resolve.engine.loop import run
 from resolve.engine.priority import PriorityRound
@@ -60,7 +61,7 @@ from resolve.state.game import Card, GameState, create_object, zone_list
 from resolve.state.ids import CardId, ObjectId, PlayerId
 from resolve.state.invariants import check_invariants, check_pure_data
 from resolve.state.mana import Mana, ManaRestriction, ManaType
-from resolve.state.spell import FROM_HAND, NORMAL, CastChoices, Target
+from resolve.state.spell import FROM_HAND, NORMAL, CastChoices, CastVariant, Target
 from resolve.state.turn import Phase, Step, TurnState, gives_priority, segment_of
 from resolve.state.zones import BATTLEFIELD, COMMAND, EXILE, STACK, Zone, ZoneKind
 from resolve.tasks import Task
@@ -174,12 +175,18 @@ class Scenario:
         ]
 
     def stack(
-        self, controller: PlayerId, names: Sequence[str], *, owner: PlayerId | None = None
+        self,
+        controller: PlayerId,
+        names: Sequence[str],
+        *,
+        owner: PlayerId | None = None,
+        variant: CastVariant = NORMAL,
     ) -> list[ObjectId]:
         """Put spells on the stack under ``controller``, listed top first (405.2).
 
-        Each is a spell cast normally from its owner's hand (601.2a), its total cost its mana cost
-        and nothing spent: its record is ``CastChoices(NORMAL, FROM_HAND, hand)``.
+        Each is a spell cast as ``variant`` (default: normally) from its owner's hand (601.2a),
+        its total cost the variant's mana cost and nothing spent: its record is
+        ``CastChoices(variant, FROM_HAND, hand)``.
         """
         owner = controller if owner is None else owner
         ids = [
@@ -188,9 +195,12 @@ class Scenario:
         ]
         state = self._state
         for obj in ids:
-            cost = state.card_of(state.objects[obj]).data.faces[0].cost
+            if variant == NORMAL:
+                cost = state.card_of(state.objects[obj]).data.faces[0].cost
+            else:
+                cost = variant_characteristics(state, obj, variant).mana_cost
             state.objects[obj].spell = CastChoices(
-                NORMAL, FROM_HAND, Zone.hand(owner), total_cost=cost
+                variant, FROM_HAND, Zone.hand(owner), total_cost=cost
             )
         return ids[::-1]
 

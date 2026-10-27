@@ -1,5 +1,6 @@
 """Events that change permanents: playing a land, tapping and untapping, damage removal,
-permanents leaving for the graveyard (701.8, 704.5f, 704.5g), and exiling (701.13)."""
+permanents leaving for the graveyard (701.8, 704.5f, 704.5g), exiling (701.13) and returning to
+the hand (400.3)."""
 
 from __future__ import annotations
 
@@ -140,3 +141,19 @@ class ObjectExiled(Event):
         if state.object(self.obj).zone.kind is ZoneKind.EXILE:
             raise EngineError(f"object {self.obj} is already in exile")
         return replace(self, moved=move_object(state, self.obj, EXILE).id)
+
+
+@dataclass(frozen=True, kw_only=True)
+class ReturnedToHand(Event):
+    """The permanent ``obj`` returns to its owner's hand (400.3: a card goes only to its owner's
+    hand), as a new object (400.7, recorded as ``moved``). Public: it was on the battlefield."""
+
+    obj: ObjectId
+    moved: ObjectId | None = None
+
+    def apply(self, state: GameState) -> Event:
+        if self.moved is not None:
+            raise EngineError("a return is proposed without its outcome")
+        _permanent(state, self.obj)
+        owner = state.objects[self.obj].owner
+        return replace(self, moved=move_object(state, self.obj, Zone.hand(owner)).id)

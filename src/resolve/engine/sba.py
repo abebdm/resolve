@@ -8,7 +8,8 @@ checks again, until a check performs nothing. The state-based actions implemente
 - 704.5b: a player who attempted to draw from an empty library since the last check loses.
   Both only if ``defaults.can_lose_game`` says the player can (104.3).
 - 704.5f: a creature with 0 or less toughness is put into its owner's graveyard.
-- 704.5g: a creature with toughness above 0 and lethal damage marked on it is destroyed.
+- 704.5g: a creature with toughness above 0 and lethal damage marked on it is destroyed, unless
+  it can't be (indestructible, 702.12b: ``legality.allowed(DestroyAction)``).
 
 A player who loses leaves the game (104.5, ``LeaveGame``, 800.4a). ``EndCheck`` then ends the
 game if at most one player is left: the last player in the game wins (104.2a), and if none is
@@ -29,7 +30,7 @@ from resolve.events.base import Event
 from resolve.events.game import GameEnded, PlayerLeftGame, PlayerLost
 from resolve.events.permanents import PermanentDestroyed, PutIntoGraveyard
 from resolve.events.pipeline import ApplyEvents
-from resolve.rules import defaults
+from resolve.rules import defaults, legality
 from resolve.rules.defaults import LossReason
 from resolve.state.game import apnap_order, players_in_game
 from resolve.state.ids import ObjectId, PlayerId
@@ -55,7 +56,13 @@ def state_based_actions(state: GameState) -> tuple[Event, ...]:
         if toughness <= 0:
             events.append(PutIntoGraveyard(obj=obj, rules=("704.5f", "704.3")))
         elif state.objects[obj].damage > 0 and toughness <= state.objects[obj].damage:
-            events.append(PermanentDestroyed(obj=obj, rules=("704.5g", "120.6", "701.8a")))
+            # 702.12b: an indestructible creature ignores this state-based action.
+            controller = state.objects[obj].controller
+            if controller is None:
+                raise EngineError(f"permanent {obj} has no controller (110.2)")
+            destroy = legality.DestroyAction(controller, obj)
+            if legality.allowed(state, destroy).allowed:
+                events.append(PermanentDestroyed(obj=obj, rules=("704.5g", "120.6", "701.8a")))
     for player_id in apnap_order(state):
         player = state.player(player_id)
         # 104.3: a player who can't lose the game for the reason stays in it. Their state is kept,

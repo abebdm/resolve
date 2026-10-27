@@ -11,12 +11,22 @@ Every legality question is an ``Action`` value. ``allowed(state, action)`` works
    (101.2a).
 
 Playing a land, casting a spell, targeting (``TargetAction``, through
-``resolve.rules.targeting.target_problem``) and destroying (``DestroyAction``) exist so far;
-countering joins them in M2.8, attacking and blocking in M3, and activating abilities in M4
-(until then a mana ability's own conditions decide: 602.5 in
-``ActivatedManaAbility.can_activate``). A
-function that asks the question calls ``legality.allowed`` through the module, so a test or an
-effect that replaces ``permissions`` or ``prohibitions`` is obeyed everywhere.
+``resolve.rules.targeting.target_problem``), destroying (``DestroyAction``) and countering
+(``CounterAction``) exist so far; attacking and blocking join them in M3, and activating
+abilities in M4 (until then a mana ability's own conditions decide: 602.5 in
+``ActivatedManaAbility.can_activate``). A function that asks the question calls
+``legality.allowed`` through the module, so a test or an effect that replaces ``permissions`` or
+``prohibitions`` is obeyed everywhere.
+
+The keyword prohibitions read abilities only through computed characteristics (a permanent's)
+or ``defaults.player_abilities`` (a player's), so abilities that effects grant (M5) need no
+change here:
+
+- targeting: shroud (702.18a), hexproof (702.11b-c), hexproof from a quality (702.11d) and
+  protection (702.16b, 702.16j), on a permanent or a player; a spell on the stack keeps none of
+  them (113.6: a permanent's abilities function on the battlefield);
+- destroying: indestructible (702.12b);
+- countering: "can't be countered" (113.6g).
 """
 
 from __future__ import annotations
@@ -24,10 +34,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from resolve.cards.keywords import Hexproof, Indestructible, Protection, Shroud
+from resolve.cards.keywords.qualities import Everything
+from resolve.cards.primitives.base import Ability
+from resolve.cards.primitives.statics import CantBeCountered
 from resolve.cards.primitives.targets import TargetSpec
 from resolve.data.types import CardType
 from resolve.effects.characteristics import Characteristics, characteristics
-from resolve.errors import EngineError
+from resolve.errors import EngineError, NotImplementedRule
 from resolve.rules import defaults
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.spell import CastPermission, CastVariant, Target, TargetObject, TargetPlayer
@@ -90,9 +104,18 @@ class TargetAction(Action):
 
 @dataclass(frozen=True)
 class DestroyAction(Action):
-    """The permanent ``obj`` is destroyed (701.8a) by an effect ``player`` controls."""
+    """The permanent ``obj`` is destroyed (701.8a) by an effect ``player`` controls; for the
+    state-based action of lethal damage (704.5g), which no player controls, ``player`` is the
+    permanent's controller."""
 
     obj: ObjectId
+
+
+@dataclass(frozen=True)
+class CounterAction(Action):
+    """The spell ``spell`` is countered (701.6a) by a spell or ability ``player`` controls."""
+
+    spell: ObjectId
 
 
 @dataclass(frozen=True)
@@ -131,6 +154,8 @@ def permissions(state: GameState, action: Action) -> tuple[Permission, ...]:
         return _target_permissions(state, action)
     if isinstance(action, DestroyAction):
         return _destroy_permissions(state, action)
+    if isinstance(action, CounterAction):
+        return _counter_permissions(state, action)
     raise EngineError(f"no rule of legality covers {action!r}")
 
 
@@ -142,14 +167,11 @@ def prohibitions(state: GameState, action: Action) -> tuple[Prohibition, ...]:
         # 101.2: "can't cast" effects (Kutzil's Flanker, M5; split second, M9) forbid it here.
         return ()
     if isinstance(action, TargetAction):
-        # 115.5: a spell or ability on the stack is an illegal target for itself. Shroud,
-        # hexproof and protection (702.18a, 702.11b-d, 702.16b) join it here in M2.8.
-        if action.candidate == TargetObject(action.targeter.obj):
-            return (Prohibition("115.5", "a spell or ability can't target itself"),)
-        return ()
+        return _target_prohibitions(state, action)
     if isinstance(action, DestroyAction):
-        # Indestructible (702.12b) forbids it here (M2.8).
-        return ()
+        return _destroy_prohibitions(state, action)
+    if isinstance(action, CounterAction):
+        return _counter_prohibitions(state, action)
     raise EngineError(f"no rule of legality covers {action!r}")
 
 
@@ -177,6 +199,8 @@ def _basis(action: Action) -> tuple[str, ...]:
         return ("115.1", "115.2")
     if isinstance(action, DestroyAction):
         return ("701.8a",)
+    if isinstance(action, CounterAction):
+        return ("701.6a",)
     return ("101.2",)
 
 
@@ -255,3 +279,80 @@ def _destroy_permissions(state: GameState, action: DestroyAction) -> tuple[Permi
     if obj is None or obj.zone.kind is not ZoneKind.BATTLEFIELD:
         return ()
     return (Permission("701.8a", "destroy a permanent"),)
+
+
+def _target_prohibitions(state: GameState, action: TargetAction) -> tuple[Prohibition, ...]:
+    targeter = action.targeter
+    if action.candidate == TargetObject(targeter.obj):
+        # 115.5: a spell or ability on the stack is an illegal target for itself.
+        return (Prohibition("115.5", "a spell or ability can't target itself"),)
+    found = _candidate_abilities(state, action.candidate)
+    if found is None:
+        return ()
+    abilities, protected = found
+    # 102.2-102.3: in a two-player or free-for-all game every other player is an opponent
+    # (teams, 810.x, are M9's).
+    by_opponent = targeter.controller != protected
+    forbidden: list[Prohibition] = []
+    for ability in abilities:
+        match ability:
+            case Shroud():
+                forbidden.append(Prohibition("702.18a", "it has shroud"))
+            case Hexproof(quality=None) if by_opponent:
+                rule = "702.11c" if isinstance(action.candidate, TargetPlayer) else "702.11b"
+                forbidden.append(Prohibition(rule, "it has hexproof against its opponents"))
+            case Hexproof(quality=quality) if by_opponent and quality is not None:
+                if isinstance(action.candidate, TargetPlayer):
+                    # 702.11d defines "hexproof from" for a permanent only; no card gives it to a
+                    # player.
+                    raise NotImplementedRule("702.11d: a player with hexproof from a quality")
+                if quality.matches(targeter.characteristics):
+                    forbidden.append(Prohibition("702.11d", f"it has {ability.text.lower()}"))
+            case Protection(quality=Everything()):
+                forbidden.append(Prohibition("702.16j", "it has protection from everything"))
+            case Protection(quality=quality) if quality.matches(targeter.characteristics):
+                forbidden.append(Prohibition("702.16b", f"it has {ability.text.lower()}"))
+            case _:
+                pass
+    # 702.11h, 702.16m, 702.18b: redundant instances forbid it once.
+    return tuple(dict.fromkeys(forbidden))
+
+
+def _candidate_abilities(
+    state: GameState, candidate: Target
+) -> tuple[tuple[Ability, ...], PlayerId] | None:
+    """The abilities of a target candidate that can stop it being targeted, and who it belongs
+    to for hexproof (a permanent's controller, 702.11b; the player, 702.11c): ``None`` for a
+    spell on the stack, whose permanent abilities don't function there (113.6)."""
+    match candidate:
+        case TargetPlayer(player=player):
+            return defaults.player_abilities(state, player), player
+        case TargetObject(object=obj):
+            game_object = state.objects.get(obj)
+            if game_object is None or game_object.zone.kind is not ZoneKind.BATTLEFIELD:
+                return None
+            if game_object.controller is None:
+                raise EngineError(f"permanent {obj} has no controller (110.2)")
+            return characteristics(state, obj).abilities, game_object.controller
+
+
+def _destroy_prohibitions(state: GameState, action: DestroyAction) -> tuple[Prohibition, ...]:
+    # 702.12b: a permanent with indestructible can't be destroyed (by an effect or by 704.5g).
+    if any(isinstance(a, Indestructible) for a in characteristics(state, action.obj).abilities):
+        return (Prohibition("702.12b", "it has indestructible"),)
+    return ()
+
+
+def _counter_permissions(state: GameState, action: CounterAction) -> tuple[Permission, ...]:
+    # 701.6a: countering a spell removes it from the stack.
+    obj = state.objects.get(action.spell)
+    if obj is None or obj.zone.kind is not ZoneKind.STACK or obj.spell is None:
+        return ()
+    return (Permission("701.6a", "counter a spell"),)
+
+
+def _counter_prohibitions(state: GameState, action: CounterAction) -> tuple[Prohibition, ...]:
+    # 113.6g: "This spell can't be countered." functions on the stack.
+    if any(isinstance(a, CantBeCountered) for a in characteristics(state, action.spell).abilities):
+        return (Prohibition("113.6g", "it can't be countered"),)
+    return ()

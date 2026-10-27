@@ -635,7 +635,9 @@ Built in M2.1, and moved to §5 ("Rule defaults"), §6 and §9.
 *Provisional: designed in M2's plan; built in M2 (M2.1 to M2.8), extended in M3 to M5 and M9.
 Each milestone's plan may revise it, with the user's sign-off. M2.1 built the skeleton
 (`resolve.rules.legality`: `allowed`, `permissions`, `prohibitions`, and `PlayLand`, whose limit
-305.2b is a prohibition).*
+305.2b is a prohibition); M2.3 casting (`CastAction`); M2.6 `TargetAction` and `DestroyAction`;
+M2.8 `CounterAction` and the keyword prohibitions (shroud, hexproof, protection,
+indestructible, "can't be countered").*
 
 Every legality question is an `Action` value: casting, playing a land, activating, targeting,
 countering, destroying; from M3 attacking and blocking; from M4 searching and special actions.
@@ -854,10 +856,13 @@ aren't rewritten (612.3).
 
 ### 17.11 Keywords, qualities and targeting
 
-*Provisional: designed in M2's plan; built in M2.6 and M2.8. That milestone's plan may revise
-it, with the user's sign-off. M2.6 built targeting (`resolve.rules.targeting`,
-`legality.TargetAction`, `Targeter`); 115.5 is the rules' own prohibition there. Keywords and
-qualities are M2.8.*
+*Provisional: designed in M2's plan; built in M2.6 and M2.8; abilities' targets in M4 and 115.7
+in M5. Each milestone's plan may revise it, with the user's sign-off. M2.6 built targeting
+(`resolve.rules.targeting`, `legality.TargetAction`, `Targeter`); 115.5 is the rules' own
+prohibition there. M2.8 built the keywords (`resolve.cards.keywords`: `Flash`, `Hexproof`,
+`Shroud`, `Indestructible`, `Protection`, `has_keyword`) and the qualities but a player
+(702.16k); their prohibitions are in `legality` (docs/decisions.md, 2026-10-27). A spell on the
+stack keeps none of them (113.6).*
 
 **Keywords and qualities.**
 
@@ -891,20 +896,28 @@ qualities are judged by: the spell's own, or the ability source's last known inf
 with the user's sign-off. M2.3 built `resolved_spell_destination` and the resolution of
 permanent spells (608.3a); M2.6 the resolution of instants and sorceries (`ResolveSpell`; a spell
 whose targets are all illegal goes to its owner's graveyard, 608.2b, without the destination
-function) and the 120.3 table (`DamageDealt.apply`).*
+function) and the 120.3 table (`DamageDealt.apply`); M2.8 countering (`SpellCountered`) and
+protection's damage gap (702.16e). Revised in M2.8 with the user's sign-off (docs/decisions.md,
+2026-10-27): a countered spell doesn't use the destination function.*
 
 **Where it goes.** `resolved_spell_destination(state, spell)` decides where an instant or sorcery
-goes as it resolves (608.2n), and is also used for a countered spell (701.6). The default is its
-owner's graveyard. It is where the other destinations plug in:
+goes as it resolves (608.2n). The default is its owner's graveyard. It is where the destinations
+that apply "as it resolves" plug in:
 
 - adventures (exile with permission, 715.3d);
 - omens (shuffled into the library, 720.3d);
-- buyback (to the hand, 702.27);
-- flashback-style exile (M6, through the replacement stage).
+- buyback (to the hand, 702.27a).
+
+A countered spell (701.6a) and a spell that doesn't resolve (608.2b) always go to their owner's
+graveyard, as ordinary zone changes through the event pipeline (`SpellCountered`,
+`SpellDidNotResolve`: new objects, 400.7); a countered Adventure goes to the graveyard, not
+exile. Replacement effects (Rest in Peace, flashback-style exile: M6) change those events, and
+the resolution's, in the replacement stage.
 
 **Damage.** One 120.3 results table reads the source's characteristics, using last known
 information if the source is gone. Deathtouch, lifelink, infect, wither, toxic and protection's
-prevention plug in there.
+prevention plug in there (until M6, damage protection would prevent raises the 702.16e gap at
+the top of `DamageDealt.apply`).
 
 ### 17.13 Choices stored on permanents
 
