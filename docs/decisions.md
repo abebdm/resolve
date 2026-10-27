@@ -52,7 +52,8 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   every order gives the same total (the generic part is `max(0, generic + increases -
   reductions)`), so a question would have identical answers (design.md §6's canonical answers);
   a reduction whose order matters (118.7b-e: colored, colorless or hybrid amounts) must add
-  that choice with its first card. 113.6 makes a permanent's abilities function only on the
+  that choice with its first card; until then, two reductions of which one isn't generic raise
+  `NotImplementedRule` (601.2f) in `spell_total_cost`. 113.6 makes a permanent's abilities function only on the
   battlefield, so the Medallion on the stack, in a hand or in a graveyard reduces nothing;
   abilities that function from other zones (113.6b, "this spell costs {1} less", Ghalta) join
   the gathering with their cards (M4). "You cast" is judged as the caster being the

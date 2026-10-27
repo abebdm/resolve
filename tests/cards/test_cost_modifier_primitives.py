@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import copy
 import pickle
+from dataclasses import dataclass
 
 import pytest
 
@@ -21,13 +22,16 @@ from resolve.cards.keywords import (
     SubtypeQuality,
 )
 from resolve.cards.primitives.cost_modifiers import (
+    CostModifier,
     ModifierStep,
     ReduceGeneric,
     SpellCostReduction,
 )
 from resolve.cards.primitives.words import ColorWord, SubtypeWord, rewrite_words
-from resolve.data.mana_cost import parse_mana_cost
+from resolve.data.mana_cost import ManaCost, parse_mana_cost
 from resolve.data.types import CardType, Color
+from resolve.errors import NotImplementedRule
+from resolve.rules import costs
 from resolve.state.ids import PlayerId
 from resolve.state.turn import Phase
 from tests.scenario import Scenario
@@ -105,6 +109,49 @@ def test_601_2f_the_reduction_applies_to_its_controllers_spells_with_the_quality
     assert ability.modifier(state, medallion, giant, P0) is None
     assert ability.modifier(state, medallion, other, P1) is None
     assert SpellCostReduction(GREEN, 2).modifier(state, medallion, bears, P0) == ReduceGeneric(2)
+
+
+def test_105_2_a_multicolored_green_spell_is_a_green_spell() -> None:
+    """Decimate ({2}{R}{G}) is red and green, so it is a green spell (105.2): the Medallion's
+    ability applies to it."""
+    scenario = Scenario(2)
+    (medallion,) = scenario.battlefield(P0, ["Emerald Medallion"])
+    (decimate,) = scenario.stack(P0, ["Decimate"])
+    state = scenario.build()
+    modifier = SpellCostReduction(GREEN).modifier(state, medallion, decimate, P0)
+    assert modifier == ReduceGeneric(1)
+
+
+def test_601_2f_an_order_dependent_reduction_is_a_gap(monkeypatch: pytest.MonkeyPatch) -> None:
+    """601.2f lets the player order the reductions. Generic ones commute, so nothing is asked;
+    with two reductions of which one isn't generic (118.7b-e) the order matters, and choosing it
+    isn't implemented yet: ``NotImplementedRule``."""
+
+    @dataclass(frozen=True)
+    class ReduceGreen(CostModifier):
+        @property
+        def step(self) -> ModifierStep:
+            return ModifierStep.REDUCTION
+
+        def apply(self, cost: ManaCost) -> ManaCost:
+            return cost
+
+    scenario = Scenario(2)
+    (bears,) = scenario.stack(P0, ["Grizzly Bears"])
+    state = scenario.build()
+    base = parse_mana_cost("{1}{G}")
+
+    def generic_only(*_: object) -> tuple[CostModifier, ...]:
+        return (ReduceGeneric(1), ReduceGeneric(1))
+
+    def with_green(*_: object) -> tuple[CostModifier, ...]:
+        return (ReduceGeneric(1), ReduceGreen())
+
+    monkeypatch.setattr(costs, "spell_cost_modifiers", generic_only)
+    assert costs.spell_total_cost(state, bears, P0, base) == parse_mana_cost("{G}")
+    monkeypatch.setattr(costs, "spell_cost_modifiers", with_green)
+    with pytest.raises(NotImplementedRule, match=r"601\.2f"):
+        costs.spell_total_cost(state, bears, P0, base)
 
 
 def test_612_the_reductions_quality_is_a_typed_word() -> None:

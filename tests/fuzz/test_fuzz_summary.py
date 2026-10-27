@@ -332,7 +332,7 @@ def test_a_payable_cast_reversed_is_counted_for_its_kind_of_seat() -> None:
     counts the first two as payable reversals, each for its kind of seat, and the third only as
     an attempt."""
     gap = "508.1: declaring attackers"
-    results = []
+    results: list[FuzzResult] = []
     for player, lands in ((PlayerId(0), 2), (PlayerId(1), 2), (PlayerId(0), 1)):
         scenario = Scenario(2)
         scenario.battlefield(player, ["Forest"] * lands)

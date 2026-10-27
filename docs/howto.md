@@ -480,7 +480,9 @@ files.
    working on `ManaCost` (`generic`, `with_generic`). A reduction by colored, colorless or
    hybrid mana (118.7b-e) needs the player's choice of order in `resolve.rules.costs` first:
    today the modifiers of a step are applied in battlefield order without asking, which is
-   right only while every reduction is generic (docs/decisions.md, 2026-10-27, "M2.9").
+   right only while every reduction is generic; two reductions of which one isn't a
+   `ReduceGeneric` raise `NotImplementedRule("601.2f: ...")` (docs/decisions.md, 2026-10-27,
+   "M2.9").
 3. `resolve.rules.costs.spell_cost_modifiers` gathers the abilities of permanents on the
    battlefield (113.6). An ability that works from another zone ("this spell costs {1} less",
    113.6b) must be added there.

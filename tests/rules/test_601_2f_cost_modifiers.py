@@ -111,10 +111,38 @@ def test_601_2f_two_medallions_stop_at_zero_generic() -> None:
     assert payment.cost == cost("{3}{R}")
 
 
+def test_601_2f_two_copies_of_a_reducer_both_apply() -> None:
+    """601.2f subtracts all cost reductions: two Emerald Medallions take {2} off Test Growth
+    ({X}{G}) with X = 3 ({3}{G}): {1}{G}; with X = 2: {G}."""
+    for x, total in ((3, "{1}{G}"), (2, "{G}")):
+        scenario = Scenario(2)
+        (growth,) = scenario.hand(P0, ["Test Growth"])
+        scenario.battlefield(P0, ["Emerald Medallion", "Emerald Medallion", "Forest"])
+        scenario.at(Phase.PRECOMBAT_MAIN)
+        state = scenario.build()
+        run_script(state, cast(growth, P0), choose_x(x))
+        (payment,) = view_for(state, P0).payments
+        assert payment.cost == cost(total), x
+
+
+def test_601_2f_a_tapped_medallion_still_reduces() -> None:
+    """Being tapped doesn't stop a permanent's static abilities (110.5b, 113.6): Grizzly Bears
+    still costs {G}."""
+    scenario = Scenario(2)
+    (bears,) = scenario.hand(P0, ["Grizzly Bears"])
+    medallion, _ = scenario.battlefield(P0, ["Emerald Medallion", "Forest"])
+    scenario.tap(medallion)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(bears, P0))
+    (payment,) = view_for(state, P0).payments
+    assert payment.cost == cost("{G}")
+
+
 def test_601_2f_two_reductions_together_reduce_more() -> None:
-    """Test Raptor ({1}{G}) is a green Dinosaur: Emerald Medallion and Kinjalli's Caller both
-    apply, the second finding no generic mana left, so the total is {G} (601.2f: never less than
-    nothing); with Test Thorn as well, the {1} it adds is reduced too: still {G}."""
+    """Test Raptor ({1}{G}) is a green Dinosaur, so Emerald Medallion and Kinjalli's Caller both
+    apply. With Test Thorn as well: {1}{G} plus {1} is {2}{G}, minus {2} is {G} (601.2f). One
+    reduction missing, or the reductions before the increase, would give {1}{G}."""
     scenario = Scenario(2)
     (raptor,) = scenario.hand(P0, ["Test Raptor"])
     scenario.battlefield(P0, ["Emerald Medallion", "Kinjalli's Caller", "Test Thorn"])
@@ -128,8 +156,8 @@ def test_601_2f_two_reductions_together_reduce_more() -> None:
 
 def test_601_2f_only_spells_you_cast() -> None:
     """Three players. P1 and P2 control Emerald Medallions; P0's Grizzly Bears still costs
-    {1}{G} ("spells you cast" are the Medallion's controller's). P1's own Bears costs {G}: only
-    P1's Medallion applies to it."""
+    {1}{G} ("spells you cast" are the Medallion's controller's). P1's Test Growth with X = 2
+    ({2}{G}) costs {1}{G}: only P1's Medallion applies to it, not P2's."""
     scenario = Scenario(3)
     (bears,) = scenario.hand(P0, ["Grizzly Bears"])
     scenario.battlefield(P0, ["Forest"])
@@ -142,15 +170,29 @@ def test_601_2f_only_spells_you_cast() -> None:
     assert payment.cost == cost("{1}{G}")
 
     scenario = Scenario(3)
-    (bears,) = scenario.hand(P1, ["Grizzly Bears"])
-    scenario.battlefield(P1, ["Emerald Medallion"])
+    (growth,) = scenario.hand(P1, ["Test Growth"])
+    scenario.battlefield(P1, ["Emerald Medallion", "Forest"])
     scenario.battlefield(P2, ["Emerald Medallion"])
-    scenario.mana(P1, G)
     scenario.at(Phase.PRECOMBAT_MAIN, active=P1)
     state = scenario.build()
-    run_script(state, cast(bears, P1))
-    (cast_event,) = records(state, SpellCast)
-    assert cast_event.total_cost == cost("{G}")
+    run_script(state, cast(growth, P1), choose_x(2, P1))
+    (payment,) = view_for(state, P1).payments
+    assert payment.cost == cost("{1}{G}")
+
+
+def test_601_2f_you_is_the_controller_not_the_owner() -> None:
+    """ "You" is the Medallion's controller (109.5). P0 controls an Emerald Medallion P1 owns:
+    P0's Grizzly Bears costs {G}, P1's costs {1}{G}."""
+    for caster, total in ((P0, "{G}"), (P1, "{1}{G}")):
+        scenario = Scenario(2)
+        (bears,) = scenario.hand(caster, ["Grizzly Bears"])
+        scenario.battlefield(P0, ["Emerald Medallion"], owner=P1)
+        scenario.battlefield(caster, ["Forest"])
+        scenario.at(Phase.PRECOMBAT_MAIN, active=caster)
+        state = scenario.build()
+        run_script(state, cast(bears, caster))
+        (payment,) = view_for(state, caster).payments
+        assert payment.cost == cost(total), caster
 
 
 def test_202_3_mana_value_isnt_changed() -> None:
@@ -190,6 +232,23 @@ def test_601_2f_x_is_chosen_before_the_reduction() -> None:
         assert payment.cost == cost(total), x
 
 
+def test_107_3a_x_keeps_its_announced_value_after_the_reduction() -> None:
+    """The reduction changes the generic mana paid, not X (107.3a, 202.3e): Test Growth with
+    X = 2 and Emerald Medallion is paid {1}{G}, and on the stack its X is still 2 and its mana
+    value 3."""
+    scenario = Scenario(2)
+    (growth,) = scenario.hand(P0, ["Test Growth"])
+    _, first, second = scenario.battlefield(P0, ["Emerald Medallion", "Forest", "Forest"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(growth, P0), choose_x(2), activate(first), activate(second))
+    (cast_event,) = records(state, SpellCast)
+    assert cast_event.total_cost == cost("{1}{G}")
+    record = state.object(cast_event.spell).spell
+    assert record is not None and record.x == 2
+    assert characteristics(state, cast_event.spell).mana_value == 3
+
+
 def test_601_2f_the_total_is_locked_in() -> None:
     """Once the total is determined it is locked in (601.2f): if Emerald Medallion leaves the
     battlefield while Grizzly Bears is being paid, the total stays {G}; if one arrives then, the
@@ -224,11 +283,10 @@ def test_601_2f_the_total_is_locked_in() -> None:
     assert cast_event.total_cost == cost("{1}{G}")
 
 
-def test_601_8_a_cost_reducer_resolving_doesnt_change_spells_on_the_stack() -> None:
-    """601.8: P0 casts Ashcoat Bear (flash, {1}{G}) in response to their own Emerald Medallion
-    spell, paying {1}{G}. The Medallion resolves first; the Bear's locked-in total stays
-    {1}{G}, and it resolves without anything more to pay. The next green spell, Grizzly Bears,
-    costs {G}."""
+def test_113_6_a_flash_spell_cast_over_a_medallion_spell_pays_in_full() -> None:
+    """113.6: P0 casts Ashcoat Bear (flash, {1}{G}) in response to their own Emerald Medallion
+    spell: the Medallion isn't on the battlefield, so the Bear costs {1}{G}. The Bear resolves,
+    then the Medallion; the next green spell, Grizzly Bears, costs {G}."""
     scenario = Scenario(2)
     ashcoat, bears = scenario.hand(P0, ["Ashcoat Bear", "Grizzly Bears"])
     scenario.stack(P0, ["Emerald Medallion"])
@@ -247,6 +305,28 @@ def test_601_8_a_cost_reducer_resolving_doesnt_change_spells_on_the_stack() -> N
     run_script(state, cast(bears, P0), activate(third))
     _, bears_cast = records(state, SpellCast)
     assert bears_cast.total_cost == cost("{G}")
+
+
+def test_601_8_a_reducer_arriving_doesnt_change_a_spell_already_cast() -> None:
+    """601.8: Grizzly Bears is cast for {1}{G}; then, with the Bears on the stack, an Emerald
+    Medallion comes onto the battlefield (the test moves it, as an effect would). The Bears'
+    total and the mana spent are unchanged, and it resolves with no further payment."""
+    scenario = Scenario(2)
+    (bears,) = scenario.hand(P0, ["Grizzly Bears"])
+    (medallion,) = scenario.graveyard(P0, ["Emerald Medallion"])
+    first, second = scenario.battlefield(P0, ["Forest", "Forest"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(bears, P0), activate(first), activate(second))
+    (cast_event,) = records(state, SpellCast)
+    assert cast_event.total_cost == cost("{1}{G}")
+    move_object(state, medallion, BATTLEFIELD, controller=P0)
+    record = state.object(cast_event.spell).spell
+    assert record is not None and record.total_cost == cost("{1}{G}")
+    assert record.mana_spent == cast_event.mana_spent
+    run_script(state, pass_(P0), pass_(P1))
+    assert characteristics(state, state.battlefield[-1]).name == "Grizzly Bears"
+    assert len(records(state, SpellCast)) == 1 and view_for(state, P0).payments == ()
 
 
 def test_601_8_spells_already_on_the_stack_keep_their_total() -> None:
