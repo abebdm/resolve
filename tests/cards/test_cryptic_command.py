@@ -29,14 +29,19 @@ from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import ChooseOne, ModesOption
 from resolve.events.cards import CardDrawn
 from resolve.events.permanents import PermanentTapped
-from resolve.events.spells import SpellCountered, SpellDidNotResolve, SpellResolved
+from resolve.events.spells import (
+    ModesChosen,
+    SpellCountered,
+    SpellDidNotResolve,
+    SpellResolved,
+)
 from resolve.state.game import GameState
 from resolve.state.ids import PlayerId
 from resolve.state.mana import ManaType
 from resolve.state.spell import TargetObject
 from resolve.state.turn import Phase
 from resolve.state.zones import Zone
-from tests.casting_support import cast, choose_modes, pass_, records
+from tests.casting_support import answered, cast, choose_modes, pass_, records
 from tests.game_fixtures import request_of
 from tests.scenario import Scenario, names, run_script
 
@@ -75,14 +80,17 @@ def test_cryptic_command_offers_two_different_legal_modes() -> None:
     assert request.kind is DecisionKind.CHOOSE_MODES and isinstance(request.space, ChooseOne)
     assert request.space.options == (ModesOption((1, 2)), ModesOption((1, 3)), ModesOption((2, 3)))
 
+    # With only the Scout, the one legal choice is (tap, draw): it isn't asked (the casting
+    # decisions skip a choice with one answer), and it is the spell's modes.
     scenario = Scenario(2)
     (cryptic,) = scenario.hand(P0, [NAME])
     scenario.battlefield(P1, ["Gladecover Scout"])
+    scenario.mana(P0, U, U, U, U)
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
     run_script(state, cast(cryptic, P0))
-    space = request_of(state).space
-    assert isinstance(space, ChooseOne) and space.options == (ModesOption((2, 3)),)
+    (chosen,) = records(state, ModesChosen)
+    assert chosen.modes == (2, 3) and answered(state, DecisionKind.CHOOSE_MODES) == 0
 
 
 def test_cryptic_command_counter_and_bounce() -> None:

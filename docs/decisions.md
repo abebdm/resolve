@@ -19,6 +19,59 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-27: M2.8: a countered spell goes to its owner's graveyard, not where it would resolve to
+- **Decision (approved by the user, 2026-10-27; revises design.md §17.12 and the M2.6 handoff
+  note):** a countered spell is moved to its owner's graveyard by `SpellCountered`, an ordinary
+  zone change through the event pipeline (`ApplyEvents`, a new object, 400.7), never by
+  `defaults.resolved_spell_destination`. That function now decides only where an instant or
+  sorcery goes as it resolves (608.2n). M6's replacement effects (Rest in Peace, flashback's
+  exile) change the `SpellCountered` event like any other zone change.
+- **Why:** every destination the function exists for applies only "as it resolves": an
+  Adventure is exiled (715.3d), an Omen shuffled into its owner's library (720.3d), a buyback
+  spell returned to its owner's hand (702.27a). A countered Adventure goes to the graveyard
+  (701.6a), so using the resolution function would have been wrong. This matches the M2.6
+  decision for a spell that doesn't resolve (608.2b, `SpellDidNotResolve`).
+- **Rules:** 701.6a, 701.6b, 608.2n, 715.3d, 720.3d, 702.27a, 400.7, 614.
+- **Where:** `resolve.events.spells.SpellCountered`, `primitives.effects.CounterSpell`,
+  `defaults.resolved_spell_destination` (docstring); tests in `tests/rules/test_701_6_counter.py`
+  (a permanent spell, an instant, the owner's graveyard, an Adventure with the resolution
+  destination replaced by exile).
+
+### 2026-10-27: M2.8: keyword prohibitions and where each keyword is read
+- **Decision:**
+  - Shroud, hexproof, "hexproof from" and protection are prohibitions of
+    `legality.allowed(TargetAction)`, read from the candidate's computed characteristics (a
+    permanent) or `defaults.player_abilities` (a player). A spell on the stack keeps none of them:
+    a permanent's abilities function only on the battlefield (113.6), and 702.11b, 702.16b and
+    702.18a speak of a permanent or player, so a hexproof creature spell can be countered.
+  - "Opponents" for hexproof is every other player (102.2, 102.3: a free-for-all; teams in 810
+    are M9's), the same idiom as `PlayerFilter` and `EachOpponent`.
+  - "Hexproof from [quality]" on a player raises `NotImplementedRule("702.11d")`: 702.11d defines
+    it for permanents only, and no card gives it to a player.
+  - Protection and "hexproof from" judge the targeter's characteristics (`Targeter`): the spell's
+    own, or an ability's source's last known information (113.7a). A card-type quality reads
+    those characteristics wherever the object is (702.16a: a permanent with the type, or a source
+    not on the battlefield of that type).
+  - Indestructible is a prohibition of `allowed(DestroyAction)`, used by `Destroy` and by
+    704.5g; an indestructible creature with lethal damage gets no event at all (so state-based
+    actions don't repeat forever). For 704.5g the action's player is the permanent's controller.
+  - "Can't be countered" (`CantBeCountered`, a static ability of the spell) is a prohibition of
+    `allowed(CounterAction)`. Targeting the spell is allowed; the counter spell resolves and
+    simply doesn't counter it (101.2).
+  - Flash is read in `defaults.may_cast_now` from the variant's characteristics; it adds no zone.
+  - Protection's damage prevention (702.16e, 702.16j) raises `NotImplementedRule("702.16e")` at
+    the top of `DamageDealt.apply`, before anything changes, so every damage path (spells now,
+    combat in M3) reaches it; Repentant Blacksmith stays out of the fuzz decks until M6.
+  - Redundant instances (702.8b, 702.11h, 702.16m, 702.18b) give one prohibition each kind.
+- **Why:** design.md §17.2 and §17.11: one legality check, keywords read only through
+  characteristics so M5's grants need no change. 608.2b re-checks targets with the same check,
+  so a target that gained hexproof is illegal on resolution (interpretation: 608.2b's "illegal
+  target" is judged by the rules for choosing one).
+- **Rules:** 702.8, 702.11, 702.12, 702.16, 702.18, 113.6, 113.6g, 113.7a, 101.2, 608.2b, 704.5g.
+- **Where:** `resolve.rules.legality`, `resolve.cards.keywords`, `resolve.cards.primitives.statics`,
+  `resolve.engine.sba`, `resolve.events.damage`, `defaults.may_cast_now`, `tools/fuzz.py`
+  (`FUZZ_EXCLUSIONS`).
+
 ### 2026-10-26: M2.7: a choice of modes is a multiset in printed order
 - **Decision:** `CHOOSE_MODES` is a `ChooseOne` of `ModesOption(modes)`, one option per choice
   `ModeChoice.combinations` allows among the legal modes: `itertools.combinations` (no repeats,

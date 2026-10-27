@@ -31,7 +31,7 @@ from resolve.events.spells import (
     SpellDidNotResolve,
     SpellResolved,
 )
-from resolve.rules import defaults, legality
+from resolve.rules import legality
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import ManaType
@@ -40,6 +40,7 @@ from resolve.state.turn import Phase
 from resolve.state.zones import EXILE, Zone
 from tests.casting_support import cast, choose_targets, options, pass_, records, target_choices
 from tests.scenario import Scenario, names, run_script
+from tests.seams import patch_object
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 U, R = ManaType.BLUE, ManaType.RED
@@ -92,7 +93,7 @@ def test_701_6a_a_countered_instant_goes_to_its_owners_graveyard() -> None:
     (countered,) = records(state, SpellCountered)
     assert countered.spell == shock and state.player(P0).graveyard == [countered.moved]
     entry = next(e for e in state.event_log if isinstance(e.record, SpellCountered))
-    assert set(entry.visible_to) == {P0, P1}
+    assert entry.visible_to is None  # public: every player sees it
 
 
 def test_701_6a_the_owners_graveyard_not_the_controllers() -> None:
@@ -110,7 +111,7 @@ def test_701_6a_a_countered_adventure_goes_to_the_graveyard_not_exile(
     graveyard (701.6a), not to exile. Exile is where an Adventure goes only as it *resolves*
     (715.3d); ``resolved_spell_destination`` is replaced by exile here, as 715.3d will make it
     (M4), and countering doesn't consult it."""
-    monkeypatch.setattr(defaults, "resolved_spell_destination", lambda state, spell: EXILE)
+    patch_object(monkeypatch, "resolved_spell_destination", lambda state, spell: EXILE)
     scenario = Scenario(2)
     adventure = Alternative(AlternativeKind.ADVENTURE)
     (quest,) = scenario.stack(P0, ["Test Adventurer // Test Quest"], variant=adventure)

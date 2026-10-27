@@ -15,9 +15,17 @@ Task: implement step M2.8 of `docs/plans/m2.md` (prompt in the plan's "Prompts")
   implementation (the 14 keyword-card text/characteristics tests, Cryptic's text, and "must
   still happen" tests: list in scratchpad, to copy into the PR).
 
+- Implemented: legality prohibitions (target, destroy, counter) and `CounterAction`; flash in
+  `may_cast_now`; 704.5g via `allowed(DestroyAction)`; 702.16e gap in `DamageDealt.apply`;
+  `CounterSpell`, `ReturnToHand`, `TapAll`, `SpellCountered`, `ReturnedToHand`,
+  `EachCreature.controlled_by`; fuzz exclusion (Repentant Blacksmith) and "N countered" in the
+  Spells line; primitives tests. Full suite 2523 passed; pyright clean; quick fuzz ok.
+- Docs: primitives.md, decisions.md (two entries), design.md §17.2/§17.11/§17.12.
+
 ## In progress
 
-- Implementing.
+- Remaining docs: roadmap (items, coverage rows, What's built), torture-tests, howto,
+  CLAUDE.md status, README status, plan handoff notes. Then test-reviewer, PR.
 
 ## Next
 

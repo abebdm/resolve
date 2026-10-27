@@ -113,12 +113,22 @@ def players(state: GameState, ref: PlayerRef, context: Context) -> tuple[PlayerI
 
 
 def each_creature(state: GameState, group: EachCreature, context: Context) -> tuple[ObjectId, ...]:
-    """The creatures on the battlefield now (608.2h), in battlefield order, but the exception."""
+    """The creatures on the battlefield now (608.2h), in battlefield order, but the exception,
+    and only those the group's controllers control (108.4) if it names them."""
     excepted = () if group.except_ is None else objects(state, group.except_, context)
+    match group.controlled_by:
+        case None:
+            controllers = None
+        case You():
+            controllers = (context.controller,)
+        case EachOpponent():
+            controllers = each_opponent(state, group.controlled_by, context)
     return tuple(
         obj
         for obj in state.battlefield
-        if obj not in excepted and characteristics(state, obj).is_a(CardType.CREATURE)
+        if obj not in excepted
+        and (controllers is None or state.objects[obj].controller in controllers)
+        and characteristics(state, obj).is_a(CardType.CREATURE)
     )
 
 

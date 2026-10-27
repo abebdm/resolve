@@ -30,7 +30,7 @@ from resolve.decisions.spaces import ObjectOption, PlayerOption
 from resolve.effects.characteristics import characteristics
 from resolve.errors import NotImplementedRule
 from resolve.events.damage import DamageDealt
-from resolve.rules import defaults, targeting
+from resolve.rules import targeting
 from resolve.rules.legality import Targeter
 from resolve.state.game import GameState
 from resolve.state.ids import PlayerId
@@ -39,6 +39,7 @@ from resolve.state.spell import TargetObject
 from resolve.state.turn import Phase
 from tests.casting_support import cast, pass_, records, target_choices
 from tests.scenario import Scenario, run_script
+from tests.seams import patch
 
 P0, P1 = PlayerId(0), PlayerId(1)
 W, R = ManaType.WHITE, ManaType.RED
@@ -172,9 +173,7 @@ def test_702_16b_a_player_with_protection(monkeypatch: pytest.MonkeyPatch) -> No
     """With ``defaults.player_abilities`` giving P1 protection from red, P0's Test Shock can't
     target P1 (702.16b: a permanent or player); P0 still can be."""
     red = Protection(ColorQuality(ColorWord(Color.RED)))
-    monkeypatch.setattr(
-        defaults, "player_abilities", lambda state, who: (red,) if who == P1 else ()
-    )
+    patch(monkeypatch, "player_abilities", lambda state, who: (red,) if who == P1 else ())
     scenario = Scenario(2)
     (shock,) = scenario.hand(P0, ["Test Shock"])
     scenario.mana(P0, R)

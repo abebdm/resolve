@@ -92,8 +92,8 @@ lifelink and deathtouch plug in there.
 
 ### `Destroy` (`resolve.cards.primitives.effects`)
 "Destroy [objects]": every permanent referred to, once each, that `legality.allowed(DestroyAction)`
-permits (indestructible will refuse, M2.8), to its owner's graveyard at once.
-- **Rules:** 701.8a, 702.12b (from M2.8).
+permits (indestructible refuses), to its owner's graveyard at once.
+- **Rules:** 701.8a, 702.12b.
 - **Parameters:** `objects: tuple[ObjectRef, ...]`.
 - **Example:** Decimate: `Destroy(tuple(TargetRef(i) for i in range(4)))`; Test Shatter (tests).
 
@@ -117,6 +117,30 @@ object (`ObjectExiled`).
 - **Rules:** 121.1, 121.2, 107.1b.
 - **Parameters:** `count: Value = Fixed(1)`, `player: PlayerRef = You()`.
 - **Example:** Test Ponder (tests): `DrawCards()`, "Draw a card."
+
+### `CounterSpell` (`resolve.cards.primitives.effects`)
+"Counter [spells]": each spell referred to that is still on the stack and that
+`legality.allowed(CounterAction)` permits ("can't be countered" refuses, 101.2) is countered
+(`SpellCountered`): to its owner's graveyard as a new object, through the event pipeline, never
+`resolved_spell_destination`; no refund (701.6b).
+- **Rules:** 701.6a, 701.6b, 113.6g, 101.2.
+- **Parameters:** `spells: tuple[ObjectRef, ...]`.
+- **Example:** Cancel: `CounterSpell((TargetRef(0),))` with `TargetSpec(spells=SpellFilter())`.
+
+### `ReturnToHand` (`resolve.cards.primitives.effects`)
+"Return [permanent] to its owner's hand": each permanent referred to moves to its owner's hand
+as a new object (`ReturnedToHand`), all at once.
+- **Rules:** 400.3, 400.7.
+- **Parameters:** `objects: tuple[ObjectRef, ...]` (the text is written for one).
+- **Example:** Cryptic Command: `ReturnToHand((TargetRef(0),))`.
+
+### `TapAll` (`resolve.cards.primitives.effects`)
+"Tap all [creatures]": every untapped creature of the group when it applies becomes tapped
+(`PermanentTapped` each, at once); already tapped ones are left alone. Not targeted.
+- **Rules:** 701.26a, 115.10, 608.2h.
+- **Parameters:** `group: EachCreature` (with `controlled_by` and `except_`).
+- **Example:** Cryptic Command: `TapAll(EachCreature(controlled_by=EachOpponent()))`, "Tap all
+  creatures your opponents control."
 
 ### `AddMana` (`resolve.cards.primitives.effects`)
 "Add [mana]": the controller adds these mana units, with the ability's object as their source.
@@ -207,7 +231,9 @@ the spell's controller if `controller=You()`; a player, or only an opponent
 What a definition points at, resolved by `resolve.effects.evaluation` as the effect applies:
 the spell itself (201.5); the legal targets of instance `index` (608.2b); its controller (109.5);
 an object's controller, from last known information if it left (608.2h); every creature on the
-battlefield but `except_` ("each other creature"); each opponent still in the game (800.4a).
+battlefield but `except_` ("each other creature"), and only those `controlled_by` controls if
+given (`You()`: "creatures you control"; `EachOpponent()`: "creatures your opponents control");
+each opponent still in the game (800.4a).
 - **Rules:** 201.5, 109.5, 108.4, 115.10, 608.2b, 608.2h, 800.4a.
 - **Example:** Swords to Plowshares's `ControllerOf(TargetRef(0))`.
 
@@ -261,7 +287,13 @@ refuse it, since the payment is only known once made.
 
 ## Static abilities and continuous effects
 
-*None yet.*
+### `CantBeCountered` (`resolve.cards.primitives.statics`)
+"This spell can't be countered.": a static ability of a spell, functioning on the stack; it is
+the prohibition of `legality.allowed(CounterAction)`. The spell can still be targeted, and a
+spell that would counter it still resolves (101.2). `scope` is `ThisObject()`; "[spells] you
+control can't be countered" from a permanent is a continuous effect (M5).
+- **Rules:** 113.6g, 101.2.
+- **Example:** Test Stubborn Spell (tests): `abilities=(CantBeCountered(),)`.
 
 ## Replacement and prevention effects
 
@@ -269,4 +301,53 @@ refuse it, since the payment is only known once made.
 
 ## Keywords (`resolve.cards.keywords`)
 
-*None yet.*
+Keyword abilities are `Ability` values in a definition's `abilities`, read only through computed
+characteristics (`has_keyword(chars, Kind)`, `keywords(chars, Kind)`) or, for a player,
+`defaults.player_abilities`, so M5's grants need no change. "From A and from B" and "from each
+[characteristic]" are separate abilities (702.16g-h, 702.11f-g); redundant instances count once.
+
+### `Flash` (`resolve.cards.keywords.evergreen`)
+"You may play this card any time you could cast an instant": read by `defaults.may_cast_now`,
+from whatever zone a permission allows (it adds no zone).
+- **Rules:** 702.8a, 702.8b, 117.1a, 304.1.
+- **Example:** Ashcoat Bear: `CardDefinition("Ashcoat Bear", abilities=(Flash(),))`.
+
+### `Hexproof(quality=None)` (`resolve.cards.keywords.evergreen`)
+Can't be the target of spells or abilities its controller's (a player's: their) opponents
+control; with a `quality`, only [quality] spells and abilities from [quality] sources. A
+prohibition of `legality.allowed(TargetAction)` (`targeting.target_problem`). Works on the
+battlefield only (113.6), so a hexproof creature spell can be countered. "Hexproof from" on a
+player raises `NotImplementedRule("702.11d")` (the CR defines it for permanents).
+- **Rules:** 702.11b, 702.11c, 702.11d, 702.11h, 608.2b.
+- **Example:** Gladecover Scout: `Hexproof()`; Test Redproof Bear (tests): `Hexproof(ColorQuality(ColorWord(Color.RED)))`.
+
+### `Shroud` (`resolve.cards.keywords.evergreen`)
+Can't be the target of spells or abilities, its controller's included.
+- **Rules:** 702.18a, 702.18b.
+- **Example:** Humble Budoka: `Shroud()`.
+
+### `Indestructible` (`resolve.cards.keywords.evergreen`)
+Can't be destroyed: the prohibition of `legality.allowed(DestroyAction)`, used by `Destroy` and by
+704.5g (lethal damage). 704.5f, exile and sacrifice are unaffected.
+- **Rules:** 702.12b, 702.12c, 704.5g.
+- **Example:** Darksteel Relic, Darksteel Myr: `Indestructible()`.
+
+### `Protection(quality)`, `protection_from_each_color()` (`resolve.cards.keywords.evergreen`)
+Can't be targeted by spells with the quality or abilities from sources with it, whoever controls
+them; from `Everything()`, by nothing. Targeting is a prohibition of
+`legality.allowed(TargetAction)`; damage prevention (702.16e) raises `NotImplementedRule` in
+`DamageDealt.apply` until M6; blocking (702.16f) is M3, Auras and Equipment (702.16c-d) M4.
+`protection_from_each_color()` is five abilities, one per color.
+- **Rules:** 702.16a, 702.16b, 702.16e (gap), 702.16h, 702.16j, 702.16m.
+- **Example:** Repentant Blacksmith: `Protection(ColorQuality(ColorWord(Color.RED)))`; Nacatl
+  Savage: `Protection(CardTypeQuality(CardType.ARTIFACT))`; Test Prismatic Knight (tests):
+  `abilities=protection_from_each_color()`.
+
+### Qualities: `ColorQuality`, `MulticoloredQuality`, `MonocoloredQuality`, `CardTypeQuality`, `SubtypeQuality`, `Everything`, `each_color()` (`resolve.cards.keywords.qualities`)
+What protection and "hexproof from" are from: `matches(characteristics)` over the targeting
+spell's characteristics or an ability's source's (113.7a), and `text` ("red", "artifacts",
+"Elves"). Colors and subtypes are typed words (612.2). Room is kept for a player (702.16k) and a
+name (702.16a).
+- **Rules:** 702.16a, 702.16j, 105.2b, 105.2c, 702.16h (`each_color`).
+- **Example:** Nacatl Savage's `CardTypeQuality(CardType.ARTIFACT)`; Test Multiproof Knight
+  (tests): `MulticoloredQuality()`.

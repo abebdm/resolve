@@ -117,6 +117,7 @@ from resolve.events.spells import (
     ActionReversed,
     PermanentSpellResolved,
     SpellCast,
+    SpellCountered,
     SpellDidNotResolve,
     SpellProposed,
     SpellResolved,
@@ -757,6 +758,7 @@ class GameStats:
     - ``did_not_resolve``: spells whose every target was illegal (``SpellDidNotResolve``,
       608.2b).
     - ``damage``: the damage dealt in all (``DamageDealt``, 120.3).
+    - ``countered``: spells countered (``SpellCountered``, 701.6a).
     """
 
     answers: int
@@ -776,6 +778,7 @@ class GameStats:
     autopay_payable_reversed: int = 0
     did_not_resolve: int = 0
     damage: int = 0
+    countered: int = 0
 
     @staticmethod
     def of(result: FuzzResult) -> GameStats:
@@ -821,6 +824,7 @@ class GameStats:
             autopay_payable_reversed=sum(is_autopay_seat(p) for p in result.payable_reversed),
             did_not_resolve=sum(isinstance(record, SpellDidNotResolve) for record in records),
             damage=sum(record.total for record in records if isinstance(record, DamageDealt)),
+            countered=sum(isinstance(record, SpellCountered) for record in records),
         )
 
 
@@ -859,6 +863,7 @@ def summary_lines(games: Sequence[GameStats]) -> list[str]:
         f"{sum(game.abilities_reversed for game in games)} reversed.",
         f"Spells: {sum(casts.values())} cast, {sum(game.resolved for game in games)} resolved, "
         f"{sum(game.did_not_resolve for game in games)} didn't resolve, "
+        f"{sum(game.countered for game in games)} countered, "
         f"{sum(game.reversed for game in games)} reversed.",
         f"Damage: {sum(game.damage for game in games)} dealt.",
         f"Reversed casts: auto-pay seats {autopay_reversed} of {autopay_reversed + autopay_cast} "
@@ -920,9 +925,10 @@ CARDS_EXCERPT = Path(__file__).resolve().parent / "excerpts" / "cards.json"
 SPELLS = "spells"
 CREATURES = "creatures"
 RECIPES = (SPELLS, CREATURES)
-# Cards kept out of the fuzz decks, with the reason (none yet; Repentant Blacksmith joins in M2.8
-# until M6, for the 702.16e gap).
-FUZZ_EXCLUSIONS: dict[str, str] = {}
+# Cards kept out of the fuzz decks, with the reason.
+FUZZ_EXCLUSIONS: dict[str, str] = {
+    "Repentant Blacksmith": "702.16e (M6): damage from red sources to it would be prevented",
+}
 
 
 def recipe_cards(recipe: str, excerpt: Path = CARDS_EXCERPT) -> tuple[str, ...]:

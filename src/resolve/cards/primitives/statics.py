@@ -11,6 +11,8 @@ from dataclasses import dataclass
 from resolve.cards.primitives.base import Ability
 from resolve.cards.primitives.refs import ThisObject
 
+_THIS_OBJECT = ThisObject()
+
 
 @dataclass(frozen=True)
 class CantBeCountered(Ability):
@@ -19,7 +21,7 @@ class CantBeCountered(Ability):
     overrides). ``scope`` is the spell itself; "[spells] you control can't be countered" (a
     static ability of a permanent, Destiny Spinner) is a continuous effect (M5)."""
 
-    scope: ThisObject = ThisObject()
+    scope: ThisObject = _THIS_OBJECT
 
     @property
     def text(self) -> str:
