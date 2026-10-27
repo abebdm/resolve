@@ -269,8 +269,11 @@ FIERY_CONFLUENCE = spell(
     4.0,
     "Sorcery",
     ["R"],
-    "Choose three. You may choose the same mode more than once.",
-)
+    "Choose three. You may choose the same mode more than once.\n"
+    "\u2022 Fiery Confluence deals 1 damage to each creature.\n"
+    "\u2022 Fiery Confluence deals 2 damage to each opponent.\n"
+    "\u2022 Destroy target artifact.",
+)  # Oracle text from the 2026-10-26 snapshot (tools/excerpts/cards.json)
 RISHKARS_EXPERTISE = spell(
     "Rishkar's Expertise", "{4}{G}{G}", 6.0, "Sorcery", ["G"],
     "Draw cards equal to the greatest power among creatures you control.",
@@ -335,6 +338,21 @@ TEST_ARTIFACT_LAND_CREATURE: dict[str, Any] = {
     "colors": [],
     "color_identity": [],
 }
+
+# Invented cards for modes and X (M2.7).
+TEST_BLAZE = spell(
+    "Test Blaze", "{X}{R}", 1.0, "Instant", ["R"], "Test Blaze deals X damage to any target."
+)
+TEST_COMMAND = spell(
+    "Test Command", "{1}{U}", 2.0, "Instant", ["U"],
+    "Choose two \u2014\n\u2022 Destroy target artifact.\n\u2022 Destroy target enchantment.\n"
+    "\u2022 Draw a card.",
+)  # fmt: skip
+TEST_TWIN_BLAZE = spell(
+    "Test Twin Blaze", "{X}{X}{R}", 1.0, "Instant", ["R"],
+    "Test Twin Blaze deals X damage to any target.",
+)  # fmt: skip
+TEST_ARTIFACT_TOTEM = spell("Test Artifact Totem", "{2}", 2.0, "Artifact Enchantment", [], "")
 
 # Mana costs that don't follow 107.4 (an Un-set half-mana symbol): loads, but can't be played.
 TEST_HALF = spell("Test Half", "{HW}", 0.5, "Creature — Elf", ["W"])

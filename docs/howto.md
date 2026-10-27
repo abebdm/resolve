@@ -140,12 +140,18 @@ drive decisions with a script.
    `answered(state, kind)`. Questions with one possible answer aren't asked, so a script lists
    only the decisions that really come: tapping the only lands that pay asks no `pay()` and no
    `counts`. Give mana with lands, or `scenario.mana(player, ...)` (units with no source, which
-   form one class each type; `restriction=` gives them a 106.6 restriction). `scenario.stack(controller, names)` puts spells on the stack as
+   form one class each type; `restriction=` gives them a 106.6 restriction).
+   `scenario.stack(controller, names)` puts spells on the stack as
    if cast from their owner's hand; `scenario.targets(spell, [TargetObject(obj)], ...)` gives one
    its targets, one list per instance of "target" (a spell with targets needs them before it
    resolves); when all players pass, the top one resolves. While casting, answer a 601.2c target
    question with `choose_targets(obj, PlayerOption(player), ...)`; an instance whose only answer is
-   every legal target isn't asked.
+   every legal target isn't asked. A modal spell asks its modes first, `choose_modes(0, 0, 2)`
+   (indices from 0 in printed order, a repeated mode listed that many times; not asked when only
+   one choice is legal), then X if its cost has {X}, `choose_x(3)`, then the targets of each
+   chosen mode in turn. On the stack, `scenario.modes(spell, 0, 0, 2)` and `scenario.x(spell, 3)`
+   give a spell its modes and X (with the total cost), and `scenario.targets` then lists the
+   chosen modes' instances in turn.
    `choose_color(Color.GREEN)` answers "one mana of any color" (asked only with two or more
    colors). A mana ability with a mana cost (Selesnya Signet) asks its own
    `ACTIVATE_MANA_ABILITIES` (answer with `activate(...)`/`pay()`) and, if it fails, its own
@@ -404,8 +410,11 @@ files.
    `spell=SpellAbility((Mode(targets, effects),))` (`resolve.cards.primitives.spells`): one
    `TargetSpec` per instance of the word "target" in the order of its text, its effects in the
    order written, referring to targets with `TargetRef(i)` and to numbers with values
-   (`Fixed`, `PowerOf`). Its `text` is written from the primitives; the card test checks it
-   equals the Oracle text without reminder text.
+   (`Fixed`, `PowerOf`, `X()` for an {X} in its cost). A modal spell lists its modes and how
+   many to choose, `SpellAbility((mode, mode, ...), ModeChoice(minimum, maximum, repeatable))`;
+   each mode's `TargetRef(i)` counts that mode's own instances of "target" from 0 (Fiery
+   Confluence). Its `text` is written from the primitives ("this spell" where the card names
+   itself); the card test checks it equals the Oracle text without reminder text.
 3. Add a Scryfall-format record to `tests/scryfall_fixtures.py` if tests need the card, and to
    `scenario_database()` / `scenario_registry()` in `tests/game_fixtures.py` for scenarios.
 4. Write `tests/cards/test_<card or group>.py`: the computed characteristics, each ability in

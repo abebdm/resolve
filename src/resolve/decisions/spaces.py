@@ -112,6 +112,14 @@ class ManaActivationOption(Immutable):
 
 
 @dataclass(frozen=True)
+class ModesOption(Immutable):
+    """A choice of modes for a modal spell (700.2, 601.2b): ``modes`` by index from 0, in
+    printed order, a mode chosen more than once listed that many times (700.2d)."""
+
+    modes: tuple[int, ...]
+
+
+@dataclass(frozen=True)
 class ColorOption(Immutable):
     """A color (105.1), such as the color of the mana an ability adds (106.1a)."""
 
@@ -128,6 +136,7 @@ Option = (
     | ActivateAbilityOption
     | ManaOption
     | ManaActivationOption
+    | ModesOption
     | ColorOption
 )
 

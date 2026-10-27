@@ -36,9 +36,9 @@ Mana cost, colors and mana value (202):
 - the colors are the face's colors in the card data (105.2, 202.2): Scryfall derives them from the
   mana cost and any color indicator (204.2), so a card whose colors are set otherwise (devoid)
   reads right too;
-- the mana value is the cost's, with {X} as 0 (202.3e); M2.3 gives an object on the stack the X
-  chosen for it. The back face of a nonmodal double-faced card is never read yet (712.8d), so
-  202.3b needs nothing.
+- the mana value is the cost's, with {X} as 0 off the stack and as the value announced for it on
+  the stack (202.3e, ``CastChoices.x``). The back face of a nonmodal double-faced card is never
+  read yet (712.8d), so 202.3b needs nothing.
 """
 
 from __future__ import annotations
@@ -201,9 +201,17 @@ def _face_characteristics(state: GameState, game_object: GameObject, index: int)
         toughness_text=face.toughness if has_numbers else None,
         mana_cost=face.cost,
         colors=tuple(color for color in Color if color.value in face.colors),
-        mana_value=0 if face.cost is None else face.cost.mana_value(),
+        mana_value=0 if face.cost is None else face.cost.mana_value(_x_on_stack(game_object)),
         spell_ability=card.definitions[index].spell,
     )
+
+
+def _x_on_stack(game_object: GameObject) -> int:
+    """202.3e: X is the number chosen for the object while it is on the stack, else 0."""
+    record = game_object.spell
+    if game_object.zone.kind is not ZoneKind.STACK or record is None or record.x is None:
+        return 0
+    return record.x
 
 
 def _face_index(data: CardData) -> int:

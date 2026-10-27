@@ -45,6 +45,7 @@ from resolve.decisions.spaces import (
     ManaOption,
     Pick,
     PickMany,
+    PlayerOption,
 )
 from resolve.engine.api import new_game, pending_decision, submit, view_for
 from resolve.engine.payment import PAY
@@ -58,7 +59,14 @@ from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana, ManaType
 from resolve.state.turn import Phase
 from resolve.state.zones import ZoneKind
-from tests.casting_support import activate, activate_with_priority, cast, records
+from tests.casting_support import (
+    activate,
+    activate_with_priority,
+    cast,
+    choose_targets,
+    choose_x,
+    records,
+)
 from tests.game_fixtures import request_of
 from tests.scenario import Scenario, run_script
 from tools.fuzz import recipe_deck
@@ -645,3 +653,18 @@ def test_601_2h_paying_the_signet_from_the_pool_keeps_the_color_a_later_land_can
     assert was_cast(state)
     assert tapped(state, [plains, signet]) == [True, True]
     assert state.player(P0).mana_pool == []
+
+
+def test_107_3a_the_auto_payer_pays_the_total_with_x() -> None:
+    """Test Blaze with X = 2 from three Mountains: the auto-payer plans from the payment under
+    way, whose cost is the total with the announced X, {2}{R} (601.2f), and taps all three."""
+    scenario = Scenario(2)
+    (blaze,) = scenario.hand(P0, ["Test Blaze"])
+    mountains = scenario.battlefield(P0, ["Mountain", "Mountain", "Mountain"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(blaze, P0), choose_x(2), choose_targets(PlayerOption(P1)))
+    autopay(state)
+    (cast_event,) = records(state, SpellCast)
+    assert cast_event.total_cost.text == "{2}{R}"
+    assert all(state.objects[m].tapped for m in mountains)

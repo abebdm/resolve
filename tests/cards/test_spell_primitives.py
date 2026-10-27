@@ -31,7 +31,7 @@ from resolve.cards.primitives.targets import (
     TargetSpec,
     target,
 )
-from resolve.cards.primitives.values import Fixed, PowerOf
+from resolve.cards.primitives.values import Fixed, PowerOf, X
 from resolve.data.types import CardType
 from resolve.effects.evaluation import Context, Timing, evaluate, players
 from resolve.engine.drawing import DrawCards as DrawTask
@@ -51,6 +51,7 @@ from tests.scenario import Scenario, names
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 CREATURE = target(CardType.CREATURE)
+ARTIFACT = target(CardType.ARTIFACT)
 
 
 def context(spell: ObjectId, *targets: tuple[Target, ...]) -> Context:
@@ -113,10 +114,64 @@ def test_113_3a_a_spell_ability_has_modes_and_text() -> None:
         SpellAbility(())
     with pytest.raises(ValueError, match="nonmodal"):
         SpellAbility((mode, mode))
-    modal = SpellAbility((mode, mode), ModeChoice(1, 1))
-    with pytest.raises(NotImplementedRule) as gap:
-        _ = modal.text
-    assert gap.value.rule == "700.2"
+    modal = SpellAbility((mode, Mode((), (DrawCards(),))), ModeChoice(1, 1))
+    assert modal.text == "Choose one \u2014\n\u2022 You gain 3 life.\n\u2022 Draw a card."
+
+
+def test_700_2_a_modal_spells_text_lists_its_modes() -> None:
+    """700.2: the instruction to choose, then the modes as a bulleted list; 700.2d: "You may
+    choose the same mode more than once." for a repeatable choice."""
+    gain, draw = Mode((), (GainLife(You(), Fixed(3)),)), Mode((), (DrawCards(),))
+
+    def triple_up_to(most: int) -> str:
+        return SpellAbility((gain, draw, gain), ModeChoice(0, most)).text
+
+    three = SpellAbility((gain, draw), ModeChoice(3, 3, repeatable=True))
+    assert three.text == (
+        "Choose three. You may choose the same mode more than once.\n"
+        "\u2022 You gain 3 life.\n\u2022 Draw a card."
+    )
+    assert SpellAbility((gain, draw), ModeChoice(1, 2)).text.startswith(
+        "Choose one or both \u2014\n"
+    )
+    triple = SpellAbility((gain, draw, gain), ModeChoice(1, 3))
+    assert triple.text.startswith("Choose one or more \u2014\n")
+    assert SpellAbility((gain, draw), ModeChoice(0, 2)).text.startswith("Choose any number \u2014")
+    assert triple_up_to(1).startswith("Choose up to one \u2014\n")
+    with pytest.raises(ValueError, match="mode"):
+        ModeChoice(-1, 1)
+    with pytest.raises(ValueError, match="mode"):
+        ModeChoice(2, 1)
+    with pytest.raises(ValueError, match="more modes"):
+        SpellAbility((gain, draw), ModeChoice(3, 3))
+
+
+def test_700_2d_mode_combinations() -> None:
+    """Every choice of modes among the legal ones (700.2a), each once, listed in printed order:
+    without repeats each mode at most once, with repeats (700.2d) every multiset."""
+    pair = ModeChoice(2, 2)
+    assert pair.combinations((0, 1, 2)) == ((0, 1), (0, 2), (1, 2))
+    assert pair.combinations((1, 2)) == ((1, 2),)
+    assert pair.combinations((2,)) == ()
+    assert ModeChoice(1, 2).combinations((0, 1)) == ((0,), (1,), (0, 1))
+    three = ModeChoice(3, 3, repeatable=True)
+    assert len(three.combinations((0, 1, 2))) == 10
+    assert three.combinations((0, 1)) == ((0, 0, 0), (0, 0, 1), (0, 1, 1), (1, 1, 1))
+    assert three.combinations(()) == ()
+
+
+def test_601_2c_700_2c_the_instances_of_target_are_the_chosen_modes() -> None:
+    """A nonmodal spell's instances are its one mode's; a modal spell's are each chosen mode's in
+    turn, a repeated mode's once per repetition (700.2d)."""
+    shatter = Mode((ARTIFACT,), (Destroy((TargetRef(0),)),))
+    draw = Mode((), (DrawCards(),))
+    modal = SpellAbility((draw, shatter), ModeChoice(2, 2, repeatable=True))
+    assert modal.instances((0, 1)) == (ARTIFACT,)
+    assert modal.instances((1, 1)) == (ARTIFACT, ARTIFACT)
+    assert modal.instances((0, 0)) == ()
+    assert modal.chosen((0, 1)) == (draw, shatter)
+    single = SpellAbility((shatter,))
+    assert single.instances(()) == (ARTIFACT,) and single.chosen(()) == (shatter,)
 
 
 def test_effects_are_written_as_card_text_writes_them() -> None:
@@ -135,6 +190,9 @@ def test_effects_are_written_as_card_text_writes_them() -> None:
     )
     assert text((CREATURE,), DealDamage(Fixed(1), (EachCreature(except_=TargetRef(0)),))) == (
         "This spell deals 1 damage to each creature other than target creature."
+    )
+    assert text((ANY_TARGET,), DealDamage(X(), (TargetRef(0),))) == (
+        "This spell deals X damage to any target."
     )
     assert text((CREATURE,), Destroy((TargetRef(0),))) == "Destroy target creature."
     assert text((CREATURE,), Exile((TargetRef(0),)), GainLife(You(), PowerOf(TargetRef(0)))) == (
@@ -163,6 +221,22 @@ def test_608_2h_values_are_evaluated_now() -> None:
     assert evaluate(state, power, found) == 3  # last known information
     assert evaluate(state, power, context(spell, ())) is None
     assert evaluate(state, PowerOf(ThisObject()), found) is None  # an instant has no power
+
+
+def test_107_3a_x_is_the_value_announced_for_the_spell() -> None:
+    """``X()`` is the value announced for the spell (107.3a), read from its record, also once it
+    has left the stack (its last known information, 608.2h). A spell without an announced X
+    (107.3f: X only in its text) is a gap."""
+    scenario = Scenario(2)
+    blaze, shock = scenario.stack(P0, ["Test Blaze", "Test Shock"])
+    scenario.x(blaze, 4)
+    state = scenario.build()
+    assert evaluate(state, X(), context(blaze, ())) == 4
+    move_object(state, blaze, Zone.graveyard(P0))
+    assert evaluate(state, X(), context(blaze, ())) == 4
+    with pytest.raises(NotImplementedRule) as gap:
+        evaluate(state, X(), context(shock, ()))
+    assert gap.value.rule == "107.3f"
 
 
 def test_109_5_players_are_you_controllers_and_targets_still_in_the_game() -> None:

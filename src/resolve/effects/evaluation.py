@@ -10,7 +10,10 @@ whose text it is, its controller, its targets, and when the evaluation happens (
   those still legal (608.2b): an illegal target is neither affected nor a source of
   information, so a value that needs one can't be determined (``None``) and that part of the
   effect doesn't happen.
-- **On announcement** (601.2b, 113.7a), for activated abilities (M4) and X (M2.7).
+- **On announcement** (601.2b, 113.7a), for activated abilities (M4).
+
+X (107.3a) is the value announced as the spell was cast, from its record (``CastChoices.x``);
+once the spell has left the stack, from its last known information.
 - **Continuously**, for static abilities (M5).
 
 107.1b: values may be negative here; an effect that uses one as an amount uses 0 instead.
@@ -32,10 +35,10 @@ from resolve.cards.primitives.refs import (
     ThisObject,
     You,
 )
-from resolve.cards.primitives.values import Fixed, PowerOf, Value
+from resolve.cards.primitives.values import Fixed, PowerOf, Value, X
 from resolve.data.types import CardType
 from resolve.effects.characteristics import characteristics
-from resolve.errors import EngineError
+from resolve.errors import EngineError, NotImplementedRule
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.last_known import LastKnown, snapshot
 from resolve.state.spell import Target, TargetObject, TargetPlayer
@@ -141,3 +144,11 @@ def evaluate(state: GameState, value: Value, context: Context) -> int | None:
             (obj,) = found
             known = information(state, obj)
             return None if known is None else known.characteristics.power
+        case X():
+            # 107.3a: while the spell is on the stack, X is the value announced for it.
+            known = information(state, context.obj)
+            if known is None or known.spell is None or known.spell.x is None:
+                raise NotImplementedRule(
+                    "107.3f: a value of X not announced for a cost (X only in the text)"
+                )
+            return known.spell.x

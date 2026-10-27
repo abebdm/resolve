@@ -160,6 +160,32 @@ class ManaCost(Immutable):
         with ``x`` for each {X} (202.3e)."""
         return sum(symbol.mana_value(x) for symbol in self.symbols)
 
+    @property
+    def has_x(self) -> bool:
+        """Whether the cost has an {X} (107.3a)."""
+        return any(symbol.kind is SymbolKind.VARIABLE for symbol in self.symbols)
+
+    def with_x(self, x: int) -> ManaCost:
+        """This cost with the announced value ``x`` in place of each {X} (107.3a, 601.2f): the
+        generic amounts, {X}s included, added up into one generic symbol where the first of them
+        was, ``{X}{R}`` with 3 becoming ``{3}{R}``. A generic amount of 0 is left out unless
+        nothing else is in the cost (``{0}``). A cost without {X} is unchanged."""
+        if not self.has_x:
+            return self
+        if x < 0:
+            raise ValueError("X can't be negative (107.1b)")
+        generic = (SymbolKind.GENERIC, SymbolKind.VARIABLE)
+        amount = sum(
+            s.number if s.kind is SymbolKind.GENERIC else x
+            for s in self.symbols
+            if s.kind in generic
+        )
+        first = next(i for i, s in enumerate(self.symbols) if s.kind in generic)
+        rest = [s for s in self.symbols if s.kind not in generic]
+        if amount or not rest:
+            rest.insert(first, ManaSymbol(SymbolKind.GENERIC, number=amount))
+        return ManaCost(tuple(rest))
+
 
 def parse_mana_cost(text: str) -> ManaCost:
     """Parse Scryfall's text for a mana cost; ``ManaCostError`` if it doesn't follow 107.4.

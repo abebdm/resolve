@@ -23,12 +23,14 @@ win, loss or draw, in 2 to 6 players. Creature and artifact spells can now be ca
 with mana and resolved onto the battlefield; a cast that can't be paid is undone. Instants and
 sorceries choose their targets as they are cast and check them again as they resolve (a spell
 whose targets are all gone does nothing), and can deal damage, destroy, exile, gain life and
-draw cards. Mana comes
+draw cards. Modal spells let their caster choose modes (the same one more than once where the
+card allows it), and a cost with {X} has its value announced and paid. Mana comes
 from lands, artifacts and creatures (which can't tap the turn they arrive), including mana of a
 color you choose, mana only some spells may use, and abilities that cost mana themselves. The
 cards implemented so far are the basic lands, three vanilla creatures, Sol Ring, Arcane Signet,
 Selesnya Signet, Command Tower, Temple of the False God, Llanowar Elves, Avacyn's Pilgrim,
-Ixalli's Lorekeeper, Swords to Plowshares, Chandra's Ignition and Decimate. Tools compare a new Comprehensive Rules version or card data snapshot against
+Ixalli's Lorekeeper, Swords to Plowshares, Chandra's Ignition, Decimate and Fiery Confluence.
+Tools compare a new Comprehensive Rules version or card data snapshot against
 the pinned ones (`tools/rules_diff.py`, `tools/card_diff.py`), and `tools/rule.py` prints any
 rule of the pinned Comprehensive Rules by number. M2 (spells and the stack) is under
 way. Its plan is approved ([`docs/plans/m2.md`](docs/plans/m2.md)). Its first step,
@@ -45,7 +47,8 @@ undoing an illegal cast) and resolving permanent spells. Its fifth step added th
 abilities of the target decks' mana sources and summoning sickness. Its sixth step added a
 helper that pays mana automatically, for people at the terminal (`--autopay`) and for half the
 random test players. Its seventh step added targets, instants and sorceries that resolve, and the
-first effects. **Next:** modes and X (M2.7). Details: "Current status" in [`CLAUDE.md`](CLAUDE.md).
+first effects. Its eighth step added modes and X. **Next:** evergreen keywords, countering
+spells and Cryptic Command (M2.8). Details: "Current status" in [`CLAUDE.md`](CLAUDE.md).
 
 Resolve is unofficial Fan Content permitted under the Wizards of the Coast Fan Content Policy. It
 is not approved or endorsed by Wizards. Portions of the materials used are property of Wizards of

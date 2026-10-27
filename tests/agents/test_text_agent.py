@@ -38,6 +38,7 @@ from resolve.decisions.spaces import (
     Distribute,
     ManaActivationOption,
     ManaOption,
+    ModesOption,
     Number,
     ObjectOption,
     Order,
@@ -392,3 +393,11 @@ def test_render_view_shows_each_spells_targets() -> None:
         f"  Stack (top last): Test Shock #{shock} (targeting player 1 (you)), "
         f"Swords to Plowshares #{swords} (targeting Grizzly Bears #{bears})"
     ) in text
+
+
+def test_700_2_a_choice_of_modes_is_numbered_as_printed() -> None:
+    """A choice of modes (700.2) names each chosen mode by its place in the printed list, from 1,
+    a repeated mode (700.2d) as often as it was chosen."""
+    own, _, _ = board()
+    assert describe_option(ModesOption((0, 0, 2)), own) == "modes 1, 1 and 3"
+    assert describe_option(ModesOption((1,)), own) == "mode 2"

@@ -6,18 +6,18 @@
       "oracle_cards": {
         "type": "oracle_cards",
         "file": "oracle-cards.jsonl.gz",
-        "updated_at": "2026-10-22T21:01:55.797+00:00",
-        "size": 25090657,
-        "sha256": "b567f5160c618730bf3a227a5496979917e4f6979687af32059097ce9e620d1f",
-        "source": "https://data.scryfall.io/oracle-cards/oracle-cards-20261022210155.jsonl.gz"
+        "updated_at": "2026-10-26T09:01:56.442+00:00",
+        "size": 25110502,
+        "sha256": "0d03f926f16a761a85976076dd2e33d3fc1f535651ef919ed8d2944ca1ea5885",
+        "source": "https://data.scryfall.io/oracle-cards/oracle-cards-20261026090156.jsonl.gz"
       },
       "rulings": {
         "type": "rulings",
         "file": "rulings.jsonl.gz",
-        "updated_at": "2026-10-22T21:00:34.247+00:00",
+        "updated_at": "2026-10-26T09:00:32.536+00:00",
         "size": 5422271,
-        "sha256": "dc1f51b2948054ac696f83b390dcd54ce733d1e20f5cebb0db53c0979ea4c422",
-        "source": "https://data.scryfall.io/rulings/rulings-20261022210034.jsonl.gz"
+        "sha256": "c7fd71cc034b83dc8d91f476a71f8c497e9103eb192bebdb81e246bb1baaa5b0",
+        "source": "https://data.scryfall.io/rulings/rulings-20261026090032.jsonl.gz"
       }
     }
   },
@@ -257,6 +257,23 @@
         "R"
       ],
       "keywords": []
+    },
+    {
+      "object": "card",
+      "oracle_id": "3c22e031-4804-4c31-bd3c-c3f29d456b34",
+      "name": "Fiery Confluence",
+      "layout": "normal",
+      "mana_cost": "{2}{R}{R}",
+      "cmc": 4.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Choose three. You may choose the same mode more than once.\n• Fiery Confluence deals 1 damage to each creature.\n• Fiery Confluence deals 2 damage to each opponent.\n• Destroy target artifact.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": []
     }
   ],
   "rulings": [
@@ -301,6 +318,55 @@
       "source": "wotc",
       "published_at": "2020-11-10",
       "comment": "If you don't have a commander, Arcane Signet's ability produces no mana."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "3c22e031-4804-4c31-bd3c-c3f29d456b34",
+      "source": "wotc",
+      "published_at": "2015-11-04",
+      "comment": "No player can cast spells or activate abilities in between the modes of a resolving spell."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "3c22e031-4804-4c31-bd3c-c3f29d456b34",
+      "source": "wotc",
+      "published_at": "2015-11-04",
+      "comment": "You choose the modes as you cast the spell. Once modes are chosen, they can't be changed."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "3c22e031-4804-4c31-bd3c-c3f29d456b34",
+      "source": "wotc",
+      "published_at": "2015-11-04",
+      "comment": "If a mode requires a target, you can select that mode only if there's a legal target available. Ignore the targeting requirements for modes you don't choose. Each time you select that mode, you can choose a different target, or you can choose the same target."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "3c22e031-4804-4c31-bd3c-c3f29d456b34",
+      "source": "wotc",
+      "published_at": "2015-11-04",
+      "comment": "If a Confluence is copied, the effect that creates the copy will usually allow you to choose new targets, but you can't choose new modes."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "3c22e031-4804-4c31-bd3c-c3f29d456b34",
+      "source": "wotc",
+      "published_at": "2015-11-04",
+      "comment": "No matter which combination of modes you choose, you always follow the instructions of a Confluence in the order they are written. If the same mode is chosen more than once, you choose their relative order as you cast the spell."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "3c22e031-4804-4c31-bd3c-c3f29d456b34",
+      "source": "wotc",
+      "published_at": "2015-11-04",
+      "comment": "If all targets for the chosen modes become illegal before the Confluence resolves, the spell won't resolve and none of its effects will happen. If at least one target is still legal, the spell will resolve but will have no effect on any illegal targets."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "3c22e031-4804-4c31-bd3c-c3f29d456b34",
+      "source": "wotc",
+      "published_at": "2015-11-04",
+      "comment": "If the first or second modes are chosen multiple times, each of those modes represents a separate damage-dealing event. For example, if your opponent casts Fiery Confluence choosing the second mode three times, and you control Guardian Seraph (a creature with the ability \"If a source an opponent controls would deal damage to you, prevent 1 of that damage\"), you'll be dealt a total of 3 damage."
     },
     {
       "object": "ruling",

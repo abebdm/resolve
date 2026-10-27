@@ -217,7 +217,7 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
 - [x] Create the keyword table: widened into the rules coverage map at the end of this file
   (M2.0).
 - [x] Resolution (608), including checking targets again on resolution (608.2b) and partial
-  fizzling; last known information (608.2h) (M2.6; modes resolve in M2.7).
+  fizzling; last known information (608.2h) (M2.6); modal spells' modes (M2.7).
 - [ ] Mana payment details and the general cost model: generic, colored, {C}, X and restricted
   mana (106.6), with slots for hybrid, Phyrexian, snow and non-mana costs; cost increases and
   reductions in 601.2f's order.
@@ -530,6 +530,18 @@ completes a step (CLAUDE.md, "Documentation requirements").
   (`resolve.cards.definitions.removal`, in the excerpt); fixtures Test Shock and Test Ponder (real
   definitions now), Test Shatter, Test Wall, Test Totem, Test Artifact Land Creature;
   `Scenario.targets`, `casting_support.choose_targets`.
+- **Done (M2.7, modes and X):** `CastSpell`'s stages `MODES` (601.2b, 700.2: `CHOOSE_MODES`, a
+  `ChooseOne` of `ModesOption`; `ModesChosen`), `X` (601.2b, 107.3a: `CHOOSE_X`, a
+  `ChooseNumber(0, None)`; `XAnnounced`) and `TARGETS` (each chosen mode's instances, 700.2c);
+  `CastChoices.modes` and `x`; `ModeChoice.combinations`, `SpellAbility.chosen`, `instances` and
+  the modal text (`resolve.cards.primitives.spells`); `targeting.legal_modes`, `mode_choices`
+  (700.2a), `can_choose_targets` for modal spells; the total cost with X (`ManaCost.has_x`,
+  `with_x`; 601.2f), the mana value with X on the stack (202.3e); the value `X`
+  (`resolve.cards.primitives.values`); modal resolution (`resolution.Instruction`: each mode's
+  effects with its own targets, 608.2b over all of them, 608.2c); the text agent's
+  `ModesOption`. Cards: Fiery Confluence (`resolve.cards.definitions.removal`, in the excerpt);
+  fixtures Test Blaze ({X}) and Test Command (choose two); `Scenario.modes`, `Scenario.x`,
+  `casting_support.choose_modes`, `choose_x`.
 ---
 
 ## Rules coverage map
@@ -566,7 +578,7 @@ earlier milestones must leave room for every row in this map.
 | 104 | Ending the Game | M1 ✓; 104.3c-d M4, M7; 104.4b M7; alternative wins and losses M5 | E | `can_lose_game`: default function in place (M2.1 ✓) |
 | 105 | Colors | M2 | E |  |
 | 106 | Mana | M1 ✓, M2 (spending mana, 106.4a: M2.3 ✓; restrictions 106.6, any color 106.1a, undefined mana 106.5: M2.4 ✓); 106.7 M6 | E | `Mana.restriction`, `ManaRestriction` |
-| 107 | Numbers and Symbols | M2 (107.4 symbols parsed: M2.2 ✓); 107.4e-f, 107.4h M9; 107.14 M4; 107.15, 107.17 M9 | E | hybrid and Phyrexian: M2 builds the announcement stage |
+| 107 | Numbers and Symbols | M2 (107.4 symbols parsed: M2.2 ✓; 107.3a X announced: M2.7 ✓; 107.3b M2.10); 107.3c, 107.3f with their first card; 107.4e-f, 107.4h M9; 107.14 M4; 107.15, 107.17 M9 | E | hybrid and Phyrexian: M2 builds the announcement stage |
 | 108 | Cards | M0 ✓ | E |  |
 | 109 | Objects | M1 ✓; 109.3 with each layout (omen and preparation read as their normal part: M2.2 ✓; 720.4, 722.4) | E |  |
 | 110 | Permanents | M1 ✓; statuses with their mechanics | E |  |
@@ -585,7 +597,7 @@ earlier milestones must leave room for every row in this map.
 | 123 | Stickers | M5 (stickers change names, abilities, power and toughness: 123.6-123.8); M7 (sticker sheets chosen before the game, 123.2) | S | Unfinity: 47 cards that use stickers and 48 sticker sheets are Commander-legal |
 | 200 | General | — | — | nothing to implement |
 | 201 | Name | M1 ✓; 201.4 M4 | E |  |
-| 202 | Mana Cost and Color | M2 (M2.2 ✓: 202.1-202.3; 202.3e on the stack M2.7) | E |  |
+| 202 | Mana Cost and Color | M2 (M2.2 ✓: 202.1-202.3; 202.3e on the stack: M2.7 ✓) | E |  |
 | 203 | Illustration | out of scope | — | no game rules |
 | 204 | Color Indicator | M2 (M2.2 ✓) | E | colors come from the card data |
 | 205 | Type Line | M1 ✓; type changes M5 | E |  |
@@ -638,14 +650,14 @@ earlier milestones must leave room for every row in this map.
 | 513 | End Step | M1 ✓ | E |  |
 | 514 | Cleanup Step | M1 ✓; 514.2 effects ending M5 | E |  |
 | 600 | General | — | — | nothing to implement |
-| 601 | Casting Spells | M2 (M2.3 ✓: 601.2a, 601.2e-i, 601.3, 601.3e variants and permissions, 601.6; 601.2c M2.6 ✓; 601.2b M2.7; 601.2d M4; 601.3b M6) | E | gaps per variant: 709.3, 712.11a-b, 715.3, 718.3, 720.3, 722.3, 708.4, 702.102; 903.8 |
+| 601 | Casting Spells | M2 (M2.3 ✓: 601.2a, 601.2e-i, 601.3, 601.3e variants and permissions, 601.6; 601.2c M2.6 ✓; 601.2b modes and X: M2.7 ✓, hybrid and Phyrexian announcements M9; 601.2d M4; 601.3b M6) | E | gaps per variant: 709.3, 712.11a-b, 715.3, 718.3, 720.3, 722.3, 708.4, 702.102; 903.8 |
 | 602 | Activating Activated Abilities | M4 (for mana abilities, 602.2b mana costs and 602.5 "activate only if": M2.4 ✓) | E |  |
 | 603 | Handling Triggered Abilities | M4 | E |  |
 | 604 | Handling Static Abilities | M5 (M2: keyword and cost-reduction statics) | E |  |
 | 605 | Mana Abilities | M1 ✓, M2 (605.3a while casting: M2.3 ✓; 605.2, 605.3a while paying a mana ability's cost, 605.3c: M2.4 ✓); 605.1b M4 | E |  |
 | 606 | Loyalty Abilities | M4 | E |  |
 | 607 | Linked Abilities | M4 | E | D (hideaway) |
-| 608 | Resolving Spells and Abilities | M2 (608.1, 608.3a: M2.3 ✓; 608.2a-c, 608.2h, 608.2m-n: M2.6 ✓; 608.2g M2.10); 608.2d-f, 608.2i, 608.2k M4 | E | `resolved_spell_destination` (608.2n) in place (M2.3 ✓), called from M2.6 ✓ |
+| 608 | Resolving Spells and Abilities | M2 (608.1, 608.3a: M2.3 ✓; 608.2a-c, 608.2h, 608.2m-n: M2.6 ✓; 608.2c for modes: M2.7 ✓; 608.2g M2.10); 608.2d-f, 608.2i, 608.2k M4 | E | `resolved_spell_destination` (608.2n) in place (M2.3 ✓), called from M2.6 ✓ |
 | 609 | Effects | M2 (one-shot effects of spells: M2.6 ✓) | E |  |
 | 610 | One-Shot Effects | M2; 610.3 M4 | E |  |
 | 611 | Continuous Effects | M5 | E |  |
@@ -654,7 +666,7 @@ earlier milestones must leave room for every row in this map.
 | 614 | Replacement Effects | M6 | E |  |
 | 615 | Prevention Effects | M6 | E |  |
 | 616 | Interaction of Replacement and/or Prevention Effects | M6 | E |  |
-| 700 | General | M2 (700.2); the others with their mechanics | E |  |
+| 700 | General | M2 (700.2, 700.2a, 700.2c-d, 700.2f: M2.7 ✓; 700.2b M4 with triggered abilities; 700.2e, 700.2g-i with their cards); the others with their mechanics | E |  |
 | 703 | Turn-Based Actions | M1 ✓, M3 | E |  |
 | 704 | State-Based Actions | M1 ✓ (704.5a, b, f, g); 704.5c, d, i, j, m, n, p, q, r, z M4; 704.5e M5; 704.5h M3; 704.5k, s, t, u, v-y M9 | E | 704.5j is the legend rule; 704.5u is space sculptor |
 | 705 | Flipping a Coin | M2 | S |  |

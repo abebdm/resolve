@@ -134,6 +134,26 @@ def test_202_3e_x_defaults_to_zero() -> None:
     assert parse_mana_cost("{X}{G}").mana_value() == 1
 
 
+@pytest.mark.parametrize(
+    ("text", "x", "total"),
+    [
+        ("{X}{R}", 3, "{3}{R}"),
+        ("{X}{R}", 0, "{R}"),
+        ("{X}", 0, "{0}"),
+        ("{X}", 2, "{2}"),
+        ("{X}{X}{G}", 2, "{4}{G}"),
+        ("{X}{1}{R}", 2, "{3}{R}"),
+        ("{2}{R}", 5, "{2}{R}"),
+    ],
+)
+def test_107_3a_the_announced_x_replaces_each_x(text: str, x: int, total: str) -> None:
+    """107.3a, 601.2f: the total cost has the announced value in place of each {X}; the generic
+    amounts are added up into one symbol (a {0} is left only when nothing else is)."""
+    cost = parse_mana_cost(text).with_x(x)
+    assert cost == parse_mana_cost(total)
+    assert not cost.has_x and parse_mana_cost(text).has_x == ("X" in text)
+
+
 # --- 202.2: colors ----------------------------------------------------------------------------
 
 

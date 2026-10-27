@@ -51,6 +51,7 @@ from resolve.decisions.spaces import (
     ChooseCounts,
     ChooseOne,
     Pick,
+    PlayerOption,
 )
 from resolve.engine.api import pending_decision, submit, view_for
 from resolve.engine.view import PlayerView
@@ -63,7 +64,7 @@ from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import ManaType
 from resolve.state.rng import Rng
 from resolve.state.turn import Phase
-from tests.casting_support import activate_with_priority, cast, records
+from tests.casting_support import activate_with_priority, cast, choose_targets, choose_x, records
 from tests.scenario import Scenario, run_script
 
 P0, P1 = PlayerId(0), PlayerId(1)
@@ -91,6 +92,7 @@ SPELLS = (
     "Sol Ring",  # {1}
     "Selesnya Signet",  # {2}
     "Avacyn's Pilgrim",  # {G}
+    "Test Blaze",  # {X}{R}, X from 0 to 3: the total cost has X's value (601.2f)
 )
 COMMANDERS = (None, "Avacyn's Pilgrim", "Hill Giant", "Savannah Lions")
 DINOSAUR = SpendOnlyOnSubtype(SubtypeWord("Dinosaur"))
@@ -166,6 +168,10 @@ def random_board(rng: Rng) -> tuple[GameState, str, Done]:
 
         return state, f"Selesnya Signet #{signet} with priority {where}", signet_done
     run_script(state, cast(card, P0))
+    if spell == "Test Blaze":
+        x = rng.randbelow(4)
+        run_script(state, choose_x(x), choose_targets(PlayerOption(P1)))
+        spell = f"{spell} (X = {x})"
     return state, f"{spell} {where}", lambda state: bool(records(state, SpellCast))
 
 

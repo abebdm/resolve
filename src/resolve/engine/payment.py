@@ -30,8 +30,9 @@ while paying in order to reverse them (733.1; docs/decisions.md). ``step`` and `
 holds its own payment, so the activations made while paying for an activation are reachable too
 (``resolve.engine.reversal``).
 
-Hybrid, Phyrexian and snow symbols (M9) and {X} (M2.7) raise ``NotImplementedRule``; non-mana
-components arrive in M4.
+Hybrid, Phyrexian and snow symbols (M9) raise ``NotImplementedRule``, and so does an {X}: a
+spell's total cost has the announced value in its place (601.2f, ``resolve.engine.casting``), and
+abilities' and effects' costs with {X} arrive in M4. Non-mana components arrive in M4.
 """
 
 from __future__ import annotations
@@ -142,7 +143,11 @@ def mana_need(cost: ManaCost) -> ManaNeed:
             case SymbolKind.GENERIC:
                 total += symbol.number  # 107.4b
             case SymbolKind.VARIABLE:
-                raise NotImplementedRule("107.3a: paying a cost with {X}")
+                # A spell's total cost has X's value already (601.2f, ``ManaCost.with_x``).
+                raise NotImplementedRule(
+                    "107.3a: paying a cost with {X} whose value wasn't announced (activation "
+                    "costs, 602.2b, and effects that pay a cost, 107.3h: M4)"
+                )
             case SymbolKind.SNOW:
                 raise NotImplementedRule("107.4h: paying {S} with mana from a snow source")
             case _:

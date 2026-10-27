@@ -513,6 +513,19 @@ def test_118_6_a_spell_with_no_mana_cost_cant_be_cast_by_paying_it() -> None:
     assert state.player(P0).mana_pool == [Mana(U), Mana(U)]
 
 
+@pytest.mark.parametrize("record", [fx.TEST_HYBRID, fx.TEST_PHYREXIAN], ids=lambda r: r["name"])
+def test_601_2b_announcing_hybrid_and_phyrexian_payment_is_a_gap(record: dict[str, Any]) -> None:
+    """601.2b: a cost with hybrid or Phyrexian symbols is announced as the nonhybrid equivalent,
+    or as life or mana, after X; that announcement is a gap until M9."""
+    scenario = with_cards(record)
+    (card,) = scenario.hand(P0, [record["name"]])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    with pytest.raises(NotImplementedRule) as gap:
+        run_script(state, cast(card, P0))
+    assert gap.value.rule == "601.2b"
+
+
 def test_800_4a_a_caster_who_concedes_takes_their_spell_with_them() -> None:
     """Three players: P0 concedes while paying for Grizzly Bears. The spell, like everything P0
     owns, leaves the game (800.4a); the cast just ends, and nothing is reversed."""

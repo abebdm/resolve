@@ -367,8 +367,8 @@ def numbers(pattern: str, text: str) -> tuple[float, ...]:
 
 # The excerpt's cards, by hand: the noncreature ones, and the creatures.
 NONCREATURES = [
-    "Arcane Signet", "Chandra's Ignition", "Command Tower", "Decimate", "Selesnya Signet",
-    "Sol Ring", "Swords to Plowshares", "Temple of the False God",
+    "Arcane Signet", "Chandra's Ignition", "Command Tower", "Decimate", "Fiery Confluence",
+    "Selesnya Signet", "Sol Ring", "Swords to Plowshares", "Temple of the False God",
 ]  # fmt: skip
 CREATURES = [
     "Avacyn's Pilgrim", "Grizzly Bears", "Hill Giant", "Ixalli's Lorekeeper", "Llanowar Elves",
@@ -388,13 +388,14 @@ def expected_deck(recipe: str, copies: int) -> Counter[str]:
 
 def test_the_recipes_hold_the_excerpt_minus_the_exclusions() -> None:
     assert fuzz_tool.recipe_cards("spells") == (
-        "Arcane Signet", "Chandra's Ignition", "Command Tower", "Decimate", "Selesnya Signet",
-        "Sol Ring", "Swords to Plowshares", "Temple of the False God",
+        "Arcane Signet", "Chandra's Ignition", "Command Tower", "Decimate", "Fiery Confluence",
+        "Selesnya Signet", "Sol Ring", "Swords to Plowshares", "Temple of the False God",
     )  # fmt: skip
     assert fuzz_tool.recipe_cards("creatures") == (
         "Arcane Signet", "Avacyn's Pilgrim", "Chandra's Ignition", "Command Tower", "Decimate",
-        "Grizzly Bears", "Hill Giant", "Ixalli's Lorekeeper", "Llanowar Elves", "Savannah Lions",
-        "Selesnya Signet", "Sol Ring", "Swords to Plowshares", "Temple of the False God",
+        "Fiery Confluence", "Grizzly Bears", "Hill Giant", "Ixalli's Lorekeeper", "Llanowar Elves",
+        "Savannah Lions", "Selesnya Signet", "Sol Ring", "Swords to Plowshares",
+        "Temple of the False God",
     )  # fmt: skip
     assert fuzz_tool.FUZZ_EXCLUSIONS == {}
     for recipe in fuzz_tool.RECIPES:
@@ -406,16 +407,18 @@ def test_the_recipes_hold_the_excerpt_minus_the_exclusions() -> None:
 def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The default run, cut to its first four games (standard, 2 to 5 players). The seats get the
-    spells and creatures recipes with 8 and then 2 of each basic land, in turn. The games reach
-    later turns; players play lands (at most one a turn, 305.2), tap them for mana, cast spells,
-    which resolve or are reversed; and the summary's numbers are those of the games."""
+    """The default run, cut to its first five games (standard, 2 to 6 players). The
+    seats get the spells and creatures recipes with 8 and then 2 of each basic land, in turn. The
+    games reach later turns; players play lands (at most one a turn, 305.2), tap them for mana,
+    cast spells, which resolve or are reversed; and the summary's numbers are those of the
+    games. (Five games since M2.7: with Fiery Confluence in the decks, the first four no longer
+    include a payable cast that a random seat reversed.)"""
     recorder = Recorder()
-    text = run_main(monkeypatch, recorder, "--games", "4", "--jobs", "1")
+    text = run_main(monkeypatch, recorder, "--games", "5", "--jobs", "1")
 
     pool = [("spells", 8), ("creatures", 8), ("spells", 2), ("creatures", 2)]
-    assert [len(decks) for _, decks, _, _ in recorder.calls] == [2, 3, 4, 5]
-    assert [seed for _, _, seed, _ in recorder.calls] == [0, 1, 2, 3]
+    assert [len(decks) for _, decks, _, _ in recorder.calls] == [2, 3, 4, 5, 6]
+    assert [seed for _, _, seed, _ in recorder.calls] == [0, 1, 2, 3, 4]
     for config, decks, seed, options in recorder.calls:
         assert config.commander is None
         assert options == {"concession_chance": 200, "check_every": 10}
@@ -491,15 +494,15 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
     assert set(gaps) <= set(fuzz_tool.ALLOWED_GAPS)
 
     total = sum(answers)
-    assert numbers(r"4 games passed: (\d+) answers accepted, (\d+) rejected\.", text) == (total, 0)
+    assert numbers(r"5 games passed: (\d+) answers accepted, (\d+) rejected\.", text) == (total, 0)
     assert numbers(r"Answers per game: min (\d+), average ([\d.]+), max (\d+)\.", text) == (
         min(answers),
-        round(total / 4, 1),
+        round(total / len(answers), 1),
         max(answers),
     )
     assert numbers(r"Turns per game: min (\d+), average ([\d.]+), max (\d+)\.", text) == (
         min(turns),
-        round(sum(turns) / 4, 1),
+        round(sum(turns) / len(turns), 1),
         max(turns),
     )
     assert numbers(
@@ -551,7 +554,7 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
     assert f"Casts per card: {per_card}." in text
     per_gap = ", ".join(f"{rule} x{gaps[rule]}" for rule in sorted(gaps)) or "none"
     assert f"Gaps: {per_gap}." in text
-    assert "Formats: standard x4" in text
+    assert "Formats: standard x5" in text
 
 
 def test_every_other_commander_game_gives_the_seats_commanders(

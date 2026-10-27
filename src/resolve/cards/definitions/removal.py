@@ -1,13 +1,13 @@
-"""Instants and sorceries that remove permanents: Swords to Plowshares, Chandra's Ignition and
-Decimate."""
+"""Instants and sorceries that remove permanents: Swords to Plowshares, Chandra's Ignition,
+Decimate and Fiery Confluence."""
 
 from __future__ import annotations
 
 from resolve.cards.primitives.effects import DealDamage, Destroy, Exile, GainLife
 from resolve.cards.primitives.refs import ControllerOf, EachCreature, EachOpponent, TargetRef
-from resolve.cards.primitives.spells import Mode, SpellAbility
+from resolve.cards.primitives.spells import Mode, ModeChoice, SpellAbility
 from resolve.cards.primitives.targets import target
-from resolve.cards.primitives.values import PowerOf
+from resolve.cards.primitives.values import Fixed, PowerOf
 from resolve.cards.registry import CardDefinition
 from resolve.data.types import CardType
 
@@ -63,4 +63,20 @@ DECIMATE = CardDefinition(
     ),
 )
 
-DEFINITIONS = (SWORDS_TO_PLOWSHARES, CHANDRAS_IGNITION, DECIMATE)
+# Choose three. You may choose the same mode more than once.
+# • Fiery Confluence deals 1 damage to each creature.
+# • Fiery Confluence deals 2 damage to each opponent.
+# • Destroy target artifact.
+FIERY_CONFLUENCE = CardDefinition(
+    "Fiery Confluence",
+    spell=SpellAbility(
+        (
+            Mode((), (DealDamage(Fixed(1), (EachCreature(),)),)),
+            Mode((), (DealDamage(Fixed(2), (EachOpponent(),)),)),
+            Mode((target(CardType.ARTIFACT),), (Destroy((_IT,)),)),
+        ),
+        ModeChoice(3, 3, repeatable=True),
+    ),
+)
+
+DEFINITIONS = (SWORDS_TO_PLOWSHARES, CHANDRAS_IGNITION, DECIMATE, FIERY_CONFLUENCE)
