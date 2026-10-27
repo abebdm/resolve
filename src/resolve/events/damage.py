@@ -96,6 +96,6 @@ def _protection_gap(state: GameState, source: Characteristics, event: DamageDeal
         for ability in abilities:
             if isinstance(ability, Protection) and ability.quality.matches(source):
                 raise NotImplementedRule(
-                    f"702.16e: preventing damage to a permanent or player with "
-                    f"{ability.text.lower()} (M6)"
+                    "702.16e: preventing damage from a source with a quality a permanent or "
+                    "player has protection from (M6)"
                 )

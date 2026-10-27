@@ -24,12 +24,17 @@ with mana and resolved onto the battlefield; a cast that can't be paid is undone
 sorceries choose their targets as they are cast and check them again as they resolve (a spell
 whose targets are all gone does nothing), and can deal damage, destroy, exile, gain life and
 draw cards. Modal spells let their caster choose modes (the same one more than once where the
-card allows it), and a cost with {X} has its value announced and paid. Mana comes
+card allows it), and a cost with {X} has its value announced and paid. Spells can be countered
+(a countered spell goes to its owner's graveyard), and some can't be. Flash, hexproof, shroud,
+indestructible and protection work for casting, targeting and destroying (protection's damage
+prevention comes with prevention effects). Mana comes
 from lands, artifacts and creatures (which can't tap the turn they arrive), including mana of a
 color you choose, mana only some spells may use, and abilities that cost mana themselves. The
 cards implemented so far are the basic lands, three vanilla creatures, Sol Ring, Arcane Signet,
 Selesnya Signet, Command Tower, Temple of the False God, Llanowar Elves, Avacyn's Pilgrim,
-Ixalli's Lorekeeper, Swords to Plowshares, Chandra's Ignition, Decimate and Fiery Confluence.
+Ixalli's Lorekeeper, Swords to Plowshares, Chandra's Ignition, Decimate, Fiery Confluence,
+Cryptic Command, Cancel, and one card for each keyword: Ashcoat Bear, Gladecover Scout, Humble
+Budoka, Darksteel Relic, Darksteel Myr, Repentant Blacksmith and Nacatl Savage.
 Tools compare a new Comprehensive Rules version or card data snapshot against
 the pinned ones (`tools/rules_diff.py`, `tools/card_diff.py`), and `tools/rule.py` prints any
 rule of the pinned Comprehensive Rules by number. M2 (spells and the stack) is under
@@ -47,8 +52,8 @@ undoing an illegal cast) and resolving permanent spells. Its fifth step added th
 abilities of the target decks' mana sources and summoning sickness. Its sixth step added a
 helper that pays mana automatically, for people at the terminal (`--autopay`) and for half the
 random test players. Its seventh step added targets, instants and sorceries that resolve, and the
-first effects. Its eighth step added modes and X. **Next:** evergreen keywords, countering
-spells and Cryptic Command (M2.8). Details: "Current status" in [`CLAUDE.md`](CLAUDE.md).
+first effects. Its eighth step added modes and X, and its ninth the evergreen keywords,
+countering spells and Cryptic Command. **Next:** cost reductions (M2.9). Details: "Current status" in [`CLAUDE.md`](CLAUDE.md).
 
 Resolve is unofficial Fan Content permitted under the Wizards of the Coast Fan Content Policy. It
 is not approved or endorsed by Wizards. Portions of the materials used are property of Wizards of
