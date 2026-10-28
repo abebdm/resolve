@@ -24,7 +24,7 @@ from resolve.state.config import GameConfig
 from resolve.state.ids import CardId, ObjectId, PlayerId
 from resolve.state.mana import Mana
 from resolve.state.rng import Rng
-from resolve.state.spell import CastChoices
+from resolve.state.spell import CastChoices, CastGrant
 from resolve.state.turn import TurnState
 from resolve.state.zones import Zone, ZoneKind
 from resolve.values import Immutable
@@ -147,6 +147,8 @@ class GameState:
     - ``turn_direction``: 1 when turn order proceeds clockwise (103.1), -1 when it is reversed.
     - ``last_known``: objects that left the battlefield or the stack as they last existed there,
       by their old IDs (608.2h, ``resolve.state.last_known``).
+    - ``cast_grants``: the permissions to cast spells that effects have given players for now
+      (608.2g, ``CastGrant``), oldest first; ``defaults.cast_permissions`` reads them.
     """
 
     config: GameConfig
@@ -171,6 +173,7 @@ class GameState:
     extra_turns: list[PlayerId] = field(default_factory=list[PlayerId])
     turn_direction: int = 1
     last_known: dict[ObjectId, LastKnown] = field(default_factory=dict[ObjectId, "LastKnown"])
+    cast_grants: list[CastGrant] = field(default_factory=list[CastGrant])
 
     def player(self, player: PlayerId) -> Player:
         """The player with this ID; ``EngineError`` if there is none."""

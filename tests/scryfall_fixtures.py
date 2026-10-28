@@ -274,9 +274,11 @@ FIERY_CONFLUENCE = spell(
     "\u2022 Fiery Confluence deals 2 damage to each opponent.\n"
     "\u2022 Destroy target artifact.",
 )  # Oracle text from the 2026-10-26 snapshot (tools/excerpts/cards.json)
+# Oracle text from the 2026-10-27 snapshot (tools/excerpts/cards.json).
 RISHKARS_EXPERTISE = spell(
     "Rishkar's Expertise", "{4}{G}{G}", 6.0, "Sorcery", ["G"],
-    "Draw cards equal to the greatest power among creatures you control.",
+    "Draw cards equal to the greatest power among creatures you control.\nYou may cast a spell "
+    "with mana value 5 or less from your hand without paying its mana cost.",
 )  # fmt: skip
 
 # Real mana sources of M2.4 (Oracle text from the 2026-10-21 snapshot, tools/excerpts/cards.json).
@@ -310,6 +312,8 @@ TEST_GOLD = spell("Test Gold", "{W}{B}", 2.0, "Sorcery", ["W", "B"])
 TEST_GROWTH = spell("Test Growth", "{X}{G}", 1.0, "Sorcery", ["G"])
 TEST_HYBRID = spell("Test Hybrid", "{2/W}{2/W}", 4.0, "Sorcery", ["W"])
 TEST_TWO_TONE = spell("Test Two-Tone", "{1}{W/U}{W/U}", 3.0, "Sorcery", ["W", "U"])
+# A sorcery with no mana cost (202.1b, 118.6), like Ancestral Vision without suspend.
+TEST_VISION = spell("Test Vision", "", 0.0, "Sorcery", [], "Draw a card.")
 TEST_PHYREXIAN = spell("Test Phyrexian", "{1}{W/P}{W/P}", 3.0, "Sorcery", ["W"])
 TEST_SNOW = spell("Test Snow", "{S}{S}", 2.0, "Snow Artifact", [])
 # Real removal spells of M2.6 (Oracle text from the 2026-10-22 snapshot, tools/excerpts/cards.json).

@@ -843,3 +843,28 @@ def test_608_2n_a_resolved_instant_goes_where_the_destination_function_says(
     run_script(state, pass_(P0), pass_(P1))
     assert names(state, Zone.graveyard(P0)) == ["Swords to Plowshares"]
     assert state.exile == []
+
+
+def test_608_2g_the_free_cast_offers_what_cast_options_gives(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A cast during a resolution offers exactly the options ``cast_options`` gives with the
+    effect's permission: with it replaced by one that leaves out Hill Giant, only Grizzly Bears
+    is offered while Rishkar's Expertise resolves."""
+    scenario = Scenario(2)
+    scenario.stack(P0, ["Rishkar's Expertise"])
+    bears, giant = scenario.hand(P0, ["Grizzly Bears", "Hill Giant"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    real = defaults.cast_options
+
+    def without_giant(state: GameState, player: PlayerId) -> tuple[CastSpellOption, ...]:
+        return tuple(o for o in real(state, player) if o.object != giant)
+
+    patch(monkeypatch, "cast_options", without_giant)
+    state = scenario.build()
+    run_script(state, pass_(P0), pass_(P1))
+    request = request_of(state)
+    assert request.kind is DecisionKind.CAST_DURING_RESOLUTION
+    assert isinstance(request.space, ChooseOne)
+    offered = [o for o in request.space.options if isinstance(o, CastSpellOption)]
+    assert [o.object for o in offered] == [bears]

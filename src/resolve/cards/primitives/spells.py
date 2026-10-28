@@ -27,22 +27,32 @@ def _number_word(number: int) -> str:
 class Mode(Immutable):
     """One mode of a spell ability (700.2), or the whole of a nonmodal one: its instances of the
     word "target" in the order written (``targets``, 115.1, 601.2c) and its effects in the order
-    written (608.2c). ``cost`` leaves room for a mode with its own cost (spree, 702.172, M9)."""
+    written (608.2c). ``paragraphs`` lists the effects (by index) that begin a new paragraph of
+    the printed text (Rishkar's Expertise); it changes only ``text``. ``cost`` leaves room for a
+    mode with its own cost (spree, 702.172, M9)."""
 
     targets: tuple[TargetSpec, ...]
     effects: tuple[Effect, ...]
     cost: None = None
+    paragraphs: tuple[int, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.effects:
             raise ValueError("a mode needs at least one effect")
+        if any(not 0 < index < len(self.effects) for index in self.paragraphs):
+            raise ValueError("a new paragraph begins at an effect after the first")
 
     @property
     def text(self) -> str:
         """The mode's text, written from its effects: ``"Exile target creature. Its controller
-        gains life equal to its power."``."""
+        gains life equal to its power."``; an effect in ``paragraphs`` begins a new line."""
         phrasing = Phrasing(self.targets)
-        return " ".join(sentence(effect.describe(phrasing)) for effect in self.effects)
+        text = ""
+        for index, effect in enumerate(self.effects):
+            if index:
+                text += "\n" if index in self.paragraphs else " "
+            text += sentence(effect.describe(phrasing))
+        return text
 
 
 @dataclass(frozen=True)

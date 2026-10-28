@@ -32,7 +32,14 @@ from resolve.rules import defaults
 from resolve.state.config import GameConfig
 from resolve.state.ids import PlayerId
 from resolve.state.mana import Mana, ManaType
-from resolve.state.spell import COMMANDER, FROM_HAND, NORMAL, CastPermission, CastTiming
+from resolve.state.spell import (
+    COMMANDER,
+    FROM_HAND,
+    NORMAL,
+    CastGrant,
+    CastPermission,
+    CastTiming,
+)
 from resolve.state.turn import TURN_SEQUENCE, Phase, Step
 from resolve.state.zones import ZoneKind
 from tests.scenario import Scenario
@@ -43,10 +50,10 @@ P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 CITATIONS = {
     "land_plays_allowed": ["305.2"],
     "land_play_options": ["305.1"],
-    "cast_permissions": ["601.3", "903.8"],
+    "cast_permissions": ["601.3", "903.8", "608.2g"],
     "cast_options": ["601.3", "117.1a"],
     "has_sorcery_timing": ["117.1a", "307.1"],
-    "may_cast_now": ["117.1a", "702.8a"],
+    "may_cast_now": ["117.1a", "702.8a", "608.2g"],
     "resolved_spell_destination": ["608.2n"],
     "maximum_hand_size": ["402.2"],
     "draw_step_draws": ["504.1"],
@@ -379,16 +386,46 @@ def test_117_1a_ignoring_one_spell_still_counts_the_others() -> None:
     assert not defaults.has_sorcery_timing(state, P0, ignoring=below)
 
 
-@pytest.mark.parametrize(
-    ("timing", "rule"),
-    [(CastTiming.AS_THOUGH_FLASH, "601.3b"), (CastTiming.DURING_RESOLUTION, "608.2g")],
-)
-def test_601_3b_608_2g_other_cast_timings_are_gaps(timing: CastTiming, rule: str) -> None:
+def test_601_3b_as_though_it_had_flash_is_a_gap() -> None:
     scenario = Scenario(2)
     (bears,) = scenario.hand(P0, ["Grizzly Bears"])
     scenario.at(Step.UPKEEP)
     state = scenario.build()
-    permission = CastPermission("601.3", ZoneKind.HAND, timing)
+    permission = CastPermission("601.3", ZoneKind.HAND, CastTiming.AS_THOUGH_FLASH)
     with pytest.raises(NotImplementedRule) as gap:
         defaults.may_cast_now(state, P0, bears, NORMAL, permission)
-    assert gap.value.rule == rule
+    assert gap.value.rule == "601.3b"
+
+
+def test_608_2g_during_a_resolution_the_spells_timing_is_ignored() -> None:
+    """608.2g: a spell an effect allows to be cast during its resolution is cast then, whatever
+    117.1a would say: a creature and a sorcery in the upkeep with a spell on the stack. A land is
+    still never cast (305.9)."""
+    scenario = Scenario(2)
+    scenario.stack(P1, ["Test Shock"])
+    bears, ponder, forest = scenario.hand(P0, ["Grizzly Bears", "Test Ponder", "Forest"])
+    scenario.at(Step.UPKEEP, active=P1)
+    state = scenario.build()
+    permission = CastPermission("608.2g", ZoneKind.HAND, CastTiming.DURING_RESOLUTION)
+    assert defaults.may_cast_now(state, P0, bears, NORMAL, permission)
+    assert defaults.may_cast_now(state, P0, ponder, NORMAL, permission)
+    assert not defaults.may_cast_now(state, P0, forest, NORMAL, permission)
+    assert not defaults.may_cast_now(state, P0, bears)  # 117.1a, with the rules' permission
+
+
+def test_608_2g_a_granted_permission_applies_to_the_players_own_zone() -> None:
+    """A permission an effect gives (``GameState.cast_grants``) is one of
+    ``cast_permissions``'s, after the rules' own: for P0's cards in P0's hand only, not P1's
+    hand, nor P0's graveyard or library; and not for P1."""
+    scenario = Scenario(2)
+    (bears,) = scenario.hand(P0, ["Grizzly Bears"])
+    (theirs,) = scenario.hand(P1, ["Grizzly Bears"])
+    (dead,) = scenario.graveyard(P0, ["Grizzly Bears"])
+    (deep,) = scenario.library(P0, ["Grizzly Bears"])
+    state = scenario.build()
+    permission = CastPermission("608.2g", ZoneKind.HAND, CastTiming.DURING_RESOLUTION)
+    state.cast_grants.append(CastGrant(P0, permission))
+    assert defaults.cast_permissions(state, P0, bears) == (FROM_HAND, permission)
+    assert defaults.cast_permissions(state, P1, theirs) == (FROM_HAND,)
+    for obj in (theirs, dead, deep):
+        assert permission not in defaults.cast_permissions(state, P0, obj)

@@ -8,8 +8,10 @@ when: on announcement (601.2b, 113.7a) or on resolution, once per effect as it a
   (608.2h); nothing if the object is an illegal target (608.2b).
 - ``X()``: the value of X (107.3): for a spell, the value announced for it as it was cast
   (107.3a, 601.2b).
+- ``GreatestPower(group)``: "the greatest power among [creatures]" (208.1, 608.2h): the highest
+  power among the creatures in the group as the effect applies; 0 when the group is empty.
 
-Counts and "the greatest power among" (M2.10) and arithmetic join them with their cards.
+Counts and arithmetic join them with their cards.
 107.1b: an effect that uses a negative result as an amount uses 0 instead; the effects apply
 that (``DealDamage``, ``GainLife``, ``DrawCards``).
 """
@@ -18,7 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from resolve.cards.primitives.refs import ObjectRef, Phrasing
+from resolve.cards.primitives.refs import EachCreature, ObjectRef, Phrasing, You
 from resolve.values import Immutable
 
 _NUMBER_WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
@@ -63,5 +65,30 @@ class X(Immutable):
         return "X"
 
 
-Value = Fixed | PowerOf | X
+@dataclass(frozen=True)
+class GreatestPower(Immutable):
+    """ "The greatest power among [creatures]" (208.1): the highest power among the creatures
+    ``group`` refers to as the effect applies (608.2h), such as Rishkar's Expertise's "creatures
+    you control". With none it is 0 (Rishkar's Expertise's ruling: with no creature of power
+    above 0 you draw no cards); it can be negative (107.1b: the effect then uses 0)."""
+
+    group: EachCreature
+
+    def __post_init__(self) -> None:
+        if self.group.except_ is not None:
+            raise ValueError("no card takes the greatest power among other creatures yet")
+
+    def describe(self, phrasing: Phrasing) -> str:
+        """``"the greatest power among creatures you control"``."""
+        match self.group.controlled_by:
+            case None:
+                creatures = "creatures"
+            case You():
+                creatures = "creatures you control"
+            case _:
+                creatures = "creatures your opponents control"
+        return f"the greatest power among {creatures}"
+
+
+Value = Fixed | PowerOf | X | GreatestPower
 """A number in a definition."""

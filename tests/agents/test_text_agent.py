@@ -58,15 +58,18 @@ from resolve.state.spell import (
     FROM_HAND,
     NORMAL,
     Alternative,
+    AlternativeCost,
     AlternativeKind,
     Back,
+    CastPermission,
+    CastTiming,
     Half,
     TargetObject,
     TargetPlayer,
 )
 from resolve.state.turn import Phase
 from resolve.state.turn import Step as TurnStep
-from resolve.state.zones import Zone
+from resolve.state.zones import Zone, ZoneKind
 from tests.casting_support import activate, cast
 from tests.engine_support import AskTwice
 from tests.game_fixtures import choose_starting_player, request_of, start
@@ -311,6 +314,15 @@ def test_casting_and_paying_options_are_described_in_words() -> None:
     assert describe_option(ManaOption(Mana(ManaType.COLORLESS)), own) == "{C}"
     assert describe_option(ManaActivationOption(0, elves, 0), own) == (
         f"reverse ability 0 of Llanowar Elves #{elves}"
+    )
+    free = CastPermission(
+        "608.2g",
+        ZoneKind.HAND,
+        CastTiming.DURING_RESOLUTION,
+        alternative_cost=AlternativeCost.WITHOUT_PAYING_MANA_COST,
+    )
+    assert describe_option(CastSpellOption(hand, NORMAL, free), own) == (
+        f"cast Llanowar Elves #{hand} without paying its mana cost"
     )
 
 

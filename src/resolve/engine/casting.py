@@ -84,6 +84,7 @@ from resolve.decisions.spaces import (
     ChooseOne,
     ChooseSubset,
     ModesOption,
+    NamedOption,
     Number,
     ObjectOption,
     Option,
@@ -140,6 +141,10 @@ _ANNOUNCED = (
     SymbolKind.PHYREXIAN,
     SymbolKind.HYBRID_PHYREXIAN,
 )
+
+
+DECLINE = NamedOption("decline")
+"""The option of casting nothing when an effect allows a cast during its resolution (608.2g)."""
 
 
 class CastStage(Enum):
@@ -532,3 +537,14 @@ def _variant_gap(state: GameState, card: ObjectId, variant: CastVariant) -> None
                     )
         case FaceDown():
             raise NotImplementedRule("708.4: casting a card face down")
+
+
+@dataclass(slots=True)
+class CastDuringResolution(Task):
+    """608.2g: ``player`` may cast a spell under ``permission`` while a spell resolves (stub)."""
+
+    player: PlayerId
+    permission: CastPermission
+
+    def run(self, state: GameState) -> TaskResult:
+        raise NotImplementedRule("608.2g: casting a spell during a resolution (stub)")
