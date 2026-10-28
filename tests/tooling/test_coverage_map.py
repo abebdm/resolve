@@ -25,6 +25,7 @@ import pytest
 
 from resolve.citations import RULE_LINE, cited_rules
 from resolve.data.rules_text import PINNED_RULES_FILE, read_rules_text, rule_blocks
+from tools.gaps import ENGINE_DIR, Gap, find_gaps
 
 ROADMAP = Path(__file__).resolve().parents[2] / "docs" / "roadmap.md"
 
@@ -215,9 +216,8 @@ def test_a_row_in_the_wrong_table_fails(map_text: str, rules_text: str) -> None:
 
 
 def test_a_bad_milestone_fails(map_text: str, rules_text: str) -> None:
-    line = next(line for line in map_text.splitlines() if line.startswith("| 105 |"))
     for milestone in ("later", "M12", ""):
-        broken = break_row(map_text, "105", line.replace("| M2 |", f"| {milestone} |"))
+        broken = break_row(map_text, "105", f"| 105 | Colors | {milestone} | E |  |")
         assert map_problems(broken, rules_text), milestone
 
 
@@ -240,16 +240,14 @@ def test_an_out_of_scope_row_without_a_reason_fails(map_text: str, rules_text: s
 
 
 def test_an_out_of_scope_row_missing_from_the_list_fails(map_text: str, rules_text: str) -> None:
-    line = next(line for line in map_text.splitlines() if line.startswith("| 105 |"))
-    broken = break_row(map_text, "105", line.replace("| M2 | E |", "| out of scope | — |"))
+    broken = break_row(map_text, "105", "| 105 | Colors | out of scope | — | a reason |")
     problems = map_problems(broken, rules_text)
     assert "105 is out of scope but isn't in the out-of-scope table" in problems
 
 
 def test_a_citation_of_a_missing_rule_fails(map_text: str, rules_text: str) -> None:
-    line = next(line for line in map_text.splitlines() if line.startswith("| 105 |"))
     missing = "105." + "99"  # written in pieces: a citation checker reads this file too
-    broken = break_row(map_text, "105", line.replace("| E |  |", f"| E | see {missing} |"))
+    broken = break_row(map_text, "105", f"| 105 | Colors | M2 | E | see {missing} |")
     assert f"105 cites {missing}, which isn't in the pinned CR" in map_problems(broken, rules_text)
 
 
@@ -258,3 +256,67 @@ def test_the_out_of_scope_table_naming_a_missing_rule_fails(map_text: str, rules
     assert "the out-of-scope table names 799, which isn't in the CR" in map_problems(
         broken, rules_text
     )
+
+
+# --- The gaps and the map ----------------------------------------------------------------------
+
+# A milestone not ticked off: "M4" without a following "✓". Steps ("M2.3") only say which step
+# did a part.
+OPEN_MILESTONE = re.compile(r"\bM\d\b(?!\.\d)(?! ✓)")
+
+
+def gap_row(rule: str) -> str:
+    """The map row a gap's rule belongs to: its keyword (701.x, 702.x) or its section."""
+    keyword = re.match(r"70[12]\.\d+", rule)
+    return keyword.group(0) if keyword else rule[:3]
+
+
+def gap_problems(map_text: str, gaps: list[Gap]) -> list[str]:
+    """Each ``NotImplementedRule`` gap (``tools/gaps.py``) whose map row says its rules are all
+    done: a row must leave room for the gap with a milestone not ticked off ("M4", "601.3b
+    M6"), a set-mechanic or exotic tier (implemented in M9 unless a deck needs it), or "out of
+    scope". One sentence per gap; empty when every gap has an open row."""
+    rows = {cells[0]: cells for _, cells, _ in map_rows(map_text) if len(cells) == 5}
+    problems: list[str] = []
+    for gap in gaps:
+        number = gap_row(gap.rule)
+        cells = rows.get(number)
+        if cells is None:
+            problems.append(f"gap {gap.rule} ({gap.what}): no row {number} in the map")
+            continue
+        _, _, milestone, tier, _ = cells
+        if OPEN_MILESTONE.search(milestone) or tier in ("S", "X") or milestone == "out of scope":
+            continue
+        problems.append(f"gap {gap.rule} ({gap.what}): row {number} is all done: {milestone!r}")
+    return problems
+
+
+def test_every_gap_has_an_open_row_in_the_map(map_text: str) -> None:
+    """``tools/gaps.py`` agrees with the map (plan M2.11): every rule the engine raises
+    ``NotImplementedRule`` for belongs to a row that leaves a milestone for it."""
+    gaps, unlistable = find_gaps(ENGINE_DIR)
+    assert unlistable == []
+    assert gaps, "the engine has gaps to check"
+    assert gap_problems(map_text, gaps) == []
+
+
+def test_a_gap_in_a_row_ticked_off_fails(map_text: str) -> None:
+    """508.1 (declaring attackers) is a gap; a map claiming 508 done in M3 is wrong."""
+    gap = Gap("508.1", "declaring attackers", ENGINE_DIR / "engine" / "turns.py", 1)
+    broken = break_row(map_text, "508", "| 508 | Declare Attackers Step | M3 ✓ | E |  |")
+    assert gap_problems(broken, [gap]) == [
+        "gap 508.1 (declaring attackers): row 508 is all done: 'M3 ✓'"
+    ]
+    assert gap_problems(map_text, [gap]) == []
+
+
+def test_a_gap_of_a_keyword_is_checked_against_the_keywords_row(map_text: str) -> None:
+    """702.11d (a player with hexproof from a quality) belongs to the hexproof row (702.11), not
+    to the section 702; a set-mechanic row (702.102, fuse) leaves room for its gaps."""
+    gap = Gap("702.11d", "a player with hexproof from", ENGINE_DIR / "rules" / "legality.py", 1)
+    broken = break_row(map_text, "702.11", "| 702.11 | Hexproof | M2 ✓ (M2.8) | E | D |")
+    assert gap_problems(broken, [gap]) == [
+        "gap 702.11d (a player with hexproof from): row 702.11 is all done: 'M2 ✓ (M2.8)'"
+    ]
+    fuse = Gap("702.102", "casting a fused split spell", ENGINE_DIR / "engine" / "casting.py", 1)
+    assert gap_problems(map_text, [fuse]) == []

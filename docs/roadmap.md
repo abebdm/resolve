@@ -617,34 +617,34 @@ earlier milestones must leave room for every row in this map.
 | CR | Name | Milestone | Tier | Notes |
 |---|---|---|---|---|
 | 100 | General | M0 ✓ | E |  |
-| 101 | The Magic Golden Rules | M1 ✓ (101.4); 101.2 system M2 (skeleton M2.1 ✓, casting M2.3 ✓, targeting and destroying M2.6 ✓, keyword prohibitions and countering M2.8 ✓); 101.1, 101.3 with each effect | E | `allowed` (design.md §17.2); land plays are its first action |
+| 101 | The Magic Golden Rules | M1 ✓ (101.4); 101.2 system M2 ✓ (skeleton M2.1 ✓, casting M2.3 ✓, targeting and destroying M2.6 ✓, keyword prohibitions and countering M2.8 ✓); 101.1, 101.3 with each effect | E | `allowed` (design.md §17.2); land plays are its first action |
 | 102 | Players | M1 ✓ | E | teams (102.3-102.4): out of scope with the team variants |
 | 103 | Starting the Game | M1 ✓; 103.6 M5; 103.2b M7 | E | `opening_hand_actions`, `mulligan_options`, `starting_life`, `starting_hand_size`: default functions in place (M2.1 ✓) |
 | 104 | Ending the Game | M1 ✓; 104.3c-d M4, M7; 104.4b M7; alternative wins and losses M5 | E | `can_lose_game`: default function in place (M2.1 ✓) |
-| 105 | Colors | M2 | E |  |
-| 106 | Mana | M1 ✓, M2 (spending mana, 106.4a: M2.3 ✓; restrictions 106.6, any color 106.1a, undefined mana 106.5: M2.4 ✓); 106.7 M6 | E | `Mana.restriction`, `ManaRestriction` |
-| 107 | Numbers and Symbols | M2 (107.4 symbols parsed: M2.2 ✓; 107.3a X announced: M2.7 ✓; 107.3b M2.10 ✓); 107.3c, 107.3f with their first card; 107.4e-f, 107.4h M9; 107.14 M4; 107.15, 107.17 M9 | E | hybrid and Phyrexian: M2 builds the announcement stage |
+| 105 | Colors | M2 ✓ (colors of objects, 105.1-105.2: M2.2; choosing a color, 105.4: M2.4); 105.3 M5 (color-changing effects); 105.5 with its first card | E |  |
+| 106 | Mana | M1 ✓, M2 ✓ (spending mana, 106.4a: M2.3 ✓; restrictions 106.6, any color 106.1a, undefined mana 106.5: M2.4 ✓); 106.7 M6 | E | `Mana.restriction`, `ManaRestriction` |
+| 107 | Numbers and Symbols | M2 ✓ (107.4 symbols parsed: M2.2 ✓; 107.3a X announced: M2.7 ✓; 107.3b M2.10 ✓); 107.3c, 107.3f with their first card; 107.4e-f, 107.4h M9; 107.14 M4; 107.15, 107.17 M9 | E | hybrid and Phyrexian: M2 builds the announcement stage |
 | 108 | Cards | M0 ✓ | E |  |
-| 109 | Objects | M1 ✓; 109.3 with each layout (omen and preparation read as their normal part: M2.2 ✓; 720.4, 722.4) | E |  |
+| 109 | Objects | M1 ✓; 109.3 with each layout in its own row (M4, M5, M9; omen and preparation read as their normal part: M2.2 ✓; 720.4, 722.4); 109.4c with emblems (M4) | E |  |
 | 110 | Permanents | M1 ✓; statuses with their mechanics | E |  |
 | 111 | Tokens | M4 | E | D (Regisaur Alpha, Generous Gift) |
-| 112 | Spells | M2 (spells on the stack with their record: M2.3 ✓); copies M5 | E |  |
-| 113 | Abilities | M2 (spell abilities 113.3a: M2.6 ✓; 113.6 M2.8 ✓: permanents' abilities only on the battlefield, 113.6g can't be countered); M4; M5 | E | `CantBeCountered` |
+| 112 | Spells | M2 ✓ (spells on the stack with their record: M2.3 ✓); copies M5 | E |  |
+| 113 | Abilities | M2 ✓ (spell abilities 113.3a: M2.6 ✓; 113.6 M2.8 ✓: permanents' abilities only on the battlefield, 113.6g can't be countered); M4; M5 | E | `CantBeCountered` |
 | 114 | Emblems | M4 | E | with planeswalkers |
-| 115 | Targets | M2 (115.1-115.6, 115.10: M2.6 ✓; shroud, hexproof and protection M2.8 ✓); 115.7 M5 | E | `target_problem` (M2.6 ✓) |
+| 115 | Targets | M2 ✓ (115.1-115.6, 115.10: M2.6 ✓; shroud, hexproof and protection M2.8 ✓); 115.7 M5 | E | `target_problem` (M2.6 ✓) |
 | 116 | Special Actions | M1 ✓ (116.2a); the others with their mechanics | E | 116.2i out of scope (Planechase); 116.2j is for conspiracy cards (315) |
-| 117 | Timing and Priority | M1 ✓, M2 (117.1a casting, 117.3b-c, 117.4 with the stack: M2.3 ✓; flash M2.8 ✓) | E |  |
-| 118 | Costs | M2 (mana: paying generic, colored and {C} mana M2.3 ✓; mana costs of mana abilities, restricted mana M2.4 ✓; X M2.7 ✓; generic reductions 118.7, 118.7a: M2.9 ✓; 118.9 "without paying its mana cost", 118.9a-d, 118.6a: M2.10 ✓; other alternative costs with their keywords); 118.7b-g with their first cards (colored, colorless, hybrid, Phyrexian, snow reductions); M4 (other costs, 118.12) | E | `resolve.rules.costs` |
-| 119 | Life | M2 (gaining life, 119.3, 119.10: M2.6 ✓); paying life M4 | E |  |
-| 120 | Damage | M2 (noncombat: 120.1-120.2, 120.3a, 120.3e, 120.4b, 120.8: M2.6 ✓), M3 (combat), M4 (120.3b-d, 120.3g-h) | E | the 120.3 table is `DamageDealt.apply` |
+| 117 | Timing and Priority | M1 ✓, M2 ✓ (117.1a casting, 117.3b-c, 117.4 with the stack: M2.3 ✓; flash M2.8 ✓) | E |  |
+| 118 | Costs | M2 ✓ (mana: paying generic, colored and {C} mana M2.3 ✓; mana costs of mana abilities, restricted mana M2.4 ✓; X M2.7 ✓; generic reductions 118.7, 118.7a: M2.9 ✓; 118.9 "without paying its mana cost", 118.9a-d, 118.6a: M2.10 ✓; other alternative costs with their keywords); 118.7b-g with their first cards (colored, colorless, hybrid, Phyrexian, snow reductions); M4 (other costs, 118.12) | E | `resolve.rules.costs` |
+| 119 | Life | M2 ✓ (gaining life, 119.3, 119.10: M2.6 ✓); paying life M4 | E |  |
+| 120 | Damage | M2 ✓ (noncombat: 120.1-120.2, 120.3a, 120.3e, 120.4b, 120.8: M2.6 ✓), M3 (combat), M4 (120.3b-d, 120.3g-h) | E | the 120.3 table is `DamageDealt.apply` |
 | 121 | Drawing a Card | M1 ✓; 121.6 M6 | E |  |
 | 122 | Counters | M4 | E | D |
 | 123 | Stickers | M5 (stickers change names, abilities, power and toughness: 123.6-123.8); M7 (sticker sheets chosen before the game, 123.2) | S | Unfinity: 47 cards that use stickers and 48 sticker sheets are Commander-legal |
 | 200 | General | — | — | nothing to implement |
 | 201 | Name | M1 ✓; 201.4 M4 | E |  |
-| 202 | Mana Cost and Color | M2 (M2.2 ✓: 202.1-202.3; 202.3e on the stack: M2.7 ✓) | E |  |
+| 202 | Mana Cost and Color | M2 ✓ (M2.2 ✓: 202.1-202.3; 202.3e on the stack: M2.7 ✓) | E |  |
 | 203 | Illustration | out of scope | — | no game rules |
-| 204 | Color Indicator | M2 (M2.2 ✓) | E | colors come from the card data |
+| 204 | Color Indicator | M2 ✓ (M2.2 ✓) | E | colors come from the card data |
 | 205 | Type Line | M1 ✓; type changes M5 | E |  |
 | 206 | Expansion Symbol | M9 | X | 206.3: City in a Bottle, Golgothian Sylex and Apocalypse Chime refer to names "originally printed" in a set; 206.3a-c list those names, so no extra card data is needed |
 | 207 | Text Box | M1 ✓ | E | ability words have no rules meaning (207.2c) |
@@ -655,13 +655,13 @@ earlier milestones must leave room for every row in this map.
 | 212 | Life Modifier | out of scope | — | Vanguard |
 | 213 | Information Below the Text Box | out of scope | — | no game rules |
 | 300 | General | M1 ✓ | E |  |
-| 301 | Artifacts | M2 (casting artifact spells: M2.3 ✓); Equipment M4; Vehicles M5; Fortifications M9 | E |  |
-| 302 | Creatures | M1 ✓, M2 (302.6 for {T} costs: M2.4 ✓), M3 (302.6 for attacking) | E | `can_tap_for_cost`, `GameObject.entered_turn`, `Player.last_turn_began` |
-| 303 | Enchantments | M2; Auras M4 | E | Sagas, Classes, Cases and Rooms have their own rows |
-| 304 | Instants | M2 | E |  |
+| 301 | Artifacts | M2 ✓ (casting artifact spells: M2.3 ✓); Equipment M4; Vehicles M5; Fortifications M9 | E |  |
+| 302 | Creatures | M1 ✓, M2 ✓ (302.6 for {T} costs: M2.4 ✓), M3 (302.6 for attacking) | E | `can_tap_for_cost`, `GameObject.entered_turn`, `Player.last_turn_began` |
+| 303 | Enchantments | M2 ✓ (casting enchantment spells, 303.1-303.2: M2.3); Auras M4 | E | Sagas, Classes, Cases and Rooms have their own rows |
+| 304 | Instants | M2 ✓ (304.1 timing: M2.3, flash M2.8; 304.2 resolving: M2.6); 304.4 with the first effect that puts a card onto the battlefield (M4); 304.5 with activated abilities (M4) | E |  |
 | 305 | Lands | M1 ✓; modifiers M5 | E | `land_plays_allowed`, `land_play_options`: default functions in place (M2.1 ✓) |
 | 306 | Planeswalkers | M4 (attacking them M3) | E |  |
-| 307 | Sorceries | M2 | E |  |
+| 307 | Sorceries | M2 ✓ (307.1 timing: M2.3; 307.2 resolving: M2.6); 307.4 with the first effect that puts a card onto the battlefield (M4); 307.5 with activated abilities (M4) | E |  |
 | 308 | Kindreds | M1 ✓ | E |  |
 | 309 | Dungeons | M7 | S | with venture (701.49) |
 | 310 | Battles | M4 (attacking them M3) | S | M3 leaves room for attacking battles |
@@ -675,8 +675,8 @@ earlier milestones must leave room for every row in this map.
 | 402 | Hand | M1 ✓; modifiers M5 | E | D (Reliquary Tower); `maximum_hand_size`: default function in place (M2.1 ✓) |
 | 403 | Battlefield | M1 ✓ | E |  |
 | 404 | Graveyard | M1 ✓ | E |  |
-| 405 | Stack | M2 (405.1-405.2, 405.5: M2.3 ✓); 405.3 M4 | E |  |
-| 406 | Exile | M2; face-down exile M4 | E |  |
+| 405 | Stack | M2 ✓ (405.1-405.2, 405.5: M2.3 ✓); 405.3 M4 | E |  |
+| 406 | Exile | M2 ✓ (exiling, 406.2-406.3: M2.6); face-down exile and the rest M4 | E |  |
 | 407 | Ante | M7 | X | the 9 ante cards are banned in every format, not never legal; they need an option to play for ante (407.2, 407.3) |
 | 408 | Command | M7; emblems M4 | E |  |
 | 500 | General | M1 ✓; 500.7-500.10 M3; 500.11 M6 | E | `turn_structure`, `is_skipped`, `next_turn`, `mana_that_empties`, `TurnState.segments`: default functions in place (M2.1 ✓) |
@@ -695,39 +695,39 @@ earlier milestones must leave room for every row in this map.
 | 513 | End Step | M1 ✓ | E |  |
 | 514 | Cleanup Step | M1 ✓; 514.2 effects ending M5 | E |  |
 | 600 | General | — | — | nothing to implement |
-| 601 | Casting Spells | M2 (M2.3 ✓: 601.2a, 601.2e-i, 601.3, 601.3e variants and permissions, 601.6; 601.2c M2.6 ✓; 601.2b modes and X: M2.7 ✓, hybrid and Phyrexian announcements M9; 601.2f increases, reductions and lock-in, 601.8: M2.9 ✓; casting during resolution with a permission's alternative cost: M2.10 ✓; 601.2d M4; 601.3b M6) | E | gaps per variant: 709.3, 712.11a-b, 715.3, 718.3, 720.3, 722.3, 708.4, 702.102; 903.8 |
+| 601 | Casting Spells | M2 ✓ (M2.3 ✓: 601.2a, 601.2e-i, 601.3, 601.3e variants and permissions, 601.6; 601.2c M2.6 ✓; 601.2b modes and X: M2.7 ✓, hybrid and Phyrexian announcements M9; 601.2f increases, reductions and lock-in, 601.8: M2.9 ✓; casting during resolution with a permission's alternative cost: M2.10 ✓; 601.2d M4; 601.3b M6) | E | gaps per variant: 709.3, 712.11a-b, 715.3, 718.3, 720.3, 722.3, 708.4, 702.102; 903.8 |
 | 602 | Activating Activated Abilities | M4 (for mana abilities, 602.2b mana costs and 602.5 "activate only if": M2.4 ✓) | E |  |
 | 603 | Handling Triggered Abilities | M4 | E |  |
-| 604 | Handling Static Abilities | M5 (M2: keyword statics M2.8 ✓, cost-reduction statics M2.9 ✓) | E |  |
-| 605 | Mana Abilities | M1 ✓, M2 (605.3a while casting: M2.3 ✓; 605.2, 605.3a while paying a mana ability's cost, 605.3c: M2.4 ✓); 605.1b M4 | E |  |
+| 604 | Handling Static Abilities | M5 (M2 ✓: keyword statics M2.8 ✓, cost-reduction statics M2.9 ✓) | E |  |
+| 605 | Mana Abilities | M1 ✓, M2 ✓ (605.3a while casting: M2.3 ✓; 605.2, 605.3a while paying a mana ability's cost, 605.3c: M2.4 ✓); 605.1b M4 | E |  |
 | 606 | Loyalty Abilities | M4 | E |  |
 | 607 | Linked Abilities | M4 | E | D (hideaway) |
-| 608 | Resolving Spells and Abilities | M2 (608.1, 608.3a: M2.3 ✓; 608.2a-c, 608.2h, 608.2m-n: M2.6 ✓; 608.2c for modes: M2.7 ✓; 608.2g M2.10 ✓); 608.2d-f, 608.2i, 608.2k M4 | E | `resolved_spell_destination` (608.2n) in place (M2.3 ✓), called from M2.6 ✓ |
-| 609 | Effects | M2 (one-shot effects of spells: M2.6 ✓) | E |  |
-| 610 | One-Shot Effects | M2; 610.3 M4 | E |  |
+| 608 | Resolving Spells and Abilities | M2 ✓ (608.1, 608.3a: M2.3 ✓; 608.2a-c, 608.2h, 608.2m-n: M2.6 ✓; 608.2c for modes: M2.7 ✓; 608.2g M2.10 ✓); 608.2d-f, 608.2i, 608.2k M4 | E | `resolved_spell_destination` (608.2n) in place (M2.3 ✓), called from M2.6 ✓ |
+| 609 | Effects | M2 ✓ (one-shot effects of spells: M2.6 ✓) | E |  |
+| 610 | One-Shot Effects | M2 ✓ (one-shot effects, 610.1: M2.6); 610.2-610.3 M4; 610.4 with phasing (M9); 610.5 M5 | E |  |
 | 611 | Continuous Effects | M5 | E |  |
 | 612 | Text-Changing Effects | M5 (typed words and `rewrite_words`: M2.2 ✓) | X |  |
 | 613 | Interaction of Continuous Effects | M5 | E |  |
 | 614 | Replacement Effects | M6 | E |  |
 | 615 | Prevention Effects | M6 | E |  |
 | 616 | Interaction of Replacement and/or Prevention Effects | M6 | E |  |
-| 700 | General | M2 (700.2, 700.2a, 700.2c-d, 700.2f: M2.7 ✓; 700.2b M4 with triggered abilities; 700.2e, 700.2g-i with their cards); the others with their mechanics | E |  |
+| 700 | General | M2 ✓ (700.2, 700.2a, 700.2c-d, 700.2f: M2.7 ✓; 700.2b M4 with triggered abilities; 700.2e, 700.2g-i with their cards); the others with their mechanics | E |  |
 | 703 | Turn-Based Actions | M1 ✓, M3 | E |  |
 | 704 | State-Based Actions | M1 ✓ (704.5a, b, f, g; 704.5g and indestructible: M2.8 ✓); 704.5c, d, i, j, m, n, p, q, r, z M4; 704.5e M5; 704.5h M3; 704.5k, s, t, u, v-y M9 | E | 704.5j is the legend rule; 704.5u is space sculptor |
 | 705 | Flipping a Coin | M2 | S |  |
 | 706 | Rolling a Die | M2 | S |  |
 | 707 | Copying Objects | M5 | E | D (Sunfrill Imitator, offspring, myriad) |
-| 708 | Face-Down Spells and Permanents | M5 (casting room M2: `FaceDown` variant, M2.3 ✓) | S | morph, manifest, disguise, cloak |
-| 709 | Split Cards | M5 (casting room M2: halves offered, 709.3 gap, M2.3 ✓) | S | split cards and Rooms |
+| 708 | Face-Down Spells and Permanents | M5 (casting room M2 ✓: `FaceDown` variant, M2.3 ✓) | S | morph, manifest, disguise, cloak |
+| 709 | Split Cards | M5 (casting room M2 ✓: halves offered, 709.3 gap, M2.3 ✓) | S | split cards and Rooms |
 | 710 | Flip Cards | M5 | X |  |
 | 711 | Leveler Cards | M5 (level up itself, 702.87, M4) | S | D (Joraga Treespeaker): level symbols are static abilities (711.2) |
-| 712 | Double-Faced Cards | M4 (MDFC casting through M2's cast variants: back face offered, 712.11b gap, M2.3 ✓) | E | D (Dowsing Dagger) |
+| 712 | Double-Faced Cards | M4 (MDFC casting through M2's cast variants ✓: back face offered, 712.11b gap, M2.3 ✓) | E | D (Dowsing Dagger) |
 | 713 | Substitute Cards | out of scope | — | substitute cards stand in for physical double-faced cards; the engine tracks faces itself |
 | 714 | Saga Cards | M4 | S |  |
-| 715 | Adventurer Cards | M4 (casting room M2: `Alternative(ADVENTURE)`, M2.3 ✓) | S |  |
+| 715 | Adventurer Cards | M4 (casting room M2 ✓: `Alternative(ADVENTURE)`, M2.3 ✓) | S |  |
 | 716 | Class Cards | M5 | S |  |
 | 717 | Attraction Cards | M7 (an Attraction deck in the command zone, 717.2; the junkyard, 717.6) | S | Unfinity: 22 Attractions without the acorn stamp are Commander-legal |
-| 718 | Prototype Cards | M5 (casting room M2: `Alternative(PROTOTYPE)`, M2.3 ✓) | S |  |
+| 718 | Prototype Cards | M5 (casting room M2 ✓: `Alternative(PROTOTYPE)`, M2.3 ✓) | S |  |
 | 719 | Case Cards | M4 | S |  |
 | 720 | Omen Cards | M2 | S | casting and resolution; 720.4 normal characteristics M2.2 ✓ (plan corrected: not a 109.3 gap); 720.3 variant gap M2.3 ✓ |
 | 721 | Station Cards | M4 | S |  |
@@ -742,7 +742,7 @@ earlier milestones must leave room for every row in this map.
 | 730 | Merging with Permanents | M5 | X | mutate |
 | 731 | Day and Night | M7 | S |  |
 | 732 | Taking Shortcuts | M7 | E | how much of it is worth implementing: design.md §16 |
-| 733 | Handling Illegal Actions | M2 (M2.3 ✓; reversing a mana ability activation and the kept-abilities dependency check of 733.1: M2.4 ✓; 733.2 for a cast during resolution, asked again: M2.10 ✓) | E | checkpoint and restore (`resolve.state.checkpoint`), `resolve.engine.reversal` |
+| 733 | Handling Illegal Actions | M2 ✓ (M2.3 ✓; reversing a mana ability activation and the kept-abilities dependency check of 733.1: M2.4 ✓; 733.2 for a cast during resolution, asked again: M2.10 ✓); keeping the results of sacrifice and discard (733.1) M4 | E | checkpoint and restore (`resolve.state.checkpoint`), `resolve.engine.reversal` |
 | 800 | General | M1 ✓ (800.4a, h, j, k); the rest M7 | E |  |
 | 801 | Limited Range of Influence Option | out of scope | — | Commander doesn't use it (903.2) |
 | 802 | Attack Multiple Players Option | M3, M7 | E | Commander's multiplayer default |
@@ -772,17 +772,17 @@ earlier milestones must leave room for every row in this map.
 | 702.5 | Enchant | M4 | E | Aura spells' targets use M2's targeting |
 | 702.6 | Equip | M4 | E | D |
 | 702.7 | First Strike | M3 | E | D |
-| 702.8 | Flash | M2 (M2.8 ✓) | E | `Flash`, read by `may_cast_now` |
+| 702.8 | Flash | M2 ✓ (M2.8 ✓) | E | `Flash`, read by `may_cast_now` |
 | 702.9 | Flying | M3 | E | D |
 | 702.10 | Haste | M3 | E | D; the 302.6 hook is `defaults.can_tap_for_cost` (M2.4 ✓); the attack half shares its test |
-| 702.11 | Hexproof | M2 (M2.8 ✓) | E | D; including "hexproof from"; a player's from `player_abilities` |
-| 702.12 | Indestructible | M2 (M2.8 ✓) | E | D |
+| 702.11 | Hexproof | M2 ✓ (M2.8); a player with "hexproof from" (702.11d) M5, with its first card | E | D; including "hexproof from"; a player's from `player_abilities` |
+| 702.12 | Indestructible | M2 ✓ (M2.8 ✓) | E | D |
 | 702.13 | Intimidate | M3 | E | retired evergreen |
 | 702.14 | Landwalk | M3 | E | retired evergreen |
 | 702.15 | Lifelink | M3 | E | D; noncombat damage too |
-| 702.16 | Protection | M2 (targeting: M2.8 ✓); M3 (blocking); M4 (enchant, equip); M6 (damage: `NotImplementedRule("702.16e")` until then) | E | D; a player as the quality (702.16k) with its first card |
+| 702.16 | Protection | M2 ✓ (targeting: M2.8 ✓); M3 (blocking); M4 (enchant, equip); M6 (damage: `NotImplementedRule("702.16e")` until then) | E | D; a player as the quality (702.16k) with its first card |
 | 702.17 | Reach | M3 | E | D |
-| 702.18 | Shroud | M2 (M2.8 ✓) | E | D |
+| 702.18 | Shroud | M2 ✓ (M2.8 ✓) | E | D |
 | 702.19 | Trample | M3 | E | D |
 | 702.20 | Vigilance | M3 | E | D |
 | 702.21 | Ward | M4 | E | D; M2 logs the targets chosen |
@@ -968,20 +968,20 @@ earlier milestones must leave room for every row in this map.
 | 701.2 | Activate | M4 | E |  |
 | 701.3 | Attach | M4 | E |  |
 | 701.4 | Behold | M4 | S | a cost |
-| 701.5 | Cast | M2 | E |  |
-| 701.6 | Counter | M2 (M2.8 ✓) | E | ward uses it (M4); `CounterSpell`, `SpellCountered` |
+| 701.5 | Cast | M2 ✓ (M2.3) | E |  |
+| 701.6 | Counter | M2 ✓ (M2.8 ✓) | E | ward uses it (M4); `CounterSpell`, `SpellCountered` |
 | 701.7 | Create | M4 | E | D (tokens) |
-| 701.8 | Destroy | M2 (M2.6 ✓; indestructible M2.8 ✓) | E | `allowed(DestroyAction)` |
+| 701.8 | Destroy | M2 ✓ (M2.6 ✓; indestructible M2.8 ✓) | E | `allowed(DestroyAction)` |
 | 701.9 | Discard | M1 ✓ | E |  |
 | 701.10 | Double | M4 (counters), M5 (power and toughness) | E | D |
 | 701.11 | Triple | M5 | S |  |
 | 701.12 | Exchange | M5 | E |  |
-| 701.13 | Exile | M2 (M2.6 ✓) | E |  |
+| 701.13 | Exile | M2 ✓ (M2.6 ✓) | E |  |
 | 701.14 | Fight | M4 | E | D |
 | 701.15 | Goad | M5 | E | common in Commander; needs durations |
 | 701.16 | Investigate | M4 | E | Clue tokens |
 | 701.17 | Mill | M4 | E |  |
-| 701.18 | Play | M1 ✓ (lands), M2 | E |  |
+| 701.18 | Play | M1 ✓ (lands), M2 ✓ | E |  |
 | 701.19 | Regenerate | M6 | E | D |
 | 701.20 | Reveal | M4 | E | D |
 | 701.21 | Sacrifice | M4 | E | D |
