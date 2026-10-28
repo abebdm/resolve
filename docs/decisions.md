@@ -19,6 +19,25 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-28: M2.10: the fuzz summary test plays pinned decks
+- **Decision (the user's, 2026-10-28):** `test_a_default_run_plays_turns_lands_and_spells_and_
+  reports_them` plays the default run's first five games with its own pinned recipes, card lists
+  written in the test (`PINNED_NONCREATURES`, `PINNED_CREATURES`: the excerpt's cards as of
+  M2.9), by replacing `fuzz_tool.recipe_cards` in the test. Its thresholds on what the games do
+  (some game reaches turn 10; lands, mana, casts, resolutions and reversals happen; both kinds
+  of seat have payable casts and the auto-paying seats reverse none) stay. A separate test,
+  `test_the_default_run_with_every_current_card_completes_and_reports_consistently`, plays the
+  whole default run (ten games, both formats) with the current recipes and checks only that the
+  decks are those recipes, every game ends (a loss or an allowed gap) and the summary reports
+  exactly what the games did (`check_summary`, shared by both), with no threshold on random
+  outcomes.
+- **Why:** the games were built from every implemented card, so each new card reshuffled them
+  and broke a threshold: M2.7 (five games instead of four), M2.9 (the random seats' payable
+  reversal) and M2.10 (adding Rishkar's Expertise left the longest of the five games at turn 9,
+  not 10). Pinning the decks fixes the cause; the separate test keeps the run with every current
+  card checked.
+- **Where:** `tests/fuzz/test_fuzz_summary.py`.
+
 ### 2026-10-28: M2.10: casting during a resolution is a granted permission and its own decision
 - **Decision:**
   - A permission an effect gives for now is a `CastGrant(player, permission)` in

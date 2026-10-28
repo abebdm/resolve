@@ -35,6 +35,6 @@ Task: implement step M2.10 of `docs/plans/m2.md` (prompt in its "Prompts" sectio
 
 ## Open questions
 
-- `test_a_default_run_plays_turns_lands_and_spells_and_reports_them` asserts some of the first
+- RESOLVED (user: pin the decks; done, decisions.md 2026-10-28). Was: the fuzz summary test asserts some of the first
   five default-run games reaches turn 10; with Rishkar's Expertise in the decks the max is 9
   (main: 11; 20 games now: 14). Changing it is the user's call (never loosen a test).
