@@ -43,14 +43,14 @@ from resolve.events.cards import CardDrawn
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.spell import NORMAL
 from resolve.state.turn import Phase
-from resolve.state.zones import Zone
+from resolve.state.zones import BATTLEFIELD, STACK, Zone
 from tests.casting_support import (
+    activate,
     answered,
     cast,
     cast_during_resolution,
     options,
     pass_,
-    pay,
     records,
 )
 from tests.game_fixtures import request_of
@@ -121,7 +121,7 @@ def test_with_no_creatures_draws_nothing_but_may_still_cast() -> None:
     assert records(state, CardDrawn) == []
     assert CastSpellOption(giant, NORMAL, free(expertise)) in options(state)
     run_script(state, cast_during_resolution(giant, free(expertise)))
-    assert names(state, Zone.stack()) == ["Hill Giant"]
+    assert names(state, STACK) == ["Hill Giant"]
 
 
 def test_a_creature_with_0_power_draws_nothing() -> None:
@@ -148,7 +148,7 @@ def test_it_may_cast_a_card_it_drew() -> None:
     assert first is not None
     assert options(state)[1] == CastSpellOption(first, NORMAL, free(expertise))
     run_script(state, cast_during_resolution(first, free(expertise)))
-    assert names(state, Zone.stack()) == ["Grizzly Bears"]
+    assert names(state, STACK) == ["Grizzly Bears"]
     assert names(state, Zone.graveyard(P0)) == ["Rishkar's Expertise"]
 
 
@@ -159,11 +159,11 @@ def test_the_power_is_read_as_it_resolves() -> None:
     draws 2."""
     scenario = Scenario(2)
     expertise_on_stack(scenario)
-    scenario.battlefield(P0, ["Test Wall", "Forest", "Forest"])
+    _, first, second = scenario.battlefield(P0, ["Test Wall", "Forest", "Forest"])
     (bear,) = scenario.hand(P0, ["Ashcoat Bear"])
     state = scenario.build()
-    run_script(state, cast(bear), pay(), pass_(P0), pass_(P1))
-    assert names(state, Zone.battlefield()) == ["Test Wall", "Forest", "Forest", "Ashcoat Bear"]
+    run_script(state, cast(bear), activate(first), activate(second), pass_(P0), pass_(P1))
+    assert names(state, BATTLEFIELD) == ["Test Wall", "Forest", "Forest", "Ashcoat Bear"]
     assert records(state, CardDrawn) == []
     run_script(state, pass_(P0), pass_(P1))
     assert len(records(state, CardDrawn)) == 2

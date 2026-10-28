@@ -172,8 +172,8 @@ class SpellCostIncrease(SpellCostModifier):
 TEST_THORN = CardDefinition("Test Thorn", abilities=(SpellCostIncrease(),))
 # Test Growth ({X}{G}): a green sorcery with {X} and no text.
 TEST_GROWTH = CardDefinition("Test Growth")
-# Test Vision (no mana cost): "Draw a card."
-TEST_VISION = CardDefinition("Test Vision", spell=TEST_PONDER.spell)
+# Test Insight (no mana cost): "Draw a card."
+TEST_INSIGHT = CardDefinition("Test Insight", spell=TEST_PONDER.spell)
 
 
 def registry() -> CardRegistry:
@@ -253,7 +253,7 @@ def scenario_registry() -> CardRegistry:
             TEST_THORN,
             TEST_GROWTH,
             *card_draw.DEFINITIONS,
-            TEST_VISION,
+            TEST_INSIGHT,
             *map(CardDefinition, extra),
         ]
     )
@@ -276,7 +276,7 @@ def scenario_database() -> CardDatabase:
     extra += [fx.TEST_PRISMATIC_KNIGHT, fx.TEST_UNTOUCHABLE, fx.TEST_TWIN_FLASH]
     extra += [fx.TEST_INDESTRUCTIBLE_WISP, fx.TEST_STUBBORN_SPELL, fx.TEST_GOLD_SHOCK]
     extra += [fx.TEST_ADVENTURER, fx.EMERALD_MEDALLION, fx.KINJALLIS_CALLER, fx.TEST_THORN]
-    extra += [fx.TEST_GROWTH, fx.RISHKARS_EXPERTISE, fx.TEST_TWO_TONE, fx.TEST_VISION]
+    extra += [fx.TEST_GROWTH, fx.RISHKARS_EXPERTISE, fx.TEST_TWO_TONE, fx.TEST_INSIGHT]
     lands = [fx.PLAINS, fx.ISLAND, fx.SWAMP, fx.MOUNTAIN]
     return CardDatabase(parse_oracle_cards([*fx.default_cards(), *lands, *extra]))
 

@@ -12,11 +12,12 @@ The functions and their defaults:
 |----------------------------------|----------------------|--------------------------------------|
 | ``land_plays_allowed``           | 305.2                | one land per turn                    |
 | ``land_play_options``            | 305.1                | lands in the hand, sorcery timing    |
-| ``cast_permissions``             | 601.3, 903.8         | from the hand; commanders            |
+| ``cast_permissions``             | 601.3, 903.8, 608.2g | from the hand; commanders; effects'  |
+|                                  |                      | grants (``GameState.cast_grants``)   |
 | ``cast_options``                 | 601.3, 117.1a        | each permission and layout variant   |
 | ``has_sorcery_timing``           | 117.1a, 307.1        | own main phase, empty stack          |
-| ``may_cast_now``                 | 117.1a, 702.8a       | instants and flash any time, others  |
-|                                  |                      | sorcery                              |
+| ``may_cast_now``                 | 117.1a, 702.8a,      | instants and flash any time, others  |
+|                                  | 608.2g               | sorcery; any time during resolution  |
 | ``resolved_spell_destination``   | 608.2n               | the owner's graveyard                |
 | ``maximum_hand_size``            | 402.2                | seven                                |
 | ``draw_step_draws``              | 504.1                | one card                             |
@@ -133,21 +134,31 @@ def land_play_options(state: GameState, player: PlayerId) -> tuple[ObjectId, ...
 def cast_permissions(
     state: GameState, player: PlayerId, obj: ObjectId
 ) -> tuple[CastPermission, ...]:
-    """The rules' permissions for ``player`` to cast the card ``obj`` from where it is (601.3):
-    from their hand (``FROM_HAND``; 601.2a), and a commander they own from the command zone
-    (``COMMANDER``; 903.8). Effects that allow casting from other zones (M2.10, M4) add theirs.
+    """The permissions for ``player`` to cast the card ``obj`` from where it is (601.3): the
+    rules' own, from their hand (``FROM_HAND``; 601.2a) and a commander they own from the command
+    zone (``COMMANDER``; 903.8), then those effects have given them for now
+    (``GameState.cast_grants``, oldest first), each for the cards in ``player``'s own zone of its
+    kind: Rishkar's Expertise's "from your hand" during its resolution (608.2g). Effects that
+    allow casting from other zones (M4, M5) add theirs.
 
     A spell whose proposal is being checked (601.2e) is judged from the zone it was cast from.
+    Whether the permission's other conditions hold (its timing, its mana value limit) is
+    ``legality``'s question.
     """
     game_object = state.objects[obj]
     zone = game_object.zone if game_object.spell is None else game_object.spell.cast_from
     if game_object.owner != player:
         return ()
+    found: list[CastPermission] = []
     if zone == Zone.hand(player):
-        return (FROM_HAND,)
-    if zone.kind is ZoneKind.COMMAND and game_object.card in state.player(player).commanders:
-        return (COMMANDER,)
-    return ()
+        found.append(FROM_HAND)
+    elif zone.kind is ZoneKind.COMMAND and game_object.card in state.player(player).commanders:
+        found.append(COMMANDER)
+    for grant in state.cast_grants:
+        kind = grant.permission.zone
+        if grant.player == player and zone == Zone(kind, player if kind.is_per_player else None):
+            found.append(grant.permission)
+    return tuple(found)
 
 
 def cast_options(state: GameState, player: PlayerId) -> tuple[CastSpellOption, ...]:
@@ -232,7 +243,10 @@ def may_cast_now(
     A land is never cast (305.9). A card with flash may be cast any time an instant could
     (702.8a), from whatever zone a permission allows; its flash is read from the variant's
     characteristics, so a granted flash (M5) counts too. "As though it had flash" (601.3b, M6)
-    and "during this resolution" (608.2g, M2.10) are permissions' timings.
+    is a permission's timing. So is "during this resolution" (608.2g): an effect that allows a
+    spell to be cast while it resolves allows it then, whatever its type (a sorcery with the
+    stack not empty); such a permission exists only while that effect applies
+    (``GameState.cast_grants``).
     """
     from resolve.cards.keywords import Flash, has_keyword
 
@@ -252,7 +266,7 @@ def may_cast_now(
         case CastTiming.AS_THOUGH_FLASH:
             raise NotImplementedRule("601.3b: casting a spell as though it had flash")
         case CastTiming.DURING_RESOLUTION:
-            raise NotImplementedRule("608.2g: casting a spell during a resolution")
+            return True  # 608.2g
 
 
 def resolved_spell_destination(state: GameState, spell: ObjectId) -> Zone:

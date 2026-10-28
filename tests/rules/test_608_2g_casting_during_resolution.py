@@ -41,15 +41,15 @@ from resolve.state.spell import (
     FROM_HAND,
     NORMAL,
     AlternativeCost,
-    AlternativeKind,
     CastPermission,
     CastTiming,
+    Half,
     TargetObject,
 )
-from resolve.state.spell import Alternative as AlternativeVariant
 from resolve.state.turn import Phase
-from resolve.state.zones import Zone, ZoneKind
+from resolve.state.zones import BATTLEFIELD, STACK, Zone, ZoneKind
 from tests.casting_support import (
+    activate,
     answered,
     cast_during_resolution,
     decline,
@@ -140,7 +140,7 @@ def test_608_2g_a_sorcery_can_be_cast_while_the_expertise_resolves() -> None:
     done_index = next(e.index for e in state.event_log if isinstance(e.record, SpellResolved))
     assert cast_index < done_index  # 608.2g: cast while the Expertise was still resolving
     assert state.stack == [cast.spell]
-    assert names(state, Zone.stack()) == ["Test Ponder"]
+    assert names(state, STACK) == ["Test Ponder"]
 
 
 def test_608_2g_an_instant_and_a_flash_creature_are_offered_too() -> None:
@@ -178,7 +178,7 @@ def test_608_2g_no_priority_after_the_free_spell_is_cast() -> None:
     assert answered(state, DecisionKind.CAST_DURING_RESOLUTION) == 1  # one spell only
     request = request_of(state)
     assert (request.kind, request.player) == (DecisionKind.PRIORITY_ACTION, P0)
-    assert names(state, Zone.stack()) == ["Grizzly Bears"]
+    assert names(state, STACK) == ["Grizzly Bears"]
     assert names(state, Zone.graveyard(P0)) == ["Rishkar's Expertise"]
     assert names(state, Zone.hand(P1)) == ["Ashcoat Bear"]
 
@@ -191,7 +191,7 @@ def test_608_2g_the_free_spell_resolves_after_the_expertise_like_any_other() -> 
     state = scenario.build()
     resolve(state)
     run_script(state, cast_during_resolution(bears, free(expertise)), pass_(P0), pass_(P1))
-    assert names(state, Zone.battlefield()) == ["Grizzly Bears"]
+    assert names(state, BATTLEFIELD) == ["Grizzly Bears"]
     assert state.stack == []
 
 
@@ -265,18 +265,18 @@ def test_601_2b_no_hybrid_announcement_when_the_mana_cost_isnt_paid() -> None:
 
 
 def test_118_6a_a_card_with_no_mana_cost_can_be_cast_without_paying_it() -> None:
-    """Test Vision has no mana cost (an unpayable cost, 118.6), so its mana value is 0 (202.3a)
+    """Test Insight has no mana cost (an unpayable cost, 118.6), so its mana value is 0 (202.3a)
     and the permission allows it; "if an alternative cost is applied to an unpayable cost,
     including an effect that allows a player to cast a spell without paying its mana cost, the
     alternative cost may be paid" (118.6a): it is cast."""
     scenario = Scenario(2)
-    expertise, (vision,) = resolving(scenario, ["Test Vision"])
+    expertise, (insight,) = resolving(scenario, ["Test Insight"])
     state = scenario.build()
     resolve(state)
-    run_script(state, cast_during_resolution(vision, free(expertise)))
+    run_script(state, cast_during_resolution(insight, free(expertise)))
     (cast,) = records(state, SpellCast)
     assert cast.total_cost == parse_mana_cost("{0}")
-    assert names(state, Zone.stack()) == ["Test Vision"]
+    assert names(state, STACK) == ["Test Insight"]
     assert not records(state, ActionReversed)
 
 
@@ -289,7 +289,7 @@ def test_118_9d_a_cost_increase_applies_to_the_alternative_cost() -> None:
     scenario.battlefield(P1, ["Test Thorn"])
     state = scenario.build()
     resolve(state)
-    run_script(state, cast_during_resolution(bears, free(expertise)))
+    run_script(state, cast_during_resolution(bears, free(expertise)), activate(forest))
     (cast,) = records(state, SpellCast)
     assert cast.total_cost == parse_mana_cost("{1}")
     assert state.objects[forest].tapped
@@ -408,42 +408,45 @@ def test_608_2g_the_free_spell_may_target_the_resolving_expertise() -> None:
 
 
 def test_608_2g_the_permission_ignores_timing_but_not_variants() -> None:
-    """601.3e: the permission is offered for each way the card can be cast, judged on that way's
-    characteristics. Test Adventurer // Test Quest (drawn by the Expertise: an adventurer card
-    in hand is still the 109.3 gap while a player has priority) gives two options, the creature
-    and the Adventure; casting the Adventure is still the 715.3 gap (M4)."""
+    """601.3e: the permission is offered for each way a card can be cast, each judged on its own
+    characteristics; only the timing is ignored. Ashcoat Bear is offered as itself; Test Spark //
+    Test Frost (drawn by the Expertise: a split card in hand is still the 109.3 gap while a
+    player has priority) as each half (709.3a: only the half is considered, mana value 2 each),
+    and casting a half is still the 709.3 gap (M5)."""
     scenario = Scenario(2)
     (expertise,) = scenario.stack(P0, ["Rishkar's Expertise"])
+    scenario.battlefield(P0, ["Grizzly Bears"])
+    (bear,) = scenario.hand(P0, ["Ashcoat Bear"])
+    scenario.library(P0, ["Test Spark // Test Frost", "Forest"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    resolve(state)
+    split = state.player(P0).hand[1]
+    permission = free(expertise)
+    assert options(state) == (
+        DECLINE,
+        CastSpellOption(bear, NORMAL, permission),
+        CastSpellOption(split, Half(0), permission),
+        CastSpellOption(split, Half(1), permission),
+    )
+    with pytest.raises(NotImplementedRule) as gap:
+        run_script(state, cast_during_resolution(split, permission, Half(0)))
+    assert gap.value.rule == "709.3"
+
+
+def test_608_2g_an_adventurer_card_is_still_a_gap() -> None:
+    """An adventurer card's characteristics are still the 109.3 gap (715, M4), so an adventurer
+    the Expertise draws (Test Adventurer // Test Quest) reaches that gap when the free cast is
+    offered, as it would with priority, rather than being offered or refused silently."""
+    scenario = Scenario(2)
+    scenario.stack(P0, ["Rishkar's Expertise"])
     scenario.battlefield(P0, ["Grizzly Bears"])
     scenario.library(P0, ["Test Adventurer // Test Quest", "Forest"])
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
-    resolve(state)
-    adventurer = state.player(P0).hand[0]
-    adventure = AlternativeVariant(AlternativeKind.ADVENTURE)
-    assert options(state) == (
-        DECLINE,
-        CastSpellOption(adventurer, NORMAL, free(expertise)),
-        CastSpellOption(adventurer, adventure, free(expertise)),
-    )
     with pytest.raises(NotImplementedRule) as gap:
-        run_script(state, cast_during_resolution(adventurer, free(expertise), adventure))
-    assert gap.value.rule == "715.3"
-
-
-def test_608_2g_a_split_card_is_still_a_gap() -> None:
-    """A split card's halves (709.3) are still gaps. A split card in hand can't be there while a
-    player has priority yet (109.3), so it is drawn by the Expertise (Grizzly Bears: 2 cards):
-    offering the free cast then reaches the split card's gap rather than offering or refusing
-    it silently."""
-    scenario = Scenario(2)
-    scenario.stack(P0, ["Rishkar's Expertise"])
-    scenario.battlefield(P0, ["Grizzly Bears"])
-    scenario.library(P0, ["Test Spark // Test Frost", "Forest"])
-    scenario.at(Phase.PRECOMBAT_MAIN)
-    state = scenario.build()
-    with pytest.raises(NotImplementedRule):
         resolve(state)
+    assert gap.value.rule == "109.3"
 
 
 def test_601_2e_the_permission_is_checked_again_for_the_proposed_spell() -> None:

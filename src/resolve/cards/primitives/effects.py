@@ -26,7 +26,6 @@ from resolve.cards.primitives.refs import (
 )
 from resolve.cards.primitives.values import Fixed, GreatestPower, PowerOf, Value, X
 from resolve.data.types import CardType, Color
-from resolve.errors import NotImplementedRule
 from resolve.events.mana import ManaAdded
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana, ManaRestriction, ManaType
@@ -414,7 +413,25 @@ class MayCastFromHand(Effect):
     mana_value_at_most: Value | None = None
 
     def tasks(self, state: GameState, context: Context) -> tuple[Task, ...]:
-        raise NotImplementedRule("608.2g: casting a spell during a resolution (stub)")
+        from resolve.effects import evaluation
+        from resolve.engine.casting import CastDuringResolution
+        from resolve.state.spell import AlternativeCost, CastPermission, CastTiming
+        from resolve.state.zones import ZoneKind
+
+        limit = None
+        if self.mana_value_at_most is not None:
+            limit = evaluation.evaluate(state, self.mana_value_at_most, context)
+            if limit is None:
+                return ()  # 608.2b: the limit can't be determined
+        permission = CastPermission(
+            "608.2g",
+            ZoneKind.HAND,
+            CastTiming.DURING_RESOLUTION,
+            source=context.obj,
+            alternative_cost=AlternativeCost.WITHOUT_PAYING_MANA_COST,
+            mana_value_at_most=limit,
+        )
+        return (CastDuringResolution(context.controller, permission),)
 
     def describe(self, phrasing: Phrasing) -> str:
         """``"you may cast a spell with mana value 5 or less from your hand without paying its
