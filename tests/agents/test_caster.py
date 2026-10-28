@@ -172,3 +172,19 @@ def test_the_same_seed_gives_the_same_answers() -> None:
     first, second = CasterAgent(7), CasterAgent(7)
     for _ in range(3):
         assert chosen(state, first) == chosen(state, second)
+
+
+def test_during_a_resolution_it_declines_once_every_spell_was_tried() -> None:
+    """Asked again in the same window after a free cast was reversed (733.2: the engine asks
+    again), it doesn't try the same spell forever: with every offered spell tried, it declines
+    (608.2g lets the player cast nothing)."""
+    scenario = Scenario(2)
+    scenario.stack(P0, ["Rishkar's Expertise"])
+    scenario.hand(P0, ["Grizzly Bears"])
+    scenario.library(P0, ["Forest"] * 5)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, pass_(P0), pass_(P1))
+    agent = CasterAgent(0)
+    assert isinstance(chosen(state, agent), CastSpellOption)
+    assert chosen(state, agent) == DECLINE

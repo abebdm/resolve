@@ -26,6 +26,9 @@ Task: implement step M2.11 of `docs/plans/m2.md` (prompt in the plan's "Prompts"
 
 ## In progress
 
+- Test review done (adequate with gaps); findings 1, 2, 3, 5, 6, 7, 9 handled; 4 and 8 answered
+  in the PR (no M2 effect exiles from a hidden zone; the window is fuzz policy).
+
 ## Next
 
 - Real thorough run (started in the background) -> fill placeholders.

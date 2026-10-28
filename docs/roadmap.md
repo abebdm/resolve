@@ -1064,7 +1064,7 @@ earlier milestones must leave room for every row in this map.
 | 701.15 | Goad | M5 | E | common in Commander; needs durations |
 | 701.16 | Investigate | M4 | E | Clue tokens |
 | 701.17 | Mill | M4 | E |  |
-| 701.18 | Play | M1 ✓ (lands), M2 ✓ | E |  |
+| 701.18 | Play | M1 ✓ (lands), M2 ✓ (casting); 701.18b-c with the first effect that lets a player play a card (M4) | E |  |
 | 701.19 | Regenerate | M6 | E | D |
 | 701.20 | Reveal | M4 | E | D |
 | 701.21 | Sacrifice | M4 | E | D |

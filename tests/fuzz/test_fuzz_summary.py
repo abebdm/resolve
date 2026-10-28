@@ -507,7 +507,7 @@ def check_summary(recorder: Recorder, text: str, formats: str) -> Totals:
             if isinstance(record, SpellCast | ActionReversed) and (
                 not isinstance(record, ActionReversed) or record.card is not None
             ):
-                seat = "auto-pay" if fuzz_tool.is_autopay_seat(record.player) else "random"
+                seat = "auto-pay" if record.player % 3 else "random"  # casters and auto-pay seats
                 attempts[seat] += 1
                 if isinstance(record, ActionReversed):
                     reversed_by[seat] += 1
@@ -575,7 +575,7 @@ def check_summary(recorder: Recorder, text: str, formats: str) -> Totals:
     ) == (cast, resolved, did_not_resolve, countered, reversed_)
     assert numbers(r"Damage: (\d+) dealt\.", text) == (damage,)
     payable_reversed = Counter(
-        "auto-pay" if fuzz_tool.is_autopay_seat(player) else "random"
+        "auto-pay" if player % 3 else "random"
         for result in recorder.results
         for player in result.payable_reversed
     )
@@ -649,6 +649,14 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
     # of_seat): how many random games happen to have one changes with every deck (2026-10-27).
     assert totals.payable["auto-pay"] > 0 and totals.payable["random"] > 0
     assert totals.payable_reversed["auto-pay"] == 0
+    # The caster seats (1, 4, ...: docs/decisions.md, 2026-10-28, "M2.11") cast spells.
+    caster_casts = [
+        entry.record
+        for result in recorder.results
+        for entry in result.state.event_log
+        if isinstance(entry.record, SpellCast) and entry.record.player % 3 == 1
+    ]
+    assert caster_casts, "the caster seats cast spells"
 
 
 def test_the_default_run_with_every_current_card_completes_and_reports_consistently(

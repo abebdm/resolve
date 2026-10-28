@@ -25,8 +25,9 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   3, so a two-player game has a random seat and a caster. `CasterAgent`
   (`resolve.agents.caster`) plays a land if it may, then casts each spell offered that it hasn't
   tried in the current priority window (the turn, step, stack, its untapped permanents and its
-  mana pool), then passes; it casts during a resolution rather than declining, keeps X from 0
-  to 3, and answers everything else at random. `docs/verification.md` holds the thorough run's
+  mana pool), then passes; it casts during a resolution rather than declining (until every
+  offered spell was tried in the window: a reversed free cast is asked again, 733.2), keeps X
+  from 0 to 3, and answers everything else at random. `docs/verification.md` holds the thorough run's
   expectations, and lists under "Not yet reachable" those the M2 plan (§8) set that the run
   can't meet yet, each with its reason and milestone: endings by decking and life total, and
   Chandra's Ignition, after M3 removes the 508.1 gap (an M3 roadmap item restores them);

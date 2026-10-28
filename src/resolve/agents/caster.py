@@ -14,8 +14,9 @@ Its policy:
   objects on the stack, and the deciding player's untapped permanents and mana pool. A spell the
   auto-payer can't pay for is reversed (118.3, 733.1), which restores all of that, so the caster
   doesn't try it again until the window changes. It remembers only the current window.
-- **Casting during a resolution** (608.2g): it casts one of the spells offered, at random,
-  rather than declining.
+- **Casting during a resolution** (608.2g): it casts one of the spells offered that it hasn't
+  tried in this window, at random, rather than declining; once all were tried (a reversed cast
+  is asked again, 733.2), it declines.
 - **X** (107.3a) and any other number without an upper bound: from the minimum to
   ``CASTER_UNBOUNDED_SPAN`` more, an amount a fuzz deck's mana can pay.
 - **Everything else** (mulligans, modes, targets, colors outside a payment, ...): at random,
@@ -39,6 +40,7 @@ from resolve.decisions.spaces import (
     Pick,
     PlayLandOption,
 )
+from resolve.engine.casting import DECLINE
 from resolve.engine.view import PlayerView
 
 # How far above its minimum the caster picks a number without an upper bound (X, 107.3a).
@@ -70,9 +72,11 @@ class CasterAgent:
             if request.kind is DecisionKind.PRIORITY_ACTION:
                 return self._priority(view, request, options)
             if request.kind is DecisionKind.CAST_DURING_RESOLUTION:
-                casts = [i for i, o in enumerate(options) if isinstance(o, CastSpellOption)]
-                if casts:
-                    return Pick(self._one_of(casts))
+                cast = self._untried_cast(view, request, options)
+                if cast is not None:
+                    return Pick(cast)
+                if DECLINE in options:
+                    return Pick(options.index(DECLINE))
         return self.random.random_value(space)
 
     def _priority(
@@ -81,6 +85,18 @@ class CasterAgent:
         lands = [i for i, option in enumerate(options) if isinstance(option, PlayLandOption)]
         if lands:
             return Pick(self._one_of(lands))
+        cast = self._untried_cast(view, request, options)
+        if cast is not None:
+            return Pick(cast)
+        if PassOption() in options:
+            return Pick(options.index(PassOption()))
+        return self.random.random_value(request.space)
+
+    def _untried_cast(
+        self, view: PlayerView, request: DecisionRequest, options: tuple[Option, ...]
+    ) -> int | None:
+        """The index of a cast offered that wasn't tried in this window, at random, now noted as
+        tried; ``None`` if there is none."""
         window = _window(view, request)
         if window != self.window:
             self.window, self.tried = window, []
@@ -89,15 +105,13 @@ class CasterAgent:
             for i, option in enumerate(options)
             if isinstance(option, CastSpellOption) and option not in self.tried
         ]
-        if casts:
-            index = self._one_of(casts)
-            option = options[index]
-            assert isinstance(option, CastSpellOption)
-            self.tried.append(option)
-            return Pick(index)
-        if PassOption() in options:
-            return Pick(options.index(PassOption()))
-        return self.random.random_value(request.space)
+        if not casts:
+            return None
+        index = self._one_of(casts)
+        option = options[index]
+        assert isinstance(option, CastSpellOption)
+        self.tried.append(option)
+        return index
 
     def _one_of(self, indices: list[int]) -> int:
         return indices[self.random.rng.randbelow(len(indices))]

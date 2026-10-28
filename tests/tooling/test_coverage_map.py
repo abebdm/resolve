@@ -320,3 +320,17 @@ def test_a_gap_of_a_keyword_is_checked_against_the_keywords_row(map_text: str) -
     ]
     fuse = Gap("702.102", "casting a fused split spell", ENGINE_DIR / "engine" / "casting.py", 1)
     assert gap_problems(map_text, [fuse]) == []
+
+
+def test_a_gap_without_a_row_and_an_out_of_scope_row(map_text: str) -> None:
+    """A gap whose section has no row is reported; an out-of-scope row (an exotic X tier too)
+    leaves room for its gaps."""
+    gap = Gap("508.1", "declaring attackers", ENGINE_DIR / "engine" / "turns.py", 1)
+    assert gap_problems(break_row(map_text, "508", ""), [gap]) == [
+        "gap 508.1 (declaring attackers): no row 508 in the map"
+    ]
+    for row in (
+        "| 508 | Declare Attackers Step | out of scope | — | a reason |",
+        "| 508 | Declare Attackers Step | M3 ✓ | X |  |",
+    ):
+        assert gap_problems(break_row(map_text, "508", row), [gap]) == []
