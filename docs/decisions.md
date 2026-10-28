@@ -19,6 +19,70 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-28: M2.10: the fuzz summary test plays pinned decks
+- **Decision (the user's, 2026-10-28):** `test_a_default_run_plays_turns_lands_and_spells_and_
+  reports_them` plays the default run's first five games with its own pinned recipes, card lists
+  written in the test (`PINNED_NONCREATURES`, `PINNED_CREATURES`: the excerpt's cards as of
+  M2.9), by replacing `fuzz_tool.recipe_cards` in the test. Its thresholds on what the games do
+  (some game reaches turn 10; lands, mana, casts, resolutions and reversals happen; both kinds
+  of seat have payable casts and the auto-paying seats reverse none) stay. A separate test,
+  `test_the_default_run_with_every_current_card_completes_and_reports_consistently`, plays the
+  whole default run (ten games, both formats) with the current recipes and checks only that the
+  decks are those recipes, every game ends (a loss or an allowed gap) and the summary reports
+  exactly what the games did (`check_summary`, shared by both), with no threshold on random
+  outcomes.
+- **Why:** the games were built from every implemented card, so each new card reshuffled them
+  and broke a threshold: M2.7 (five games instead of four), M2.9 (the random seats' payable
+  reversal) and M2.10 (adding Rishkar's Expertise left the longest of the five games at turn 9,
+  not 10). Pinning the decks fixes the cause; the separate test keeps the run with every current
+  card checked.
+- **Where:** `tests/fuzz/test_fuzz_summary.py`.
+
+### 2026-10-28: M2.10: casting during a resolution is a granted permission and its own decision
+- **Decision:**
+  - A permission an effect gives for now is a `CastGrant(player, permission)` in
+    `GameState.cast_grants`, which `defaults.cast_permissions` reads after the rules' own (the
+    player's own zone of the permission's kind). `CastDuringResolution` adds the grant when it
+    first runs and removes it when it ends, so the 601.2e check during the cast finds it, and a
+    reversal (whose checkpoint holds the grant) keeps it.
+  - `CastPermission` carries the alternative cost it requires (`alternative_cost`, only
+    `WITHOUT_PAYING_MANA_COST` so far) and `mana_value_at_most`. The limit is a permission
+    condition in `legality._cast_permissions`, judged on the variant's characteristics (601.3e),
+    so a split card's halves are offered by their own mana value (709.3a) and still raise
+    709.3 when chosen.
+  - The question is `CAST_DURING_RESOLUTION`, a `ChooseOne` of `DECLINE` (first) and the
+    `cast_options` that carry the effect's permission, so the free cast goes through the same
+    seam as priority. Like priority (2026-10-18, "Questions with a single possible answer are
+    not asked"), it is an exception to that rule and is asked even when declining is the only
+    answer: its options come from a hidden hand (402.3), so skipping it would tell the other
+    players that nothing could be cast. Declining automatically is an agent's convenience.
+  - A `CastGrant` covers the cards in its player's own zone of the permission's kind. Casting
+    from another player's zone or from a set of named objects (cards an effect exiled, a copy)
+    needs a field for it, added with its first card (M4, M5).
+  - 601.2b's announcement of the alternative cost is the permission chosen: there is no
+    separate `ALTERNATIVE` stage (the plan's table asks nothing there in M2). `CastSpell` reads
+    `permission.pays_mana_cost`: when false, X is announced as 0 without asking (107.3b), no
+    hybrid or Phyrexian announcement is made (601.2b announces only for a cost that will be
+    paid) and the total cost starts from {0} (also for an object with no mana cost, 118.6a),
+    with increases and reductions still applied (118.9d).
+  - A reversed attempt (733.1) asks the same question again: 733.2 lets the player "redo the
+    reversed action in a legal way or take any other action"; nobody has priority during the
+    resolution, so the other actions are casting another offered spell or declining.
+  - The 2017-04-18 ruling (a split card's mana value is both halves', either half may be cast)
+    predates the pinned CR's 709.3a and 601.3e; the pinned CR wins (CLAUDE.md rule 3).
+- **Why:** design.md §17.3 makes `cast_permissions` the one place zones are allowed and the
+  permission the carrier of timing and alternative costs; storing the grant as data keeps the
+  state picklable and lets M4's "while searching" (Panglacial Wurm) and "until end of turn"
+  permissions use the same field with a different lifetime. A separate decision kind (rather
+  than a priority round) matches 608.2g: no player has priority, and only the effect's spells
+  may be cast.
+- **Rules:** 608.2g, 601.2b, 601.2e, 601.2f, 601.3, 601.3e, 709.3a, 107.3b, 118.6a, 118.9,
+  118.9a-d, 733.1, 733.2.
+- **Where:** `resolve.state.spell` (`AlternativeCost`, `CastPermission`, `CastGrant`),
+  `resolve.state.game` (`cast_grants`), `resolve.rules.defaults` (`cast_permissions`,
+  `may_cast_now`), `resolve.rules.legality`, `resolve.engine.casting` (`CastSpell`,
+  `CastDuringResolution`, `DECLINE`), `resolve.cards.primitives.effects` (`MayCastFromHand`).
+
 ### 2026-10-27: M2.9: the random seats' payable reversals are checked deterministically
 - **Decision (the user's, 2026-10-27):** `test_a_default_run_plays_turns_lands_and_spells_and_
   reports_them` no longer asserts that the random seats reverse some payable cast in the default

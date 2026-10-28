@@ -2,9 +2,10 @@
 
 Mana abilities' effects (``AddMana``, ``AddManaOfAnyColor``, 605.1a) give their events
 directly. Spells' effects are ``Effect`` values (``DealDamage``, ``Destroy``, ``Exile``,
-``GainLife``, ``DrawCards``, ``CounterSpell``, ``ReturnToHand``, ``TapAll``), applied one at
-a time in the order written (608.2c) by ``resolve.engine.resolution.ResolveSpell``; each
-evaluates its references and values as it applies (608.2h, ``resolve.effects.evaluation``).
+``GainLife``, ``DrawCards``, ``CounterSpell``, ``ReturnToHand``, ``TapAll``,
+``MayCastFromHand``), applied one at a time in the order written (608.2c) by
+``resolve.engine.resolution.ResolveSpell``; each evaluates its references and values as it
+applies (608.2h, ``resolve.effects.evaluation``).
 """
 
 from __future__ import annotations
@@ -23,7 +24,7 @@ from resolve.cards.primitives.refs import (
     ThisObject,
     You,
 )
-from resolve.cards.primitives.values import Fixed, PowerOf, Value, X
+from resolve.cards.primitives.values import Fixed, GreatestPower, PowerOf, Value, X
 from resolve.data.types import CardType, Color
 from resolve.events.mana import ManaAdded
 from resolve.state.ids import ObjectId, PlayerId
@@ -173,7 +174,7 @@ class DealDamage(Effect):
                 amount = f"{number} damage"
             case X():
                 amount = "X damage"
-            case PowerOf() as power:
+            case PowerOf() | GreatestPower() as power:
                 amount = f"damage equal to {power.describe(phrasing)}"
         recipients = [_recipient_text(r, self.source, phrasing) for r in self.to]
         return f"{source} deals {amount} to {_listed(recipients)}"
@@ -267,7 +268,7 @@ class GainLife(Effect):
                 return f"{player} {verb} {number} life"
             case X():
                 return f"{player} {verb} X life"
-            case PowerOf() as power:
+            case PowerOf() | GreatestPower() as power:
                 return f"{player} {verb} life equal to {power.describe(phrasing)}"
 
 
@@ -297,7 +298,7 @@ class DrawCards(Effect):
                 cards = "a card"
             case Fixed() | X() as count:
                 cards = f"{count.word} cards"
-            case PowerOf() as power:
+            case PowerOf() | GreatestPower() as power:
                 cards = f"cards equal to {power.describe(phrasing)}"
         return f"draw {cards}" if player == "you" else f"{player} draws {cards}"
 
@@ -396,6 +397,55 @@ class TapAll(Effect):
                 return f"tap {noun} you control"
             case EachOpponent():
                 return f"tap {noun} your opponents control"
+
+
+@dataclass(frozen=True)
+class MayCastFromHand(Effect):
+    """ "You may cast a spell [with mana value N or less] from your hand without paying its mana
+    cost" (608.2g, 118.9): as the effect applies, the controller may cast one spell from their
+    hand, ignoring timing (608.2g), with the alternative cost "without paying its mana cost"
+    (118.9; X is 0, 107.3b), and only a spell whose mana value is at most
+    ``mana_value_at_most`` (evaluated as the effect applies, 608.2h; ``None``: any). Declining
+    casts nothing. The resolving spell or ability goes on resolving afterwards, and nobody
+    receives priority after the cast (608.2g): ``resolve.engine.casting.CastDuringResolution``.
+    Rishkar's Expertise."""
+
+    mana_value_at_most: Value | None = None
+
+    def tasks(self, state: GameState, context: Context) -> tuple[Task, ...]:
+        from resolve.effects import evaluation
+        from resolve.engine.casting import CastDuringResolution
+        from resolve.state.spell import AlternativeCost, CastPermission, CastTiming
+        from resolve.state.zones import ZoneKind
+
+        limit = None
+        if self.mana_value_at_most is not None:
+            limit = evaluation.evaluate(state, self.mana_value_at_most, context)
+            if limit is None:
+                return ()  # 608.2b: the limit can't be determined
+        permission = CastPermission(
+            "608.2g",
+            ZoneKind.HAND,
+            CastTiming.DURING_RESOLUTION,
+            source=context.obj,
+            alternative_cost=AlternativeCost.WITHOUT_PAYING_MANA_COST,
+            mana_value_at_most=limit,
+        )
+        return (CastDuringResolution(context.controller, permission),)
+
+    def describe(self, phrasing: Phrasing) -> str:
+        """``"you may cast a spell with mana value 5 or less from your hand without paying its
+        mana cost"``."""
+        match self.mana_value_at_most:
+            case None:
+                spell = "a spell"
+            case Fixed(value=number):
+                spell = f"a spell with mana value {number} or less"
+            case X():
+                spell = "a spell with mana value X or less"
+            case PowerOf() | GreatestPower() as value:
+                spell = f"a spell with mana value less than or equal to {value.describe(phrasing)}"
+        return f"you may cast {spell} from your hand without paying its mana cost"
 
 
 DamageRecipient = TargetRef | EachCreature | EachOpponent

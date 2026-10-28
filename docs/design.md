@@ -667,7 +667,12 @@ it, with the user's sign-off. M2.3 built the variants, the permissions `FROM_HAN
 variants other than normal raise their rules' gaps. M2.6 built the targets stage (601.2c: one
 `CHOOSE_TARGETS` per instance of "target", `BecameTargets`); M2.7 the modes (601.2b, 700.2:
 `CHOOSE_MODES`, a `ChooseOne` of `ModesOption` multisets) and X (`CHOOSE_X`, a `ChooseNumber`;
-the total cost has its value). Division and hybrid arrive in M4 and M9.*
+the total cost has its value). M2.10 built casting during a resolution (608.2g:
+`CastDuringResolution`, the `CAST_DURING_RESOLUTION` decision, a permission an effect grants as a
+`CastGrant` in `GameState.cast_grants`) and the permission's alternative cost "without paying
+its mana cost" (118.9: X is 0, 107.3b; the total starts from {0}) and mana value limit; the
+alternative cost is announced by the permission chosen, so stage 2 below asks nothing yet
+(docs/decisions.md, 2026-10-28). Division and hybrid arrive in M4 and M9.*
 
 Every way of casting that changes a spell's characteristics is chosen **before** the card moves
 to the stack, and castability is checked on the chosen characteristics only (601.3e):

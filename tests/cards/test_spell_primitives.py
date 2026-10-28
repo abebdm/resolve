@@ -1,6 +1,6 @@
 """Spell primitives: targets (``TargetSpec`` and its filters), references, values, the spell
-ability and its mode, and the effects ``DealDamage``, ``Destroy``, ``Exile``, ``GainLife`` and
-``DrawCards``, on their own.
+ability and its mode, and the effects ``DealDamage``, ``Destroy``, ``Exile``, ``GainLife``,
+``DrawCards`` and ``MayCastFromHand``, on their own.
 
 From the pinned CR: 115.3 and 115.6 (how many targets an instance chooses), 115.4 ("any
 target"), 109.5 ("you"), 608.2h (values evaluated as the effect applies; last known information),
@@ -13,7 +13,14 @@ from __future__ import annotations
 
 import pytest
 
-from resolve.cards.primitives.effects import DealDamage, Destroy, DrawCards, Exile, GainLife
+from resolve.cards.primitives.effects import (
+    DealDamage,
+    Destroy,
+    DrawCards,
+    Exile,
+    GainLife,
+    MayCastFromHand,
+)
 from resolve.cards.primitives.refs import (
     ControllerOf,
     EachCreature,
@@ -31,9 +38,10 @@ from resolve.cards.primitives.targets import (
     TargetSpec,
     target,
 )
-from resolve.cards.primitives.values import Fixed, PowerOf, X
+from resolve.cards.primitives.values import Fixed, GreatestPower, PowerOf, X
 from resolve.data.types import CardType
 from resolve.effects.evaluation import Context, Timing, evaluate, players
+from resolve.engine.casting import CastDuringResolution
 from resolve.engine.drawing import DrawCards as DrawTask
 from resolve.engine.loop import run
 from resolve.errors import NotImplementedRule
@@ -44,8 +52,15 @@ from resolve.events.permanents import ObjectExiled, PermanentDestroyed
 from resolve.events.pipeline import ApplyEvents
 from resolve.state.game import move_object
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.spell import Target, TargetObject, TargetPlayer
-from resolve.state.zones import EXILE, Zone
+from resolve.state.spell import (
+    AlternativeCost,
+    CastPermission,
+    CastTiming,
+    Target,
+    TargetObject,
+    TargetPlayer,
+)
+from resolve.state.zones import EXILE, Zone, ZoneKind
 from tests.engine_support import Hold
 from tests.scenario import Scenario, names
 
@@ -333,3 +348,80 @@ def test_121_draw_cards_draws_one_at_a_time() -> None:
     assert [(d.player, d.drawn_from) for d in draws] == [(P0, top), (P0, second)]
     assert names(state, Zone.hand(P0)) == ["Forest", "Plains"]
     assert DrawCards(Fixed(0)).tasks(state, context(spell)) == ()
+
+
+def test_208_1_the_greatest_power_among_creatures() -> None:
+    """``GreatestPower`` is the highest power among the group's creatures now (608.2h): P0's
+    Hill Giant (3) and Grizzly Bears (2) give 3; P1's creatures don't count for "you control";
+    "creatures" counts P1's Test Wall too. With no creature in the group it is 0."""
+    scenario = Scenario(2)
+    (spell,) = scenario.stack(P0, ["Rishkar's Expertise"])
+    giant, bears = scenario.battlefield(P0, ["Hill Giant", "Grizzly Bears"])
+    scenario.battlefield(P1, ["Test Wall"])
+    state = scenario.build()
+    yours = GreatestPower(EachCreature(controlled_by=You()))
+    assert evaluate(state, yours, context(spell)) == 3
+    assert (
+        evaluate(state, GreatestPower(EachCreature(controlled_by=EachOpponent())), context(spell))
+        == 0
+    )
+    move_object(state, giant, Zone.graveyard(P0))
+    assert evaluate(state, yours, context(spell)) == 2
+    assert evaluate(state, GreatestPower(EachCreature()), context(spell)) == 2
+    move_object(state, bears, Zone.graveyard(P0))
+    assert evaluate(state, yours, context(spell)) == 0
+    with pytest.raises(ValueError, match="other creatures"):
+        GreatestPower(EachCreature(except_=ThisObject()))
+
+
+def test_608_2g_may_cast_from_hand_is_written_as_card_text_writes_it() -> None:
+    def text(effect: MayCastFromHand) -> str:
+        return Mode((), (effect,)).text
+
+    assert text(MayCastFromHand(Fixed(5))) == (
+        "You may cast a spell with mana value 5 or less from your hand without paying its mana "
+        "cost."
+    )
+    assert text(MayCastFromHand()) == (
+        "You may cast a spell from your hand without paying its mana cost."
+    )
+    assert text(MayCastFromHand(X())) == (
+        "You may cast a spell with mana value X or less from your hand without paying its mana "
+        "cost."
+    )
+    assert Mode((), (DrawCards(GreatestPower(EachCreature(controlled_by=You()))),)).text == (
+        "Draw cards equal to the greatest power among creatures you control."
+    )
+
+
+def test_608_2g_may_cast_from_hand_gives_the_cast_with_its_permission() -> None:
+    """As it applies, ``MayCastFromHand`` evaluates its limit (608.2h) and gives one
+    ``CastDuringResolution`` for the controller, with the permission: the hand, during this
+    resolution (608.2g), without paying the mana cost (118.9), the limit, and the spell as its
+    source."""
+    scenario = Scenario(2)
+    (spell,) = scenario.stack(P0, ["Rishkar's Expertise"])
+    state = scenario.build()
+    (task,) = MayCastFromHand(Fixed(5)).tasks(state, context(spell))
+    assert task == CastDuringResolution(
+        P0,
+        CastPermission(
+            "608.2g",
+            ZoneKind.HAND,
+            CastTiming.DURING_RESOLUTION,
+            source=spell,
+            alternative_cost=AlternativeCost.WITHOUT_PAYING_MANA_COST,
+            mana_value_at_most=5,
+        ),
+    )
+    (unlimited,) = MayCastFromHand().tasks(state, context(spell))
+    assert isinstance(unlimited, CastDuringResolution)
+    assert unlimited.permission.mana_value_at_most is None
+
+
+def test_a_mode_writes_its_paragraphs_on_their_own_lines() -> None:
+    mode = Mode((), (DrawCards(), DrawCards(Fixed(2))), paragraphs=(1,))
+    assert mode.text == "Draw a card.\nDraw two cards."
+    for paragraphs in ((0,), (2,)):
+        with pytest.raises(ValueError, match="paragraph"):
+            Mode((), (DrawCards(), DrawCards()), paragraphs=paragraphs)

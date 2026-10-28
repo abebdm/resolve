@@ -222,8 +222,8 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
 - [x] Mana payment details and the general cost model: generic, colored, {C}, X and restricted
   mana (106.6), with slots for hybrid, Phyrexian, snow and non-mana costs; cost increases and
   reductions in 601.2f's order (M2.3 to M2.9).
-- [ ] Casting without paying the mana cost, during resolution (608.2g, 118.9; Rishkar's
-  Expertise).
+- [x] Casting without paying the mana cost, during resolution (608.2g, 118.9; Rishkar's
+  Expertise) (M2.10).
 - [x] Mana abilities beyond basic lands (605): "any color in your commander's color identity",
   activation conditions, mana costs on mana abilities, creatures' mana abilities and summoning
   sickness (302.6), restricted mana (Ixalli's Lorekeeper) (M2.4).
@@ -231,10 +231,8 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
   payments and abilities in the views it plans from (M2.5).
 - [x] The first primitives: damage, destroy, exile, draw, life gain (M2.6), counter target spell
   (M2.8).
-- [ ] Cards: 14 from the target decks, 8 keyword example cards and the torture tests Decimate
-  and Cryptic Command (`docs/plans/m2.md` §7). Done: 13 target-deck cards (Emerald Medallion
-  and Kinjalli's Caller: M2.9), the 8 keyword example cards, Decimate and Cryptic Command
-  (M2.8); left: Rishkar's Expertise (M2.10).
+- [x] Cards: 14 from the target decks, 8 keyword example cards and the torture tests Decimate
+  and Cryptic Command (`docs/plans/m2.md` §7): the last, Rishkar's Expertise, in M2.10.
 
 Moved out of M2 by the plan: dividing (601.2d), reductions from a count or from targets
 (Ghalta, Hamza, Savage Stomp), overload, casting from the graveyard, exile and the library top,
@@ -576,6 +574,19 @@ completes a step (CLAUDE.md, "Documentation requirements").
   (`resolve.cards.definitions.cost_reducers`, in the excerpt and the fuzz recipes); fixtures
   Test Thorn (a test-only increase, `SpellCostIncrease`/`IncreaseGeneric` in
   `tests/game_fixtures.py`) and Test Growth ({X}{G}).
+- **Done (M2.10, casting during resolution without paying the mana cost):** `CastPermission`'s
+  `alternative_cost` (`AlternativeCost.WITHOUT_PAYING_MANA_COST`, 118.9) and
+  `mana_value_at_most`; `CastGrant` and `GameState.cast_grants` (a permission an effect gives
+  for now), read by `defaults.cast_permissions`; `CastTiming.DURING_RESOLUTION` in
+  `defaults.may_cast_now` (608.2g); the mana value limit in `legality.allowed(CastAction)`
+  (601.3e); `resolve.engine.casting.CastDuringResolution` (the `CAST_DURING_RESOLUTION`
+  decision, `DECLINE`; a reversed attempt is asked again, 733.2); `CastSpell` announcing X as 0
+  (107.3b), skipping the hybrid announcement and starting the total from {0} when the mana cost
+  isn't paid (118.9, 118.9d, 118.6a); primitives `GreatestPower` (values), `MayCastFromHand`
+  (effects) and `Mode.paragraphs`; the text agent names the alternative cost. Card: Rishkar's
+  Expertise (`resolve.cards.definitions.card_draw`, in the excerpt and both fuzz recipes);
+  fixtures Test Insight (no mana cost) and Test Two-Tone in the scenario database;
+  `casting_support.cast_during_resolution`, `decline`.
 ---
 
 ## Rules coverage map
@@ -612,7 +623,7 @@ earlier milestones must leave room for every row in this map.
 | 104 | Ending the Game | M1 ✓; 104.3c-d M4, M7; 104.4b M7; alternative wins and losses M5 | E | `can_lose_game`: default function in place (M2.1 ✓) |
 | 105 | Colors | M2 | E |  |
 | 106 | Mana | M1 ✓, M2 (spending mana, 106.4a: M2.3 ✓; restrictions 106.6, any color 106.1a, undefined mana 106.5: M2.4 ✓); 106.7 M6 | E | `Mana.restriction`, `ManaRestriction` |
-| 107 | Numbers and Symbols | M2 (107.4 symbols parsed: M2.2 ✓; 107.3a X announced: M2.7 ✓; 107.3b M2.10); 107.3c, 107.3f with their first card; 107.4e-f, 107.4h M9; 107.14 M4; 107.15, 107.17 M9 | E | hybrid and Phyrexian: M2 builds the announcement stage |
+| 107 | Numbers and Symbols | M2 (107.4 symbols parsed: M2.2 ✓; 107.3a X announced: M2.7 ✓; 107.3b M2.10 ✓); 107.3c, 107.3f with their first card; 107.4e-f, 107.4h M9; 107.14 M4; 107.15, 107.17 M9 | E | hybrid and Phyrexian: M2 builds the announcement stage |
 | 108 | Cards | M0 ✓ | E |  |
 | 109 | Objects | M1 ✓; 109.3 with each layout (omen and preparation read as their normal part: M2.2 ✓; 720.4, 722.4) | E |  |
 | 110 | Permanents | M1 ✓; statuses with their mechanics | E |  |
@@ -623,7 +634,7 @@ earlier milestones must leave room for every row in this map.
 | 115 | Targets | M2 (115.1-115.6, 115.10: M2.6 ✓; shroud, hexproof and protection M2.8 ✓); 115.7 M5 | E | `target_problem` (M2.6 ✓) |
 | 116 | Special Actions | M1 ✓ (116.2a); the others with their mechanics | E | 116.2i out of scope (Planechase); 116.2j is for conspiracy cards (315) |
 | 117 | Timing and Priority | M1 ✓, M2 (117.1a casting, 117.3b-c, 117.4 with the stack: M2.3 ✓; flash M2.8 ✓) | E |  |
-| 118 | Costs | M2 (mana: paying generic, colored and {C} mana M2.3 ✓; mana costs of mana abilities, restricted mana M2.4 ✓; X M2.7 ✓; generic reductions 118.7, 118.7a: M2.9 ✓; 118.9 M2.10); 118.7b-g with their first cards (colored, colorless, hybrid, Phyrexian, snow reductions); M4 (other costs, 118.12) | E | `resolve.rules.costs` |
+| 118 | Costs | M2 (mana: paying generic, colored and {C} mana M2.3 ✓; mana costs of mana abilities, restricted mana M2.4 ✓; X M2.7 ✓; generic reductions 118.7, 118.7a: M2.9 ✓; 118.9 "without paying its mana cost", 118.9a-d, 118.6a: M2.10 ✓; other alternative costs with their keywords); 118.7b-g with their first cards (colored, colorless, hybrid, Phyrexian, snow reductions); M4 (other costs, 118.12) | E | `resolve.rules.costs` |
 | 119 | Life | M2 (gaining life, 119.3, 119.10: M2.6 ✓); paying life M4 | E |  |
 | 120 | Damage | M2 (noncombat: 120.1-120.2, 120.3a, 120.3e, 120.4b, 120.8: M2.6 ✓), M3 (combat), M4 (120.3b-d, 120.3g-h) | E | the 120.3 table is `DamageDealt.apply` |
 | 121 | Drawing a Card | M1 ✓; 121.6 M6 | E |  |
@@ -684,14 +695,14 @@ earlier milestones must leave room for every row in this map.
 | 513 | End Step | M1 ✓ | E |  |
 | 514 | Cleanup Step | M1 ✓; 514.2 effects ending M5 | E |  |
 | 600 | General | — | — | nothing to implement |
-| 601 | Casting Spells | M2 (M2.3 ✓: 601.2a, 601.2e-i, 601.3, 601.3e variants and permissions, 601.6; 601.2c M2.6 ✓; 601.2b modes and X: M2.7 ✓, hybrid and Phyrexian announcements M9; 601.2f increases, reductions and lock-in, 601.8: M2.9 ✓; 601.2d M4; 601.3b M6) | E | gaps per variant: 709.3, 712.11a-b, 715.3, 718.3, 720.3, 722.3, 708.4, 702.102; 903.8 |
+| 601 | Casting Spells | M2 (M2.3 ✓: 601.2a, 601.2e-i, 601.3, 601.3e variants and permissions, 601.6; 601.2c M2.6 ✓; 601.2b modes and X: M2.7 ✓, hybrid and Phyrexian announcements M9; 601.2f increases, reductions and lock-in, 601.8: M2.9 ✓; casting during resolution with a permission's alternative cost: M2.10 ✓; 601.2d M4; 601.3b M6) | E | gaps per variant: 709.3, 712.11a-b, 715.3, 718.3, 720.3, 722.3, 708.4, 702.102; 903.8 |
 | 602 | Activating Activated Abilities | M4 (for mana abilities, 602.2b mana costs and 602.5 "activate only if": M2.4 ✓) | E |  |
 | 603 | Handling Triggered Abilities | M4 | E |  |
 | 604 | Handling Static Abilities | M5 (M2: keyword statics M2.8 ✓, cost-reduction statics M2.9 ✓) | E |  |
 | 605 | Mana Abilities | M1 ✓, M2 (605.3a while casting: M2.3 ✓; 605.2, 605.3a while paying a mana ability's cost, 605.3c: M2.4 ✓); 605.1b M4 | E |  |
 | 606 | Loyalty Abilities | M4 | E |  |
 | 607 | Linked Abilities | M4 | E | D (hideaway) |
-| 608 | Resolving Spells and Abilities | M2 (608.1, 608.3a: M2.3 ✓; 608.2a-c, 608.2h, 608.2m-n: M2.6 ✓; 608.2c for modes: M2.7 ✓; 608.2g M2.10); 608.2d-f, 608.2i, 608.2k M4 | E | `resolved_spell_destination` (608.2n) in place (M2.3 ✓), called from M2.6 ✓ |
+| 608 | Resolving Spells and Abilities | M2 (608.1, 608.3a: M2.3 ✓; 608.2a-c, 608.2h, 608.2m-n: M2.6 ✓; 608.2c for modes: M2.7 ✓; 608.2g M2.10 ✓); 608.2d-f, 608.2i, 608.2k M4 | E | `resolved_spell_destination` (608.2n) in place (M2.3 ✓), called from M2.6 ✓ |
 | 609 | Effects | M2 (one-shot effects of spells: M2.6 ✓) | E |  |
 | 610 | One-Shot Effects | M2; 610.3 M4 | E |  |
 | 611 | Continuous Effects | M5 | E |  |
@@ -731,7 +742,7 @@ earlier milestones must leave room for every row in this map.
 | 730 | Merging with Permanents | M5 | X | mutate |
 | 731 | Day and Night | M7 | S |  |
 | 732 | Taking Shortcuts | M7 | E | how much of it is worth implementing: design.md §16 |
-| 733 | Handling Illegal Actions | M2 (M2.3 ✓; reversing a mana ability activation and the kept-abilities dependency check of 733.1: M2.4 ✓) | E | checkpoint and restore (`resolve.state.checkpoint`), `resolve.engine.reversal` |
+| 733 | Handling Illegal Actions | M2 (M2.3 ✓; reversing a mana ability activation and the kept-abilities dependency check of 733.1: M2.4 ✓; 733.2 for a cast during resolution, asked again: M2.10 ✓) | E | checkpoint and restore (`resolve.state.checkpoint`), `resolve.engine.reversal` |
 | 800 | General | M1 ✓ (800.4a, h, j, k); the rest M7 | E |  |
 | 801 | Limited Range of Influence Option | out of scope | — | Commander doesn't use it (903.2) |
 | 802 | Attack Multiple Players Option | M3, M7 | E | Commander's multiplayer default |

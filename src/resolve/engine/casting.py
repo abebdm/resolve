@@ -76,14 +76,16 @@ from typing import TYPE_CHECKING
 
 from resolve.cards.primitives.spells import SpellAbility
 from resolve.cards.primitives.targets import TargetSpec
-from resolve.data.mana_cost import ManaCost, SymbolKind
+from resolve.data.mana_cost import ManaCost, SymbolKind, parse_mana_cost
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import (
     AnswerValue,
+    CastSpellOption,
     ChooseNumber,
     ChooseOne,
     ChooseSubset,
     ModesOption,
+    NamedOption,
     Number,
     ObjectOption,
     Option,
@@ -106,7 +108,7 @@ from resolve.events.spells import (
     SpellProposed,
     XAnnounced,
 )
-from resolve.rules import costs, legality, targeting
+from resolve.rules import costs, defaults, legality, targeting
 from resolve.rules.legality import Targeter
 from resolve.state.checkpoint import Checkpoint, take_checkpoint
 from resolve.state.ids import ObjectId, PlayerId
@@ -116,6 +118,7 @@ from resolve.state.spell import (
     AlternativeKind,
     Back,
     CastChoices,
+    CastGrant,
     CastPermission,
     CastVariant,
     FaceDown,
@@ -140,6 +143,12 @@ _ANNOUNCED = (
     SymbolKind.PHYREXIAN,
     SymbolKind.HYBRID_PHYREXIAN,
 )
+
+
+_NOTHING = parse_mana_cost("{0}")
+
+DECLINE = NamedOption("decline")
+"""The option of casting nothing when an effect allows a cast during its resolution (608.2g)."""
 
 
 class CastStage(Enum):
@@ -267,7 +276,12 @@ class CastSpell(Task):
         assert self.spell is not None
         record = self._record(state)
         cost = characteristics(state, self.spell).mana_cost
+        pays = record.permission.pays_mana_cost
         if cost is not None and cost.has_x and record.x is None:
+            if not pays:
+                # 107.3b: neither the mana cost nor an alternative cost with X is paid: X is 0.
+                announced = XAnnounced(spell=self.spell, x=0, rules=("601.2b", "107.3b"))
+                return Push((ApplyEvents((announced,)), self))
             # 601.2b, 107.3a: the caster announces the value of X; any number from 0 (107.1b).
             return NeedDecision(
                 player=self.player,
@@ -277,7 +291,8 @@ class CastSpell(Task):
                 rules=("601.2b", "107.3a"),
                 source=self.spell,
             )
-        if cost is not None and {symbol.kind for symbol in cost.symbols} & set(_ANNOUNCED):
+        # 601.2b: hybrid and Phyrexian symbols are announced only in a cost that will be paid.
+        if pays and cost is not None and {symbol.kind for symbol in cost.symbols} & set(_ANNOUNCED):
             raise NotImplementedRule(
                 "601.2b: announcing how hybrid and Phyrexian mana symbols will be paid (M9)"
             )
@@ -335,18 +350,25 @@ class CastSpell(Task):
 
     def _total(self, state: GameState) -> TaskResult:
         assert self.spell is not None
-        # 601.2f: the total cost is the mana cost, with the announced value in place of each
-        # {X} (107.3a), plus increases, minus reductions; then it is locked in (601.8).
-        cost = characteristics(state, self.spell).mana_cost
-        if cost is None:
-            # 118.6: an object with no mana cost can't be cast by paying it.
-            self.stage = CastStage.REVERSE
-            return self.run(state)
-        x = self._record(state).x
-        if cost.has_x:
-            if x is None:
-                raise EngineError(f"spell {self.spell} has {{X}} but no value announced")
-            cost = cost.with_x(x)
+        # 601.2f: the total cost is the mana cost (with the announced value in place of each
+        # {X}, 107.3a) or the alternative cost, plus increases, minus reductions; then it is
+        # locked in (601.8).
+        record = self._record(state)
+        if record.permission.pays_mana_cost:
+            cost = characteristics(state, self.spell).mana_cost
+            if cost is None:
+                # 118.6: an object with no mana cost can't be cast by paying it.
+                self.stage = CastStage.REVERSE
+                return self.run(state)
+            if cost.has_x:
+                if record.x is None:
+                    raise EngineError(f"spell {self.spell} has {{X}} but no value announced")
+                cost = cost.with_x(record.x)
+        else:
+            # 118.9: "without paying its mana cost" pays nothing in its place, so the total
+            # starts from {0} (601.2f), also for an object with no mana cost (118.6a); increases
+            # still apply to it (118.9d).
+            cost = _NOTHING
         cost = costs.spell_total_cost(state, self.spell, self.player, cost)
         self.total = cost
         self.payment = PayCosts(self.player, cost, ForSpell(self.spell))
@@ -532,3 +554,89 @@ def _variant_gap(state: GameState, card: ObjectId, variant: CastVariant) -> None
                     )
         case FaceDown():
             raise NotImplementedRule("708.4: casting a card face down")
+
+
+@dataclass(slots=True)
+class CastDuringResolution(Task):
+    """``player`` may cast a spell under ``permission`` while the spell or ability that allows
+    it resolves (608.2g): Rishkar's Expertise's "You may cast a spell with mana value 5 or less
+    from your hand without paying its mana cost" (``MayCastFromHand``).
+
+    1. The permission is granted (``GameState.cast_grants``), so ``defaults.cast_permissions``
+       and ``legality.allowed`` find it, at 601.3 and again at 601.2e.
+    2. ``CAST_DURING_RESOLUTION``: a ``ChooseOne`` of ``DECLINE``, then every option
+       ``defaults.cast_options`` gives with this permission (601.3e: each way of casting each
+       card). Like priority, it is asked even when declining is the only answer: the options
+       depend on a hidden hand.
+    3. The chosen spell is cast (``CastSpell``, 601.2a-i). Nobody receives priority afterwards
+       (608.2g): the resolving spell goes on resolving. If the cast was illegal and reversed
+       (733.1), the player may redo it or do something else (733.2): with nobody holding
+       priority during the resolution, they are asked again.
+    4. The permission ends: the grant is removed. It allows one spell.
+
+    ``attempt``: where the event log stood when the cast being attempted began.
+    """
+
+    player: PlayerId
+    permission: CastPermission
+    attempt: int | None = None
+
+    def run(self, state: GameState) -> TaskResult:
+        if self.attempt is not None:
+            begun, self.attempt = self.attempt, None
+            if any(
+                isinstance(entry.record, SpellCast) and entry.record.player == self.player
+                for entry in state.event_log[begun:]
+            ):
+                return self._end(state)  # cast: the permission is used
+        if state.player(self.player).left_game:
+            return self._end(state)  # 800.4a
+        grant = CastGrant(self.player, self.permission)
+        if grant not in state.cast_grants:
+            state.cast_grants.append(grant)
+        offered = tuple(
+            option
+            for option in defaults.cast_options(state, self.player)
+            if option.permission == self.permission
+        )
+        # Asked even when declining is the only answer, as priority is: the options come from a
+        # hidden hand, so skipping the question would tell the other players there was nothing
+        # to cast (docs/decisions.md, 2026-10-28).
+        return NeedDecision(
+            player=self.player,
+            kind=DecisionKind.CAST_DURING_RESOLUTION,
+            space=ChooseOne((DECLINE, *offered)),
+            prompt=_cast_prompt(self.permission),
+            rules=("608.2g", "601.3"),
+            source=self.permission.source,
+        )
+
+    def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
+        if not isinstance(request.space, ChooseOne) or not isinstance(answer, Pick):
+            raise EngineError(f"CastDuringResolution can't resume with {answer!r}")
+        match request.space.chosen(answer):
+            case CastSpellOption(object=card, variant=variant, permission=permission):
+                self.attempt = len(state.event_log)
+                return Push((CastSpell(self.player, card, variant, permission), self))
+            case option if option == DECLINE:
+                return self._end(state)
+            case option:
+                raise EngineError(f"unexpected option {option!r} for a cast during resolution")
+
+    def _end(self, state: GameState) -> TaskResult:
+        grant = CastGrant(self.player, self.permission)
+        if grant in state.cast_grants:
+            state.cast_grants.remove(grant)
+        return Done()
+
+
+def _cast_prompt(permission: CastPermission) -> str:
+    """``"You may cast a spell with mana value 5 or less from your hand without paying its mana
+    cost."``"""
+    spell = "a spell"
+    if permission.mana_value_at_most is not None:
+        spell += f" with mana value {permission.mana_value_at_most} or less"
+    text = f"You may cast {spell} from your {permission.zone.value}"
+    if permission.alternative_cost is not None:
+        text += f" {permission.alternative_cost.value}"
+    return text + "."

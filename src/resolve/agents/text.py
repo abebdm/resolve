@@ -107,7 +107,9 @@ def describe_option(option: Option, view: PlayerView) -> str:
             zone = permission.zone
             named = "command zone" if zone is ZoneKind.COMMAND else zone.value
             where = "" if zone is ZoneKind.HAND else f" from the {named}"
-            return f"cast {_named(view, obj)}" + (f" ({how})" if how else "") + where
+            cost = permission.alternative_cost
+            paid = "" if cost is None else f" {cost.value}"
+            return f"cast {_named(view, obj)}" + (f" ({how})" if how else "") + where + paid
         case ActivateAbilityOption(object=obj, ability=index):
             return f"activate ability {index} of {_named(view, obj)}"
         case ManaOption(mana=mana):

@@ -20,6 +20,7 @@ from resolve.decisions.spaces import (
     PassOption,
     PlayerOption,
 )
+from resolve.engine.casting import DECLINE
 from resolve.engine.payment import PAY
 from resolve.events.base import AnswerRecord
 from resolve.events.spells import BecameTargets
@@ -86,6 +87,20 @@ def choose_x(value: int, player: PlayerId | None = None) -> Step:
 def choose_color(color: Color) -> Choose:
     """106.1a: the color of the mana an ability adds."""
     return choose(ColorOption(color), kind=DecisionKind.CHOOSE_COLOR)
+
+
+def cast_during_resolution(
+    obj: ObjectId, permission: CastPermission, variant: CastVariant = NORMAL
+) -> Choose:
+    """608.2g: cast ``obj`` under the permission an effect gives while it resolves."""
+    return choose(
+        CastSpellOption(obj, variant, permission), kind=DecisionKind.CAST_DURING_RESOLUTION
+    )
+
+
+def decline() -> Choose:
+    """608.2g: cast nothing when an effect allows a cast during its resolution."""
+    return choose(DECLINE, kind=DecisionKind.CAST_DURING_RESOLUTION)
 
 
 def pass_(player: PlayerId | None = None) -> Choose:

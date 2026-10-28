@@ -6,18 +6,18 @@
       "oracle_cards": {
         "type": "oracle_cards",
         "file": "oracle-cards.jsonl.gz",
-        "updated_at": "2026-10-26T21:01:59.922+00:00",
-        "size": 25135745,
-        "sha256": "081a50ef82c767523f955e914153cf988ff045a72e3765b6aa2382567f9eb53a",
-        "source": "https://data.scryfall.io/oracle-cards/oracle-cards-20261026210159.jsonl.gz"
+        "updated_at": "2026-10-27T21:02:43.600+00:00",
+        "size": 25165222,
+        "sha256": "2f8afacba1b8f5375723cdeec3bc00adb3c6b97d038acc6406fa774129d7cf0a",
+        "source": "https://data.scryfall.io/oracle-cards/oracle-cards-20261027210243.jsonl.gz"
       },
       "rulings": {
         "type": "rulings",
         "file": "rulings.jsonl.gz",
-        "updated_at": "2026-10-26T21:00:34.988+00:00",
+        "updated_at": "2026-10-27T21:00:33.257+00:00",
         "size": 5422271,
-        "sha256": "f340b483b578935870ae0243ef666ec9988aaf9fe15784309e875897b128901a",
-        "source": "https://data.scryfall.io/rulings/rulings-20261026210034.jsonl.gz"
+        "sha256": "c05694d5f8d54ffe18b7202191012f3b5943a2e0aba1befafdf91bce58072f13",
+        "source": "https://data.scryfall.io/rulings/rulings-20261027210033.jsonl.gz"
       }
     }
   },
@@ -477,6 +477,23 @@
       "keywords": [],
       "power": "0",
       "toughness": "3"
+    },
+    {
+      "object": "card",
+      "oracle_id": "97407cd0-2bd2-4074-94d3-4ec3d243fa78",
+      "name": "Rishkar's Expertise",
+      "layout": "normal",
+      "mana_cost": "{4}{G}{G}",
+      "cmc": 6.0,
+      "type_line": "Sorcery",
+      "oracle_text": "Draw cards equal to the greatest power among creatures you control.\nYou may cast a spell with mana value 5 or less from your hand without paying its mana cost.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": []
     }
   ],
   "rulings": [
@@ -577,6 +594,76 @@
       "source": "wotc",
       "published_at": "2009-02-01",
       "comment": "“Protection from artifacts” means the following: -- Nacatl Savage can't be blocked by artifact creatures. -- Nacatl Savage can't be equipped. It also can't be enchanted by Auras that have somehow become artifacts in addition to enchantments. -- Nacatl Savage can't be targeted by abilities from artifact sources. -- All damage that would be dealt to Nacatl Savage by artifact sources is prevented."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "97407cd0-2bd2-4074-94d3-4ec3d243fa78",
+      "source": "wotc",
+      "published_at": "2017-02-09",
+      "comment": "If you cast a card \"without paying its mana cost,\" you can't choose to cast it for any alternative costs, such as emerge costs. You can, however, pay additional costs. If the card has any mandatory additional costs, such as that of Cathartic Reunion, you must pay those to cast the card."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "97407cd0-2bd2-4074-94d3-4ec3d243fa78",
+      "source": "wotc",
+      "published_at": "2017-02-09",
+      "comment": "Effects that allow you to \"cast\" a card don't allow you to play a land card."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "97407cd0-2bd2-4074-94d3-4ec3d243fa78",
+      "source": "wotc",
+      "published_at": "2017-02-09",
+      "comment": "You may cast one of the cards drawn by Rishkar's Expertise's first effect while performing its second effect."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "97407cd0-2bd2-4074-94d3-4ec3d243fa78",
+      "source": "wotc",
+      "published_at": "2017-02-09",
+      "comment": "A card's mana value is determined solely by the mana symbols printed in its upper right corner. The mana value is the total amount of mana in that cost, regardless of color. For example, a card with mana cost {1}{U}{U} has mana value 3. Ignore any alternative costs, additional costs, cost increases, or cost reductions that could apply to it. A card with no mana cost has a mana value of 0."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "97407cd0-2bd2-4074-94d3-4ec3d243fa78",
+      "source": "wotc",
+      "published_at": "2017-02-09",
+      "comment": "If you control no creatures with power greater than 0 as Rishkar's Expertise resolves, you draw no cards, but you may cast a card with mana value 5 or less from your hand without paying its mana cost."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "97407cd0-2bd2-4074-94d3-4ec3d243fa78",
+      "source": "wotc",
+      "published_at": "2017-02-09",
+      "comment": "If the card has {X} in its mana cost, you must choose 0 as the value of X when casting it without paying its mana cost."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "97407cd0-2bd2-4074-94d3-4ec3d243fa78",
+      "source": "wotc",
+      "published_at": "2017-02-09",
+      "comment": "Any triggered abilities that trigger while performing the Expertise spell's first effect won't be put onto the stack until after you're done casting your free spell. They're put onto the stack at the same time as any abilities that triggered while casting that spell regardless of the order in which those abilities triggered."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "97407cd0-2bd2-4074-94d3-4ec3d243fa78",
+      "source": "wotc",
+      "published_at": "2017-02-09",
+      "comment": "While you're casting your free spell, the Expertise spell is still on the stack. It will be put into its owner's graveyard after the free spell is cast. The free spell can't target the Expertise card in your graveyard. It can target the Expertise spell on the stack, but the Expertise spell will become an illegal target before the free spell resolves."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "97407cd0-2bd2-4074-94d3-4ec3d243fa78",
+      "source": "wotc",
+      "published_at": "2017-02-09",
+      "comment": "The greatest power among creatures you control is determined as Rishkar's Expertise resolves."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "97407cd0-2bd2-4074-94d3-4ec3d243fa78",
+      "source": "wotc",
+      "published_at": "2017-04-18",
+      "comment": "The mana value of a split card is determined by the combined mana cost of its two halves. If an expertise spell allows you to cast a split card, you may cast either half or, if that split card has fuse, both halves."
     },
     {
       "object": "ruling",

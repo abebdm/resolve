@@ -18,7 +18,7 @@ import sys
 from collections import Counter
 from collections.abc import Sequence
 from contextlib import redirect_stdout
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from typing import Any
 
 import pytest
@@ -395,8 +395,8 @@ def numbers(pattern: str, text: str) -> tuple[float, ...]:
 # The excerpt's cards, by hand: the noncreature ones, and the creatures.
 NONCREATURES = [
     "Arcane Signet", "Cancel", "Chandra's Ignition", "Command Tower", "Cryptic Command",
-    "Darksteel Relic", "Decimate", "Emerald Medallion", "Fiery Confluence", "Selesnya Signet",
-    "Sol Ring", "Swords to Plowshares", "Temple of the False God",
+    "Darksteel Relic", "Decimate", "Emerald Medallion", "Fiery Confluence", "Rishkar's Expertise",
+    "Selesnya Signet", "Sol Ring", "Swords to Plowshares", "Temple of the False God",
 ]  # fmt: skip
 # Repentant Blacksmith is left out (``FUZZ_EXCLUSIONS``: 702.16e until M6).
 CREATURES = [
@@ -419,16 +419,17 @@ def expected_deck(recipe: str, copies: int) -> Counter[str]:
 def test_the_recipes_hold_the_excerpt_minus_the_exclusions() -> None:
     assert fuzz_tool.recipe_cards("spells") == (
         "Arcane Signet", "Cancel", "Chandra's Ignition", "Command Tower", "Cryptic Command",
-        "Darksteel Relic", "Decimate", "Emerald Medallion", "Fiery Confluence", "Selesnya Signet",
-        "Sol Ring", "Swords to Plowshares", "Temple of the False God",
+        "Darksteel Relic", "Decimate", "Emerald Medallion", "Fiery Confluence",
+        "Rishkar's Expertise", "Selesnya Signet", "Sol Ring", "Swords to Plowshares",
+        "Temple of the False God",
     )  # fmt: skip
     assert fuzz_tool.recipe_cards("creatures") == (
         "Arcane Signet", "Ashcoat Bear", "Avacyn's Pilgrim", "Cancel", "Chandra's Ignition",
         "Command Tower", "Cryptic Command", "Darksteel Myr", "Darksteel Relic", "Decimate",
         "Emerald Medallion", "Fiery Confluence", "Gladecover Scout", "Grizzly Bears", "Hill Giant",
         "Humble Budoka", "Ixalli's Lorekeeper", "Kinjalli's Caller", "Llanowar Elves",
-        "Nacatl Savage", "Savannah Lions", "Selesnya Signet", "Sol Ring", "Swords to Plowshares",
-        "Temple of the False God",
+        "Nacatl Savage", "Rishkar's Expertise", "Savannah Lions", "Selesnya Signet", "Sol Ring",
+        "Swords to Plowshares", "Temple of the False God",
     )  # fmt: skip
     assert list(fuzz_tool.FUZZ_EXCLUSIONS) == ["Repentant Blacksmith"]
     for recipe in fuzz_tool.RECIPES:
@@ -437,35 +438,47 @@ def test_the_recipes_hold_the_excerpt_minus_the_exclusions() -> None:
             assert Counter(card.data.name for card in deck.cards) == expected_deck(recipe, copies)
 
 
-def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The default run, cut to its first five games (standard, 2 to 6 players). The
-    seats get the spells and creatures recipes with 8 and then 2 of each basic land, in turn. The
-    games reach later turns; players play lands (at most one a turn, 305.2), tap them for mana,
-    cast spells, which resolve or are reversed; and the summary's numbers are those of the
-    games. (Five games since M2.7: with Fiery Confluence in the decks, the first four no longer
-    include a payable cast that a random seat reversed.)"""
-    recorder = Recorder()
-    text = run_main(monkeypatch, recorder, "--games", "5", "--jobs", "1")
+# The cards of the pinned recipes (the excerpt's as of M2.9), so that adding a card to the excerpt
+# doesn't reshuffle the games ``test_a_default_run_plays_turns_lands_and_spells_and_reports_them``
+# reads (docs/decisions.md, 2026-10-28).
+PINNED_NONCREATURES = (
+    "Arcane Signet", "Cancel", "Chandra's Ignition", "Command Tower", "Cryptic Command",
+    "Darksteel Relic", "Decimate", "Emerald Medallion", "Fiery Confluence", "Selesnya Signet",
+    "Sol Ring", "Swords to Plowshares", "Temple of the False God",
+)  # fmt: skip
+PINNED_CREATURES = (
+    "Ashcoat Bear", "Avacyn's Pilgrim", "Darksteel Myr", "Gladecover Scout", "Grizzly Bears",
+    "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper", "Kinjalli's Caller", "Llanowar Elves",
+    "Nacatl Savage", "Savannah Lions",
+)  # fmt: skip
 
-    pool = [("spells", 8), ("creatures", 8), ("spells", 2), ("creatures", 2)]
-    assert [len(decks) for _, decks, _, _ in recorder.calls] == [2, 3, 4, 5, 6]
-    assert [seed for _, _, seed, _ in recorder.calls] == [0, 1, 2, 3, 4]
-    for config, decks, seed, options in recorder.calls:
-        assert config.commander is None
-        assert options == {"concession_chance": 200, "check_every": 10}
-        for seat, player_deck in enumerate(decks):
-            names = Counter(card.data.name for card in player_deck.cards)
-            assert names == expected_deck(*pool[(seed + seat) % len(pool)])
-            assert player_deck.commanders == ()
-    assert (
-        "Run: quick preset; decks: the spells and creatures recipes with 8 and 2 of each basic "
-        "land (basic_lands.json, cards.json), cycled among the seats; concessions: 1 decision "
-        "in 200; full checks every 10 answers." in text
-    )
 
-    # Each game's numbers, counted here from its final state.
+def pinned_recipe_cards(recipe: str) -> tuple[str, ...]:
+    """``fuzz_tool.recipe_cards`` with the pinned card lists, sorted by name."""
+    if recipe == "spells":
+        return PINNED_NONCREATURES
+    return tuple(sorted(PINNED_NONCREATURES + PINNED_CREATURES))
+
+
+@dataclass
+class Totals:
+    """What a run's games did, counted from their final states."""
+
+    turns: list[int]
+    lands: int
+    mana: int
+    cast: int
+    resolved: int
+    reversed_: int
+    gaps: Counter[str]
+    payable: dict[str, int]
+    payable_reversed: Counter[str]
+
+
+def check_summary(recorder: Recorder, text: str, formats: str) -> Totals:
+    """Count each recorded game's numbers from its final state, check that every game ended (a
+    loss, 104.3, or an allowed gap) and that the summary ``text`` reports exactly those numbers;
+    ``formats`` is the summary's expected ``Formats:`` line. Returns the totals."""
     answers: list[int] = []
     turns: list[int] = []
     lands = mana = cast = resolved = reversed_ = abilities_reversed = 0
@@ -522,13 +535,14 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
         endings[
             {"704.5b": "decked", "704.5a": "life total", "104.3a": "concession"}[last_loss.rules[0]]
         ] += 1
-    assert max(turns) >= 10, "some game reaches a later turn"
-    assert lands > 0 and mana > 0
-    assert cast > 0 and resolved > 0 and reversed_ > 0, "spells are cast, resolve and are reversed"
     assert set(gaps) <= set(fuzz_tool.ALLOWED_GAPS)
 
     total = sum(answers)
-    assert numbers(r"5 games passed: (\d+) answers accepted, (\d+) rejected\.", text) == (total, 0)
+    games = len(recorder.results)
+    assert numbers(rf"{games} games passed: (\d+) answers accepted, (\d+) rejected\.", text) == (
+        total,
+        0,
+    )
     assert numbers(r"Answers per game: min (\d+), average ([\d.]+), max (\d+)\.", text) == (
         min(answers),
         round(total / len(answers), 1),
@@ -575,23 +589,83 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
         reversed_by["auto-pay"],
         attempts["auto-pay"],
         payable_reversed["auto-pay"],
-        payable["auto-pay"],
+        payable.get("auto-pay", 0),
         reversed_by["random"],
         attempts["random"],
         payable_reversed["random"],
-        payable["random"],
+        payable.get("random", 0),
+    )
+    per_card = ", ".join(f"{name} x{casts[name]}" for name in sorted(casts))
+    assert f"Casts per card: {per_card}." in text
+    per_gap = ", ".join(f"{rule} x{gaps[rule]}" for rule in sorted(gaps)) or "none"
+    assert f"Gaps: {per_gap}." in text
+    assert f"Formats: {formats}" in text
+    return Totals(turns, lands, mana, cast, resolved, reversed_, gaps, payable, payable_reversed)
+
+
+def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The default run, cut to its first five games (standard, 2 to 6 players), with the pinned
+    recipes (``PINNED_NONCREATURES``, ``PINNED_CREATURES``: the excerpt's cards as of M2.9), so
+    that new cards don't change these games. The seats get the spells and creatures recipes with
+    8 and then 2 of each basic land, in turn. The games reach later turns; players play lands (at
+    most one a turn, 305.2), tap them for mana, cast spells, which resolve or are reversed; and
+    the summary's numbers are those of the games. (Five games since M2.7: with Fiery Confluence
+    in the decks, the first four no longer included a payable cast that a random seat
+    reversed.)"""
+    monkeypatch.setattr(fuzz_tool, "recipe_cards", pinned_recipe_cards)
+    recorder = Recorder()
+    text = run_main(monkeypatch, recorder, "--games", "5", "--jobs", "1")
+
+    pool = [("spells", 8), ("creatures", 8), ("spells", 2), ("creatures", 2)]
+    assert [len(decks) for _, decks, _, _ in recorder.calls] == [2, 3, 4, 5, 6]
+    assert [seed for _, _, seed, _ in recorder.calls] == [0, 1, 2, 3, 4]
+    for config, decks, seed, options in recorder.calls:
+        assert config.commander is None
+        assert options == {"concession_chance": 200, "check_every": 10}
+        for seat, player_deck in enumerate(decks):
+            names = Counter(card.data.name for card in player_deck.cards)
+            recipe, copies = pool[(seed + seat) % len(pool)]
+            expected = Counter({name: copies for name in fuzz_tool.BASIC_LAND_NAMES})
+            expected.update({name: max(1, copies // 2) for name in pinned_recipe_cards(recipe)})
+            assert names == expected
+            assert player_deck.commanders == ()
+    assert (
+        "Run: quick preset; decks: the spells and creatures recipes with 8 and 2 of each basic "
+        "land (basic_lands.json, cards.json), cycled among the seats; concessions: 1 decision "
+        "in 200; full checks every 10 answers." in text
+    )
+    totals = check_summary(recorder, text, "standard x5")
+    assert max(totals.turns) >= 10, "some game reaches a later turn"
+    assert totals.lands > 0 and totals.mana > 0
+    assert totals.cast > 0 and totals.resolved > 0 and totals.reversed_ > 0, (
+        "spells are cast, resolve and are reversed"
     )
     # M2.5's "done when" (docs/decisions.md): of the casts that could be paid when their payment
     # began, the auto-paying seats reverse none. That the random seats' payable reversals are
     # counted is checked deterministically (test_a_payable_cast_reversed_is_counted_for_its_kind_
     # of_seat): how many random games happen to have one changes with every deck (2026-10-27).
-    assert payable["auto-pay"] > 0 and payable["random"] > 0
-    assert payable_reversed["auto-pay"] == 0
-    per_card = ", ".join(f"{name} x{casts[name]}" for name in sorted(casts))
-    assert f"Casts per card: {per_card}." in text
-    per_gap = ", ".join(f"{rule} x{gaps[rule]}" for rule in sorted(gaps)) or "none"
-    assert f"Gaps: {per_gap}." in text
-    assert "Formats: standard x5" in text
+    assert totals.payable["auto-pay"] > 0 and totals.payable["random"] > 0
+    assert totals.payable_reversed["auto-pay"] == 0
+
+
+def test_the_default_run_with_every_current_card_completes_and_reports_consistently(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The whole default run (ten games, both formats) with the current recipes (every excerpt
+    card but the exclusions: ``NONCREATURES`` and ``CREATURES``): each game's decks are those
+    recipes, each game ends (a loss, 104.3, or an allowed gap), and the summary reports exactly
+    what the games did. No threshold on random outcomes (docs/decisions.md, 2026-10-28)."""
+    recorder = Recorder()
+    text = run_main(monkeypatch, recorder, "--jobs", "1")
+    pool = [("spells", 8), ("creatures", 8), ("spells", 2), ("creatures", 2)]
+    assert len(recorder.results) == fuzz_tool.QUICK.games
+    for _, decks, seed, _ in recorder.calls:
+        for seat, player_deck in enumerate(decks):
+            names = Counter(card.data.name for card in player_deck.cards)
+            assert names == expected_deck(*pool[(seed + seat) % len(pool)])
+    check_summary(recorder, text, "commander x5, standard x5")
 
 
 def test_every_other_commander_game_gives_the_seats_commanders(

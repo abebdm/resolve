@@ -40,7 +40,11 @@ from resolve.cards.primitives.base import Ability
 from resolve.cards.primitives.statics import CantBeCountered
 from resolve.cards.primitives.targets import TargetSpec
 from resolve.data.types import CardType
-from resolve.effects.characteristics import Characteristics, characteristics
+from resolve.effects.characteristics import (
+    Characteristics,
+    characteristics,
+    variant_characteristics,
+)
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.rules import defaults
 from resolve.state.ids import ObjectId, PlayerId
@@ -231,12 +235,18 @@ def _land_play_prohibitions(state: GameState, action: PlayLand) -> tuple[Prohibi
 
 def _cast_permissions(state: GameState, action: CastAction) -> tuple[Permission, ...]:
     # 601.3: a rule or effect allows the cast: the permission applies to the card where it is
-    # (``defaults.cast_permissions``) and its timing allows casting the variant now (117.1a,
-    # 601.3e: judged on the variant's characteristics).
+    # (``defaults.cast_permissions``), the card is a spell it allows (a mana value limit, such as
+    # Rishkar's Expertise's "with mana value 5 or less") and its timing allows casting the
+    # variant now (117.1a, 608.2g). 601.3e: both are judged on the variant's characteristics.
     if action.card not in state.objects:
         return ()
     if action.permission not in defaults.cast_permissions(state, action.player, action.card):
         return ()
+    limit = action.permission.mana_value_at_most
+    if limit is not None:
+        chars = variant_characteristics(state, action.card, action.variant)
+        if chars.mana_value > limit:  # 202.3: from the printed mana cost
+            return ()
     if not defaults.may_cast_now(
         state, action.player, action.card, action.variant, action.permission
     ):

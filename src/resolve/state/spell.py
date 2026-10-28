@@ -8,7 +8,10 @@ effect that allows it (601.3), with the zone it allows casting from and its timi
   (702.102), ``Back`` (712.11a-b), ``Alternative(kind)`` for an adventure, an Omen or a
   prototype (715.3, 720.3, 718.3), or ``FaceDown(kind)`` (708.4).
 - ``CastPermission``: the rule (or effect) that allows the cast, the zone the card is cast from,
-  and its timing. The rules' own are ``FROM_HAND`` (601.3, 117.1a) and ``COMMANDER`` (903.8).
+  its timing, the alternative cost it requires (118.9b) and which spells it allows. The rules'
+  own are ``FROM_HAND`` (601.3, 117.1a) and ``COMMANDER`` (903.8).
+- ``CastGrant``: a permission an effect has given a player for now, such as Rishkar's
+  Expertise's "during this resolution" (608.2g); ``GameState.cast_grants`` holds them.
 - ``CastChoices``: the record a spell carries on the stack (``GameObject.spell``): its variant,
   permission and the zone it was cast from (601.2a), then the total cost locked in (601.2f) and the
   mana spent (601.2h). A permanent spell's record passes to the permanent it becomes, as
@@ -120,12 +123,27 @@ class CastTiming(Enum):
       702.8) whenever the player has priority, any other spell with sorcery timing.
     - ``AS_THOUGH_FLASH``: as though it had flash (601.3b); from M6.
     - ``DURING_RESOLUTION``: during the resolution of the spell or ability that allows it, ignoring
-      timing (608.2g); from M2.10.
+      the timing of 117.1a (608.2g); while it lasts, the effect's ``CastGrant`` is in
+      ``GameState.cast_grants``.
     """
 
     NORMAL = "normal"
     AS_THOUGH_FLASH = "as though it had flash"
     DURING_RESOLUTION = "during resolution"
+
+
+class AlternativeCost(Enum):
+    """An alternative cost a cast permission requires (118.9, 118.9b): paid rather than the mana
+    cost. Only one can be applied to a spell (118.9a, 601.2b).
+
+    - ``WITHOUT_PAYING_MANA_COST``: "cast it without paying its mana cost" (118.9): nothing is paid
+      in place of the mana cost, so the total cost starts from {0} (601.2f) and X is 0 (107.3b).
+      It can be applied to an object with no mana cost (118.6a).
+
+    Flashback, escape and the others join with their keywords (M4, M9).
+    """
+
+    WITHOUT_PAYING_MANA_COST = "without paying its mana cost"
 
 
 @dataclass(frozen=True)
@@ -134,15 +152,25 @@ class CastPermission(Immutable):
 
     ``rule`` is the CR rule behind it (the rules' own, or the rule an effect's kind follows);
     ``source`` the object whose effect grants it (``None`` for the rules' own); ``zone`` the zone
-    the card is cast from; ``timing`` when (``CastTiming``). Alternative costs a permission
-    requires (flashback, "without paying its mana cost", 118.9) and the zone a spell cast with it
-    goes to as it leaves the stack join with their milestones (M2.10, M4, M6).
+    the card is cast from; ``timing`` when (``CastTiming``); ``alternative_cost`` the alternative
+    cost it requires (118.9b), if any; ``mana_value_at_most`` the greatest mana value of a spell
+    it allows ("a spell with mana value 5 or less"), judged on the characteristics of the way the
+    card is cast (601.3e). The zone a spell cast with it goes to as it leaves the stack (flashback)
+    joins with its milestone (M4, M6).
     """
 
     rule: str
     zone: ZoneKind
     timing: CastTiming = CastTiming.NORMAL
     source: ObjectId | None = None
+    alternative_cost: AlternativeCost | None = None
+    mana_value_at_most: int | None = None
+
+    @property
+    def pays_mana_cost(self) -> bool:
+        """Whether a spell cast with this permission is cast by paying its mana cost (601.2f):
+        not with "without paying its mana cost" (118.9)."""
+        return self.alternative_cost is not AlternativeCost.WITHOUT_PAYING_MANA_COST
 
 
 FROM_HAND = CastPermission("601.3", ZoneKind.HAND)
@@ -150,6 +178,17 @@ FROM_HAND = CastPermission("601.3", ZoneKind.HAND)
 
 COMMANDER = CastPermission("903.8", ZoneKind.COMMAND)
 """A player may cast a commander they own from the command zone (903.8)."""
+
+
+@dataclass(frozen=True)
+class CastGrant(Immutable):
+    """``permission``, which an effect has given ``player`` for now: while Rishkar's Expertise
+    resolves, "you may cast a spell with mana value 5 or less from your hand without paying its
+    mana cost" (608.2g). It applies to the cards in ``player``'s own zone of the permission's
+    kind (``defaults.cast_permissions``)."""
+
+    player: PlayerId
+    permission: CastPermission
 
 
 # --- Targets -----------------------------------------------------------------------------------

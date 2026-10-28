@@ -60,8 +60,10 @@ of 0 is a 700.2 gap);
 modal), `instances(modes)` their instances of "target" in turn (601.2c, 700.2c).
 - **Rules:** 113.3a, 115.1a, 601.2b, 601.2c, 608.2c; 700.2, 700.2a, 700.2c, 700.2d
   (`ModeChoice(minimum, maximum, repeatable)`).
-- **Parameters:** `Mode(targets: tuple[TargetSpec, ...], effects: tuple[Effect, ...], cost=None)`
-  (`cost`: room for spree); `SpellAbility(modes, choose: ModeChoice | None = None)`.
+- **Parameters:** `Mode(targets: tuple[TargetSpec, ...], effects: tuple[Effect, ...], cost=None,
+  paragraphs: tuple[int, ...] = ())` (`cost`: room for spree; `paragraphs`: the effects, by
+  index, that begin a new paragraph of the printed text, as in Rishkar's Expertise; it changes
+  only `text`); `SpellAbility(modes, choose: ModeChoice | None = None)`.
 - **Examples:** Swords to Plowshares (`resolve.cards.definitions.removal`):
   `SpellAbility((Mode((target(CardType.CREATURE),), (Exile((TargetRef(0),)),
   GainLife(ControllerOf(TargetRef(0)), PowerOf(TargetRef(0))))),))`. Fiery Confluence (same
@@ -141,6 +143,20 @@ as a new object (`ReturnedToHand`), all at once.
 - **Parameters:** `group: EachCreature` (with `controlled_by` and `except_`).
 - **Example:** Cryptic Command: `TapAll(EachCreature(controlled_by=EachOpponent()))`, "Tap all
   creatures your opponents control."
+
+### `MayCastFromHand` (`resolve.cards.primitives.effects`)
+"You may cast a spell [with mana value N or less] from your hand without paying its mana cost":
+as it applies, its limit is evaluated and the controller may cast one spell from their hand,
+ignoring timing, with the alternative cost "without paying its mana cost" (X is 0); declining
+casts nothing. It gives one `CastDuringResolution` (`resolve.engine.casting`) with a
+`CastPermission("608.2g", HAND, DURING_RESOLUTION, source=the spell, alternative_cost=
+WITHOUT_PAYING_MANA_COST, mana_value_at_most=N)`; a limit that can't be determined (608.2b)
+does nothing. The resolving spell goes on resolving afterwards; nobody receives priority.
+- **Rules:** 608.2g, 118.9, 118.9a-d, 118.6a, 107.3b, 601.3e, 733.2.
+- **Parameters:** `mana_value_at_most: Value | None = None` (`None`: any mana value).
+- **Example:** Rishkar's Expertise (`resolve.cards.definitions.card_draw`):
+  `MayCastFromHand(Fixed(5))`. Effects with another zone ("from among the exiled cards"), "you
+  may cast it this turn" or a paid cost reuse `CastDuringResolution` with their own permission.
 
 ### `AddMana` (`resolve.cards.primitives.effects`)
 "Add [mana]": the controller adds these mana units, with the ability's object as their source.
@@ -239,15 +255,18 @@ each opponent still in the game (800.4a).
 - **Rules:** 201.5, 109.5, 108.4, 115.10, 608.2b, 608.2h, 800.4a.
 - **Example:** Swords to Plowshares's `ControllerOf(TargetRef(0))`.
 
-### Values: `Fixed`, `PowerOf`, `X` (`resolve.cards.primitives.values`)
+### Values: `Fixed`, `PowerOf`, `X`, `GreatestPower` (`resolve.cards.primitives.values`)
 Numbers as expressions, evaluated by `resolve.effects.evaluation.evaluate` when the effect applies:
 a printed number (never negative); an object's power (last known if it left; nothing for an
 illegal target); `X()`, the value announced for the spell as it was cast (from its record,
-`CastChoices.x`, or its last known information; X only in the text, 107.3f, is a gap). Counts and
-"greatest power" (M2.10) join them.
+`CastChoices.x`, or its last known information; X only in the text, 107.3f, is a gap);
+`GreatestPower(group)`, "the greatest power among [creatures]": the highest power among the
+group's creatures now, 0 with none (an `EachCreature` without `except_`). Counts and arithmetic
+join them with their cards.
 - **Rules:** 107.1b, 107.3a, 107.3i, 208.1, 608.2h, 608.2b.
 - **Example:** `PowerOf(TargetRef(0))` in Swords to Plowshares and Chandra's Ignition;
-  `DealDamage(X(), (TargetRef(0),))` in Test Blaze (`tests/game_fixtures.py`).
+  `DealDamage(X(), (TargetRef(0),))` in Test Blaze (`tests/game_fixtures.py`);
+  `DrawCards(GreatestPower(EachCreature(controlled_by=You())))` in Rishkar's Expertise.
 
 ## Triggers
 

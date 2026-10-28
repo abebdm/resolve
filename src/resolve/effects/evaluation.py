@@ -35,7 +35,7 @@ from resolve.cards.primitives.refs import (
     ThisObject,
     You,
 )
-from resolve.cards.primitives.values import Fixed, PowerOf, Value, X
+from resolve.cards.primitives.values import Fixed, GreatestPower, PowerOf, Value, X
 from resolve.data.types import CardType
 from resolve.effects.characteristics import characteristics
 from resolve.errors import EngineError, NotImplementedRule
@@ -162,3 +162,10 @@ def evaluate(state: GameState, value: Value, context: Context) -> int | None:
                     "107.3f: a value of X not announced for a cost (X only in the text)"
                 )
             return known.spell.x
+        case GreatestPower(group=group):
+            # 208.1, 608.2h: the creatures as the effect applies; with none, 0.
+            powers = [
+                characteristics(state, obj).power for obj in each_creature(state, group, context)
+            ]
+            known = [power for power in powers if power is not None]
+            return max(known, default=0)

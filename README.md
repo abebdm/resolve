@@ -28,13 +28,16 @@ card allows it), and a cost with {X} has its value announced and paid. Spells ca
 (a countered spell goes to its owner's graveyard), and some can't be. Flash, hexproof, shroud,
 indestructible and protection work for casting, targeting and destroying (protection's damage
 prevention comes with prevention effects). Permanents can make spells cost less (only their
-generic mana, after any increases, never changing a spell's mana value). Mana comes
+generic mana, after any increases, never changing a spell's mana value). A spell can let its
+caster cast another spell from their hand for free while it resolves (with nobody getting
+priority in between, and X counted as 0). Mana comes
 from lands, artifacts and creatures (which can't tap the turn they arrive), including mana of a
 color you choose, mana only some spells may use, and abilities that cost mana themselves. The
 cards implemented so far are the basic lands, three vanilla creatures, Sol Ring, Arcane Signet,
 Selesnya Signet, Command Tower, Temple of the False God, Llanowar Elves, Avacyn's Pilgrim,
 Ixalli's Lorekeeper, Emerald Medallion, Kinjalli's Caller, Swords to Plowshares, Chandra's
-Ignition, Decimate, Fiery Confluence, Cryptic Command, Cancel, and one card for each keyword: Ashcoat Bear, Gladecover Scout, Humble
+Ignition, Decimate, Fiery Confluence, Cryptic Command, Cancel, Rishkar's Expertise, and one
+card for each keyword: Ashcoat Bear, Gladecover Scout, Humble
 Budoka, Darksteel Relic, Darksteel Myr, Repentant Blacksmith and Nacatl Savage.
 Tools compare a new Comprehensive Rules version or card data snapshot against
 the pinned ones (`tools/rules_diff.py`, `tools/card_diff.py`), and `tools/rule.py` prints any
@@ -55,8 +58,9 @@ helper that pays mana automatically, for people at the terminal (`--autopay`) an
 random test players. Its seventh step added targets, instants and sorceries that resolve, and the
 first effects. Its eighth step added modes and X, its ninth the evergreen keywords,
 countering spells and Cryptic Command, and its tenth cost reductions (Emerald Medallion and
-Kinjalli's Caller make spells cost less). **Next:** casting a spell for free while another
-resolves (M2.10, Rishkar's Expertise). Details: "Current status" in [`CLAUDE.md`](CLAUDE.md).
+Kinjalli's Caller make spells cost less), and its eleventh casting a spell for free while
+another resolves (Rishkar's Expertise), the last of M2's cards. **Next:** M2's wrap-up (M2.11),
+then the user's milestone check. Details: "Current status" in [`CLAUDE.md`](CLAUDE.md).
 
 Resolve is unofficial Fan Content permitted under the Wizards of the Coast Fan Content Policy. It
 is not approved or endorsed by Wizards. Portions of the materials used are property of Wizards of

@@ -156,8 +156,13 @@ drive decisions with a script.
    give a spell its modes and X (with the total cost), and `scenario.targets` then lists the
    chosen modes' instances in turn.
    `choose_color(Color.GREEN)` answers "one mana of any color" (asked only with two or more
-   colors). A mana ability with a mana cost (Selesnya Signet) asks its own
-   `ACTIVATE_MANA_ABILITIES` (answer with `activate(...)`/`pay()`) and, if it fails, its own
+   colors). An effect that allows a cast while it resolves (608.2g, Rishkar's Expertise) asks
+   `CAST_DURING_RESOLUTION`: answer `cast_during_resolution(obj, permission)` (the permission
+   is the effect's, `source=` the resolving spell;
+   `tests/rules/test_608_2g_casting_during_resolution.py` has `free(spell)`) or `decline()`;
+   like priority, it is asked even when declining is the only answer. A {0} total still offers
+   mana abilities first (601.2g) when there are any: answer `pay()`. A mana ability with a mana
+   cost (Selesnya Signet) asks its own `ACTIVATE_MANA_ABILITIES` (answer with `activate(...)`/`pay()`) and, if it fails, its own
    `REVERSE_MANA_ABILITIES`.
 7. **Summoning sickness (302.6).** Permanents the builder puts on the battlefield came under
    their controller's control before the first turn (`entered_turn=0`), so a creature can tap
@@ -466,6 +471,24 @@ files.
    effects, its controller, multiplayer, redundant instances), and its text in
    `tests/cards/test_keyword_primitives.py`; add it to `docs/primitives.md` ("Keywords") and tick
    its coverage-map row.
+
+### Let an effect cast a spell during its resolution
+
+1. The effect's `tasks` returns `CastDuringResolution(player, permission)`
+   (`resolve.engine.casting`), as `MayCastFromHand` does. The `CastPermission` names the zone
+   (`ZoneKind`), the timing `CastTiming.DURING_RESOLUTION` (608.2g), `source=` the resolving
+   object, the alternative cost it requires (`AlternativeCost`, 118.9b) and any mana value
+   limit (`mana_value_at_most`, evaluated as the effect applies).
+2. Nothing else is needed for the hand: the task grants the permission
+   (`GameState.cast_grants`, read by `defaults.cast_permissions` for the player's own zone of
+   that kind), offers what `defaults.cast_options` gives with it, runs `CastSpell`, asks again
+   after a reversal (733.2) and removes the grant. A new zone (the library while searching,
+   cards exiled by the effect) or a condition other than mana value needs `cast_permissions`
+   (which cards the grant covers) or `legality._cast_permissions` (which spells it allows)
+   extended, with tests.
+3. Test what the permission allows and refuses, that nobody receives priority after the cast,
+   X (107.3b) and the total cost (118.9d) when the mana cost isn't paid, declining, and a
+   reversed attempt.
 
 ### Add a cost increase or reduction
 
