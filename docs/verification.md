@@ -35,11 +35,11 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
    Every test passes; none is skipped.
 3. **Lint and types:** `uv run ruff check .` and `uv run pyright`. Both report no problems.
 4. **The thorough fuzz run:** `uv run python tools/fuzz.py --thorough`. It plays 100 games with
-   every check before every decision, several at once (one per CPU), and takes about an hour on
-   an 8-core machine (about TIME_4 on 4 cores). It prints its settings first, a line every 10
-   games, and the summary at the end. The seats cycle three kinds of player: random (exploring
-   illegal actions), caster (plays a land, then casts every spell it may, paid by the
-   auto-payer) and auto-pay (random, paid by the auto-payer). Check that:
+   every check before every decision, several at once (one per CPU), and takes about half an
+   hour on an 8-core machine (43 minutes on 4 cores in M2.11). It prints its settings first, a
+   line every 10 games, and the summary at the end. The seats cycle three kinds of player:
+   random (exploring illegal actions), caster (plays a land, then casts every spell it may,
+   paid by the auto-payer) and auto-pay (random, paid by the auto-payer). Check that:
    - the first line starts `Run: thorough preset;`, the summary says `100 games passed`, and
      nothing says `FAILED:`;
    - `Endings:` shows `concession` games and many `rules gap` games, with `draw x0`
@@ -49,11 +49,12 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
      response; a Cancel or Cryptic Command cast by a caster seat with mana left open), so a 0
      in one of them, after an engine change, is worth a note rather than a failure: the rules
      and card tests cover both;
-   - `Damage:` above zero (Fiery Confluence, Chandra's Ignition);
+   - `Damage:` above zero (Fiery Confluence; Chandra's Ignition only after M3);
    - `Casts per card:` lists every card of `tools/excerpts/cards.json` but the lands (played,
      not cast), Repentant Blacksmith (kept out of the fuzz decks until M6, 702.16e) and the
      cards under "Not yet reachable"; a rarely cast card (Cryptic Command, with three blue
-     symbols) may be missing in one run and is then worth a note, not a failure;
+     symbols, or a creature that only one recipe holds) may be missing in one run and is then
+     worth a note, not a failure;
    - `Gaps:` lists only `508.1` and `903.8`;
    - `Turns per game:` reaches a maximum of several tens of turns, and `Played:` shows
      hundreds of lands and mana abilities, and some reversed mana ability activations
@@ -65,8 +66,13 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
    - the last line gives the time; note it if it is much longer than the estimate above.
    The exact numbers depend on the engine and change from milestone to milestone; a run with the
    same code always prints the same numbers, except the timing. At the end of M2 the run
-   printed: RESULT_LINES
-5. **The quick run** (what agents run): `uv run python tools/fuzz.py`. Under a minute: 10 games,
+   printed `100 games passed: 47830 answers accepted, 1 rejected`; `Endings: decked x0, life total x0, concession x17, draw x0, rules gap
+   x83`; `Spells: 305 cast, 302 resolved, 1 didn't resolve, 1 countered, 11344 reversed`;
+   `Damage: 22 dealt`; `Reversed casts: auto-pay seats 7523 of 7750 attempts, 0 of 227
+   payable; random seats 3821 of 3899, 19 of 97 payable`; 20 cards in `Casts per card:`
+   (Grizzly Bears and Cryptic Command not cast that run, by chance; with `--seed 100` both
+   are); `Gaps: 508.1 x53, 903.8 x30`.
+5. **The quick run** (what agents run): `uv run python tools/fuzz.py`. About a minute: 10 games,
    with the full checks every 10 answers. The same things to check as in step 4, for 10 games,
    except that most cards, `didn't resolve`, `countered` and damage may be missing from so few
    games.

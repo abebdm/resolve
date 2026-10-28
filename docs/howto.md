@@ -208,8 +208,8 @@ override either.
 
 | Run | Command (PowerShell and Unix alike) | Games | Decks | Concessions | Full checks | Time |
 |---|---|---|---|---|---|---|
-| Quick (default): agents and day-to-day work | `uv run python tools/fuzz.py` | 10 | both recipes, 8 and 2 of each basic land | 1 decision in 200 | every 10 answers | about QUICK_TIME on 4 cores (M2.11) |
-| Thorough: the user's milestone verification | `uv run python tools/fuzz.py --thorough` | 100 | both recipes, 8 and 4 of each basic land | 1 decision in 500 | before every decision | about 1 hour on 8 cores, TIME_4 on 4 (M2.11) |
+| Quick (default): agents and day-to-day work | `uv run python tools/fuzz.py` | 10 | both recipes, 8 and 2 of each basic land | 1 decision in 200 | every 10 answers | about a minute on 4 cores (M2.11: one long six-player game sets the time) |
+| Thorough: the user's milestone verification | `uv run python tools/fuzz.py --thorough` | 100 | both recipes, 8 and 4 of each basic land | 1 decision in 500 | before every decision | about half an hour on 8 cores, 43 minutes on 4 (M2.11) |
 
 1. Both presets cycle the player counts 2 to 6, then the formats (standard, then Commander), so
    10 games are one game of each. The decks come from two recipes (`recipe_deck`): the same
