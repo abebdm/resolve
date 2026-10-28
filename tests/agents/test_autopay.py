@@ -668,3 +668,18 @@ def test_107_3a_the_auto_payer_pays_the_total_with_x() -> None:
     (cast_event,) = records(state, SpellCast)
     assert cast_event.total_cost.text == "{2}{R}"
     assert all(state.objects[m].tapped for m in mountains)
+
+
+def test_601_2f_the_auto_payer_pays_the_reduced_total() -> None:
+    """Grizzly Bears with Emerald Medallion, from a Forest and a Plains: the payment under way
+    is the reduced total {G} (601.2f), so the auto-payer taps only the Forest."""
+    scenario = Scenario(2)
+    (bears,) = scenario.hand(P0, ["Grizzly Bears"])
+    _, forest, plains = scenario.battlefield(P0, ["Emerald Medallion", "Forest", "Plains"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    run_script(state, cast(bears, P0))
+    autopay(state)
+    (cast_event,) = records(state, SpellCast)
+    assert cast_event.total_cost.text == "{G}"
+    assert tapped(state, [forest, plains]) == [True, False]

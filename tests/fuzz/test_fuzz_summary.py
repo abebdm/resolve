@@ -323,6 +323,32 @@ def test_the_summary_compares_the_auto_paying_seats_with_the_random_ones() -> No
     )
 
 
+def test_a_payable_cast_reversed_is_counted_for_its_kind_of_seat() -> None:
+    """M2.5's measure, checked deterministically (docs/decisions.md, 2026-10-27, "M2.9"). In one
+    game P0 (an even seat: random) casts Grizzly Bears ({1}{G}) with two untapped Forests, a
+    payable cast (601.2g: the planner finds them), and answers "pay" at once: unpaid (118.3), it
+    is reversed (733.1). In a second game P1 (an odd seat: auto-pay) does the same. In a third,
+    P0 tries the Bears with one Forest: reversed, but it couldn't be paid (107.4b). The summary
+    counts the first two as payable reversals, each for its kind of seat, and the third only as
+    an attempt."""
+    gap = "508.1: declaring attackers"
+    results: list[FuzzResult] = []
+    for player, lands in ((PlayerId(0), 2), (PlayerId(1), 2), (PlayerId(0), 1)):
+        scenario = Scenario(2)
+        scenario.battlefield(player, ["Forest"] * lands)
+        (bears,) = scenario.hand(player, ["Grizzly Bears"])
+        scenario.at(Phase.PRECOMBAT_MAIN, active=player)
+        state = scenario.build()
+        reversed_ = payable_after(state, cast(bears, player), pay())
+        assert len(records(state, ActionReversed)) == 1 and records(state, SpellCast) == []
+        results.append(FuzzResult(2, 0, gap, state, tuple(reversed_)))
+    assert [result.payable_reversed for result in results] == [(PlayerId(0),), (PlayerId(1),), ()]
+    assert summary_lines([GameStats.of(result) for result in results])[7] == (
+        "Reversed casts: auto-pay seats 1 of 1 attempts, 1 of 1 payable; random seats 2 of 2, "
+        "1 of 1 payable."
+    )
+
+
 def test_the_summary_of_one_game() -> None:
     games = [GameStats(1, 0, 1, DRAW, 0, 0)]
     assert summary_lines(games)[1:3] == [
@@ -369,14 +395,14 @@ def numbers(pattern: str, text: str) -> tuple[float, ...]:
 # The excerpt's cards, by hand: the noncreature ones, and the creatures.
 NONCREATURES = [
     "Arcane Signet", "Cancel", "Chandra's Ignition", "Command Tower", "Cryptic Command",
-    "Darksteel Relic", "Decimate", "Fiery Confluence", "Selesnya Signet", "Sol Ring",
-    "Swords to Plowshares", "Temple of the False God",
+    "Darksteel Relic", "Decimate", "Emerald Medallion", "Fiery Confluence", "Selesnya Signet",
+    "Sol Ring", "Swords to Plowshares", "Temple of the False God",
 ]  # fmt: skip
 # Repentant Blacksmith is left out (``FUZZ_EXCLUSIONS``: 702.16e until M6).
 CREATURES = [
     "Ashcoat Bear", "Avacyn's Pilgrim", "Darksteel Myr", "Gladecover Scout", "Grizzly Bears",
-    "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper", "Llanowar Elves", "Nacatl Savage",
-    "Savannah Lions",
+    "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper", "Kinjalli's Caller", "Llanowar Elves",
+    "Nacatl Savage", "Savannah Lions",
 ]  # fmt: skip
 
 
@@ -393,15 +419,16 @@ def expected_deck(recipe: str, copies: int) -> Counter[str]:
 def test_the_recipes_hold_the_excerpt_minus_the_exclusions() -> None:
     assert fuzz_tool.recipe_cards("spells") == (
         "Arcane Signet", "Cancel", "Chandra's Ignition", "Command Tower", "Cryptic Command",
-        "Darksteel Relic", "Decimate", "Fiery Confluence", "Selesnya Signet", "Sol Ring",
-        "Swords to Plowshares", "Temple of the False God",
+        "Darksteel Relic", "Decimate", "Emerald Medallion", "Fiery Confluence", "Selesnya Signet",
+        "Sol Ring", "Swords to Plowshares", "Temple of the False God",
     )  # fmt: skip
     assert fuzz_tool.recipe_cards("creatures") == (
         "Arcane Signet", "Ashcoat Bear", "Avacyn's Pilgrim", "Cancel", "Chandra's Ignition",
         "Command Tower", "Cryptic Command", "Darksteel Myr", "Darksteel Relic", "Decimate",
-        "Fiery Confluence", "Gladecover Scout", "Grizzly Bears", "Hill Giant", "Humble Budoka",
-        "Ixalli's Lorekeeper", "Llanowar Elves", "Nacatl Savage", "Savannah Lions",
-        "Selesnya Signet", "Sol Ring", "Swords to Plowshares", "Temple of the False God",
+        "Emerald Medallion", "Fiery Confluence", "Gladecover Scout", "Grizzly Bears", "Hill Giant",
+        "Humble Budoka", "Ixalli's Lorekeeper", "Kinjalli's Caller", "Llanowar Elves",
+        "Nacatl Savage", "Savannah Lions", "Selesnya Signet", "Sol Ring", "Swords to Plowshares",
+        "Temple of the False God",
     )  # fmt: skip
     assert list(fuzz_tool.FUZZ_EXCLUSIONS) == ["Repentant Blacksmith"]
     for recipe in fuzz_tool.RECIPES:
@@ -555,10 +582,11 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
         payable["random"],
     )
     # M2.5's "done when" (docs/decisions.md): of the casts that could be paid when their payment
-    # began, the auto-paying seats reverse none, while the random seats reverse some.
+    # began, the auto-paying seats reverse none. That the random seats' payable reversals are
+    # counted is checked deterministically (test_a_payable_cast_reversed_is_counted_for_its_kind_
+    # of_seat): how many random games happen to have one changes with every deck (2026-10-27).
     assert payable["auto-pay"] > 0 and payable["random"] > 0
     assert payable_reversed["auto-pay"] == 0
-    assert payable_reversed["random"] > 0
     per_card = ", ".join(f"{name} x{casts[name]}" for name in sorted(casts))
     assert f"Casts per card: {per_card}." in text
     per_gap = ", ".join(f"{rule} x{gaps[rule]}" for rule in sorted(gaps)) or "none"

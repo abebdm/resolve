@@ -82,6 +82,8 @@ SOURCES = (
     "Ixalli's Lorekeeper",
     "Llanowar Elves",
     "Temple of the False God",
+    "Emerald Medallion",  # not a source: green spells cost {1} less (601.2f)
+    "Kinjalli's Caller",  # Dinosaur spells cost {1} less
 )
 CREATURES = ("Avacyn's Pilgrim", "Ixalli's Lorekeeper", "Llanowar Elves")
 SPELLS = (

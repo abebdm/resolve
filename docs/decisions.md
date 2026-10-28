@@ -19,6 +19,54 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-27: M2.9: the random seats' payable reversals are checked deterministically
+- **Decision (the user's, 2026-10-27):** `test_a_default_run_plays_turns_lands_and_spells_and_
+  reports_them` no longer asserts that the random seats reverse some payable cast in the default
+  run's first five games. It still asserts that the auto-paying seats reverse none of their
+  payable casts and that both kinds of seat have payable casts. The random half is replaced by
+  `test_a_payable_cast_reversed_is_counted_for_its_kind_of_seat`: scripted games in which a
+  payable cast (Grizzly Bears with two Forests) is answered "pay" at once and reversed, by an
+  even seat and by an odd one, plus an unpayable reversal, checked through `PayableCasts`,
+  `GameStats` and the summary's `Reversed casts:` line. The quick preset stays at 10 games.
+- **Why:** the assertion tested the metric, not a game rule, and it depended on what random
+  games happened to do: with Emerald Medallion and Kinjalli's Caller in the recipes, none of
+  the first five games (nor the full quick run, 0 of 8) had a random seat reverse a payable
+  cast; the first was game 12. M2.7 had raised the sample from four games to five for the same
+  reason, and every deck change would break it again. A deterministic test checks the same
+  thing, that such reversals are counted for the right kind of seat, every time.
+- **Where:** `tests/fuzz/test_fuzz_summary.py`. Partly supersedes the 2026-10-26 entry (M2.7,
+  five games) and the "checks the criterion" sentence of the 2026-10-22 entry (M2.5).
+
+### 2026-10-27: M2.9: cost modifiers come from battlefield statics, applied by step without asking
+- **Decision:** the total cost (601.2f) is worked out by `resolve.rules.costs.spell_total_cost`
+  in `CastSpell`'s `TOTAL` stage: the mana cost with X's value (601.2b first), then every
+  `CostModifier` by `ModifierStep` (increases, then reductions, then effects on the total),
+  each step's modifiers in battlefield order. The modifiers are those that the
+  `SpellCostModifier` abilities of permanents on the battlefield give for the spell
+  (`spell_cost_modifiers`), judged on the spell's characteristics on the stack and its
+  caster. The total is stored (`CastSpell.total`, `PayCosts.cost`, `CastChoices.total_cost`)
+  and never recomputed. A reduction is a modifier of the generic part only (`ReduceGeneric`,
+  `ManaCost.with_generic`), so it can't touch colored or colorless symbols and stops at
+  nothing (`{0}`).
+- **Why:** 601.2f lets the player apply reductions in any order. With generic reductions only,
+  every order gives the same total (the generic part is `max(0, generic + increases -
+  reductions)`), so a question would have identical answers (design.md §6's canonical answers);
+  a reduction whose order matters (118.7b-e: colored, colorless or hybrid amounts) must add
+  that choice with its first card; until then, two reductions of which one isn't generic raise
+  `NotImplementedRule` (601.2f) in `spell_total_cost`. 113.6 makes a permanent's abilities function only on the
+  battlefield, so the Medallion on the stack, in a hand or in a graveyard reduces nothing;
+  abilities that function from other zones (113.6b, "this spell costs {1} less", Ghalta) join
+  the gathering with their cards (M4). "You cast" is judged as the caster being the
+  controller of the ability's source. The first real increase is the commander tax (M7); the
+  tests use a test-only one (Test Thorn, `tests/game_fixtures.py`) to check the order.
+  `Quality` gained `adjective` ("green", "Dinosaur") so the reduction's text reuses the
+  qualities of protection rather than a parallel spell filter.
+- **Rules:** 601.2f, 601.8, 118.7, 118.7a, 113.6, 202.3, 205.3; the rulings of Emerald
+  Medallion (2023-07-28) and Kinjalli's Caller.
+- **Where:** `resolve.rules.costs`, `resolve.cards.primitives.cost_modifiers`,
+  `resolve.engine.casting` (`_total`), `resolve.data.mana_cost` (`generic`, `with_generic`),
+  `resolve.cards.keywords.qualities` (`adjective`).
+
 ### 2026-10-27: M2.8: a countered spell goes to its owner's graveyard, not where it would resolve to
 - **Decision (approved by the user, 2026-10-27; revises design.md §17.12 and the M2.6 handoff
   note):** a countered spell is moved to its owner's graveyard by `SpellCountered`, an ordinary
@@ -127,6 +175,8 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   `resolve.events.spells.XAnnounced`.
 
 ### 2026-10-26: M2.7: the fuzz summary test reads the default run's first five games
+**Partly superseded by 2026-10-27** ("M2.9: the random seats' payable reversals are checked
+deterministically"): the five games stay, the random-seat assertion they were chosen for is gone.
 - **Decision:** `test_a_default_run_plays_turns_lands_and_spells_and_reports_them` runs the
   default run's first five games (2 to 6 players, all standard) instead of four; its assertions
   are unchanged, and the averages divide by the number of games.
@@ -223,7 +273,8 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
   decision is `PAY_COSTS` (601.2h asks only when the pool pays in two or more ways) or if the
   auto-payer's planner finds a plan for its `ACTIVATE_MANA_ABILITIES`; a cast asking nothing is
   payable if it is cast. The summary line `Reversed casts:` gives, per kind of seat, the reversed
-  casts of all attempts and of the payable ones; `test_a_default_run_...` checks the criterion.
+  casts of all attempts and of the payable ones; `test_a_default_run_...` checks the criterion
+  (the random seats' half deterministically since 2026-10-27, M2.9).
 - **Why:** the inner random agent casts whatever priority offers, mostly with no way to pay
   (in 30 sample games about nine attempts in ten), and every seat reverses those, so the raw
   reversal counts were about equal (44 of 45 against 61 of 66 in the quick run's first games)

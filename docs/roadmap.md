@@ -219,9 +219,9 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
   (M2.0).
 - [x] Resolution (608), including checking targets again on resolution (608.2b) and partial
   fizzling; last known information (608.2h) (M2.6); modal spells' modes (M2.7).
-- [ ] Mana payment details and the general cost model: generic, colored, {C}, X and restricted
+- [x] Mana payment details and the general cost model: generic, colored, {C}, X and restricted
   mana (106.6), with slots for hybrid, Phyrexian, snow and non-mana costs; cost increases and
-  reductions in 601.2f's order.
+  reductions in 601.2f's order (M2.3 to M2.9).
 - [ ] Casting without paying the mana cost, during resolution (608.2g, 118.9; Rishkar's
   Expertise).
 - [x] Mana abilities beyond basic lands (605): "any color in your commander's color identity",
@@ -232,9 +232,9 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
 - [x] The first primitives: damage, destroy, exile, draw, life gain (M2.6), counter target spell
   (M2.8).
 - [ ] Cards: 14 from the target decks, 8 keyword example cards and the torture tests Decimate
-  and Cryptic Command (`docs/plans/m2.md` §7). Done: 11 target-deck cards, the 8 keyword
-  example cards, Decimate and Cryptic Command (M2.8); left: Emerald Medallion and Kinjalli's
-  Caller (M2.9), Rishkar's Expertise (M2.10).
+  and Cryptic Command (`docs/plans/m2.md` §7). Done: 13 target-deck cards (Emerald Medallion
+  and Kinjalli's Caller: M2.9), the 8 keyword example cards, Decimate and Cryptic Command
+  (M2.8); left: Rishkar's Expertise (M2.10).
 
 Moved out of M2 by the plan: dividing (601.2d), reductions from a count or from targets
 (Ghalta, Hamza, Savage Stomp), overload, casting from the graveyard, exile and the library top,
@@ -566,6 +566,16 @@ completes a step (CLAUDE.md, "Documentation requirements").
   Multiproof Knight, Test Prismatic Knight, Test Untouchable, Test Twin Flash, Test
   Indestructible Wisp, Test Stubborn Spell, Test Gold Shock, Test Adventurer // Test Quest;
   `Scenario.stack(variant=)`, `casting_support.target_choices`.
+- **Done (M2.9, cost reductions):** the 601.2f modifier pipeline: `resolve.rules.costs`
+  (`spell_cost_modifiers`: the `SpellCostModifier` abilities of the permanents on the
+  battlefield, 113.6, in battlefield order; `spell_total_cost`: increases, then reductions, then
+  effects on the total), called by `CastSpell`'s `TOTAL` stage, which locks the total in
+  (601.2f, 601.8); `resolve.cards.primitives.cost_modifiers` (`CostModifier`, `ModifierStep`,
+  `ReduceGeneric`, 118.7a; `SpellCostModifier`, `SpellCostReduction`); `ManaCost.generic` and
+  `with_generic`; `Quality.adjective`. Cards: Emerald Medallion and Kinjalli's Caller
+  (`resolve.cards.definitions.cost_reducers`, in the excerpt and the fuzz recipes); fixtures
+  Test Thorn (a test-only increase, `SpellCostIncrease`/`IncreaseGeneric` in
+  `tests/game_fixtures.py`) and Test Growth ({X}{G}).
 ---
 
 ## Rules coverage map
@@ -613,7 +623,7 @@ earlier milestones must leave room for every row in this map.
 | 115 | Targets | M2 (115.1-115.6, 115.10: M2.6 ✓; shroud, hexproof and protection M2.8 ✓); 115.7 M5 | E | `target_problem` (M2.6 ✓) |
 | 116 | Special Actions | M1 ✓ (116.2a); the others with their mechanics | E | 116.2i out of scope (Planechase); 116.2j is for conspiracy cards (315) |
 | 117 | Timing and Priority | M1 ✓, M2 (117.1a casting, 117.3b-c, 117.4 with the stack: M2.3 ✓; flash M2.8 ✓) | E |  |
-| 118 | Costs | M2 (mana: paying generic, colored and {C} mana M2.3 ✓; mana costs of mana abilities, restricted mana M2.4 ✓; X M2.7; reductions M2.9); M4 (other costs, 118.12) | E |  |
+| 118 | Costs | M2 (mana: paying generic, colored and {C} mana M2.3 ✓; mana costs of mana abilities, restricted mana M2.4 ✓; X M2.7 ✓; generic reductions 118.7, 118.7a: M2.9 ✓; 118.9 M2.10); 118.7b-g with their first cards (colored, colorless, hybrid, Phyrexian, snow reductions); M4 (other costs, 118.12) | E | `resolve.rules.costs` |
 | 119 | Life | M2 (gaining life, 119.3, 119.10: M2.6 ✓); paying life M4 | E |  |
 | 120 | Damage | M2 (noncombat: 120.1-120.2, 120.3a, 120.3e, 120.4b, 120.8: M2.6 ✓), M3 (combat), M4 (120.3b-d, 120.3g-h) | E | the 120.3 table is `DamageDealt.apply` |
 | 121 | Drawing a Card | M1 ✓; 121.6 M6 | E |  |
@@ -674,10 +684,10 @@ earlier milestones must leave room for every row in this map.
 | 513 | End Step | M1 ✓ | E |  |
 | 514 | Cleanup Step | M1 ✓; 514.2 effects ending M5 | E |  |
 | 600 | General | — | — | nothing to implement |
-| 601 | Casting Spells | M2 (M2.3 ✓: 601.2a, 601.2e-i, 601.3, 601.3e variants and permissions, 601.6; 601.2c M2.6 ✓; 601.2b modes and X: M2.7 ✓, hybrid and Phyrexian announcements M9; 601.2d M4; 601.3b M6) | E | gaps per variant: 709.3, 712.11a-b, 715.3, 718.3, 720.3, 722.3, 708.4, 702.102; 903.8 |
+| 601 | Casting Spells | M2 (M2.3 ✓: 601.2a, 601.2e-i, 601.3, 601.3e variants and permissions, 601.6; 601.2c M2.6 ✓; 601.2b modes and X: M2.7 ✓, hybrid and Phyrexian announcements M9; 601.2f increases, reductions and lock-in, 601.8: M2.9 ✓; 601.2d M4; 601.3b M6) | E | gaps per variant: 709.3, 712.11a-b, 715.3, 718.3, 720.3, 722.3, 708.4, 702.102; 903.8 |
 | 602 | Activating Activated Abilities | M4 (for mana abilities, 602.2b mana costs and 602.5 "activate only if": M2.4 ✓) | E |  |
 | 603 | Handling Triggered Abilities | M4 | E |  |
-| 604 | Handling Static Abilities | M5 (M2: keyword and cost-reduction statics) | E |  |
+| 604 | Handling Static Abilities | M5 (M2: keyword statics M2.8 ✓, cost-reduction statics M2.9 ✓) | E |  |
 | 605 | Mana Abilities | M1 ✓, M2 (605.3a while casting: M2.3 ✓; 605.2, 605.3a while paying a mana ability's cost, 605.3c: M2.4 ✓); 605.1b M4 | E |  |
 | 606 | Loyalty Abilities | M4 | E |  |
 | 607 | Linked Abilities | M4 | E | D (hideaway) |

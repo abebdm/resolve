@@ -61,6 +61,12 @@ class Quality(Immutable, ABC):
     def text(self) -> str:
         """The quality as written after "from": ``"red"``, ``"artifacts"``, ``"everything"``."""
 
+    @property
+    @abstractmethod
+    def adjective(self) -> str:
+        """The quality as written before a noun, as in "green spells" or "Dinosaur spells": an
+        empty string for ``Everything`` ("spells")."""
+
 
 @dataclass(frozen=True)
 class ColorQuality(Quality):
@@ -75,6 +81,10 @@ class ColorQuality(Quality):
     def text(self) -> str:
         return COLOR_NAMES[self.word.color]
 
+    @property
+    def adjective(self) -> str:
+        return COLOR_NAMES[self.word.color]
+
 
 @dataclass(frozen=True)
 class MulticoloredQuality(Quality):
@@ -87,6 +97,10 @@ class MulticoloredQuality(Quality):
     def text(self) -> str:
         return "multicolored"
 
+    @property
+    def adjective(self) -> str:
+        return "multicolored"
+
 
 @dataclass(frozen=True)
 class MonocoloredQuality(Quality):
@@ -97,6 +111,10 @@ class MonocoloredQuality(Quality):
 
     @property
     def text(self) -> str:
+        return "monocolored"
+
+    @property
+    def adjective(self) -> str:
         return "monocolored"
 
 
@@ -114,6 +132,10 @@ class CardTypeQuality(Quality):
     def text(self) -> str:
         return self.card_type.value.lower() + "s"
 
+    @property
+    def adjective(self) -> str:
+        return self.card_type.value.lower()
+
 
 @dataclass(frozen=True)
 class SubtypeQuality(Quality):
@@ -129,6 +151,10 @@ class SubtypeQuality(Quality):
         name = self.word.name
         return _IRREGULAR_PLURALS.get(name, name + "s")
 
+    @property
+    def adjective(self) -> str:
+        return self.word.name
+
 
 @dataclass(frozen=True)
 class Everything(Quality):
@@ -140,6 +166,10 @@ class Everything(Quality):
     @property
     def text(self) -> str:
         return "everything"
+
+    @property
+    def adjective(self) -> str:
+        return ""
 
 
 def each_color() -> tuple[ColorQuality, ...]:
