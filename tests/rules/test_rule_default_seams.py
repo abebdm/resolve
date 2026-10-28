@@ -65,6 +65,8 @@ from resolve.state.spell import (
     FROM_HAND,
     NORMAL,
     CastPermission,
+    CastTiming,
+    CastVariant,
     TargetObject,
     TargetPlayer,
 )
@@ -868,3 +870,34 @@ def test_608_2g_the_free_cast_offers_what_cast_options_gives(
     assert isinstance(request.space, ChooseOne)
     offered = [o for o in request.space.options if isinstance(o, CastSpellOption)]
     assert [o.object for o in offered] == [bears]
+
+
+def test_608_2g_the_free_cast_asks_may_cast_now(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The timing of a cast during a resolution comes from ``may_cast_now``: replaced by one
+    that refuses sorceries under the "during resolution" timing, Test Ponder isn't offered
+    while Rishkar's Expertise resolves, and Grizzly Bears still is."""
+    scenario = Scenario(2)
+    scenario.stack(P0, ["Rishkar's Expertise"])
+    bears, ponder = scenario.hand(P0, ["Grizzly Bears", "Test Ponder"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    real = defaults.may_cast_now
+
+    def no_sorceries(
+        state: GameState,
+        player: PlayerId,
+        obj: ObjectId,
+        variant: CastVariant,
+        permission: CastPermission,
+    ) -> bool:
+        if permission.timing is CastTiming.DURING_RESOLUTION and obj == ponder:
+            return False
+        return real(state, player, obj, variant, permission)
+
+    patch_may_cast_now(monkeypatch, no_sorceries)
+    state = scenario.build()
+    run_script(state, pass_(P0), pass_(P1))
+    request = request_of(state)
+    assert request.kind is DecisionKind.CAST_DURING_RESOLUTION
+    assert isinstance(request.space, ChooseOne)
+    offered = [o.object for o in request.space.options if isinstance(o, CastSpellOption)]
+    assert offered == [bears]

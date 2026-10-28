@@ -27,7 +27,9 @@ Oracle text and rulings checked against the Scryfall snapshot of 2026-10-27
   (until effects can change power, M5, that can only be seen as the creatures it has then);
 - (2017-04-18) a split card's mana value is that of both halves, and either half may be cast:
   superseded by 709.3a and 601.3e in the pinned CR (only the half cast is considered), and
-  casting a half is still the 709.3 gap (``test_608_2g_a_split_card_in_hand_is_still_a_gap``).
+  casting a half is still the 709.3 gap
+  (``test_608_2g_the_permission_ignores_timing_but_not_variants``,
+  ``test_709_3a_a_split_card_is_judged_by_the_half_cast``; docs/decisions.md, 2026-10-28).
 """
 
 from __future__ import annotations
@@ -49,6 +51,7 @@ from tests.casting_support import (
     answered,
     cast,
     cast_during_resolution,
+    decline,
     options,
     pass_,
     records,
@@ -170,13 +173,13 @@ def test_the_power_is_read_as_it_resolves() -> None:
 
 
 def test_it_goes_to_its_owners_graveyard_after_resolving() -> None:
-    """608.2n: once both effects are done (declining here: nothing castable is in hand), it is
-    put into its owner's graveyard and P0 receives priority (117.3b)."""
+    """608.2n: once both effects are done (nothing castable is in hand: P0 can only decline), it
+    is put into its owner's graveyard and P0 receives priority (117.3b)."""
     scenario = Scenario(2)
     expertise_on_stack(scenario)
     state = scenario.build()
-    run_script(state, pass_(P0), pass_(P1))
-    assert answered(state, DecisionKind.CAST_DURING_RESOLUTION) == 0
+    run_script(state, pass_(P0), pass_(P1), decline())
+    assert answered(state, DecisionKind.CAST_DURING_RESOLUTION) == 1
     assert names(state, Zone.graveyard(P0)) == ["Rishkar's Expertise"]
     request = request_of(state)
     assert (request.kind, request.player) == (DecisionKind.PRIORITY_ACTION, P0)

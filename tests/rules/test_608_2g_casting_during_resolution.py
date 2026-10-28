@@ -25,7 +25,10 @@ from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import CastSpellOption
 from resolve.effects.characteristics import characteristics
 from resolve.engine.casting import DECLINE
+from resolve.engine.concede import concede
 from resolve.errors import NotImplementedRule
+from resolve.events.cards import CardDrawn
+from resolve.events.game import PlayerLost
 from resolve.events.spells import (
     ActionReversed,
     SpellCast,
@@ -34,6 +37,7 @@ from resolve.events.spells import (
     XAnnounced,
 )
 from resolve.rules import defaults, legality
+from resolve.state.config import GameConfig
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import ManaType
@@ -52,9 +56,12 @@ from tests.casting_support import (
     activate,
     answered,
     cast_during_resolution,
+    choose_modes,
+    choose_targets,
     decline,
     options,
     pass_,
+    pay,
     records,
 )
 from tests.game_fixtures import request_of
@@ -219,14 +226,18 @@ def test_118_9_without_paying_its_mana_cost_pays_nothing() -> None:
 
 def test_118_9_lands_and_pool_are_untouched() -> None:
     """P0 has two untapped Mountains and {R} in their pool: casting Hill Giant without paying its
-    mana cost taps nothing and spends nothing."""
+    mana cost taps nothing and spends nothing. 601.2g still gives P0 the chance to activate mana
+    abilities before paying the {0} total (as for any spell costing {0}); P0 just pays."""
     scenario = Scenario(2)
     expertise, (giant,) = resolving(scenario, ["Hill Giant"])
     mountains = scenario.battlefield(P0, ["Mountain", "Mountain"])
     scenario.mana(P0, ManaType.RED)
     state = scenario.build()
     resolve(state)
-    run_script(state, cast_during_resolution(giant, free(expertise)))
+    run_script(state, cast_during_resolution(giant, free(expertise)), pay())
+    (cast,) = records(state, SpellCast)
+    assert cast.total_cost == parse_mana_cost("{0}") and cast.mana_spent == ()
+    assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
     assert not any(state.objects[m].tapped for m in mountains)
     assert [m.type for m in state.player(P0).mana_pool] == [ManaType.RED]
 
@@ -289,7 +300,12 @@ def test_118_9d_a_cost_increase_applies_to_the_alternative_cost() -> None:
     scenario.battlefield(P1, ["Test Thorn"])
     state = scenario.build()
     resolve(state)
-    run_script(state, cast_during_resolution(bears, free(expertise)), activate(forest))
+    run_script(state, cast_during_resolution(bears, free(expertise)))
+    # 608.2g: while it is paid for, the free spell is the topmost object, the Expertise under it.
+    assert request_of(state).kind is DecisionKind.ACTIVATE_MANA_ABILITIES
+    assert len(state.stack) == 2 and state.stack[0] == expertise
+    assert names(state, STACK) == ["Rishkar's Expertise", "Grizzly Bears"]
+    run_script(state, activate(forest))
     (cast,) = records(state, SpellCast)
     assert cast.total_cost == parse_mana_cost("{1}")
     assert state.objects[forest].tapped
@@ -338,6 +354,7 @@ def test_733_2_a_reversed_free_cast_can_be_chosen_again() -> None:
     assert not records(state, SpellCast)
     assert names(state, Zone.graveyard(P0)) == ["Rishkar's Expertise"]
     assert names(state, Zone.hand(P0)) == ["Grizzly Bears", "Test Raptor"]
+    assert state.cast_grants == []
 
 
 def test_608_2g_declining_casts_nothing() -> None:
@@ -353,14 +370,19 @@ def test_608_2g_declining_casts_nothing() -> None:
     assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
 
 
-def test_608_2g_nothing_is_asked_when_nothing_can_be_cast() -> None:
-    """With only a land and a spell of mana value 6 in hand, the only answer would be to
-    decline: nothing is asked."""
+def test_608_2g_the_question_is_asked_even_when_only_declining_is_possible() -> None:
+    """With only a land and a spell of mana value 6 in hand, P0 can only decline, but is still
+    asked, as priority always is: the options come from a hidden hand (402.3), and skipping the
+    question would tell the other players that nothing could be cast (docs/decisions.md,
+    2026-10-28)."""
     scenario = Scenario(2)
     resolving(scenario, ["Forest", "Rishkar's Expertise"])
     state = scenario.build()
     resolve(state)
-    assert answered(state, DecisionKind.CAST_DURING_RESOLUTION) == 0
+    request = request_of(state)
+    assert (request.kind, request.player) == (DecisionKind.CAST_DURING_RESOLUTION, P0)
+    assert options(state) == (DECLINE,)
+    run_script(state, decline())
     assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
     assert names(state, Zone.graveyard(P0)) == ["Rishkar's Expertise"]
 
@@ -380,12 +402,12 @@ def test_608_2g_the_permission_ends_with_the_resolution() -> None:
 
 def test_608_2g_a_spell_without_legal_targets_isnt_offered() -> None:
     """601.2c, as with priority: Chandra's Ignition needs a creature P0 controls; with none it
-    isn't offered, so nothing is asked."""
+    isn't offered."""
     scenario = Scenario(2)
     resolving(scenario, ["Chandra's Ignition"])
     state = scenario.build()
     resolve(state)
-    assert answered(state, DecisionKind.CAST_DURING_RESOLUTION) == 0
+    assert options(state) == (DECLINE,)
 
 
 def test_608_2g_the_free_spell_may_target_the_resolving_expertise() -> None:
@@ -450,15 +472,22 @@ def test_608_2g_an_adventurer_card_is_still_a_gap() -> None:
 
 
 def test_601_2e_the_permission_is_checked_again_for_the_proposed_spell() -> None:
-    """The free spell is checked again once proposed (601.2e) under the same permission: the
-    grant is still there while it is cast, so the cast completes."""
+    """601.2e: once the free spell's proposal is complete, it must still be legal to cast under
+    the permission. Cryptic Command asks its modes after it is proposed; if the permission has
+    ended meanwhile (here removed from the state by the test), the check fails and the cast is
+    reversed (733.1); restoring the game puts the permission back, so P0 is asked again."""
     scenario = Scenario(2)
-    expertise, (giant,) = resolving(scenario, ["Hill Giant"])
+    expertise, (command,) = resolving(scenario, ["Cryptic Command"])
     state = scenario.build()
     resolve(state)
+    run_script(state, cast_during_resolution(command, free(expertise)))
+    assert request_of(state).kind is DecisionKind.CHOOSE_MODES
     assert [g.permission for g in state.cast_grants] == [free(expertise)]
-    run_script(state, cast_during_resolution(giant, free(expertise)))
-    assert len(records(state, SpellCast)) == 1
+    state.cast_grants.clear()
+    run_script(state, choose_modes(2, 3))
+    assert len(records(state, ActionReversed)) == 1 and records(state, SpellCast) == []
+    assert request_of(state).kind is DecisionKind.CAST_DURING_RESOLUTION
+    assert [g.permission for g in state.cast_grants] == [free(expertise)]
 
 
 def test_601_3_the_permission_refuses_a_spell_above_its_mana_value() -> None:
@@ -473,3 +502,177 @@ def test_601_3_the_permission_refuses_a_spell_above_its_mana_value() -> None:
     assert legality.allowed(state, legality.CastAction(P0, giant, NORMAL, permission)).allowed
     verdict = legality.allowed(state, legality.CastAction(P0, second, NORMAL, permission))
     assert not verdict.allowed
+
+
+def test_608_2g_the_permission_ends_after_a_free_cast() -> None:
+    """The permission allows one spell (608.2g: "a spell") during that resolution: after the
+    Bears is cast, the grant is gone, and with priority nothing else may be cast with it."""
+    scenario = Scenario(2)
+    expertise, (bears, giant) = resolving(scenario, ["Grizzly Bears", "Hill Giant"])
+    state = scenario.build()
+    resolve(state)
+    run_script(state, cast_during_resolution(bears, free(expertise)))
+    assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
+    assert state.cast_grants == []
+    assert free(expertise) not in defaults.cast_permissions(state, P0, giant)
+    assert not any(
+        isinstance(o, CastSpellOption) and o.permission == free(expertise) for o in options(state)
+    )
+
+
+def test_733_2_after_a_reversal_another_offered_spell_can_be_cast() -> None:
+    """With Test Thorn the free spell costs {1}. P0 tries the Bears and pays without activating
+    their Forest: unpaid, it is reversed (733.1). Asked again (733.2), P0 casts Test Raptor and
+    pays with the Forest: the Raptor is cast, the Bears stays in hand, the grant is gone."""
+    scenario = Scenario(2)
+    expertise, (bears, raptor) = resolving(scenario, ["Grizzly Bears", "Test Raptor"])
+    (forest,) = scenario.battlefield(P0, ["Forest"])
+    scenario.battlefield(P1, ["Test Thorn"])
+    state = scenario.build()
+    resolve(state)
+    run_script(state, cast_during_resolution(bears, free(expertise)), pay())
+    assert len(records(state, ActionReversed)) == 1
+    assert request_of(state).kind is DecisionKind.CAST_DURING_RESOLUTION
+    run_script(state, cast_during_resolution(raptor, free(expertise)), activate(forest))
+    (cast,) = records(state, SpellCast)
+    assert names(state, STACK) == ["Test Raptor"]
+    assert names(state, Zone.hand(P0)) == ["Grizzly Bears"]
+    assert bears in state.player(P0).hand and state.cast_grants == []
+    assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
+    assert cast.player == P0
+
+
+def test_608_2g_the_controller_casts_not_the_active_player() -> None:
+    """Three players, P0's turn; the Expertise is P1's. P1 draws by P1's creatures (Hill Giant:
+    3, not P0's Grizzly Bears), P1 is asked and casts, and the free spell is P1's (109.5: "you"
+    is the controller). Afterwards the active player, P0, receives priority (117.3b)."""
+    scenario = Scenario(3)
+    (expertise,) = scenario.stack(P1, ["Rishkar's Expertise"])
+    scenario.battlefield(P0, ["Grizzly Bears"])
+    scenario.battlefield(P1, ["Hill Giant"])
+    (lions,) = scenario.hand(P1, ["Savannah Lions"])
+    scenario.hand(P0, ["Hill Giant"])
+    scenario.library(P1, ["Forest"] * 5)
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    resolve(state, players=3)
+    drawn = records(state, CardDrawn)
+    assert len(drawn) == 3 and all(d.player == P1 for d in drawn)
+    request = request_of(state)
+    assert (request.kind, request.player) == (DecisionKind.CAST_DURING_RESOLUTION, P1)
+    assert options(state) == (DECLINE, CastSpellOption(lions, NORMAL, free(expertise)))
+    run_script(state, cast_during_resolution(lions, free(expertise)))
+    (cast,) = records(state, SpellCast)
+    assert cast.player == P1 and state.objects[cast.spell].controller == P1
+    request = request_of(state)
+    assert (request.kind, request.player) == (DecisionKind.PRIORITY_ACTION, P0)
+
+
+def test_800_4a_the_caster_conceding_while_asked_ends_the_offer() -> None:
+    """Three players: P0 concedes while asked whether to cast (104.3a). Nothing is cast; P0's
+    objects, the Expertise among them, leave the game (800.4a); the grant is gone, and the game
+    goes on with P1 receiving priority (800.4j: P0, the active player, has left)."""
+    scenario = Scenario(3)
+    resolving(scenario, ["Grizzly Bears"])
+    state = scenario.build()
+    resolve(state, players=3)
+    concede(state, P0)
+    assert state.player(P0).left_game and state.result is None
+    assert records(state, SpellCast) == [] and state.stack == []
+    assert state.cast_grants == []
+    request = request_of(state)
+    assert (request.kind, request.player) == (DecisionKind.PRIORITY_ACTION, P1)
+
+
+def test_800_4a_another_player_conceding_meanwhile_asks_again() -> None:
+    """Three players: P2 concedes while P0 is asked. P0 is asked the same question again, and
+    the permission isn't granted twice."""
+    scenario = Scenario(3)
+    expertise, (bears,) = resolving(scenario, ["Grizzly Bears"])
+    state = scenario.build()
+    resolve(state, players=3)
+    concede(state, P2)
+    request = request_of(state)
+    assert (request.kind, request.player) == (DecisionKind.CAST_DURING_RESOLUTION, P0)
+    assert options(state) == (DECLINE, CastSpellOption(bears, NORMAL, free(expertise)))
+    assert len(state.cast_grants) == 1
+
+
+def test_704_5b_drawing_from_a_short_library_still_allows_the_cast() -> None:
+    """Three players. P0 controls Hill Giant (3) but has one card in their library: they draw it
+    and try to draw two more (121.4), are still asked, and cast the Bears they drew. They lose
+    only at the next state-based action check (704.3, 704.5b), after the Expertise finishes;
+    the Bears leaves the game with them (800.4a) and P1 receives priority."""
+    scenario = Scenario(3)
+    (expertise,) = scenario.stack(P0, ["Rishkar's Expertise"])
+    scenario.battlefield(P0, ["Hill Giant"])
+    scenario.library(P0, ["Grizzly Bears"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    resolve(state, players=3)
+    assert request_of(state).kind is DecisionKind.CAST_DURING_RESOLUTION
+    assert not state.player(P0).left_game
+    (bears,) = state.player(P0).hand
+    run_script(state, cast_during_resolution(bears, free(expertise)))
+    assert len(records(state, SpellCast)) == 1
+    lost = records(state, PlayerLost)
+    assert [r.player for r in lost] == [P0] and "704.5b" in lost[0].rules
+    assert state.stack == []
+    request = request_of(state)
+    assert (request.kind, request.player) == (DecisionKind.PRIORITY_ACTION, P1)
+
+
+def test_903_8_a_commander_in_the_command_zone_isnt_offered() -> None:
+    """ "From your hand": in a Commander game, P0's commander (Grizzly Bears, mana value 2) in
+    the command zone isn't offered; Hill Giant in hand is."""
+    scenario = Scenario(2, config=GameConfig.commander_game())
+    expertise, (giant,) = resolving(scenario, ["Hill Giant"])
+    scenario.commander(P0, "Grizzly Bears")
+    state = scenario.build()
+    resolve(state)
+    assert options(state) == (DECLINE, CastSpellOption(giant, NORMAL, free(expertise)))
+
+
+def test_601_2b_601_2c_a_free_modal_spell_still_chooses_modes_and_targets() -> None:
+    """Cryptic Command cast without paying its mana cost: its modes (601.2b) and targets (601.2c)
+    are chosen as usual ("return target permanent", here P1's Hill Giant among several
+    permanents; "draw a card"), and its total cost is {0}."""
+    scenario = Scenario(2)
+    expertise, (command,) = resolving(scenario, ["Cryptic Command"], creatures=("Grizzly Bears",))
+    (giant,) = scenario.battlefield(P1, ["Hill Giant"])
+    state = scenario.build()
+    resolve(state)
+    run_script(
+        state,
+        cast_during_resolution(command, free(expertise)),
+        choose_modes(1, 3),
+        choose_targets(giant),
+    )
+    (cast,) = records(state, SpellCast)
+    assert cast.total_cost == parse_mana_cost("{0}")
+    record = state.objects[cast.spell].spell
+    assert record is not None and record.modes == (1, 3)
+    assert record.targets == ((TargetObject(giant),),)
+    assert answered(state, DecisionKind.CHOOSE_MODES) == 1
+    assert answered(state, DecisionKind.CHOOSE_TARGETS) == 1
+
+
+def test_709_3a_a_split_card_is_judged_by_the_half_cast() -> None:
+    """709.3a, 601.3e: only the half being cast is considered. Test Quake // Test Pebble has mana
+    value 8 as a card (709.4), but Test Pebble alone is 2: it is offered, Test Quake (6) isn't.
+    (The card's 2017 ruling, from before these rules, would judge the whole card: the pinned CR
+    wins, docs/decisions.md 2026-10-28.) Casting the half is still the 709.3 gap (M5). The card
+    is drawn by the Expertise, since a split card in hand is the 109.3 gap while a player has
+    priority."""
+    scenario = Scenario(2)
+    (expertise,) = scenario.stack(P0, ["Rishkar's Expertise"])
+    scenario.battlefield(P0, ["Savannah Lions"])
+    scenario.library(P0, ["Test Quake // Test Pebble", "Forest"])
+    scenario.at(Phase.PRECOMBAT_MAIN)
+    state = scenario.build()
+    resolve(state)
+    (split,) = state.player(P0).hand[:1]
+    assert options(state) == (DECLINE, CastSpellOption(split, Half(1), free(expertise)))
+    with pytest.raises(NotImplementedRule) as gap:
+        run_script(state, cast_during_resolution(split, free(expertise), Half(1)))
+    assert gap.value.rule == "709.3"

@@ -157,10 +157,12 @@ drive decisions with a script.
    chosen modes' instances in turn.
    `choose_color(Color.GREEN)` answers "one mana of any color" (asked only with two or more
    colors). An effect that allows a cast while it resolves (608.2g, Rishkar's Expertise) asks
-   `CAST_DURING_RESOLUTION`: answer `cast_during_resolution(obj, permission)` (the permission is
-   the effect's, `source=` the resolving spell; `tests/rules/test_608_2g_casting_during_resolution.py`
-   has `free(spell)`) or `decline()`; it isn't asked when nothing can be cast. A mana ability with a mana cost (Selesnya Signet) asks its own
-   `ACTIVATE_MANA_ABILITIES` (answer with `activate(...)`/`pay()`) and, if it fails, its own
+   `CAST_DURING_RESOLUTION`: answer `cast_during_resolution(obj, permission)` (the permission
+   is the effect's, `source=` the resolving spell;
+   `tests/rules/test_608_2g_casting_during_resolution.py` has `free(spell)`) or `decline()`;
+   like priority, it is asked even when declining is the only answer. A {0} total still offers
+   mana abilities first (601.2g) when there are any: answer `pay()`. A mana ability with a mana
+   cost (Selesnya Signet) asks its own `ACTIVATE_MANA_ABILITIES` (answer with `activate(...)`/`pay()`) and, if it fails, its own
    `REVERSE_MANA_ABILITIES`.
 7. **Summoning sickness (302.6).** Permanents the builder puts on the battlefield came under
    their controller's control before the first turn (`entered_turn=0`), so a creature can tap

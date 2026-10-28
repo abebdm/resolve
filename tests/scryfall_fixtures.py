@@ -210,6 +210,38 @@ SPLIT_CARD: dict[str, Any] = {
     ],
 }
 
+# A split card whose halves differ: mana value 8 in all (709.4), but its right half alone is 2
+# (709.3a), to tell the two apart when a permission limits mana value (608.2g, Rishkar's
+# Expertise).
+BIG_SPLIT_CARD: dict[str, Any] = {
+    "object": "card",
+    "oracle_id": "oid-test-big-split",
+    "name": "Test Quake // Test Pebble",
+    "layout": "split",
+    "mana_cost": "{4}{R}{R} // {1}{U}",
+    "cmc": 8.0,
+    "type_line": "Sorcery // Sorcery",
+    "colors": ["R", "U"],
+    "color_identity": ["R", "U"],
+    "keywords": [],
+    "card_faces": [
+        {
+            "object": "card_face",
+            "name": "Test Quake",
+            "mana_cost": "{4}{R}{R}",
+            "type_line": "Sorcery",
+            "oracle_text": "",
+        },
+        {
+            "object": "card_face",
+            "name": "Test Pebble",
+            "mana_cost": "{1}{U}",
+            "type_line": "Sorcery",
+            "oracle_text": "",
+        },
+    ],
+}
+
 
 # Invented one-mana spells, for the timing rules of instants and sorceries (117.1a).
 INSTANT_CARD: dict[str, Any] = {

@@ -52,7 +52,13 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
     709.3 when chosen.
   - The question is `CAST_DURING_RESOLUTION`, a `ChooseOne` of `DECLINE` (first) and the
     `cast_options` that carry the effect's permission, so the free cast goes through the same
-    seam as priority. With nothing castable it isn't asked.
+    seam as priority. Like priority (2026-10-18, "Questions with a single possible answer are
+    not asked"), it is an exception to that rule and is asked even when declining is the only
+    answer: its options come from a hidden hand (402.3), so skipping it would tell the other
+    players that nothing could be cast. Declining automatically is an agent's convenience.
+  - A `CastGrant` covers the cards in its player's own zone of the permission's kind. Casting
+    from another player's zone or from a set of named objects (cards an effect exiled, a copy)
+    needs a field for it, added with its first card (M4, M5).
   - 601.2b's announcement of the alternative cost is the permission chosen: there is no
     separate `ALTERNATIVE` stage (the plan's table asks nothing there in M2). `CastSpell` reads
     `permission.pays_mana_cost`: when false, X is announced as 0 without asking (107.3b), no

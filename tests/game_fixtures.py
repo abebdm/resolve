@@ -200,8 +200,9 @@ def scenario_registry() -> CardRegistry:
     Test Ember ({1}{C}), Test Wall (0/4), Test Totem (an enchantment), Test Artifact Land
     Creature, the keyword example cards, Cryptic Command and M2.8's keyword fixtures (and an
     adventurer, Test Adventurer // Test Quest), the cost reducers, Test Thorn (a cost increase),
-    Test Growth ({X}{G}), Rishkar's Expertise, Test Two-Tone ({1}{W/U}{W/U}, no text) and Test
-    Vision (no mana cost): the scenario builder's default."""
+    Test Growth ({X}{G}), Rishkar's Expertise, Test Two-Tone ({1}{W/U}{W/U}, no text), Test
+    Insight (no mana cost) and Test Quake // Test Pebble (a split card of mana value 8 whose
+    right half is 2): the scenario builder's default."""
     extra = (
         "Test Spark",
         "Test Frost",
@@ -219,6 +220,8 @@ def scenario_registry() -> CardRegistry:
         "Test Artifact Land Creature",
         "Test Artifact Totem",
         "Test Two-Tone",
+        "Test Quake",
+        "Test Pebble",
     )
     lands = (basic_lands.PLAINS, basic_lands.ISLAND, basic_lands.SWAMP, basic_lands.MOUNTAIN)
     creatures = vanilla_creatures.DEFINITIONS
@@ -277,6 +280,7 @@ def scenario_database() -> CardDatabase:
     extra += [fx.TEST_INDESTRUCTIBLE_WISP, fx.TEST_STUBBORN_SPELL, fx.TEST_GOLD_SHOCK]
     extra += [fx.TEST_ADVENTURER, fx.EMERALD_MEDALLION, fx.KINJALLIS_CALLER, fx.TEST_THORN]
     extra += [fx.TEST_GROWTH, fx.RISHKARS_EXPERTISE, fx.TEST_TWO_TONE, fx.TEST_INSIGHT]
+    extra += [fx.BIG_SPLIT_CARD]
     lands = [fx.PLAINS, fx.ISLAND, fx.SWAMP, fx.MOUNTAIN]
     return CardDatabase(parse_oracle_cards([*fx.default_cards(), *lands, *extra]))
 

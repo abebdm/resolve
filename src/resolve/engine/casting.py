@@ -566,7 +566,8 @@ class CastDuringResolution(Task):
        and ``legality.allowed`` find it, at 601.3 and again at 601.2e.
     2. ``CAST_DURING_RESOLUTION``: a ``ChooseOne`` of ``DECLINE``, then every option
        ``defaults.cast_options`` gives with this permission (601.3e: each way of casting each
-       card). With nothing to cast, nothing is asked.
+       card). Like priority, it is asked even when declining is the only answer: the options
+       depend on a hidden hand.
     3. The chosen spell is cast (``CastSpell``, 601.2a-i). Nobody receives priority afterwards
        (608.2g): the resolving spell goes on resolving. If the cast was illegal and reversed
        (733.1), the player may redo it or do something else (733.2): with nobody holding
@@ -598,8 +599,9 @@ class CastDuringResolution(Task):
             for option in defaults.cast_options(state, self.player)
             if option.permission == self.permission
         )
-        if not offered:
-            return self._end(state)  # declining is the only possible answer
+        # Asked even when declining is the only answer, as priority is: the options come from a
+        # hidden hand, so skipping the question would tell the other players there was nothing
+        # to cast (docs/decisions.md, 2026-10-28).
         return NeedDecision(
             player=self.player,
             kind=DecisionKind.CAST_DURING_RESOLUTION,
