@@ -12,8 +12,8 @@ the engine's API, so nothing here may depend on them.
 
 - `docs/design.md`: the architecture. It is authoritative; follow it.
 - The current milestone's section of `docs/roadmap.md`: its items and "done" criteria.
-- `docs/plans/m2.md`, the approved plan of the current milestone, but only the parts its "How to
-  use this plan" names for your step.
+- The approved plan of the current milestone, `docs/plans/<milestone>.md`, once it exists, but
+  only the parts its "How to use this plan" names for your step. (M3's plan isn't written yet.)
 
 **Look up; don't read in full.** These are references, and most of each is irrelevant to any one
 task. List a file's headings first (Grep for `^#{2,3} `), then read only the sections your task
@@ -40,19 +40,16 @@ touches. Read more when a section points you to another.
 
 ## Current status
 
-**Current milestone: M2 (Spells and the stack), in progress: the plan is approved
-(`docs/plans/m2.md`); M2.0 to M2.10 are done (documentation, the rule defaults, mana costs and
-characteristics, casting and resolving permanent spells, mana abilities beyond basic lands and
-summoning sickness, the agent-side auto-payer, targets with last known information and the first
-effects, modes and X, evergreen keywords and countering with Cryptic Command, cost reductions,
-casting during resolution without paying the mana cost with Rishkar's Expertise).
-M0 (Skeleton) and M1 (Turn structure) are complete.** What each completed
-step built, and where, is in `docs/roadmap.md`, "What's built".
+**M0 (Skeleton), M1 (Turn structure) and M2 (Spells and the stack) are complete.** M2.11, the
+wrap-up, added the caster fuzz seat, the thorough run's expectations (`docs/verification.md`)
+and the test that checks `tools/gaps.py` against the coverage map, and deleted M2's plan (its
+"From M2" notes are in each later milestone's section of `docs/roadmap.md`). What each
+completed step built, and where, is in `docs/roadmap.md`, "What's built".
 
-- **Known violations of rule 12:** none. Every default of `docs/plans/m2.md` §5.1 comes from a
-  function in `resolve.rules.defaults` (how to add or change one: `docs/howto.md`).
-- **Next:** M2.11 (wrap-up: `docs/verification.md`, M2 complete), then the user's `--thorough`
-  milestone check.
+- **Known violations of rule 12:** none. Every rule default comes from a function in
+  `resolve.rules.defaults` (how to add or change one: `docs/howto.md`).
+- **Next:** the user's `--thorough` milestone check of M2 (`docs/verification.md`), then M3's
+  plan (Combat), written and approved before any M3 code.
 
 Do not start a milestone unless the user asks.
 

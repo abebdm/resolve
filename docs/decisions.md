@@ -19,6 +19,50 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-28: M2.11: a caster fuzz seat, and the thorough run's expectations named per milestone
+- **Decision (the user's):** the fuzz seats cycle three kinds: random (`RandomAgent`), caster
+  (`AutoPayAgent(CasterAgent)`) and auto-pay (`AutoPayAgent(RandomAgent)`), seat number modulo
+  3, so a two-player game has a random seat and a caster. `CasterAgent`
+  (`resolve.agents.caster`) plays a land if it may, then casts each spell offered that it hasn't
+  tried in the current priority window (the turn, step, stack, its untapped permanents and its
+  mana pool), then passes; it casts during a resolution rather than declining, keeps X from 0
+  to 3, and answers everything else at random. `docs/verification.md` holds the thorough run's
+  expectations, and lists under "Not yet reachable" those the M2 plan (§8) set that the run
+  can't meet yet, each with its reason and milestone: endings by decking and life total, and
+  Chandra's Ignition, after M3 removes the 508.1 gap (an M3 roadmap item restores them);
+  Decimate, once an enchantment card is in the fuzz excerpt. A prepared-board fuzz check is a
+  possible later tooling item (roadmap, M8).
+- **Why:** the thorough run on M2.10's `main` cast 21 of the 26 fuzz cards, countered nothing,
+  left no spell without its targets and dealt no damage: random seats seldom pay for expensive
+  or instant-speed spells. With the caster seats it casts 24 of 26 (20 to 24 by seed range: the
+  two misses every time are Decimate and Chandra's Ignition), with spells countered and not
+  resolved and damage dealt. The random seats stay, so illegal actions and answers are still
+  explored; the "Reversed casts" line counts the casters with the auto-pay seats (both pay with
+  the auto-payer, which must reverse no payable cast). Alternatives: prepared boards (every
+  expectation, but a board builder outside `tests/`), or only rewriting the expectations (no
+  added coverage).
+- **Rules:** 117.1a, 117.3d, 305.1, 601.2, 608.2g, 107.3a, 733.1 (the caster's policy).
+- **Where:** `resolve.agents.caster`, `tools/fuzz.py` (`SEAT_KINDS`, `seat_kind`,
+  `is_autopay_seat`, `fuzz_game`), `docs/verification.md`, `docs/roadmap.md` (M3, M8),
+  `tests/agents/test_caster.py`, `tests/fuzz/test_fuzz.py`.
+
+### 2026-10-28: M2.11: the gaps are checked against the coverage map; M2's plan is deleted
+- **Decision:** a test (`test_every_gap_has_an_open_row_in_the_map`) checks every
+  `NotImplementedRule` gap (`tools/gaps.py`) against the coverage map: its row must leave room
+  for it with a milestone not ticked off, a set-mechanic or exotic tier, or "out of scope". A
+  milestone counts as ticked off when "✓" follows it ("M2 ✓"); steps ("M2.3") only name who did
+  a part. M2's completed rows now read "M2 ✓"; the check found rows 109 (109.3, 109.4c), 733
+  (733.1 kept results of sacrifice and discard) and 702.11 (702.11d on a player) claiming too
+  much, now given their milestones. The M2 plan (`docs/plans/m2.md`) is deleted, as planned; its
+  forward-looking handoff notes moved to the later milestones' sections of the roadmap ("From
+  M2"), its design to design.md §17, and the rest is in git history.
+- **Why:** plan M2.11 asks for "`tools/gaps.py` checked against the map"; a test keeps it so
+  rather than a one-off reading. The check can't tell a part ticked off by mistake when the row
+  also names a later milestone; it catches rows that claim to be complete.
+- **Rules:** none (tooling).
+- **Where:** `tests/tooling/test_coverage_map.py`, `docs/roadmap.md`, `docs/howto.md` ("List the
+  rules the engine doesn't implement").
+
 ### 2026-10-28: M2.10: the fuzz summary test plays pinned decks
 - **Decision (the user's, 2026-10-28):** `test_a_default_run_plays_turns_lands_and_spells_and_
   reports_them` plays the default run's first five games with its own pinned recipes, card lists

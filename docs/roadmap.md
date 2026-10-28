@@ -3,8 +3,8 @@
 Milestones are worked in order. Each milestone ends with every listed item done, tests passing,
 and `pytest`, `ruff` and `pyright` clean in CI. Tick items off in the same PR that completes them.
 
-**Current milestone: M2, in progress (plan approved: `docs/plans/m2.md`; M2.0 done). M0 and M1
-are complete.**
+**Current milestone: M3 (Combat), not started: its plan comes first. M0, M1 and M2 are
+complete.**
 
 ---
 
@@ -187,7 +187,9 @@ cards are not included.
 
 ## M2 — Spells and the stack
 
-The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
+The approved plan, `docs/plans/m2.md` (steps M2.0 to M2.11), was deleted in M2.11 (it is in
+git history); its lasting content is in design.md §17, `docs/decisions.md`, "What's built" and
+the "From M2" notes of the later milestones below. **M2 is complete.**
 
 - [x] The plan, the rules coverage map, the torture tests and rules 12 and 13 (M2.0,
   documentation).
@@ -195,11 +197,11 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
   single functions (rule 12, M2.1).
 - [x] Mana costs and symbols (107.4), characteristics' mana cost, colors and mana value (202), typed
   words (612), and the `ChooseCounts` answer space (M2.2).
-- [ ] The full casting process (601.2):
+- [x] The full casting process (601.2) (M2.3 to M2.10):
   - announce, with **cast variants and permissions** chosen before the card moves, so every
     layout that changes how a spell is cast fits (split cards and Rooms 709.3, double-faced
     cards 712.11, adventures 715.3, omens 720.3, prototype 718.3, face-down 708.4, casting from
-    other zones);
+    other zones); each layout's variant raises its gap until its own milestone;
   - choose modes, X, and targets;
   - total the cost;
   - activate mana abilities;
@@ -232,7 +234,10 @@ The approved plan is `docs/plans/m2.md` (steps M2.0 to M2.11).
 - [x] The first primitives: damage, destroy, exile, draw, life gain (M2.6), counter target spell
   (M2.8).
 - [x] Cards: 14 from the target decks, 8 keyword example cards and the torture tests Decimate
-  and Cryptic Command (`docs/plans/m2.md` §7): the last, Rishkar's Expertise, in M2.10.
+  and Cryptic Command (`tools/excerpts/cards.json`): the last, Rishkar's Expertise, in M2.10.
+- [x] Wrap-up (M2.11): the thorough fuzz run's expectations in `docs/verification.md`, with a
+  caster seat in the fuzz games (`CasterAgent`) so they reach every kind of spell; `tools/gaps.py`
+  checked against the rules coverage map by a test.
 
 Moved out of M2 by the plan: dividing (601.2d), reductions from a count or from targets
 (Ghalta, Hamza, Savage Stomp), overload, casting from the graveyard, exile and the library top,
@@ -266,6 +271,15 @@ triggered mana abilities and "when that mana is spent" → M4; offspring, castin
 - [ ] Extra turns, phases and steps (500.7–500.10), on M2.1's `TurnState.segments` and
   `next_turn` (Time Walk, Relentless Assault).
 - [ ] Ending turns and phases (724): the design must allow it; implemented in M9 (exotic).
+- [ ] Restore the thorough fuzz run's expectations that the 508.1 gap blocks
+  (`docs/verification.md`, "Not yet reachable"): with attacks, games end by life total and by
+  decking, damage is dealt, and Chandra's Ignition is cast (a game with a creature no longer
+  stops at its controller's first combat). Remove 508.1 from `ALLOWED_GAPS` and move those
+  expectations back into the checklist.
+
+**From M2:** protection's blocking part (702.16f) and combat damage reach the 702.16e gap in
+`DamageDealt.apply`; `TapAll` taps without attacking; haste plugs into
+`defaults.can_tap_for_cost`.
 
 ## M4 — Activated and triggered abilities
 
@@ -313,6 +327,37 @@ triggered mana abilities and "when that mana is spent" → M4; offspring, castin
   on the spell's targets (Ghalta, Hamza, Savage Stomp; for abilities, Wayta); overload (702.96);
   "reveal a card or pay {1}" (Thunderherd Migration).
 
+**From M2** (the plan's handoff notes; module names in "What's built"):
+
+- Lion's Eye Diamond: kept mana abilities' results stand by `Event.redo` (733.1); give sacrifice
+  and discard events `redo` and make a redo re-establish triggers. The auto-payer may use such
+  a source only once `AbilityView` shows non-mana costs and multi-unit choices ("three mana of
+  any one color") and the planner weighs them.
+- A new task that pays a cost overrides `Task.payment_under_way()` and joins the fuzz oracle's
+  list (`_expected_payments`); new mana sources and spells join `SOURCES`/`SPELLS` in
+  `tests/agents/test_autopay_brute_force.py`, whose search assumptions (its docstring) a new kind
+  of mana ability may break.
+- Activated abilities with {X} need their own announcement (602.2b, 107.3k); `mana_need` raises
+  107.3a until then. Modal triggered abilities (700.2b) use `targeting.mode_choices`.
+- Card-less objects (abilities on the stack) record no last known information yet
+  (`move_object`); targets in other zones need `ObjectFilter` zones and `legal_targets` to look
+  there. 120.3c and 120.3h raise in `DamageDealt.apply`. 608.3b (a permanent spell with a
+  target) arrives with Auras.
+- Abilities that target: a `Targeter` for an ability uses its source's last known
+  characteristics (113.7a). Ward triggers on `BecameTargets` and counters an ability: extend
+  `CounterAction` to abilities.
+- A countered Adventure still goes to the graveyard
+  (`test_701_6a_a_countered_adventure_goes_to_the_graveyard_not_exile`).
+- Cost reductions: "this spell costs {N} less" functions on the stack (113.6b: add the spell's
+  own abilities to `costs.spell_cost_modifiers`); count- and target-based reductions are
+  `SpellCostModifier`s reading the state; activated abilities (Wayta) need the same pipeline for
+  602.2b.
+- Panglacial Wurm: `CastDuringResolution` with a library `CastGrant` (extend
+  `cast_permissions` for the zone and the "while searching" lifetime); triggers that trigger
+  during the first effect wait until the free spell is cast; mandatory additional costs are
+  paid with "without paying its mana cost" (601.2b raises for a definition with additional
+  costs until then). Flashback and escape add `AlternativeCost` members and permissions.
+
 ## M5 — Continuous effects and layers
 
 - [ ] The layer system (613): layers 1–7 with the 7a–7d sublayers, timestamps (613.7), dependencies
@@ -334,6 +379,19 @@ triggered mana abilities and "when that mana is spent" → M4; offspring, castin
 - [ ] Leveler cards (711); exchanges (701.12); goad (701.15).
 - [ ] Interaction tests for classic layer puzzles (the M5 rows of `docs/torture-tests.md`).
 
+**From M2:**
+
+- Control changes must set `GameObject.entered_turn` (302.6, `defaults.can_tap_for_cost`).
+- Keyword grants need no engine change (read from characteristics); Leyline of Sanctity and
+  Shalai give players hexproof through `defaults.player_abilities` (seam test
+  `test_702_11c_a_player_with_hexproof`); "hexproof from" on a player is the 702.11d gap;
+  "[spells] you control can't be countered" gives `CantBeCountered` or a `CounterAction`
+  prohibition.
+- A spell copy copies `CastChoices.modes` and `x` (700.2g, 707.10) and may choose new targets,
+  not modes. Prototype and face-down cast variants are offered once their keywords exist.
+- Type-changing effects (Mycosynth Lattice) must also reach the auto-payer's planner, which
+  matches mana to symbols by 107.4 alone.
+
 ## M6 — Replacement and prevention effects
 
 - [ ] Replacement effects (614), including entering-the-battlefield modifications (614.1c–d, 614.12)
@@ -351,6 +409,10 @@ triggered mana abilities and "when that mana is spent" → M4; offspring, castin
 - [ ] "Any color a land could produce" (106.7, Exotic Orchard); "as though it had flash"
   (601.3b, Progenitor's Icon); restricted mana tied to a chosen type (Secluded Courtyard,
   Unclaimed Territory).
+
+**From M2:** `SpellCountered` and `SpellDidNotResolve` become replaceable like other zone
+changes; protection's damage prevention replaces the `NotImplementedRule("702.16e")` in
+`DamageDealt.apply`, and Repentant Blacksmith then leaves `FUZZ_EXCLUSIONS`.
 
 ## M7 — Multiplayer and Commander
 
@@ -371,12 +433,20 @@ triggered mana abilities and "when that mana is spent" → M4; offspring, castin
   decks (717.2), sticker sheets (123.2), conspiracy cards (315.2) and playing for ante (407.2).
 - [ ] Loop guard (104.4b); decide how much of shortcuts (732) to implement.
 
+**From M2:** the commander tax (903.8) is an `INCREASE` cost modifier ({2} per previous cast
+from the command zone), applied before reductions (`resolve.rules.costs`); casting a commander
+is the 903.8 gap the fuzz games stop at until then.
+
 ## M8 — Card coverage
 
 - [ ] Implement the remaining cards of `gishath_dinosaurs.txt`, tracked by `tools/coverage.py`.
 - [ ] Implement the remaining cards of `byrke_counters.txt`.
 - [ ] Both decks pass validation and play complete random-agent games with no crashes or invariant
   violations, plus a ruling-derived test for every card.
+- [ ] Possibly (a tooling item, not required): a prepared-board fuzz check that starts
+  random-agent games from boards where a card can be cast (its mana, its targets, a spell to
+  counter), so the thorough run casts every card even where random games rarely reach it
+  (docs/decisions.md, 2026-10-28, "M2.11").
 
 ## M9 — Rules coverage
 
@@ -385,6 +455,10 @@ triggered mana abilities and "when that mana is spent" → M4; offspring, castin
   special rules), each with rules tests and a fixture or excerpt card.
 - [ ] Every row of the map is either implemented or out of scope with a reason the user approved.
 - [ ] The torture tests assigned to M9 in `docs/torture-tests.md`.
+
+**From M2:** hybrid and Phyrexian payment (107.4e-f, 601.2b) extends both `mana_need` and the
+auto-payer's planner; Mindslaver (723): `GameStats` and `PayableCasts` in `tools/fuzz.py`
+credit a cast to the controlled player, not the seat deciding for them.
 
 ## What's built
 
@@ -587,6 +661,15 @@ completes a step (CLAUDE.md, "Documentation requirements").
   Expertise (`resolve.cards.definitions.card_draw`, in the excerpt and both fuzz recipes);
   fixtures Test Insight (no mana cost) and Test Two-Tone in the scenario database;
   `casting_support.cast_during_resolution`, `decline`.
+- **Done (M2.11, wrap-up):** `resolve.agents.caster.CasterAgent` (plays a land, casts each spell
+  it may in a priority window, casts during a resolution, keeps X small) and the fuzz seats
+  cycled as random, caster and auto-pay (`tools/fuzz.py`: `SEAT_KINDS`, `seat_kind`,
+  `is_autopay_seat`); the thorough run's expectations and "Not yet reachable" in
+  `docs/verification.md`; `test_every_gap_has_an_open_row_in_the_map`
+  (`tests/tooling/test_coverage_map.py`) checking `tools/gaps.py` against the coverage map, whose
+  M2 rows read "M2 ✓"; rules tests for enchantment spells (303.1-303.2) and exile (406.2-406.3).
+  M2 is complete.
+
 ---
 
 ## Rules coverage map

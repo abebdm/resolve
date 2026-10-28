@@ -16,9 +16,17 @@ Task: implement step M2.11 of `docs/plans/m2.md` (prompt in the plan's "Prompts"
 
 ## Done
 
+- CasterAgent + tests; seat kinds (random, caster, auto-pay) in tools/fuzz.py; fuzz tests pass.
+- Gaps-vs-map test (tests/tooling/test_coverage_map.py); M2 map rows ticked; rows 109, 733,
+  702.11 given milestones; rules tests 303, 406.
+- Docs: verification.md (TIME_4 and RESULT_LINES placeholders to fill from the real thorough
+  run), howto (QUICK_TIME placeholder), decisions (two entries), roadmap (M2 ticks, What's
+  built, From M2 notes, M3/M8 items), torture-tests ticks, design.md §17.7/§17.12 moved,
+  README, CLAUDE.md; plan deleted.
+
 ## In progress
 
 ## Next
 
-- CasterAgent (`resolve.agents.caster`) + tests; seat kinds in tools/fuzz.py.
-- gaps-vs-map test; coverage-map ticks; docs; delete the plan.
+- Real thorough run (started in the background) -> fill placeholders.
+- Full checks, quick fuzz, test-reviewer, PR.

@@ -13,7 +13,7 @@ From the pinned CR:
 - 601.2c: the player announces the targets; each chosen object or player becomes a target of
   the spell (the moment ward and other "becomes the target" abilities trigger). 601.2e and 733:
   a spell that can't get legal targets is illegal and would be reversed; the engine doesn't
-  offer it at all (docs/plans/m2.md §3.5: earlier stages offer only legal choices).
+  offer it at all (docs/decisions.md, 2026-10-23: earlier stages offer only legal choices).
 - 800.4a: a player who has left the game is no longer in it, so nothing can target them.
 
 ``target_problem`` (``resolve.rules.targeting``) is the one check of a target's legality, used

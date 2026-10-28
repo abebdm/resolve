@@ -198,14 +198,18 @@ For the engine loop itself, drive it with small tasks.
 ### Run the fuzz harness
 
 `tools/fuzz.py` plays random-agent games and checks each one (`fuzz_run`'s docstring lists the
-checks). On the odd seats the auto-payer (`AutoPayAgent`, "Pay mana automatically" below)
-answers the random agent's payment decisions. It has two presets (`QUICK` and `THOROUGH` in `tools/fuzz.py`); explicit options
+checks). The seats cycle three kinds (`SEAT_KINDS`, `seat_kind`): seat 0, 3, ... is a
+`RandomAgent` (it explores illegal actions); seat 1, 4, ... a caster,
+`AutoPayAgent(CasterAgent)`, which plays a land, then casts each spell it may, then passes, so
+the runs reach the expensive and instant-speed spells; seat 2, 5, ... an
+`AutoPayAgent(RandomAgent)` (the auto-payer, "Pay mana automatically" below, answers its payment
+decisions). It has two presets (`QUICK` and `THOROUGH` in `tools/fuzz.py`); explicit options
 override either.
 
 | Run | Command (PowerShell and Unix alike) | Games | Decks | Concessions | Full checks | Time |
 |---|---|---|---|---|---|---|
-| Quick (default): agents and day-to-day work | `uv run python tools/fuzz.py` | 10 | both recipes, 8 and 2 of each basic land | 1 decision in 200 | every 10 answers | about 15 s on 4 cores (M2.5) |
-| Thorough: the user's milestone verification | `uv run python tools/fuzz.py --thorough` | 100 | both recipes, 8 and 4 of each basic land | 1 decision in 500 | before every decision | about 1 hour on 8 cores, 2 on 4 (measured before M2.3's spells; M2.11 measures it again) |
+| Quick (default): agents and day-to-day work | `uv run python tools/fuzz.py` | 10 | both recipes, 8 and 2 of each basic land | 1 decision in 200 | every 10 answers | about QUICK_TIME on 4 cores (M2.11) |
+| Thorough: the user's milestone verification | `uv run python tools/fuzz.py --thorough` | 100 | both recipes, 8 and 4 of each basic land | 1 decision in 500 | before every decision | about 1 hour on 8 cores, TIME_4 on 4 (M2.11) |
 
 1. Both presets cycle the player counts 2 to 6, then the formats (standard, then Commander), so
    10 games are one game of each. The decks come from two recipes (`recipe_deck`): the same
@@ -231,7 +235,7 @@ override either.
    (counted by the mana they added) and mana ability activations reversed (a mana cost that
    couldn't be paid); spells cast, resolved, not resolved (608.2b) and reversed; damage dealt;
    `Reversed casts:`, for the auto-pay
-   seats and the random seats, the reversed casts of all attempts and of the payable ones (a cast
+   seats (every seat paying with the auto-payer: the casters too) and the random seats, the reversed casts of all attempts and of the payable ones (a cast
    that could be paid when its payment began, `PayableCasts`; the auto-pay seats should reverse
    none); casts per card; gaps by rule; formats; games per second.
 4. A failure prints `FAILED:` with the seed and the start of a command that reproduces that one
@@ -248,7 +252,9 @@ override either.
    (`tests/engine_support.py`) mostly passes, so its games reach later turns. A new registered
    card goes into `tools/excerpts/cards.json` (a test checks that every registered card but the
    basics is there), and so into the recipes; a card the fuzz games can't use yet goes into
-   `FUZZ_EXCLUSIONS` with the reason.
+   `FUZZ_EXCLUSIONS` with the reason. What the thorough run must show is in
+   `docs/verification.md`; a card or count it can't reach yet goes under "Not yet reachable"
+   there, with the reason and the milestone that makes it reachable.
 7. When adding a new check to the harness, add a broken test-only task to
    `tests/engine_support.py` and a test in `tests/fuzz/test_fuzz.py` showing the check catches it.
 
@@ -382,6 +388,12 @@ help, Grep the file for the number (`^704\.5`).
 Run `uv run python tools/gaps.py`. It lists every `NotImplementedRule` in `src/resolve` by CR
 number, and exits with 1 if any message isn't a literal `"<CR number>: <what>"`. Don't keep a
 hand-written list anywhere.
+
+`tests/tooling/test_coverage_map.py` (`test_every_gap_has_an_open_row_in_the_map`) checks each
+gap against the rules coverage map: the gap's row (its keyword's row for 701.x and 702.x, else
+its section's) must still leave room for it, with a milestone not ticked off ("M4", "601.3b
+M6"), a set-mechanic or exotic tier, or "out of scope". When you add a gap, or tick a row off
+("M2 ✓"), name the milestone of every part still missing in that row.
 
 ### Review a PR's tests independently
 
@@ -578,7 +590,8 @@ snapshot. Update those cards' definitions and tests.
 abilities make), plus the request's `for_player` (723.5a). `plan_payment(view, player, offered)`
 gives the plan; the module docstring lists its preferences.
 
-1. Wrap any agent: `AutoPayAgent(RandomAgent(seed))` (the fuzz seats), `AutoPayAgent(human)`
+1. Wrap any agent: `AutoPayAgent(RandomAgent(seed))` and `AutoPayAgent(CasterAgent(seed))` (the
+   fuzz seats), `AutoPayAgent(human)`
    (`play_cli.py --autopay`). It is stateless, so one instance may serve several seats.
 2. A new kind of mana ability (a new `ManaEffect`, or a cost the planner can't read) needs
    `AbilityView`/`ManaOutput` to describe it (`resolve.engine.view._mana_output`) and the
