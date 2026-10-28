@@ -22,14 +22,19 @@ Task: implement step M2.10 of `docs/plans/m2.md` (prompt in its "Prompts" sectio
   isn't paid. `_total`: base {0} (118.9, 118.6a), modifiers still apply (118.9d).
 - `GreatestPower(EachCreature(controlled_by=You()))` value.
 
+## Done since
+
+- Tests first (35 confirmed failing for the right reason, commit "tests first"), implementation,
+  docs (roadmap, coverage map, torture tests, primitives, howto, decisions, design §17.3,
+  CLAUDE.md, README, plan handoff notes).
+- Quick fuzz: 10 games pass. One-off prepared-board run: 300 games, invariants and pickle OK.
+
 ## In progress
 
-- Stubs and tests first.
-
-## Next
-
-- Implement; checks; fuzz; test-reviewer; docs; PR.
+- test-reviewer running.
 
 ## Open questions
 
-- none
+- `test_a_default_run_plays_turns_lands_and_spells_and_reports_them` asserts some of the first
+  five default-run games reaches turn 10; with Rishkar's Expertise in the decks the max is 9
+  (main: 11; 20 games now: 14). Changing it is the user's call (never loosen a test).
