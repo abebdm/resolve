@@ -114,7 +114,7 @@ TEST_COMMAND = CardDefinition(
     ),
 )
 
-# The fixture cards of M2.8's keywords (docs/plans/m2.md §7).
+# The fixture cards of M2.8's keywords (docs/primitives.md).
 _RED = ColorQuality(ColorWord(Color.RED))
 TEST_REDPROOF_BEAR = CardDefinition("Test Redproof Bear", abilities=(Hexproof(_RED),))
 TEST_MULTIPROOF_KNIGHT = CardDefinition(

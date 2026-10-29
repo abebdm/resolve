@@ -1,4 +1,4 @@
-"""The keyword example cards (docs/plans/m2.md §7): Ashcoat Bear (flash), Gladecover Scout
+"""The keyword example cards (docs/primitives.md): Ashcoat Bear (flash), Gladecover Scout
 (hexproof), Humble Budoka (shroud), Darksteel Relic and Darksteel Myr (indestructible),
 Repentant Blacksmith (protection from red), Nacatl Savage (protection from artifacts) and Cancel
 ("Counter target spell.").

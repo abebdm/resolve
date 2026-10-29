@@ -19,6 +19,9 @@ agent should know:
   checks"): any run whose length is a trade-off has a quick default and a `--thorough` preset,
   and every `--thorough` run is listed here with what to look for. When reviewing a PR that adds
   or changes such a run, check that it updated this page.
+- **"Not yet reachable"** (below the checklist) lists the expectations the thorough run can't
+  meet yet, each with its reason and the milestone that makes it reachable; a run missing only
+  those still passes. A milestone that makes one reachable moves it back into the checklist.
 - **A failure** prints a line starting `FAILED:` with a command that reproduces that one game.
   Hand that line, and the options of the run, to a coding agent; it reproduces the failure, turns
   it into a failing test and fixes the engine (`docs/howto.md`, "Run the fuzz harness").
@@ -32,33 +35,47 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
    Every test passes; none is skipped.
 3. **Lint and types:** `uv run ruff check .` and `uv run pyright`. Both report no problems.
 4. **The thorough fuzz run:** `uv run python tools/fuzz.py --thorough`. It plays 100 games with
-   every check before every decision, several at once (one per CPU), and takes about an hour on
-   an 8-core machine (about two on 4 cores). It prints its settings first, a line every 10
-   games, and the summary at the end. Check that:
+   every check before every decision, several at once (one per CPU), and takes about half an
+   hour on an 8-core machine (43 minutes on 4 cores in M2.11). It prints its settings first, a
+   line every 10 games, and the summary at the end. The seats cycle three kinds of player:
+   random (exploring illegal actions), caster (plays a land, then casts every spell it may,
+   paid by the auto-payer) and auto-pay (random, paid by the auto-payer). Check that:
    - the first line starts `Run: thorough preset;`, the summary says `100 games passed`, and
      nothing says `FAILED:`;
-   - `Endings:` shows `concession` games and many `rules gap` games, with `draw x0`; `life
-     total` may be above 0 (Chandra's Ignition, from M2.6); `decked` may be 0, since most games
-     stop at the 508.1 gap once a creature resolves (M2.11 settles the final expectations);
-   - `Spells:` shows casts, resolutions and reversals above zero ("didn't resolve" and
-     "countered" may be 0: random agents rarely leave a spell without its targets, and seldom
-     have the mana for Cancel or Cryptic Command in response, from M2.8); `Damage:` may be 0 (Chandra's
-     Ignition costs five and is seldom cast by random agents); `Casts per card:` lists the
-     excerpt's cards (Sol Ring, the Signets, the mana creatures and the vanilla creatures, and
-     from M2.6 some of the removal spells; the lands are played, not cast); `Gaps:` lists only
-     `508.1` and `903.8`;
+   - `Endings:` shows `concession` games and many `rules gap` games, with `draw x0`
+     (`decked` and `life total` may be 0: see "Not yet reachable" below);
+   - `Spells:` shows casts, resolutions and reversals above zero; `didn't resolve` and
+     `countered` are only one or two each in 100 games (a spell whose target was removed in
+     response; a Cancel or Cryptic Command cast by a caster seat with mana left open), so a 0
+     in one of them, after an engine change, is worth a note rather than a failure: the rules
+     and card tests cover both;
+   - `Damage:` above zero (Fiery Confluence; Chandra's Ignition only after M3);
+   - `Casts per card:` lists every card of `tools/excerpts/cards.json` but the lands (played,
+     not cast), Repentant Blacksmith (kept out of the fuzz decks until M6, 702.16e) and the
+     cards under "Not yet reachable"; a rarely cast card (Cryptic Command, with three blue
+     symbols, or a creature that only one recipe holds) may be missing in one run and is then
+     worth a note, not a failure;
+   - `Gaps:` lists only `508.1` and `903.8`;
    - `Turns per game:` reaches a maximum of several tens of turns, and `Played:` shows
-     thousands of lands and mana abilities, and some reversed mana ability activations
+     hundreds of lands and mana abilities, and some reversed mana ability activations
      (Selesnya Signet activated with nothing to pay its {1});
-   - `Reversed casts:` shows, for the auto-pay seats, `0 of N payable` with N above zero (the
-     auto-payer never reverses a cast it could pay), and for the random seats some payable casts
-     reversed; most attempts of both kinds are reversed, because the random agents cast what
-     they can't pay;
+   - `Reversed casts:` shows, for the auto-pay seats (the casters and the auto-pay seats, which
+     pay with the auto-payer), `0 of N payable` with N above zero (the auto-payer never
+     reverses a cast it could pay), and for the random seats some payable casts reversed;
+     most attempts of both kinds are reversed, because the agents try what they can't pay;
    - the last line gives the time; note it if it is much longer than the estimate above.
    The exact numbers depend on the engine and change from milestone to milestone; a run with the
-   same code always prints the same numbers, except the timing.
-5. **The quick run** (what agents run): `uv run python tools/fuzz.py`. Under a minute: 10 games,
-   with the full checks every 10 answers. The same things to check as in step 4, for 10 games.
+   same code always prints the same numbers, except the timing. At the end of M2 the run
+   printed `100 games passed: 47830 answers accepted, 1 rejected`; `Endings: decked x0, life total x0, concession x17, draw x0, rules gap
+   x83`; `Spells: 305 cast, 302 resolved, 1 didn't resolve, 1 countered, 11344 reversed`;
+   `Damage: 22 dealt`; `Reversed casts: auto-pay seats 7523 of 7750 attempts, 0 of 227
+   payable; random seats 3821 of 3899, 19 of 97 payable`; 20 cards in `Casts per card:`
+   (Grizzly Bears and Cryptic Command not cast that run, by chance; with `--seed 100` both
+   are); `Gaps: 508.1 x53, 903.8 x30`.
+5. **The quick run** (what agents run): `uv run python tools/fuzz.py`. About a minute: 10 games,
+   with the full checks every 10 answers. The same things to check as in step 4, for 10 games,
+   except that most cards, `didn't resolve`, `countered` and damage may be missing from so few
+   games.
 6. **The auto-payer against brute force:**
    `uv run pytest tests/agents/test_autopay_brute_force.py --thorough`. It builds 20 000 random
    small boards and costs and, on each, searches every answer through the engine for a way to
@@ -67,6 +84,24 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
    lists each board it got wrong (the spell, the permanents, the pool and the commander).
 7. **Rules gaps:** `uv run python tools/gaps.py` lists every rule the engine doesn't implement
    yet. Check it matches what the milestone left for later (`docs/roadmap.md`).
+
+## Not yet reachable
+
+The milestone check expects everything above. These expectations of the M2 plan the thorough
+run can't meet yet; each says why and when it becomes reachable (docs/decisions.md,
+2026-10-28, "M2.11"):
+
+- **Endings by decking and by life total** (`decked`, `life total` may be 0), and much damage:
+  most games stop at the 508.1 gap (declaring attackers) soon after a creature resolves, long
+  before a library runs out or a life total reaches 0 from spells alone. **M3** implements
+  attacking and removes 508.1 from the allowed gaps; its roadmap item restores these
+  expectations.
+- **Chandra's Ignition cast:** it needs a creature its caster controls as its target and five
+  mana in a main phase, and a game with a creature on the battlefield stops at its
+  controller's next combat (508.1). Reachable in **M3**, with the endings above.
+- **Decimate cast:** it needs a target artifact, creature, enchantment and land, and no card in
+  the fuzz decks is an enchantment. Reachable when the first enchantment card is implemented
+  and joins the fuzz excerpt (the card and rules tests cover Decimate meanwhile).
 
 ## Optional, with the card data snapshot
 

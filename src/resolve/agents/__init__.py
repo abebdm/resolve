@@ -3,6 +3,8 @@
 - ``Agent``: the interface, one method ``decide(view, request) -> DecisionAnswer``.
 - ``play``: the driver loop of design.md §3, asking each player's agent in turn.
 - ``RandomAgent``: answers uniformly at random inside the answer space (fuzzing).
+- ``CasterAgent`` (``resolve.agents.caster``): plays a land, then casts every spell it may (a
+  fuzz seat, with the auto-payer ``resolve.agents.autopay.AutoPayAgent``).
 - ``ScriptedAgent``: answers from a fixed script (tests and replays).
 - ``TextAgent`` and the text renderer (``resolve.agents.text``): a human at a terminal.
 

@@ -252,10 +252,31 @@ priority task doesn't clear them when a cast or an activation begins; the cast c
 completes (601.2i), and so does a completed mana ability activation. 733.1 forbids reversing library actions; 601.2h pays such costs last, and mana
 abilities can't do them (605.1a), so finding one since the checkpoint is an `EngineError`.
 
-The action's task holds its payment (`PayCosts`, §17.7) in a field rather than as a separate
+The action's task holds its payment (`PayCosts`, §6 "Paying costs") in a field rather than as a separate
 task, because the reversal needs the mana abilities activated while paying. A mana ability with a
 mana cost is such an action too: `ActivateManaAbility` takes its own checkpoint, embeds a
 `PayCosts`, and is reversed the same way if its cost can't be paid, inside or outside a cast.
+
+**Resolution and where a spell goes (608)**
+
+**Where it goes.** `resolved_spell_destination(state, spell)` decides where an instant or sorcery
+goes as it resolves (608.2n). The default is its owner's graveyard. It is where the destinations
+that apply "as it resolves" plug in:
+
+- adventures (exile with permission, 715.3d);
+- omens (shuffled into the library, 720.3d);
+- buyback (to the hand, 702.27a).
+
+A countered spell (701.6a) and a spell that doesn't resolve (608.2b) always go to their owner's
+graveyard, as ordinary zone changes through the event pipeline (`SpellCountered`,
+`SpellDidNotResolve`: new objects, 400.7); a countered Adventure goes to the graveyard, not
+exile. Replacement effects (Rest in Peace, flashback-style exile: M6) change those events, and
+the resolution's, in the replacement stage.
+
+**Damage.** One 120.3 results table reads the source's characteristics, using last known
+information if the source is gone. Deathtouch, lifelink, infect, wither, toxic and protection's
+prevention plug in there (until M6, damage protection would prevent raises the 702.16e gap at
+the top of `DamageDealt.apply`).
 
 **Rule defaults (rule 12)**
 
@@ -279,8 +300,7 @@ module's docstring; the recipe is in `docs/howto.md` ("Add or change a rule defa
 
 ## 6. Decisions
 
-*Designed ahead (provisional): paying costs and `ChooseCounts` (§17.7); the rule for constrained
-answer spaces (§17.8).*
+*Designed ahead (provisional): the rule for constrained answer spaces (§17.8).*
 
 A `DecisionRequest` contains:
 
@@ -306,7 +326,7 @@ independent of the kind:
 | `ChooseOrder(options)` | `Order(permutation)` | a permutation of the option indices |
 | `ChooseNumber(minimum, maximum or None)` | `Number(value)` | within bounds |
 | `Distribute(recipients, total, minimum_each)` | `Amounts(amounts)` | one per recipient, each at least the minimum, adding up to the total (601.2d) |
-| `ChooseCounts(options, maxima, total)` | `Amounts(amounts)` | one per option, each from 0 to its maximum, adding up to the total (601.2h; built in M2.2, §17.7) |
+| `ChooseCounts(options, maxima, total)` | `Amounts(amounts)` | one per option, each from 0 to its maximum, adding up to the total (601.2h; "Paying costs" below) |
 
 Every outcome has exactly one valid answer (canonical forms), which helps AI search. Options are
 typed (`PlayerOption`, `ObjectOption`, `NamedOption`, and the priority actions `PassOption`,
@@ -315,6 +335,26 @@ legal action, including ones the engine can't take yet, which raise `NotImplemen
 chosen. A request contains only
 what its deciding player may know; one decision is pending at a time, which matches the
 sequential APNAP choices of 101.4.
+
+**Paying costs (601.2g-h)**
+
+`PayCosts(payer, cost, purpose)` pays the costs of spells (`ForSpell`), of abilities
+(`ForAbility`) and later of effects. Its decisions go through `deciding_player`, and it uses only
+the payer's resources (723.5a).
+
+- **601.2g:** an `ACTIVATE_MANA_ABILITIES` decision offers "pay" and every mana ability the
+  payer can activate (605.3a), but not those being activated (605.3c: the ability whose cost is
+  being paid, and those it is paying for).
+- **601.2h:** a `PAY_COSTS` decision in the space `ChooseCounts(options, maxima, total)`,
+  answered with `Amounts`: how many units of each class of identical mana to spend. A class of
+  restricted mana that may not be spent on `purpose` (106.6) has a maximum of 0. It is not
+  asked when only one answer pays. When none pays, the action is reversed (§5).
+- A mana ability with a mana cost (Selesnya Signet) pays it with its own embedded `PayCosts`,
+  which may activate other mana abilities in turn; `PayCosts.activations` holds the activation
+  tasks, each with its own payment, so a reversal reaches them all.
+
+Per-unit options would give two answers for one outcome, breaking §6's canonical answers. That
+is why the space is new.
 
 **Rules**
 
@@ -471,8 +511,8 @@ game that begins with more than two players (903.12g is for Brawl only).
 ## 11. Cards
 
 *Designed ahead (provisional): legality (§17.2), cast variants and permissions (§17.3), the cost
-model (§17.6), typed words (§17.10), keywords and targeting (§17.11), resolution destinations
-(§17.12), durations (§17.14), searching (§17.16), subgames and restarting (§17.17).*
+model (§17.6), typed words (§17.10), keywords and targeting (§17.11), durations (§17.14),
+searching (§17.16), subgames and restarting (§17.17). Resolution destinations are in §5.*
 
 **Data**
 
@@ -616,8 +656,8 @@ New primitives are engine code and get careful review.
 
 ## 17. Designs approved ahead of their code
 
-The M2 plan (`docs/plans/m2.md`, approved 2026-10-19) designed the systems below before
-writing the code that needs them. That way every rule and keyword in the roadmap's rules coverage
+The M2 plan (`docs/plans/m2.md`, approved 2026-10-19; deleted in M2.11, in git history)
+designed the systems below before writing the code that needs them. That way every rule and keyword in the roadmap's rules coverage
 map, and every torture test in `docs/torture-tests.md`, has a place to plug in.
 
 **Every subsection here is provisional.** Each one names the milestone that builds it. That
@@ -775,30 +815,7 @@ first card.*
 
 ### 17.7 Paying costs and the `ChooseCounts` space
 
-*Provisional: designed in M2's plan; built in M2.2 to M2.4. That milestone's plan may revise it,
-with the user's sign-off. M2.3 built `PayCosts` (`resolve.engine.payment`) for generic, colored
-and {C} mana; the action being paid for holds it in a field (§5, "Reversing illegal actions").
-M2.4 added mana abilities' mana costs and restricted mana (106.6). M2.5 shows the payments
-under way in the view (`PlayerView.payments`, §9), for the agent-side auto-payer
-(`resolve.agents.autopay`).*
-
-`PayCosts(payer, cost, purpose)` pays the costs of spells (`ForSpell`), of abilities
-(`ForAbility`) and later of effects. Its decisions go through `deciding_player`, and it uses only
-the payer's resources (723.5a).
-
-- **601.2g:** an `ACTIVATE_MANA_ABILITIES` decision offers "pay" and every mana ability the
-  payer can activate (605.3a), but not those being activated (605.3c: the ability whose cost is
-  being paid, and those it is paying for).
-- **601.2h:** a `PAY_COSTS` decision in the space `ChooseCounts(options, maxima, total)`,
-  answered with `Amounts`: how many units of each class of identical mana to spend. A class of
-  restricted mana that may not be spent on `purpose` (106.6) has a maximum of 0. It is not
-  asked when only one answer pays. When none pays, the action is reversed (§5).
-- A mana ability with a mana cost (Selesnya Signet) pays it with its own embedded `PayCosts`,
-  which may activate other mana abilities in turn; `PayCosts.activations` holds the activation
-  tasks, each with its own payment, so a reversal reaches them all.
-
-Per-unit options would give two answers for one outcome, breaking §6's canonical answers. That
-is why the space is new.
+Built in M2.2 to M2.5, and moved to §6 ("Paying costs").
 
 ### 17.8 Constrained answer spaces
 
@@ -901,32 +918,7 @@ qualities are judged by: the spell's own, or the ability source's last known inf
 
 ### 17.12 Resolution and where a spell goes
 
-*Provisional: designed in M2's plan; built in M2.3 and M2.6. That milestone's plan may revise it,
-with the user's sign-off. M2.3 built `resolved_spell_destination` and the resolution of
-permanent spells (608.3a); M2.6 the resolution of instants and sorceries (`ResolveSpell`; a spell
-whose targets are all illegal goes to its owner's graveyard, 608.2b, without the destination
-function) and the 120.3 table (`DamageDealt.apply`); M2.8 countering (`SpellCountered`) and
-protection's damage gap (702.16e). Revised in M2.8 with the user's sign-off (docs/decisions.md,
-2026-10-27): a countered spell doesn't use the destination function.*
-
-**Where it goes.** `resolved_spell_destination(state, spell)` decides where an instant or sorcery
-goes as it resolves (608.2n). The default is its owner's graveyard. It is where the destinations
-that apply "as it resolves" plug in:
-
-- adventures (exile with permission, 715.3d);
-- omens (shuffled into the library, 720.3d);
-- buyback (to the hand, 702.27a).
-
-A countered spell (701.6a) and a spell that doesn't resolve (608.2b) always go to their owner's
-graveyard, as ordinary zone changes through the event pipeline (`SpellCountered`,
-`SpellDidNotResolve`: new objects, 400.7); a countered Adventure goes to the graveyard, not
-exile. Replacement effects (Rest in Peace, flashback-style exile: M6) change those events, and
-the resolution's, in the replacement stage.
-
-**Damage.** One 120.3 results table reads the source's characteristics, using last known
-information if the source is gone. Deathtouch, lifelink, infect, wither, toxic and protection's
-prevention plug in there (until M6, damage protection would prevent raises the 702.16e gap at
-the top of `DamageDealt.apply`).
+Built in M2.3, M2.6 and M2.8, and moved to §5 ("Resolution and where a spell goes").
 
 ### 17.13 Choices stored on permanents
 

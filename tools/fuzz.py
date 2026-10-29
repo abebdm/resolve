@@ -20,10 +20,12 @@ often the full checks run (``check_every``); explicit options override them. Gam
 ``--copies`` with each recipe),
 so a failing game is reproduced by its seed and the run's options.
 
-Each game is played by ``RandomAgent``s; on the odd seats the auto-payer
-(``resolve.agents.autopay.AutoPayAgent``) answers their payment decisions. Before every answer
-(with ``check_every`` N > 1, every N answers and at the end; the bookkeeping invariants always)
-the harness checks:
+The seats cycle three kinds of agent (``SEAT_KINDS``): ``RandomAgent``, which explores illegal
+actions; ``CasterAgent``, which plays a land and casts every spell it may; and ``RandomAgent``
+again. The casters and the third kind pay with the auto-payer
+(``resolve.agents.autopay.AutoPayAgent``), which answers their payment decisions. Before every
+answer (with ``check_every`` N > 1, every N answers and at the end; the bookkeeping invariants
+always) the harness checks:
 
 - the state's bookkeeping invariants and that it is pure data (``resolve.state.invariants``);
 - every player's view, against an oracle written out from the rules rather than the engine's
@@ -74,6 +76,7 @@ from pathlib import Path
 
 from resolve.agents.autopay import AutoPayAgent, plan_payment
 from resolve.agents.base import Agent
+from resolve.agents.caster import CasterAgent
 from resolve.agents.driver import MAX_ATTEMPTS, agent_for
 from resolve.agents.random_agent import RandomAgent
 from resolve.agents.replay import ReplayDiverged, replay
@@ -649,9 +652,24 @@ def _check_replay(
         raise fail("the replay doesn't reproduce the identical state")
 
 
+# The kinds of seat, cycled by seat number (docs/decisions.md, 2026-10-28, "M2.11"): random
+# seats explore illegal actions; casters (``CasterAgent``) cast what they can, so the runs reach
+# every kind of spell; auto-pay seats are random but pay with the auto-payer (plan M2.5).
+RANDOM_SEAT = "random"
+CASTER_SEAT = "caster"
+AUTOPAY_SEAT = "auto-pay"
+SEAT_KINDS = (RANDOM_SEAT, CASTER_SEAT, AUTOPAY_SEAT)
+
+
+def seat_kind(seat: int) -> str:
+    """The kind of agent playing seat ``seat`` (``SEAT_KINDS``, cycled)."""
+    return SEAT_KINDS[seat % len(SEAT_KINDS)]
+
+
 def is_autopay_seat(seat: int) -> bool:
-    """Whether the auto-payer plays seat ``seat`` (with a random agent): the odd seats."""
-    return seat % 2 == 1
+    """Whether the auto-payer answers seat ``seat``'s payment decisions: the casters and the
+    auto-pay seats."""
+    return seat_kind(seat) != RANDOM_SEAT
 
 
 def fuzz_game(
@@ -669,15 +687,21 @@ def fuzz_game(
 ) -> FuzzResult:
     """Fuzz one game of ``new_game(config, decks, seed)``; the options are ``fuzz_run``'s.
 
-    Seat ``i`` is played by ``RandomAgent(agent_seed + i)``; ``agent_seed`` defaults to ``seed``.
-    On the odd seats the auto-payer answers that agent's payment decisions
-    (``AutoPayAgent``, ``is_autopay_seat``).
+    Seat ``i``'s agent is seeded with ``agent_seed + i``; ``agent_seed`` defaults to ``seed``.
+    The seats cycle ``SEAT_KINDS`` (``seat_kind``): ``RandomAgent``,
+    ``AutoPayAgent(CasterAgent)`` and ``AutoPayAgent(RandomAgent)``.
     """
     base = seed if agent_seed is None else agent_seed
     agents: list[Agent] = []
     for seat in range(len(decks)):
-        agent = RandomAgent((base + seat) % 2**64)
-        agents.append(AutoPayAgent(agent) if is_autopay_seat(seat) else agent)
+        agent_seed_here = (base + seat) % 2**64
+        kind = seat_kind(seat)
+        if kind == CASTER_SEAT:
+            agents.append(AutoPayAgent(CasterAgent(agent_seed_here)))
+        elif kind == AUTOPAY_SEAT:
+            agents.append(AutoPayAgent(RandomAgent(agent_seed_here)))
+        else:
+            agents.append(RandomAgent(agent_seed_here))
     commander = " --commander" if config.commander is not None else ""
     describe = (
         f"game seed {seed}, {len(decks)} players{commander} "
@@ -750,7 +774,7 @@ class GameStats:
     - ``abilities_reversed``: mana ability activations reversed because their mana cost couldn't
       be paid (``ActionReversed`` of a source, 733.1).
     - ``autopay_casts``, ``autopay_reversed``: the spells cast and the casts reversed by the
-      auto-paying seats (``is_autopay_seat``).
+      auto-paying seats (``is_autopay_seat``: casters and auto-pay seats).
     - ``payable_reversed``, ``autopay_payable_reversed``: the casts reversed although they could
       be paid when their payment began (``PayableCasts``), by every seat and by the auto-paying
       ones.

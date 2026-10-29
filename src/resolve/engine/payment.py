@@ -1,4 +1,4 @@
-"""Paying costs: the mana part (601.2g-h, 605.3a, 118.3, 106.6, design.md §17.7).
+"""Paying costs: the mana part (601.2g-h, 605.3a, 118.3, 106.6, design.md §6 "Paying costs").
 
 ``PayCosts(payer, cost, purpose)`` pays a mana cost, for a spell (``ForSpell``) or an ability
 (``ForAbility``), in two parts:

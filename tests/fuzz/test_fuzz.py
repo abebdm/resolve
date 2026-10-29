@@ -23,6 +23,7 @@ import pytest
 
 from resolve.agents.autopay import AutoPayAgent
 from resolve.agents.base import Agent
+from resolve.agents.caster import CasterAgent
 from resolve.agents.random_agent import RandomAgent
 from resolve.agents.scripted import ScriptedAgent, Step
 from resolve.decisions.kinds import DecisionKind
@@ -292,9 +293,12 @@ def test_fuzz_games_are_reproducible_from_their_seed() -> None:
     assert starters == {0, 1, 2, 3}
 
 
-def test_the_odd_seats_are_auto_paying_random_agents(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Seat ``i`` is ``RandomAgent(agent_seed + i)``; on odd seats the auto-payer answers its
-    payment decisions (plan M2.5, §8), so the summary can compare the two."""
+def test_the_seats_cycle_random_caster_and_auto_pay(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Seat ``i`` is seeded with ``agent_seed + i``. The seats cycle three kinds (docs/decisions.md,
+    2026-10-28, "M2.11"): ``RandomAgent`` (seat 0, 3, ...), which explores illegal actions;
+    ``AutoPayAgent(CasterAgent)`` (seat 1, 4, ...), which casts what it can; and
+    ``AutoPayAgent(RandomAgent)`` (seat 2, 5, ...), random but paying with the auto-payer (plan
+    M2.5, §8). A two-player game has a random seat and a caster."""
     seen: list[Sequence[Agent]] = []
 
     def recording(make_state: Callable[[], GameState], agents: Sequence[Agent], **_: object):
@@ -302,16 +306,24 @@ def test_the_odd_seats_are_auto_paying_random_agents(monkeypatch: pytest.MonkeyP
         return fuzz_tool.FuzzResult(0, 0, None, make_state())
 
     monkeypatch.setattr(fuzz_tool, "fuzz_run", recording)
-    fuzz_game(GameConfig.standard(), decks_for(4, False, 1), 1, agent_seed=50)
+    fuzz_game(GameConfig.standard(), decks_for(6, False, 1), 1, agent_seed=50)
     (agents,) = seen
+    kinds: list[str] = []
     for seat, agent in enumerate(agents):
-        if seat % 2:
-            assert isinstance(agent, AutoPayAgent)
+        if isinstance(agent, AutoPayAgent):
             inner = agent.inner
+            if isinstance(inner, CasterAgent):
+                kinds.append("caster")
+                assert inner.random.rng == RandomAgent(50 + seat).rng
+                continue
+            kinds.append("auto-pay")
         else:
             inner = agent
+            kinds.append("random")
         assert isinstance(inner, RandomAgent)
         assert inner.rng == RandomAgent(50 + seat).rng
+    assert kinds == ["random", "caster", "auto-pay"] * 2
+    assert [fuzz_tool.is_autopay_seat(seat) for seat in range(6)] == [False, True, True] * 2
 
 
 def test_a_game_that_ends_reports_no_gap() -> None:
