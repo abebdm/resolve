@@ -3,8 +3,8 @@
 Milestones are worked in order. Each milestone ends with every listed item done, tests passing,
 and `pytest`, `ruff` and `pyright` clean in CI. Tick items off in the same PR that completes them.
 
-**Current milestone: M3 (Combat), not started: its plan comes first. M0, M1 and M2 are
-complete.**
+**Current milestone: M3 (Combat), in progress (plan approved: `docs/plans/m3.md`; M3.0 done).
+M0, M1 and M2 are complete.**
 
 ---
 
@@ -247,39 +247,53 @@ triggered mana abilities and "when that mana is spent" → M4; offspring, castin
 
 ## M3 — Combat
 
+The approved plan is `docs/plans/m3.md` (steps M3.0 to M3.9).
+
+- [x] The plan, and its documentation changes: design.md §17.18, the coverage-map and
+  torture-test corrections (M3.0).
+- [ ] The answer spaces `ChooseAssignment` (attack and block declarations as constraint models)
+  and `DistributeEach` (combat damage assignment), with agent support (M3.1, M3.4, M3.5).
+- [ ] The combat rule defaults: `attack_declarer`, `block_declarer`, `combat_damage_assigner`,
+  `combat_damage_amount`, `blocks_allowed` (rule 12; M3.1 to M3.3).
 - [ ] Beginning of combat, declare attackers, declare blockers, combat damage, end of combat
-  (506–511).
-- [ ] Attack and block requirements and restrictions (508.1d, 509.1c), including "can't attack or
-  block unless" (Topiary Stomper), "can't be blocked" (Rogue's Passage) and power-based blocking
-  restrictions (Champion of Lambholt).
-- [ ] Creatures put onto the battlefield tapped and attacking (508.4, Ghalta and Mavren).
+  (506–511), and removing the 508.1 gap (M3.2, M3.3).
+- [ ] Attack and block requirements and restrictions (508.1c-d, 509.1b-c), with attack and block
+  costs (508.1g-j, 509.1d-f): the primitives of "can't attack or block unless" (Topiary Stomper),
+  "can't be blocked" (Rogue's Passage) and power-based blocking restrictions (Champion of
+  Lambholt), tested with fixtures; the cards themselves need M4 or M5 (M3.4, M3.5).
+- [ ] Creatures put onto the battlefield tapped and attacking (508.4), tested with a fixture;
+  Ghalta and Mavren, which needs triggers and tokens, in M4 (M3.7).
 - [ ] First strike and double strike damage steps; trample; deathtouch; lifelink; flying and reach;
-  vigilance; menace. Deathtouch and lifelink apply to noncombat damage too (M2's damage table).
+  vigilance; menace. Deathtouch and lifelink apply to noncombat damage too (M2's damage table)
+  (M3.2 to M3.6).
 - [ ] Defender (702.3); the retired evergreen evasion keywords intimidate (702.13), landwalk
-  (702.14) and fear (702.36).
-- [ ] Haste (702.10), including its 302.6 part.
-- [ ] Summoning sickness for attacking (302.6), sharing M2.4's "controlled since the turn
-  began" test. `defaults.can_tap_for_cost` covers only a creature's own {T}/{Q} abilities
-  (302.6, 602.5a): the tap costs of convoke (702.51), improvise (702.126), crew (702.122) and
-  "tap an untapped creature you control" ignore summoning sickness and must not use it.
-  Consider renaming it here (for example a shared `summoning_sick(state, obj)` predicate for
-  {T} costs and attacking; docs/decisions.md, 2026-10-21 "Deferred from M2.4").
-- [ ] Protection's blocking part (702.16f).
-- [ ] Multiplayer attacks: choosing which player or planeswalker each creature attacks, and
-  leaving room for attacking battles (310). Attack and block declarations use a constrained
-  answer space (`ChooseAssignment`, design.md §6).
-- [ ] Extra turns, phases and steps (500.7–500.10), on M2.1's `TurnState.segments` and
-  `next_turn` (Time Walk, Relentless Assault).
+  (702.14) and fear (702.36) (M3.2, M3.4).
+- [ ] Haste (702.10), including its 302.6 part (M3.1, M3.2).
+- [ ] Summoning sickness for attacking (302.6): `defaults.can_tap_for_cost` becomes
+  `summoning_sick(state, obj, purpose)`, for a creature's own {T}/{Q} abilities and for
+  attacking; the tap costs of convoke (702.51), improvise (702.126), crew (702.122), saddle and
+  "tap an untapped creature you control" ignore summoning sickness and never call it (M3.1;
+  docs/decisions.md, 2026-10-21 "Deferred from M2.4").
+- [ ] Protection's blocking part (702.16f, j, k) (M3.4).
+- [ ] Multiplayer attacks: choosing which player each creature attacks, blocks and damage
+  assignment in APNAP order (802), leaving room for attacking planeswalkers and battles (306,
+  310) (M3.2, M3.3).
+- [ ] Extra turns, phases and steps (500.7–500.10), on M2.1's `TurnState.segments` (with numbered
+  phases) and `next_turn` (Time Walk, Relentless Assault; M3.8).
 - [ ] Ending turns and phases (724): the design must allow it; implemented in M9 (exotic).
+- [ ] Cards: 14 keyword example cards, 7 combat-rules cards, the torture tests Time Walk and
+  Relentless Assault, and Zetalpa, Primal Dawn (`docs/plans/m3.md` §7); the torture tests'
+  rules for Lure and Basilisk Collar (the cards themselves in M5).
 - [ ] Restore the thorough fuzz run's expectations that the 508.1 gap blocks
   (`docs/verification.md`, "Not yet reachable"): with attacks, games end by life total and by
   decking, damage is dealt, and Chandra's Ignition is cast (a game with a creature no longer
   stops at its controller's first combat). Remove 508.1 from `ALLOWED_GAPS` and move those
-  expectations back into the checklist.
+  expectations back into the checklist; Decimate too, once Ghostly Prison (an enchantment) is
+  in the fuzz decks (M3.2, M3.5, M3.9).
 
 **From M2:** protection's blocking part (702.16f) and combat damage reach the 702.16e gap in
 `DamageDealt.apply`; `TapAll` taps without attacking; haste plugs into
-`defaults.can_tap_for_cost`.
+`defaults.can_tap_for_cost` (renamed `summoning_sick` in M3.1).
 
 ## M4 — Activated and triggered abilities
 
@@ -292,8 +306,8 @@ triggered mana abilities and "when that mana is spent" → M4; offspring, castin
   docs/decisions.md, 2026-10-21 "Deferred from M2.4").
 - [ ] Non-mana costs (118): sacrifice, discard, exile, life, counters, tapping other permanents,
   with reversal (733) by M2's checkpoint. Tapping an untapped creature for a cost ignores
-  summoning sickness: not through `can_tap_for_cost` (302.6 covers only a creature's own
-  {T}/{Q} abilities).
+  summoning sickness: not through `summoning_sick` (302.6 covers only a creature's own
+  {T}/{Q} abilities and attacking).
 - [ ] Triggered abilities (603):
   - APNAP ordering
   - intervening-if conditions (603.4)
@@ -304,6 +318,10 @@ triggered mana abilities and "when that mana is spent" → M4; offspring, castin
   "do this only once each turn" (Pantlaza), batched "one or more" triggers, and spell-cast and
   ability-activation triggers.
 - [ ] Triggered mana abilities (605.1b) and "when that mana is spent" delayed triggers (603.7a).
+- [ ] Life-gain and life-loss triggers ("whenever you gain life", "whenever you lose life") see
+  the life gained and lost as damage results, which M3 records inside `DamageDealt` (120.3a,
+  120.3f), one event per source (702.15e): two lifelink creatures dealing damage at once
+  trigger twice (the M3 plan's approval note 1).
 - [ ] Damage-driven triggers (enrage), fight (701.14).
 - [ ] Counters (122) on permanents and on players (poison 704.5c, energy): putting and removing
   them, counters as costs, doubling (701.10e) and proliferate (701.34).
@@ -381,7 +399,8 @@ triggered mana abilities and "when that mana is spent" → M4; offspring, castin
 
 **From M2:**
 
-- Control changes must set `GameObject.entered_turn` (302.6, `defaults.can_tap_for_cost`).
+- Control changes must set `GameObject.entered_turn` (302.6, `defaults.summoning_sick` from M3.1)
+  and remove the creature from combat (506.4, `remove_from_combat`).
 - Keyword grants need no engine change (read from characteristics); Leyline of Sanctity and
   Shalai give players hexproof through `defaults.player_abilities` (seam test
   `test_702_11c_a_player_with_hexproof`); "hexproof from" on a player is the 702.11d gap;
@@ -719,7 +738,7 @@ earlier milestones must leave room for every row in this map.
 | 117 | Timing and Priority | M1 ✓, M2 ✓ (117.1a casting, 117.3b-c, 117.4 with the stack: M2.3 ✓; flash M2.8 ✓) | E |  |
 | 118 | Costs | M2 ✓ (mana: paying generic, colored and {C} mana M2.3 ✓; mana costs of mana abilities, restricted mana M2.4 ✓; X M2.7 ✓; generic reductions 118.7, 118.7a: M2.9 ✓; 118.9 "without paying its mana cost", 118.9a-d, 118.6a: M2.10 ✓; other alternative costs with their keywords); 118.7b-g with their first cards (colored, colorless, hybrid, Phyrexian, snow reductions); M4 (other costs, 118.12) | E | `resolve.rules.costs` |
 | 119 | Life | M2 ✓ (gaining life, 119.3, 119.10: M2.6 ✓); paying life M4 | E |  |
-| 120 | Damage | M2 ✓ (noncombat: 120.1-120.2, 120.3a, 120.3e, 120.4b, 120.8: M2.6 ✓), M3 (combat), M4 (120.3b-d, 120.3g-h) | E | the 120.3 table is `DamageDealt.apply` |
+| 120 | Damage | M2 ✓ (noncombat: 120.1-120.2, 120.3a, 120.3e, 120.4b, 120.8: M2.6 ✓), M3 (combat; 120.3f lifelink and deathtouch, for noncombat damage too), M4 (120.3b-d, 120.3g-h) | E | the 120.3 table is `DamageDealt.apply` |
 | 121 | Drawing a Card | M1 ✓; 121.6 M6 | E |  |
 | 122 | Counters | M4 | E | D |
 | 123 | Stickers | M5 (stickers change names, abilities, power and toughness: 123.6-123.8); M7 (sticker sheets chosen before the game, 123.2) | S | Unfinity: 47 cards that use stickers and 48 sticker sheets are Commander-legal |
@@ -739,7 +758,7 @@ earlier milestones must leave room for every row in this map.
 | 213 | Information Below the Text Box | out of scope | — | no game rules |
 | 300 | General | M1 ✓ | E |  |
 | 301 | Artifacts | M2 ✓ (casting artifact spells: M2.3 ✓); Equipment M4; Vehicles M5; Fortifications M9 | E |  |
-| 302 | Creatures | M1 ✓, M2 ✓ (302.6 for {T} costs: M2.4 ✓), M3 (302.6 for attacking) | E | `can_tap_for_cost`, `GameObject.entered_turn`, `Player.last_turn_began` |
+| 302 | Creatures | M1 ✓, M2 ✓ (302.6 for {T} costs: M2.4 ✓), M3 (302.6 for attacking) | E | `can_tap_for_cost` (renamed `summoning_sick` in M3.1), `GameObject.entered_turn`, `Player.last_turn_began` |
 | 303 | Enchantments | M2 ✓ (casting enchantment spells, 303.1-303.2: M2.3); Auras M4 | E | Sagas, Classes, Cases and Rooms have their own rows |
 | 304 | Instants | M2 ✓ (304.1 timing: M2.3, flash M2.8; 304.2 resolving: M2.6); 304.4 with the first effect that puts a card onto the battlefield (M4); 304.5 with activated abilities (M4) | E |  |
 | 305 | Lands | M1 ✓; modifiers M5 | E | `land_plays_allowed`, `land_play_options`: default functions in place (M2.1 ✓) |
@@ -768,7 +787,7 @@ earlier milestones must leave room for every row in this map.
 | 503 | Upkeep Step | M1 ✓ | E |  |
 | 504 | Draw Step | M1 ✓ | E | `draw_step_draws`: default function in place (M2.1 ✓) |
 | 505 | Main Phase | M1 ✓; 505.3-505.5 M9 | E |  |
-| 506 | Combat Phase | M3 | E |  |
+| 506 | Combat Phase | M3 | E | 506.8 (spells timed by combat) as a predicate, `combat_point`, tested with a fixture; its first real cards in M9 |
 | 507 | Beginning of Combat Step | M3 | E |  |
 | 508 | Declare Attackers Step | M3 | E |  |
 | 509 | Declare Blockers Step | M3 | E |  |
@@ -816,7 +835,7 @@ earlier milestones must leave room for every row in this map.
 | 721 | Station Cards | M4 | S |  |
 | 722 | Preparation Cards | M5 | S | 722.4 normal characteristics M2.2 ✓ (plan corrected); 722.3 variant gap M2.3 ✓ |
 | 723 | Controlling Another Player | M9 (seam M2.1 ✓) | X | `deciding_player`, `DecisionRequest.for_player`, `knows_identity`, `concede(by=)`: seams in place; the auto-payer pays with `for_player`'s resources (723.5a, M2.5 ✓) |
-| 724 | Ending Turns and Phases | M3 (turn frame M2.1 ✓) | X | the turn frame is `TakeTurn` on the task stack (`turn_frame_index`) |
+| 724 | Ending Turns and Phases | M9 (turn frame M2.1 ✓; M3 ends combat through `end_combat` and numbers phases) | X | the turn frame is `TakeTurn` on the task stack (`turn_frame_index`) |
 | 725 | The Monarch | M7 | S | D (Regal Behemoth) |
 | 726 | The Initiative | M7 | S |  |
 | 727 | Restarting the Game | M7 | X |  |
@@ -857,7 +876,7 @@ earlier milestones must leave room for every row in this map.
 | 702.7 | First Strike | M3 | E | D |
 | 702.8 | Flash | M2 ✓ (M2.8 ✓) | E | `Flash`, read by `may_cast_now` |
 | 702.9 | Flying | M3 | E | D |
-| 702.10 | Haste | M3 | E | D; the 302.6 hook is `defaults.can_tap_for_cost` (M2.4 ✓); the attack half shares its test |
+| 702.10 | Haste | M3 | E | D; the 302.6 hook is `defaults.can_tap_for_cost` (M2.4 ✓), renamed `summoning_sick(state, obj, purpose)` in M3.1 for both halves |
 | 702.11 | Hexproof | M2 ✓ (M2.8); a player with "hexproof from" (702.11d) M5, with its first card | E | D; including "hexproof from"; a player's from `player_abilities` |
 | 702.12 | Indestructible | M2 ✓ (M2.8 ✓) | E | D |
 | 702.13 | Intimidate | M3 | E | retired evergreen |
@@ -898,7 +917,7 @@ earlier milestones must leave room for every row in this map.
 | 702.48 | Offering | M4 | X |  |
 | 702.49 | Ninjutsu | M4 | S |  |
 | 702.50 | Epic | M5 | X |  |
-| 702.51 | Convoke | M4 | S | a payment alternative; tapping a creature for convoke ignores summoning sickness: must not use `can_tap_for_cost` (302.6 covers only a creature's own {T}/{Q} abilities) |
+| 702.51 | Convoke | M4 | S | a payment alternative; tapping a creature for convoke ignores summoning sickness: must not use `summoning_sick` (formerly `can_tap_for_cost`; 302.6 covers only a creature's own {T}/{Q} abilities and attacking) |
 | 702.52 | Dredge | M6 | S |  |
 | 702.53 | Transmute | M4 | S |  |
 | 702.54 | Bloodthirst | M6 | S |  |
@@ -969,11 +988,11 @@ earlier milestones must leave room for every row in this map.
 | 702.119 | Emerge | M4 | S |  |
 | 702.120 | Escalate | M2 | S |  |
 | 702.121 | Melee | M5 | S |  |
-| 702.122 | Crew | M5 | S | tapping creatures to crew ignores summoning sickness: must not use `can_tap_for_cost` (302.6 covers only a creature's own {T}/{Q} abilities) |
+| 702.122 | Crew | M5 | S | tapping creatures to crew ignores summoning sickness: must not use `summoning_sick` (formerly `can_tap_for_cost`; 302.6 covers only a creature's own {T}/{Q} abilities and attacking) |
 | 702.123 | Fabricate | M4 | S |  |
 | 702.124 | Partner | M7 | E | Commander deck construction; D (Lae'zel's Choose a Background, no in-game effect) |
 | 702.125 | Undaunted | M2 | S |  |
-| 702.126 | Improvise | M4 | S | a payment alternative; must not use `can_tap_for_cost` (302.6 is about creatures' own {T}/{Q} abilities) |
+| 702.126 | Improvise | M4 | S | a payment alternative; must not use `summoning_sick` (formerly `can_tap_for_cost`; 302.6 is about creatures' own {T}/{Q} abilities and attacking) |
 | 702.127 | Aftermath | M5 | S | split cards |
 | 702.128 | Embalm | M5 | S |  |
 | 702.129 | Eternalize | M5 | S |  |

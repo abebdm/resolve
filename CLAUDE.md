@@ -48,8 +48,11 @@ completed step built, and where, is in `docs/roadmap.md`, "What's built".
 
 - **Known violations of rule 12:** none. Every rule default comes from a function in
   `resolve.rules.defaults` (how to add or change one: `docs/howto.md`).
-- **Next:** the user's `--thorough` milestone check of M2 (`docs/verification.md`), then M3's
-  plan (Combat), written and approved before any M3 code.
+- **Current milestone: M3 (Combat), in progress:** the plan is approved (`docs/plans/m3.md`,
+  2026-10-30) and M3.0 (its documentation: design.md §17.18, the roadmap's M3 checklist and
+  coverage-map corrections, the torture-test rows) is done.
+- **Next:** M3.1 (the answer spaces, summoning sickness and haste, the combat state), after the
+  user's `--thorough` milestone check of M2 (`docs/verification.md`) if it isn't done yet.
 
 Do not start a milestone unless the user asks.
 

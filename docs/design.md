@@ -106,7 +106,8 @@ because the controller of a player can't make them concede (723.6).
 ## 4. Game state
 
 *Designed ahead (provisional): stack objects and their choices (§17.5), counters and
-designations (§17.15), choices stored on permanents (§17.13).*
+designations (§17.15), choices stored on permanents (§17.13), the combat state and numbered
+segments (§17.18).*
 
 `GameState` (`resolve.state.game`) is **pure data**. It contains:
 
@@ -127,7 +128,9 @@ designations (§17.15), choices stored on permanents (§17.13).*
   (117.4), and per-turn records (lands played; later spells cast, etc.). The turn's phases and
   steps are data: a turn starts with the segments `defaults.turn_structure` gives it
   (`TURN_SEQUENCE`, 500.1) in `TurnState.segments`, and `TakeTurn` begins them one at a time, so
-  effects can insert and remove phases and steps (500.8-500.10)
+  effects can insert and remove phases and steps (500.8-500.10). From M3.8 each segment carries
+  the number of the phase it belongs to, so two phases of the same kind can be told apart
+  (§17.18); from M3.1 `TurnState.combat` holds the combat phase in progress (§17.18)
 - `tasks`: the task stack (§5)
 - `pending`: the current `DecisionRequest`, if any; `result`: the `GameResult` once the game is
   over
@@ -276,7 +279,8 @@ the resolution's, in the replacement stage.
 **Damage.** One 120.3 results table reads the source's characteristics, using last known
 information if the source is gone. Deathtouch, lifelink, infect, wither, toxic and protection's
 prevention plug in there (until M6, damage protection would prevent raises the 702.16e gap at
-the top of `DamageDealt.apply`).
+the top of `DamageDealt.apply`). Deathtouch and lifelink arrive in M3 (§17.18), for noncombat
+damage too.
 
 **Rule defaults (rule 12)**
 
@@ -294,13 +298,17 @@ module's docstring; the recipe is in `docs/howto.md` ("Add or change a rule defa
 - `land_plays_allowed`, `land_play_options`, `cast_permissions`, `cast_options`,
   `has_sorcery_timing`, `may_cast_now` (305.2, 305.1, 601.3, 903.8, 117.1a), with legality
   questions asked through `resolve.rules.legality.allowed` (§17.2);
-- `resolved_spell_destination` (608.2n).
+- `resolved_spell_destination` (608.2n);
+- from M3 (§17.18): `attack_declarer`, `block_declarer`, `combat_damage_assigner`,
+  `combat_damage_amount`, `blocks_allowed` (508.1, 509.1, 509.1a, 510.1, 510.1a), and
+  `summoning_sick(state, obj, purpose)` (302.6), which replaces `can_tap_for_cost`.
 
 ---
 
 ## 6. Decisions
 
-*Designed ahead (provisional): the rule for constrained answer spaces (§17.8).*
+*Designed ahead (provisional): the rule for constrained answer spaces (§17.8), with the combat
+spaces `ChooseAssignment` and `DistributeEach` (M3, §17.18).*
 
 A `DecisionRequest` contains:
 
@@ -657,7 +665,8 @@ New primitives are engine code and get careful review.
 ## 17. Designs approved ahead of their code
 
 The M2 plan (`docs/plans/m2.md`, approved 2026-10-19; deleted in M2.11, in git history)
-designed the systems below before writing the code that needs them. That way every rule and keyword in the roadmap's rules coverage
+designed the systems below before writing the code that needs them; the M3 plan
+(`docs/plans/m3.md`, approved 2026-10-30) added §17.18 and revised §17.2, §17.8, §17.9 and §17.11. That way every rule and keyword in the roadmap's rules coverage
 map, and every torture test in `docs/torture-tests.md`, has a place to plug in.
 
 **Every subsection here is provisional.** Each one names the milestone that builds it. That
@@ -680,7 +689,8 @@ M2.8 `CounterAction` and the keyword prohibitions (shroud, hexproof, protection,
 indestructible, "can't be countered").*
 
 Every legality question is an `Action` value: casting, playing a land, activating, targeting,
-countering, destroying; from M3 attacking and blocking; from M4 searching and special actions.
+countering, destroying; from M3 attacking and blocking (`AttackAction`, `BlockAction`, §17.18);
+from M4 searching and special actions.
 `allowed(state, action) -> Verdict` works in four steps:
 
 1. It collects **permissions**: the rules' own (117.1a, 305.1, 601.3, 903.8) and those granted
@@ -690,6 +700,8 @@ countering, destroying; from M3 attacking and blocking; from M4 searching and sp
    - hexproof, shroud and protection, as "can't be the target";
    - "can't be countered";
    - indestructible, as "can't be destroyed";
+   - from M3, defender, "can't attack" and "can't block", evasion and protection's blocking
+     part, as "can't attack" or "can't block (this attacker)" (§17.18);
    - from M5, static abilities ("can't cast spells during your turn");
    - from M9, split second.
 4. **Any applicable prohibition wins (101.2).** Adding or removing abilities is not a
@@ -832,7 +844,8 @@ constrained space, never an enumerated list.
 | division | `Distribute` |
 | orders | `ChooseOrder` |
 | mana payment | `ChooseCounts` |
-| attack and block declarations (each item mapped to one of its choices, with constraints) | `ChooseAssignment` |
+| attack and block declarations (each item mapped to one of its choices, with constraints) | `ChooseAssignment` (§17.18) |
+| combat damage assignment (one division per creature, checked as a whole, 510.1e, 702.19b) | `DistributeEach` (§17.18) |
 | any card name, validated against the card data (201.4) | `ChooseCardName` |
 
 Mode combinations stay enumerated, because the worst real cases are small.
@@ -862,7 +875,9 @@ An object reference resolves to current information if the object is still where
 expected, else to its last known information (608.2h). Negative amounts count as 0 (107.1b).
 
 **Look-back.** From M4, effects that look back in time (603.10, 608.2i: "dealt damage this
-turn", "spells cast this turn") read a history derived from the event log.
+turn", "spells cast this turn") read a history derived from the event log. Its first query,
+"creatures that attacked this turn" (508.6, Relentless Assault), is built in M3.8
+(`resolve.rules.history.attacked_this_turn`, §17.18).
 
 ### 17.10 Definitions: "this object" and typed words (612)
 
@@ -898,6 +913,9 @@ stack keeps none of them (113.6).*
   type (702.16a), a subtype, everything (702.16j) or a player (702.16k).
 - "From each color" and "from A and from B" become separate abilities (702.16g-h,
   702.11f-g).
+- M3 adds the combat keywords the same way (§17.18): first strike, double strike, trample,
+  deathtouch, lifelink, flying, reach, vigilance, menace, defender, haste, intimidate, fear and
+  landwalk (whose land type is a quality of lands).
 
 **Targeting.** `target_problem(state, targeter, spec, candidate)` is the single legality check
 for targets. It is built on `allowed` and used at 601.2c, at 608.2b, by 115.7 and by abilities.
@@ -999,3 +1017,74 @@ effect names.
 
 Both fit the pure-data state. Nothing in the coverage map was found that the architecture can't
 accommodate.
+
+### 17.18 Combat (506-511, 500.7-500.10)
+
+*Provisional: designed in M3's plan (`docs/plans/m3.md`, approved 2026-10-30, section 3); built
+in M3.1 to M3.8. That milestone's plan may revise it, with the user's sign-off.*
+
+**Combat state.** `TurnState.combat: CombatState | None`, pure data, exists during a combat
+phase: the phase's number, its defending players (506.2; 802.2, every opponent in a multiplayer
+game), the attackers in declaration order (each with its target, a player or, from M4, a
+planeswalker or battle; whether it was declared or put onto the battlefield attacking, 508.4;
+blocked or not, fixed when blockers are declared, 509.1h; room for reselection, 508.7a, and
+bands, 702.22), the blockers and the attackers each blocks, whether any creature attacked this
+combat (508.8), and the creatures that had first strike or double strike as the first combat
+damage step began (510.4). `remove_from_combat(state, obj)` is the one way out (506.4: leaving
+the battlefield; later control changes, phasing, regeneration, stopping being a creature);
+`end_combat(state)` empties it (511.3; 724.1d and 724.2d in M9). It is public in the view.
+
+**Legality.** `AttackAction(creature, target)` and `BlockAction(blocker, attacker)` go through
+`allowed` (§17.2). The rules' permission carries 508.1a's and 509.1a's conditions (untapped, not
+a battle, not summoning sick, a defending player's creature blocking a creature attacking that
+player), so an effect letting a tapped creature block adds a permission. Restrictions on one
+creature, or on one creature and one target or attacker, are prohibitions: defender, "can't
+attack or block (unless ...)", evasion (509.1b: cumulative), protection (702.16f, j, k).
+
+**Declarations as constraint models.** A declaration's decision carries a `ChooseAssignment`
+compiled from the state: the items (creatures that may attack or block), each item's choices
+(targets, or attackers to block) and maximum (1, or `blocks_allowed`), declaration-wide
+constraints from a closed vocabulary (`NoneOrAtLeast` for menace, `NotAlone`, `AtMost`),
+requirements (an item and the picks that obey it: "attacks each combat if able", "all creatures
+able to block this creature do so"), and the picks that need a cost. The answer, `Assignment`,
+gives each item strictly increasing choice indices. The space validates itself without the
+state, including 508.1d and 509.1c: the requirements obeyed must be at least the most that any
+declaration without costly picks obeys (a player is never required to pay a cost to obey a
+requirement). One solver (`resolve.decisions.assignment`) validates, and finds a random legal
+answer for agents. A restriction the vocabulary can't express raises `NotImplementedRule` when
+compiled. Costs to attack or block (508.1g-j, 509.1d-f) are paid after the declaration with
+`PayCosts` (`ForAttack`, `ForBlock`); one that can't be paid reverses the declaration (733).
+
+**Who decides.** `attack_declarer` (508.1), `block_declarer` per defending player in APNAP order
+(509.1, 802.4) and `combat_damage_assigner` (510.1; banding, 702.22j-k) are rule defaults (§5),
+as are `combat_damage_amount` (510.1a) and `blocks_allowed` (509.1a).
+
+**Combat damage.** Each player (the active player first, then APNAP, 802.5) assigns the damage
+of all their creatures that have a choice in one `ASSIGN_COMBAT_DAMAGE` decision, a
+`DistributeEach` (a `Distribute` per creature, answered with one `Amounts` each). Its
+`LethalBeforeExcess` constraint is trample (702.19b): damage reaches what the creature attacks
+only once every blocker is assigned lethal damage, counting marked damage and the same player's
+other assignments, any nonzero amount from a deathtouch source being lethal (702.2c). A creature
+with one possible assignment isn't asked. All assigned damage is dealt at once (510.2) as
+`DamageDealt` events with `combat=True`, one per source. With first strike or double strike in
+combat, the step deals only theirs and a second combat damage step is inserted after it into
+`TurnState.segments` (510.4, 500.9). In the 120.3 table, deathtouch marks the creature for 704.5h
+and lifelink's gain is recorded on the event, one per source (702.15e), until M6 makes damage
+results events of their own (120.4c); M4's life-gain and life-loss triggers read them there.
+
+**Entering attacking (508.4).** A zone change can carry "attacking": its controller chooses what
+it attacks as it enters, it never "attacked", 508.1's requirements and restrictions don't apply
+(508.4c), and after blockers are declared it is unblocked (508.4d).
+
+**Phases and turns (500.7-500.10).** A segment is `Segment(phase, step, number)`: segments with
+the same number are one phase, so "after this phase", "that combat" and 724.2 can name one among
+several. Added phases go directly after the specified phase, the most recently created first
+(500.8); an added main phase is a postcombat main phase (505.1a); an added step goes before or
+after a step (500.9), or into a new phase of its own (500.10); "you get" on another player's
+turn adds nothing (500.10a). Extra turns use `GameState.extra_turns` and `next_turn` (500.7).
+Each combat phase has its own combat state.
+
+**Room left.** Planeswalkers and battles as attack targets and damage recipients (M4); triggers
+on `AttackersDeclared`, `BlockersDeclared` and combat damage (508.3, 509.3, 510.3a; M4);
+commander damage (903.10a, M7; a gap until then); banding (M9); ending turns and combat (724,
+M9).

@@ -48,8 +48,10 @@ lists the hardest cards; a test keeps the map in step with the Comprehensive Rul
 rules the engine still refuses loudly. The rules that cards can change (land plays, hand size,
 the turn sequence, who decides) each live in one function that effects will plug into. The test
 games that check the engine now include players who cast every spell they can, so they reach
-counterspells and the expensive spells. **Next:** the user's milestone check of M2
-([`docs/verification.md`](docs/verification.md)), then the plan of M3 (combat). Details:
+counterspells and the expensive spells. M3 (combat) has an approved plan
+([`docs/plans/m3.md`](docs/plans/m3.md)). **Next:** its first code step, M3.1, after the user's
+milestone check of M2 ([`docs/verification.md`](docs/verification.md)) if it isn't done yet.
+Details:
 "Current status" in [`CLAUDE.md`](CLAUDE.md).
 
 Resolve is unofficial Fan Content permitted under the Wizards of the Coast Fan Content Policy. It
