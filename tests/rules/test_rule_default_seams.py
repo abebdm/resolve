@@ -2,8 +2,8 @@
 
 Each test replaces one function of ``resolve.rules.defaults`` with ``monkeypatch`` and checks the
 engine follows it at every place the rule applies. Nothing in M2 can change these defaults yet;
-M5 replaces the tests with real effects (docs/plans/m2.md §5.1). Expected values are worked from
-the pinned CR:
+M5 replaces the tests with real effects (CLAUDE.md, "Testing requirements"). Expected values
+are worked from the pinned CR:
 
 - 305.2a-b: a player may play a land only while the lands they've played this turn are fewer
   than the lands they can play this turn.

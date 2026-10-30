@@ -334,10 +334,10 @@ class Distribute(AnswerSpace):
 class ChooseCounts(AnswerSpace):
     """Choose how many of each listed option, from none up to its maximum, adding up to ``total``.
 
-    The space for paying mana (601.2h, design.md §17.7): each option is a class of identical
-    units in the pool, and the answer says how many of each class to spend. Per-unit options
-    would give several answers for one outcome, which the canonical-answer rule (§6) forbids;
-    counts give exactly one.
+    The space for paying mana (601.2h, design.md §6 "Paying costs"): each option is a class of
+    identical units in the pool, and the answer says how many of each class to spend. Per-unit
+    options would give several answers for one outcome, which the canonical-answer rule (§6)
+    forbids; counts give exactly one.
     """
 
     options: tuple[Option, ...]

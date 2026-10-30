@@ -1,5 +1,5 @@
-"""Real cards whose only rules text is one keyword (docs/plans/m2.md §7): each is the example card
-of its keyword (docs/primitives.md). Their characteristics come from the card data."""
+"""Real cards whose only rules text is one keyword (chosen in the M2 plan): each is the example
+card of its keyword (docs/primitives.md). Their characteristics come from the card data."""
 
 from __future__ import annotations
 

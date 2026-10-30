@@ -246,8 +246,9 @@ def test_game_stats_count_reversed_mana_abilities_apart_from_reversed_casts() ->
 
 
 def test_game_stats_count_casts_and_reversals_of_the_auto_paying_seats() -> None:
-    """The odd seats are the auto-payers (``fuzz_game``): P1 casts Sol Ring with a Forest, then
-    tries Grizzly Bears with nothing to pay for it (reversed, 733.1); P0's casts don't count."""
+    """Seat 1 pays with the auto-payer (``fuzz_game``: a caster): P1 casts Sol Ring with a
+    Forest, then tries Grizzly Bears with nothing to pay for it (reversed, 733.1); P0's casts
+    don't count."""
     scenario = Scenario(2)
     ring, bears = scenario.hand(PlayerId(1), ["Sol Ring", "Grizzly Bears"])
     (forest,) = scenario.battlefield(PlayerId(1), ["Forest"])
@@ -327,10 +328,10 @@ def test_a_payable_cast_reversed_is_counted_for_its_kind_of_seat() -> None:
     """M2.5's measure, checked deterministically (docs/decisions.md, 2026-10-27, "M2.9"). In one
     game P0 (an even seat: random) casts Grizzly Bears ({1}{G}) with two untapped Forests, a
     payable cast (601.2g: the planner finds them), and answers "pay" at once: unpaid (118.3), it
-    is reversed (733.1). In a second game P1 (an odd seat: auto-pay) does the same. In a third,
-    P0 tries the Bears with one Forest: reversed, but it couldn't be paid (107.4b). The summary
-    counts the first two as payable reversals, each for its kind of seat, and the third only as
-    an attempt."""
+    is reversed (733.1). In a second game P1 (a caster, paying with the auto-payer) does the
+    same. In a third, P0 tries the Bears with one Forest: reversed, but it couldn't be paid
+    (107.4b). The summary counts the first two as payable reversals, each for its kind of seat,
+    and the third only as an attempt."""
     gap = "508.1: declaring attackers"
     results: list[FuzzResult] = []
     for player, lands in ((PlayerId(0), 2), (PlayerId(1), 2), (PlayerId(0), 1)):
@@ -506,7 +507,7 @@ def check_summary(recorder: Recorder, text: str, formats: str) -> Totals:
             if isinstance(record, SpellCast | ActionReversed) and (
                 not isinstance(record, ActionReversed) or record.card is not None
             ):
-                seat = "auto-pay" if record.player % 2 else "random"
+                seat = "auto-pay" if record.player % 3 else "random"  # casters and auto-pay seats
                 attempts[seat] += 1
                 if isinstance(record, ActionReversed):
                     reversed_by[seat] += 1
@@ -574,7 +575,7 @@ def check_summary(recorder: Recorder, text: str, formats: str) -> Totals:
     ) == (cast, resolved, did_not_resolve, countered, reversed_)
     assert numbers(r"Damage: (\d+) dealt\.", text) == (damage,)
     payable_reversed = Counter(
-        "auto-pay" if player % 2 else "random"
+        "auto-pay" if player % 3 else "random"
         for result in recorder.results
         for player in result.payable_reversed
     )
@@ -648,6 +649,14 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
     # of_seat): how many random games happen to have one changes with every deck (2026-10-27).
     assert totals.payable["auto-pay"] > 0 and totals.payable["random"] > 0
     assert totals.payable_reversed["auto-pay"] == 0
+    # The caster seats (1, 4, ...: docs/decisions.md, 2026-10-28, "M2.11") cast spells.
+    caster_casts = [
+        entry.record
+        for result in recorder.results
+        for entry in result.state.event_log
+        if isinstance(entry.record, SpellCast) and entry.record.player % 3 == 1
+    ]
+    assert caster_casts, "the caster seats cast spells"
 
 
 def test_the_default_run_with_every_current_card_completes_and_reports_consistently(
