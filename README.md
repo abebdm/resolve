@@ -40,7 +40,7 @@ Ixalli's Lorekeeper, Emerald Medallion, Kinjalli's Caller, Swords to Plowshares,
 Ignition, Decimate, Fiery Confluence, Cryptic Command, Cancel, Rishkar's Expertise, and one
 card for each keyword: Ashcoat Bear, Gladecover Scout, Humble
 Budoka, Darksteel Relic, Darksteel Myr, Repentant Blacksmith, Nacatl Savage, Raging Goblin,
-Alaborn Grenadier and Wall of Stone.
+Alaborn Grenadier and Wall of Stone, and Palace Guard.
 Tools compare a new Comprehensive Rules version or card data snapshot against
 the pinned ones (`tools/rules_diff.py`, `tools/card_diff.py`), and `tools/rule.py` prints any
 rule of the pinned Comprehensive Rules by number. The rules coverage map in
@@ -53,10 +53,13 @@ games that check the engine now include players who cast every spell they can, s
 counterspells and the expensive spells. M3 (combat) is under way
 ([`docs/plans/m3.md`](docs/plans/m3.md)): creatures can now attack (not the turn they arrive,
 unless they have haste; never with defender), choosing which opponent each attacks in a
-multiplayer game; attacking taps them unless they have vigilance, and unblocked attackers deal
-their combat damage, which can win the game. Blocking isn't implemented yet: when an attacked
-player could block, the game stops loudly. **Next:** declaring blockers, and dividing damage
-among blockers (M3.3).
+multiplayer game; attacking taps them unless they have vigilance. Attacked players then declare
+blockers, one after another in turn order (an untapped creature blocks one attacker, Palace
+Guard any number; a creature with protection can't be blocked by creatures with that quality).
+Attackers and blockers deal their combat damage at once; a creature blocked by two or more
+creatures, or blocking two or more, has its controller divide its damage, and combat damage can
+win the game. **Next:** evasion (flying, reach, menace, intimidate, fear, landwalk) and other
+blocking restrictions (M3.4).
 Details:
 "Current status" in [`CLAUDE.md`](CLAUDE.md).
 

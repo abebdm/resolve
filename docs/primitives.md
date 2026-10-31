@@ -317,6 +317,15 @@ control can't be countered" from a permanent is a continuous effect (M5).
 - **Rules:** 113.6g, 101.2.
 - **Example:** Test Stubborn Spell (tests): `abilities=(CantBeCountered(),)`.
 
+### `BlocksAnyNumber` (`resolve.cards.primitives.combat`)
+"This creature can block any number of creatures.": a static ability of a creature, read from its
+computed characteristics by `defaults.blocks_allowed`, which returns `None` (no limit) instead of
+1; the block declaration's maximum is then the number of attackers it may block. 509.1a's other
+conditions still apply (untapped, blocking only creatures attacking its controller, 802.4a).
+`scope` is `ThisObject()`; "can block an additional creature" (M5) is a continuous effect.
+- **Rules:** 509.1a, 802.4a.
+- **Example:** Palace Guard: `CardDefinition("Palace Guard", abilities=(BlocksAnyNumber(),))`.
+
 ### `SpellCostReduction(spells, amount=1)` (`resolve.cards.primitives.cost_modifiers`)
 "[Quality] spells you cast cost {N} less to cast.": a static ability of a permanent (113.6: it
 functions only on the battlefield). For a spell its controller casts with the quality `spells`
@@ -405,10 +414,13 @@ Can't be destroyed: the prohibition of `legality.allowed(DestroyAction)`, used b
 ### `Protection(quality)`, `protection_from_each_color()` (`resolve.cards.keywords.evergreen`)
 Can't be targeted by spells with the quality or abilities from sources with it, whoever controls
 them; from `Everything()`, by nothing. Targeting is a prohibition of
-`legality.allowed(TargetAction)`; damage prevention (702.16e) raises `NotImplementedRule` in
-`DamageDealt.apply` until M6; blocking (702.16f) is M3, Auras and Equipment (702.16c-d) M4.
-`protection_from_each_color()` is five abilities, one per color.
-- **Rules:** 702.16a, 702.16b, 702.16e (gap), 702.16h, 702.16j, 702.16m.
+`legality.allowed(TargetAction)`. An attacking creature with it can't be blocked by creatures
+with the quality, and from `Everything()` by none (a prohibition of
+`legality.allowed(BlockAction)`, read from the attacker; protection on the blocker doesn't stop
+it blocking). Damage prevention (702.16e) raises `NotImplementedRule` in `DamageDealt.apply`
+until M6; Auras and Equipment (702.16c-d) are M4. `protection_from_each_color()` is five
+abilities, one per color.
+- **Rules:** 702.16a, 702.16b, 702.16e (gap), 702.16f, 702.16h, 702.16j, 702.16m.
 - **Example:** Repentant Blacksmith: `Protection(ColorQuality(ColorWord(Color.RED)))`; Nacatl
   Savage: `Protection(CardTypeQuality(CardType.ARTIFACT))`; Test Prismatic Knight (tests):
   `abilities=protection_from_each_color()`.

@@ -20,15 +20,18 @@ Branch: `claude/intelligent-edison-29zwm4`.
 
 ## Done
 
-- Read the plan, design, code. Excerpt has Palace Guard.
+- Tests first (confirmed failing: the 509.1 and 510.1c gaps, blocks_allowed 1 for Palace Guard,
+  BlockersDeclared ignoring defending_player); implementation; docs (roadmap, map, torture
+  tests, primitives, howto, decisions, verification, plan sections and handoff, CLAUDE.md,
+  README). Quick fuzz passes (10 games, 57 s, gaps 903.8 x3). Pyright, ruff clean.
 
 ## In progress
 
-- Tests first, with stubs.
+- Full suite run; test-reviewer.
 
 ## Next
 
-- Implement; checks; fuzz; test-reviewer; docs; PR.
+- Handle review findings; delete PROGRESS.md; PR.
 
 ## Open questions
 

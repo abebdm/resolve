@@ -59,8 +59,8 @@ most likely to expose a design that took one.
 | Pithing Needle | naming any card (201.4) | M5 | M4 `ChooseCardName` | not yet |
 | Gilded Drake | exchanging control, with a fallback if it can't (701.12) | M5 | | not yet |
 | Time Walk / Relentless Assault | an extra turn; an extra combat phase (500.7, 500.8) | M3 | M2.1 ✓ `TurnState.segments` | not yet |
-| Lure + a creature that attacks each combat if able + Ghostly Prison | obeying as many attack and block requirements as possible without breaking a restriction or being made to pay a cost (508.1c-d, 509.1c) | M3 (the rules, with Prized Unicorn standing in for Lure: M3.5); M5 (Lure itself: enchant M4, a granted ability M5) | | not yet |
-| Basilisk Collar on a creature with trample | deathtouch makes 1 damage lethal when assigning trample damage among several blockers (702.2c, 702.19b) | M3 (the rules, with a deathtouch-and-trample fixture creature: M3.6); M5 (the Collar itself: equip M4, a granted ability M5) | M2.6 ✓ damage events | not yet |
+| Lure + a creature that attacks each combat if able + Ghostly Prison | obeying as many attack and block requirements as possible without breaking a restriction or being made to pay a cost (508.1c-d, 509.1c) | M3 (the rules, with Prized Unicorn standing in for Lure: M3.5); M5 (Lure itself: enchant M4, a granted ability M5) | M3.3 ✓ block declarations as `ChooseAssignment` | not yet |
+| Basilisk Collar on a creature with trample | deathtouch makes 1 damage lethal when assigning trample damage among several blockers (702.2c, 702.19b) | M3 (the rules, with a deathtouch-and-trample fixture creature: M3.6); M5 (the Collar itself: equip M4, a granted ability M5) | M2.6 ✓ damage events; M3.3 ✓ damage assignment as one `DistributeEach` per player | not yet |
 | Worldgorger Dragon | linked exile and return; a mandatory loop ending the game in a draw (607, 610.3, 104.4b) | M7 | M4 linked abilities | not yet |
 | A commander that dies, is bounced or is stolen | its owner's choice to move it to the command zone, as a state-based action or a replacement (903.9a-b); commander damage counted per commander, whoever controls it (903.10a) | M7 | M2.1 ✓ `commander_damage_threshold`; M3.2 ✓ combat damage from a commander to a player is the gap `903.10a` (`CombatDamage`) | not yet |
 | Teferi's Protection | phasing out; a player with protection from everything; "your life total can't change" (702.26, 702.16j, 101.2) | M9 | M2 ✓ `allowed`, `player_abilities` | not yet |
@@ -75,4 +75,4 @@ most likely to expose a design that took one.
 | Golgothian Sylex | a name "originally printed" in a set (206.3b) | M9 | | not yet |
 | Gemrazer (mutate) | a merged permanent: the top card's characteristics, and every card moving when it leaves (702.140, 730) | M9 | M5 layers, 400.7 identity | not yet |
 | Bruna, the Fading Light + Gisela, the Broken Blade | melding two permanents into one card pair, and what happens when it leaves (701.42, 712.4) | M9 | M5 identity | not yet |
-| Benalish Hero (banding) | banding; the defending player assigning an attacker's combat damage (702.22) | M9 | M3 damage assignment | not yet |
+| Benalish Hero (banding) | banding; the defending player assigning an attacker's combat damage (702.22) | M9 | M3.3 ✓ damage assignment by `defaults.combat_damage_assigner` | not yet |

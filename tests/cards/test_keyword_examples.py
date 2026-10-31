@@ -13,7 +13,8 @@ test_508_declare_attackers.py. M3.2's three cards have no rulings.
 
 Only Nacatl Savage has a ruling (2009-02-01), "Protection from artifacts" means:
 
-- "can't be blocked by artifact creatures": 702.16f, blocking, M3;
+- "can't be blocked by artifact creatures": 702.16f, ``test_702_16f_protection_from_artifacts_
+  cant_be_blocked_by_an_artifact_creature`` (tests/rules/test_509_declare_blockers.py, M3.3);
 - "can't be equipped ... can't be enchanted by Auras that have somehow become artifacts": 702.16c-d,
   M4;
 - "can't be targeted by abilities from artifact sources": ``test_702_16a_card_type_quality``;
