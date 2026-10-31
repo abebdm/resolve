@@ -13,7 +13,7 @@ the engine's API, so nothing here may depend on them.
 - `docs/design.md`: the architecture. It is authoritative; follow it.
 - The current milestone's section of `docs/roadmap.md`: its items and "done" criteria.
 - The approved plan of the current milestone, `docs/plans/<milestone>.md`, once it exists, but
-  only the parts its "How to use this plan" names for your step. (M3's plan isn't written yet.)
+  only the parts its "How to use this plan" names for your step.
 
 **Look up; don't read in full.** These are references, and most of each is irrelevant to any one
 task. List a file's headings first (Grep for `^#{2,3} `), then read only the sections your task
@@ -48,8 +48,10 @@ completed step built, and where, is in `docs/roadmap.md`, "What's built".
 
 - **Known violations of rule 12:** none. Every rule default comes from a function in
   `resolve.rules.defaults` (how to add or change one: `docs/howto.md`).
-- **Next:** the user's `--thorough` milestone check of M2 (`docs/verification.md`), then M3's
-  plan (Combat), written and approved before any M3 code.
+- **Current milestone: M3 (Combat), in progress:** the plan is approved (`docs/plans/m3.md`,
+  2026-10-30) and M3.0 (its documentation: design.md §17.18, the roadmap's M3 checklist and
+  coverage-map corrections, the torture-test rows) is done.
+- **Next:** M3.1 (the answer spaces, summoning sickness and haste, the combat state).
 
 Do not start a milestone unless the user asks.
 

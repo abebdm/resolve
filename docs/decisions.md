@@ -19,6 +19,56 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-30: The M3 plan: combat as constraint models, numbered phases, stand-ins for two torture tests
+- **Decision (the user's, approving `docs/plans/m3.md` with its questions Q1 to Q8 as
+  proposed):**
+  - **Numbered segments (Q1, changes design.md §4):** a turn segment is `Segment(phase, step,
+    number)`; segments with the same number are one phase, so "after this phase", "that combat"
+    and 724.2 can name one phase among several of the same kind (built in M3.8).
+  - **Declarations as constraint models (Q2):** an attack or block declaration's
+    `ChooseAssignment` carries the model compiled from the state (items, choices, maxima,
+    declaration-wide constraints, requirements, costly picks) and validates itself; one solver
+    validates and finds legal answers for agents. Damage assignment is one `DistributeEach` per
+    player. **Reading of 508.1d and 509.1c:** the most requirements obeyable is taken over the
+    declarations that pay no cost, and a declaration that pays costs must obey at least that
+    many (a player isn't required to pay a cost to obey a requirement; Juggernaut's, Lure's and
+    Prized Unicorn's rulings).
+  - **Cards (Q3):** 14 keyword example cards, 7 combat-rules cards, Time Walk, Relentless
+    Assault and Zetalpa, Primal Dawn; Nacatl Savage leaves the fuzz decks when Juggernaut joins
+    (its protection from artifacts would reach the 702.16e gap).
+  - **Torture tests (Q4):** M3 implements the rules of the Lure row with Prized Unicorn (Lure's
+    ability on a creature) and of the Basilisk Collar row with a fixture creature that has
+    deathtouch and trample; Lure (an Aura) and the Collar (Equipment) need enchant and equip
+    (M4) and abilities granted by a static ability (layer 6, M5), and join the tests in M5.
+  - **Summoning sickness (Q5):** `defaults.can_tap_for_cost` becomes `defaults.summoning_sick(
+    state, obj, purpose)` for both halves of 302.6 ({T}/{Q} abilities, attacking); haste and
+    "as though it had haste" effects plug in there; convoke, improvise, crew, saddle and "tap an
+    untapped creature you control" never call it. The M2 tests are renamed with it.
+  - **Look-back (Q6):** "attacked this turn" (508.6) is read from the event log, the first query
+    of M4's history (design.md §17.9), not a per-turn record.
+  - **Protection's damage (Q7):** 702.16e stays a gap until M6's prevention stage, with fuzz
+    exclusions.
+  - **Lifelink (Q8):** its life gain is recorded inside `DamageDealt`, one per source (702.15e),
+    until M6 makes damage results events (120.4c). M4's "whenever you gain life" and "whenever
+    you lose life" triggers must read those records, so two lifelink creatures dealing damage
+    at once trigger twice (roadmap, M4).
+  - **Approval notes:** new assertions of `tests/fuzz/test_fuzz_summary.py` about combat use the
+    pinned recipes of M2.10 or a deterministic scenario test, never thresholds on growing
+    decks; M3.9 moves the endings by decking and life total, damage, Chandra's Ignition and
+    Decimate (Ghostly Prison is the fuzz decks' first enchantment) back into
+    `docs/verification.md`'s checklist; every new card's data is checked against the snapshot
+    before its definition is written.
+- **Why:** the plan's sections 2, 3 and 11. The constraint model lets an agent find a legal
+  declaration from the request alone (a random agent would otherwise retry blindly against a
+  Lure) and lets a UI explain an illegal one; the alternative, a state-reading `check_answer`,
+  hides the rules from agents. Numbered segments rather than boundary markers in the segment
+  list, which every reader would have to skip. The torture-test cards can't be built before M5,
+  but their rules can.
+- **Rules:** 302.6, 500.8-500.10, 505.1a, 506.8, 508.1c-d, 508.1g-j, 508.6, 509.1c, 510.1e,
+  702.2c, 702.10, 702.15e, 702.16e, 702.19b, 724.2, 120.4c.
+- **Where:** `docs/plans/m3.md`, `docs/design.md` (§4, §5, §6, §17.2, §17.8, §17.9, §17.11,
+  §17.18), `docs/roadmap.md` (M3, M4, the coverage map), `docs/torture-tests.md`.
+
 ### 2026-10-28: M2.11: a caster fuzz seat, and the thorough run's expectations named per milestone
 - **Decision (the user's):** the fuzz seats cycle three kinds: random (`RandomAgent`), caster
   (`AutoPayAgent(CasterAgent)`) and auto-pay (`AutoPayAgent(RandomAgent)`), seat number modulo
