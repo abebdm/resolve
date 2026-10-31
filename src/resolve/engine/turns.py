@@ -18,9 +18,8 @@ Skipped steps (500.11) don't begin at all (``defaults.is_skipped``):
 
 - 103.8a: in a two-player game, the starting player skips the draw step of their first turn.
   In a game that began with more than two players nobody does (103.8c).
-- 508.8: with no attackers declared, the declare blockers and combat damage steps are skipped.
-  No creature can be declared as an attacker yet (508.1 raises ``NotImplementedRule`` whenever
-  the active player controls a creature), so they are always skipped.
+- 508.8: with no creature declared as an attacker this combat, the declare blockers and combat
+  damage steps are skipped.
 
 The turn-based actions implemented:
 
@@ -28,10 +27,13 @@ The turn-based actions implemented:
   and it is never day or night; 502.3: the active player untaps their permanents at once, those
   ``defaults.permanents_that_untap`` names (all of them).
 - draw step: the active player draws ``defaults.draw_step_draws`` cards, one (504.1).
-- beginning of combat: 507.1 has no choice to make. In a two-player game the nonactive player
-  is the defending player (506.2); every multiplayer game uses the attack multiple players
-  option, so all the active player's opponents are defending players (802.2, docs/decisions.md).
-- declare attackers: with no creature to attack with, the declaration is empty (508.1).
+- the combat phase: as its first step begins, the combat state is created (``CombatBegan``) with
+  its defending players: in a two-player game the nonactive player (506.2); every multiplayer
+  game uses the attack multiple players option, so all the active player's opponents (802.2,
+  docs/decisions.md). 507.1 then has no choice to make. Declaring attackers (508.1), whether a
+  block is possible (509.1, M3.3) and combat damage (510.1-510.2) are the tasks of
+  ``resolve.engine.combat``. As the end of combat step ends, ``CombatEnded`` removes everything
+  from combat (511.3).
 - cleanup: the active player discards down to their maximum hand size, seven (514.1, 402.2,
   ``defaults.maximum_hand_size``);
   514.2 removes all damage from permanents (and would end "until end of turn" effects, none of
@@ -49,7 +51,6 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING
 
-from resolve.data.types import CardType
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import (
     AnswerValue,
@@ -59,17 +60,20 @@ from resolve.decisions.spaces import (
     Order,
     PickMany,
 )
-from resolve.effects.characteristics import characteristics
+from resolve.engine.combat import CombatDamage, DeclareAttackers, DeclareBlockers
 from resolve.engine.drawing import DrawCards
 from resolve.engine.mana import EmptyManaPools
 from resolve.engine.priority import PriorityRound, current_turn
 from resolve.engine.sba import state_based_actions
-from resolve.errors import EngineError, NotImplementedRule
+from resolve.errors import EngineError
+from resolve.events.base import Event
 from resolve.events.cards import CardDiscarded
+from resolve.events.combat import CombatBegan, CombatEnded
 from resolve.events.permanents import DamageRemoved, PermanentsUntapped
 from resolve.events.pipeline import ApplyEvents
 from resolve.events.turn import StepBegan, TurnBegan
 from resolve.rules import defaults
+from resolve.rules.combat import defending_players
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.turn import Phase, Step, gives_priority
 from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
@@ -172,7 +176,12 @@ class RunStep(Task):
             case StepStage.BEGIN:
                 self.stage = StepStage.ACTIONS
                 began = StepBegan(phase=self.phase, step=self.step, rules=_begin_rules(self.step))
-                return Push((ApplyEvents((began,)), self))
+                events: tuple[Event, ...] = (began,)
+                if self.phase is Phase.COMBAT and turn.combat is None:
+                    # 506.2, 802.2: the combat phase begins with its defending players.
+                    defending = defending_players(state)
+                    events += (CombatBegan(defending_players=defending, rules=("506.2", "802.2")),)
+                return Push((ApplyEvents(events), self))
             case StepStage.ACTIONS:
                 self.stage = StepStage.PRIORITY
                 actions = self._turn_based_actions(state, turn.active_player)
@@ -191,6 +200,8 @@ class RunStep(Task):
                 # 500.5: effects lasting until the end of the step would expire (none exist
                 # yet); then unspent mana empties.
                 tasks: list[Task] = [EmptyManaPools()]
+                if self.step is Step.END_OF_COMBAT and turn.combat is not None:
+                    tasks.append(ApplyEvents((CombatEnded(rules=("511.3",)),)))
                 if self.priority_given:
                     # 514.3a: once the stack is empty and all pass, another cleanup step begins.
                     tasks.append(RunStep(self.phase, Step.CLEANUP))
@@ -215,13 +226,11 @@ class RunStep(Task):
                 draws = defaults.draw_step_draws(state, active)
                 return (DrawCards(active, draws, ("504.1",)),) if draws > 0 else ()
             case Step.DECLARE_ATTACKERS:
-                for obj in state.battlefield:
-                    permanent = state.objects[obj]
-                    if permanent.controller == active and characteristics(state, obj).is_a(
-                        CardType.CREATURE
-                    ):
-                        raise NotImplementedRule("508.1: declaring attackers (roadmap M3)")
-                return ()  # 508.1: the active player controls no creature, so none attack
+                return (DeclareAttackers(),)
+            case Step.DECLARE_BLOCKERS:
+                return (DeclareBlockers(),)
+            case Step.COMBAT_DAMAGE:
+                return (CombatDamage(),)
             case Step.CLEANUP:
                 return (DiscardToHandSize(active), RemoveDamage())
             case _:

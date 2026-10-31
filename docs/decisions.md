@@ -19,6 +19,50 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-31: M3.2: declaring attackers, the combat state's events, and the 509.1 stand-in
+- **Decision:**
+  - The combat state begins with an event, `CombatBegan(defending_players)` (506.2, 802.2),
+    applied with the `StepBegan` of the combat phase's first step (whichever step that is, so a
+    skipped beginning of combat step, M6, still has one), and ends with `CombatEnded` (511.3) as
+    the end of combat step ends. Both are logged, so the log shows who defended.
+  - `AttackersDeclared` is applied only when at least one creature attacks; an empty declaration
+    leaves only its answer in the log (508.8 reads `attacks_happened`). 508.1f taps with one set
+    of `PermanentTapped` events before it, not a new `PermanentsTapped` event (the plan's name):
+    the existing event already taps one permanent and a set of them is simultaneous.
+  - The rules' permission to attack (`legality.AttackAction`, 508.1a) requires a combat state,
+    the active player, an untapped creature that isn't a battle, `summoning_sick(..., ATTACK)`
+    false and a defending player still in the game; defender is its only prohibition so far.
+    `AttackAction.player` is the attacking (active) player even when `attack_declarer` names
+    someone else (Master Warcraft decides, but the creatures still belong to the attacker).
+  - `remove_from_combat` lives in `resolve.state.combat` (it only edits the combat state), and
+    `move_object` calls it for anything leaving the battlefield, `PlayerLeftGame` for the owned
+    permanents it deletes. A removed attacker is taken out of its blockers' `blocking`
+    (510.1d); a removed blocker leaves its attackers blocked (509.1h).
+  - Until M3.3, `DeclareBlockers` raises `NotImplementedRule("509.1")` exactly when a defending
+    player still in the game, attacked by a current attacker, controls an untapped creature that
+    isn't a battle (509.1a, 802.4a); with no possible blocker it applies an empty
+    `BlockersDeclared`, so every attacker becomes unblocked. `BlockersDeclared` already takes
+    blocks for M3.3. The fuzz's `ALLOWED_GAPS` are 509.1 and 903.8.
+  - `CombatDamage` raises `510.1c` when any blocker still blocks something (M3.3), and `903.10a`
+    when a commander (any player's, in a game with the Commander rules) would deal combat damage
+    to a player; both before any event, so nothing is dealt.
+  - The scenario builder's `at(...)` now creates the empty combat state in the combat phase, as
+    a real game has by then, except at the beginning of combat step with `begin=True` (the
+    engine creates it). This replaces M3.1's "only `attacking` or `blocking` create it".
+  - The pinned fuzz-summary games cast no creature, so they can't show an attack (approval note
+    2): a deterministic scenario test (`test_game_stats_count_combats_attackers_and_combat_
+    damage`) checks the summary's `Combat:` and `Damage:` counts instead. The quick run with every
+    current card declared no attacker on its ten seeds; the fuzz tests' elf games
+    (`tests/fuzz/test_fuzz.py`) do attack and reach 509.1.
+- **Why:** each is the smallest choice that keeps every change an event, keeps the state
+  consistent for the invariants at every point, and leaves M3.3 to M3.7 their places.
+- **Rules:** 506.2, 506.4, 508.1a-b, 508.1f, 508.1k, 508.8, 509.1a, 509.1h, 510.1a-c, 510.2,
+  511.3, 702.3b, 702.10b, 702.20b, 800.4e, 802.2-802.4a, 903.10a.
+- **Where:** `resolve.events.combat`, `resolve.engine.combat`, `resolve.engine.turns`,
+  `resolve.rules.combat`, `resolve.rules.legality`, `resolve.rules.defaults.is_skipped`,
+  `resolve.state.combat`, `resolve.state.game.move_object`, `resolve.events.game`,
+  `tools/fuzz.py`, `tests/scenario.py`, `tests/combat_support.py`.
+
 ### 2026-10-31: M3.1: the combat spaces and the combat state as built
 - **Decision:**
   - `ChooseAssignment(items, choices, maxima)` has no constraint fields yet: `constraints`,

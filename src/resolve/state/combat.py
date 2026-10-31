@@ -13,6 +13,9 @@ It is pure data, public to every player (``PlayerView.combat``):
   battlefield attacking this combat (508.8 reads this, not the current attackers: an attacker
   removed before blocks doesn't skip the declare blockers step).
 
+``remove_from_combat`` is the one way a permanent leaves combat (506.4); ``CombatEnded`` ends it
+all (511.3, ``resolve.events.combat``).
+
 Room is left for the rest of §17.18: the phase's number (numbered segments, M3.8), the
 first-strike record (510.4, M3.6), reselecting a target (508.7a) and bands (702.22, M9).
 Records are immutable values: an update replaces the record.
@@ -20,10 +23,14 @@ Records are immutable values: an update replaces the record.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING
 
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.values import Immutable
+
+if TYPE_CHECKING:
+    from resolve.state.game import GameState
 
 
 @dataclass(frozen=True)
@@ -83,3 +90,29 @@ class CombatState:
         return tuple(
             record.blocker for record in self.blockers.values() if attacker in record.blocking
         )
+
+
+def remove_from_combat(state: GameState, obj: ObjectId) -> None:
+    """Remove ``obj`` from combat (506.4), if it is in combat: it stops being an attacking,
+    blocking, blocked or unblocked creature.
+
+    - An attacker leaves the attackers, and every blocker stops blocking it (it may then block
+      nothing: 510.1d). Its blockers stay blocking creatures.
+    - A blocker leaves the blockers; the attackers it blocked stay blocked (509.1h).
+    - ``attacks_happened`` is unchanged: the creature was still declared (508.8).
+
+    Called as a permanent leaves the battlefield (``move_object``, ``PlayerLeftGame``); control
+    changes (M5), phasing (M9), regeneration (M6) and stopping being a creature (M5) will call
+    it too. A planeswalker or battle being attacked (506.4c, M4) isn't in combat yet.
+    """
+    turn = state.turn
+    combat = None if turn is None else turn.combat
+    if combat is None:
+        return
+    if obj in combat.attackers:
+        del combat.attackers[obj]
+        for blocker, record in combat.blockers.items():
+            if obj in record.blocking:
+                blocking = tuple(attacker for attacker in record.blocking if attacker != obj)
+                combat.blockers[blocker] = replace(record, blocking=blocking)
+    combat.blockers.pop(obj, None)

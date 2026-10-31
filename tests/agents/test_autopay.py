@@ -350,8 +350,8 @@ def test_it_is_deterministic() -> None:
         agents = [AutoPayAgent(RandomAgent(seat)) for seat in range(2)]
         try:
             play(played, agents, max_answers=600, on_invalid=lambda error: None)
-        except NotImplementedRule as gap:  # creatures attack: declaring attackers is M3
-            assert str(gap).startswith("508.1"), gap
+        except NotImplementedRule as gap:  # creatures attack: declaring blockers is M3.3
+            assert str(gap).startswith("509.1"), gap
         return played
 
     one, two = game(), game()

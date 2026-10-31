@@ -1,16 +1,20 @@
-"""Real cards whose only rules text is one keyword (chosen in the M2 plan): each is the example
-card of its keyword (docs/primitives.md). Their characteristics come from the card data."""
+"""Real cards whose only rules text is one keyword (chosen in the M2 and M3 plans): each is the
+example card of its keyword (docs/primitives.md). Their characteristics come from the card
+data."""
 
 from __future__ import annotations
 
 from resolve.cards.keywords import (
     CardTypeQuality,
     ColorQuality,
+    Defender,
     Flash,
+    Haste,
     Hexproof,
     Indestructible,
     Protection,
     Shroud,
+    Vigilance,
 )
 from resolve.cards.primitives.effects import CounterSpell
 from resolve.cards.primitives.refs import TargetRef
@@ -45,10 +49,12 @@ CANCEL = CardDefinition(
     ),
 )
 
-# Haste, Vigilance, Defender (M3.2)
-RAGING_GOBLIN = CardDefinition("Raging Goblin")
-ALABORN_GRENADIER = CardDefinition("Alaborn Grenadier")
-WALL_OF_STONE = CardDefinition("Wall of Stone")
+# Haste
+RAGING_GOBLIN = CardDefinition("Raging Goblin", abilities=(Haste(),))
+# Vigilance
+ALABORN_GRENADIER = CardDefinition("Alaborn Grenadier", abilities=(Vigilance(),))
+# Defender
+WALL_OF_STONE = CardDefinition("Wall of Stone", abilities=(Defender(),))
 
 DEFINITIONS = (
     ASHCOAT_BEAR,

@@ -312,15 +312,19 @@ def is_skipped(state: GameState, segment: Segment) -> bool:
 
     - 103.8a: the starting player skips the draw step of their first turn in a two-player game;
       103.8c: in a game that began with more players nobody does.
-    - 508.8: with no attackers declared, the declare blockers and combat damage steps are
-      skipped. No creature can be declared as an attacker yet (508.1 is a gap when the active
-      player controls a creature), so they are always skipped.
+    - 508.8: if no creature was declared as an attacker or put onto the battlefield attacking
+      this combat (the combat state's ``attacks_happened``; no combat state: none was), the
+      declare blockers and combat damage steps are skipped. An attacker removed from combat was
+      still declared, so they aren't.
     """
     _, step = segment
+    turn = state.turn
     if step is Step.DRAW:
-        turn = state.turn
         return turn is not None and turn.number == 1 and not is_multiplayer(state)
-    return step in (Step.DECLARE_BLOCKERS, Step.COMBAT_DAMAGE)
+    if step in (Step.DECLARE_BLOCKERS, Step.COMBAT_DAMAGE):
+        combat = None if turn is None else turn.combat
+        return combat is None or not combat.attacks_happened
+    return False
 
 
 def next_turn(state: GameState, after: PlayerId) -> NextTurn:

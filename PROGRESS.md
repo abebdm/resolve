@@ -14,13 +14,18 @@ Task: implement step M3.2 of `docs/plans/m3.md` (user prompt in the session; bra
   (`legality.AttackAction`, `resolve.events.combat`), the three cards registered without
   abilities. `test_the_abilities_text` passes on the keyword stubs (they are the values).
 
+- Implemented (resolve.events.combat, resolve.engine.combat, legality.AttackAction,
+  rules.combat.attack_declaration, remove_from_combat, is_skipped, cards); fuzz updated
+  (ALLOWED_GAPS 509.1, Combat: line); docs updated (roadmap, coverage map, primitives, howto,
+  decisions, verification, torture tests, CLAUDE.md, README, plan handoff).
+
 ## In progress
 
-- Implementing.
+- Full suite run; test-reviewer.
 
 ## Next
 
-- Implement; run every check and the quick fuzz; test-reviewer; docs; PR.
+- Address the reviewer's findings; delete PROGRESS.md; open the PR.
 
 ## Decisions not yet in the docs
 

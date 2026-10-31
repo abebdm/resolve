@@ -97,9 +97,9 @@ def decks_for(players: int, commander: bool, seed: int) -> list[Deck]:
     Most decks hold 8 to 11 cards, so games get past the opening hands into turns and priority
     (a deck of 6 or fewer would make every player draw from an empty library during 103.5 and
     lose at the first state-based-action check, 704.5b). Every deck holds two elves, so random
-    agents soon cast one, and the game stops at the 508.1 gap once its controller's combat comes
-    (or at 903.8, casting a commander); long games are the patient and land-only tests' job.
-    Seat 1's deck is empty in one game of four.
+    agents soon cast one, and the game stops at the 509.1 gap once an elf attacks a player
+    who could block it (or at 903.8, casting a commander); long games are the patient and
+    land-only tests' job. Seat 1's deck is empty in one game of four.
     """
     commanders = [DAYBREAKER] if commander else []
     return [
@@ -373,7 +373,7 @@ def test_a_disallowed_gap_is_a_failure() -> None:
     with pytest.raises(FuzzFailure, match=r"gap that isn't allowed: 601\.2: a test gap"):
         fuzz(GapOnAnswer("601.2"), allowed_gaps=())
     config = GameConfig.standard()
-    with pytest.raises(FuzzFailure, match=r"isn't allowed: 508\.1"):
+    with pytest.raises(FuzzFailure, match=r"isn't allowed: 509\.1"):
         fuzz_game(config, [deck(10, 2), deck(10, 2)], 2, allowed_gaps=())
 
 
