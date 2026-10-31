@@ -49,8 +49,7 @@ rules the engine still refuses loudly. The rules that cards can change (land pla
 the turn sequence, who decides) each live in one function that effects will plug into. The test
 games that check the engine now include players who cast every spell they can, so they reach
 counterspells and the expensive spells. M3 (combat) has an approved plan
-([`docs/plans/m3.md`](docs/plans/m3.md)). **Next:** its first code step, M3.1, after the user's
-milestone check of M2 ([`docs/verification.md`](docs/verification.md)) if it isn't done yet.
+([`docs/plans/m3.md`](docs/plans/m3.md)). **Next:** its first code step, M3.1.
 Details:
 "Current status" in [`CLAUDE.md`](CLAUDE.md).
 
