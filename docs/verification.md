@@ -66,9 +66,9 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
    - the last line gives the time; note it if it is much longer than the estimate above.
    The exact numbers depend on the engine and change from milestone to milestone; a run with the
    same code always prints the same numbers, except the timing. At the end of M2 the run
-   printed `100 games passed: 47830 answers accepted, 1 rejected`; `Endings: decked x0, life total x0, concession x17, draw x0, rules gap
-   x83`; `Spells: 305 cast, 302 resolved, 1 didn't resolve, 1 countered, 11344 reversed`;
-   `Damage: 22 dealt`; `Reversed casts: auto-pay seats 7523 of 7750 attempts, 0 of 227
+   printed `100 games passed: 47837 answers accepted, 1 rejected`; `Endings: decked x0, life total x0, concession x17, draw x0, rules gap
+   x83`; `Spells: 305 cast, 302 resolved, 1 didn't resolve, 1 countered, 11345 reversed`;
+   `Damage: 22 dealt`; `Reversed casts: auto-pay seats 7524 of 7751 attempts, 0 of 227
    payable; random seats 3821 of 3899, 19 of 97 payable`; 20 cards in `Casts per card:`
    (Grizzly Bears and Cryptic Command not cast that run, by chance; with `--seed 100` both
    are); `Gaps: 508.1 x53, 903.8 x30`.
