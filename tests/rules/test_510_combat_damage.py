@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import pytest
 
+from resolve.decisions.kinds import DecisionKind
 from resolve.engine.concede import concede
 from resolve.errors import NotImplementedRule
 from resolve.events import pipeline
@@ -35,9 +36,10 @@ from resolve.state.zones import BATTLEFIELD
 from resolve.tasks import TaskResult
 from tests.casting_support import records
 from tests.combat_support import declare_attackers, pass_to
+from tests.game_fixtures import request_of
 from tests.scenario import Scenario
 
-P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
+P0, P1, P2, P3 = PlayerId(0), PlayerId(1), PlayerId(2), PlayerId(3)
 
 
 def test_510_1b_an_unblocked_attacker_deals_its_power_to_the_player() -> None:
@@ -180,3 +182,62 @@ def test_903_10a_combat_damage_from_a_commander_is_a_gap_until_m7() -> None:
     scenario.attacking(P1, giant)
     state = scenario.build()
     assert state.player(P1).life == 40 - 3
+
+
+# --- From the test review ---------------------------------------------------------------------
+
+
+def test_510_3_damage_is_dealt_before_the_active_player_gets_priority() -> None:
+    """510.2-510.3: combat damage is dealt as the step's turn-based action; when P0 first gets
+    priority in the combat damage step, P1 has already lost the 3 life."""
+    scenario = Scenario(2)
+    (giant,) = scenario.battlefield(P0, ["Hill Giant"])
+    scenario.at(Step.DECLARE_ATTACKERS, begin=True)
+    state = scenario.build()
+    declare_attackers(state, {giant: P1})
+    pass_to(state, Phase.COMBAT, Step.COMBAT_DAMAGE)
+    assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
+    assert request_of(state).player == P0
+    assert state.player(P1).life == 17
+
+
+def test_704_5a_two_players_dealt_lethal_combat_damage_lose_together() -> None:
+    """Four players: Grizzly Bears hits P1 (2 life) and Savannah Lions hits P2 (2 life) in the
+    same combat damage (510.2). Both lose in the same state-based-action check (704.3, 704.5a),
+    and the game goes on with P0 and P3."""
+    scenario = Scenario(4)
+    bears, lions = scenario.battlefield(P0, ["Grizzly Bears", "Savannah Lions"])
+    scenario.life(P1, 2)
+    scenario.life(P2, 2)
+    scenario.at(Step.DECLARE_ATTACKERS, begin=True)
+    state = scenario.build()
+    declare_attackers(state, {bears: P1, lions: P2})
+    pass_to(state, Phase.COMBAT, Step.COMBAT_DAMAGE)
+    log = [entry.record for entry in state.event_log]
+    losses = [(i, r.player) for i, r in enumerate(log) if isinstance(r, PlayerLost)]
+    assert [player for _, player in losses] == [P1, P2]
+    assert losses[1][0] == losses[0][0] + 1, "one check, both losses together"
+    assert state.result is None
+    assert [state.player(p).left_game for p in (P0, P1, P2, P3)] == [False, True, True, False]
+
+
+def test_903_10a_the_gap_stops_all_combat_damage() -> None:
+    """Hill Giant (not a commander) is declared before P0's commander, Grizzly Bears: the gap is
+    raised before any damage is dealt (510.2: all at once), so the Giant deals none either. A
+    commander with 0 power assigns no combat damage (510.1a), so it raises no gap."""
+    scenario = Scenario(2, config=GameConfig.commander_game())
+    (giant,) = scenario.battlefield(P0, ["Hill Giant"])
+    commander = scenario.commander(P0, "Grizzly Bears", zone=BATTLEFIELD)
+    scenario.at(Step.COMBAT_DAMAGE, begin=True)
+    scenario.attacking(P1, giant, commander)
+    with pytest.raises(NotImplementedRule):
+        scenario.build()
+    assert scenario._state.player(P1).life == 40  # pyright: ignore[reportPrivateUsage]
+    assert records(scenario._state, DamageDealt) == []  # pyright: ignore[reportPrivateUsage]
+
+    scenario = Scenario(2, config=GameConfig.commander_game())
+    myr = scenario.commander(P0, "Darksteel Myr", zone=BATTLEFIELD)
+    scenario.at(Step.COMBAT_DAMAGE, begin=True)
+    scenario.attacking(P1, myr)
+    state = scenario.build()
+    assert records(state, DamageDealt) == [] and state.player(P1).life == 40

@@ -34,6 +34,7 @@ from resolve.decisions.spaces import Assignment
 from resolve.engine.api import submit
 from resolve.engine.concede import concede
 from resolve.errors import InvalidAnswer, NotImplementedRule
+from resolve.events.base import AnswerRecord
 from resolve.events.combat import AttackersDeclared, CombatBegan, CombatEnded
 from resolve.events.permanents import PermanentTapped
 from resolve.events.turn import StepBegan
@@ -53,7 +54,7 @@ from tests.combat_support import (
     may_attack,
     pass_to,
 )
-from tests.game_fixtures import answer, request_of
+from tests.game_fixtures import answer, pass_until, request_of
 from tests.scenario import Scenario, names, run_script
 
 P0, P1, P2, P3 = PlayerId(0), PlayerId(1), PlayerId(2), PlayerId(3)
@@ -401,3 +402,109 @@ def test_509_1_no_possible_blocker_means_no_gap() -> None:
     assert combat_of(state).attackers[giant].blocked is False
     pass_to(state, Phase.POSTCOMBAT_MAIN)
     assert [state.player(p).life for p in (P0, P1, P2)] == [20, 17, 20]
+
+
+# --- From the test review: players leaving, and the batch of taps -----------------------------
+
+
+def test_800_4a_a_concession_while_attackers_are_being_declared_asks_again() -> None:
+    """Three players: P1 concedes while P0's declaration is pending (104.3a). The request is
+    withdrawn and asked again (a new id); P1 has left the game (800.4a), so every creature may now
+    attack only P2, and an answer to the old request is refused."""
+    scenario = Scenario(3)
+    bears, giant = scenario.battlefield(P0, ["Grizzly Bears", "Hill Giant"])
+    scenario.at(Step.DECLARE_ATTACKERS, begin=True)
+    state = scenario.build()
+    old = request_of(state)
+    assert attack_targets(state, bears) == (P1, P2)
+    stale = answer(state, attack_answer(state, {bears: P1}))
+    concede(state, P1)
+    assert request_of(state).id != old.id
+    assert attack_targets(state, bears) == attack_targets(state, giant) == (P2,)
+    with pytest.raises(InvalidAnswer):
+        submit(state, stale)
+    declare_attackers(state, {bears: P2})
+    assert combat_of(state).attackers == {bears: AttackRecord(bears, AttackPlayer(P2))}
+
+
+def test_800_4a_a_defending_player_who_left_before_the_declaration_isnt_offered() -> None:
+    """Three players: the combat began with P1 and P2 defending (506.2); P1 concedes in the
+    beginning of combat step. P1 stays listed (800.4e reads that) but can't be attacked: the
+    declaration offers only P2, and attacking P1 isn't allowed (506.3c's "a player not in the
+    game")."""
+    scenario = Scenario(3)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    scenario.at(Step.BEGINNING_OF_COMBAT, begin=True)
+    state = scenario.build()
+    concede(state, P1)
+    assert combat_of(state).defending_players == (P1, P2)
+    assert not attack_allowed(state, bears, P1)
+    assert attack_allowed(state, bears, P2)
+    pass_to(state, Phase.COMBAT, Step.DECLARE_ATTACKERS)
+    assert attack_targets(state, bears) == (P2,)
+
+
+def test_800_4a_the_active_player_leaving_mid_combat_removes_their_attackers() -> None:
+    """Three players: P0 declares Grizzly Bears attacking P1, then concedes in the declare
+    attackers step. The Bears leave the game and combat (800.4a, 506.4); no combat damage is
+    dealt; the turn goes on without an active player (800.4j) and the next turn is P1's."""
+    scenario = Scenario(3)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    for player in (P1, P2):
+        scenario.library(player, ["Forest"] * 3)
+    scenario.at(Step.DECLARE_ATTACKERS, begin=True)
+    state = scenario.build()
+    declare_attackers(state, {bears: P1})
+    concede(state, P0)
+    assert combat_of(state).attackers == {}
+    assert invariant_violations(state) == []
+    pass_to(state, Phase.POSTCOMBAT_MAIN)
+    assert state.player(P1).life == 20
+    pass_until(state, lambda s: s.turn is not None and s.turn.number == 2)
+    assert state.turn is not None and state.turn.active_player == P1
+
+
+def test_508_1f_attackers_tap_at_the_same_time() -> None:
+    """Grizzly Bears, Hill Giant and Alaborn Grenadier attack: the Bears and the Giant tap in one
+    set of simultaneous events (508.1f), applied before ``AttackersDeclared``; the Grenadier,
+    with vigilance, doesn't tap (702.20b)."""
+    scenario = Scenario(2)
+    bears, giant, grenadier = scenario.battlefield(
+        P0, ["Grizzly Bears", "Hill Giant", "Alaborn Grenadier"]
+    )
+    scenario.at(Step.DECLARE_ATTACKERS, begin=True)
+    state = scenario.build()
+    start = len(state.event_log)
+    declare_attackers(state, {bears: P1, giant: P1, grenadier: P1})
+    tapped = [e.obj for e in records(state, PermanentTapped)]
+    assert tapped == [bears, giant]
+    later = [entry.record for entry in state.event_log[start:]]
+    kinds = [type(record) for record in later if not isinstance(record, AnswerRecord)]
+    assert kinds[:3] == [PermanentTapped, PermanentTapped, AttackersDeclared]
+    assert not state.objects[grenadier].tapped
+
+
+def test_508_2_the_active_player_gets_priority_after_the_declaration() -> None:
+    """508.2: once attackers are declared, the active player receives priority in the declare
+    attackers step."""
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    scenario.at(Step.DECLARE_ATTACKERS, begin=True)
+    state = scenario.build()
+    declare_attackers(state, {bears: P1})
+    request = request_of(state)
+    assert (request.kind, request.player) == (DecisionKind.PRIORITY_ACTION, P0)
+    assert state.turn is not None and state.turn.step is Step.DECLARE_ATTACKERS
+
+
+def test_509_1_an_attacked_player_with_only_noncreatures_untapped_cant_block() -> None:
+    """P1, attacked, controls an untapped Forest and Sol Ring but no creature: no block is
+    possible (506.3: only creatures block), so no 509.1 gap; the Giant deals 3."""
+    scenario = Scenario(2)
+    (giant,) = scenario.battlefield(P0, ["Hill Giant"])
+    scenario.battlefield(P1, ["Forest", "Sol Ring"])
+    scenario.at(Step.DECLARE_ATTACKERS, begin=True)
+    state = scenario.build()
+    declare_attackers(state, {giant: P1})
+    pass_to(state, Phase.POSTCOMBAT_MAIN)
+    assert state.player(P1).life == 17

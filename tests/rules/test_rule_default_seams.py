@@ -949,14 +949,17 @@ def test_510_1a_the_combat_damage_amount_is_what_the_function_says(
     pass_to(state, Phase.POSTCOMBAT_MAIN)
     assert state.player(P1).life == 19
 
-    patch_object(monkeypatch, "combat_damage_amount", lambda state, creature: 0)
-    scenario = Scenario(2)
-    (giant,) = scenario.battlefield(P0, ["Hill Giant"])
-    scenario.at(Step.DECLARE_ATTACKERS, begin=True)
-    state = scenario.build()
-    declare_attackers(state, {giant: P1})
-    pass_to(state, Phase.POSTCOMBAT_MAIN)
-    assert state.player(P1).life == 20
+    for amount in (0, -1):  # 510.1a: 0 or less assigns no combat damage
+        patch_object(
+            monkeypatch, "combat_damage_amount", lambda state, creature, amount=amount: amount
+        )
+        scenario = Scenario(2)
+        (giant,) = scenario.battlefield(P0, ["Hill Giant"])
+        scenario.at(Step.DECLARE_ATTACKERS, begin=True)
+        state = scenario.build()
+        declare_attackers(state, {giant: P1})
+        pass_to(state, Phase.POSTCOMBAT_MAIN)
+        assert state.player(P1).life == 20
 
 
 def test_302_6_a_creature_the_function_calls_not_sick_may_attack(
@@ -975,5 +978,8 @@ def test_302_6_a_creature_the_function_calls_not_sick_may_attack(
     patch_sickness(monkeypatch, lambda state, obj, purpose: purpose is attack)
     scenario = Scenario(2)
     scenario.battlefield(P0, ["Hill Giant"])
+    (elves,) = scenario.battlefield(P0, ["Llanowar Elves"])
     scenario.at(Step.DECLARE_ATTACKERS, number=3, begin=True)
-    assert request_of(scenario.build()).kind is DecisionKind.PRIORITY_ACTION
+    state = scenario.build()
+    assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
+    assert ActivateAbilityOption(elves, 0) in options(state)  # its {T} ability isn't affected
