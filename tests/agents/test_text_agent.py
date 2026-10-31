@@ -515,3 +515,22 @@ def test_render_view_shows_attackers_before_blocks() -> None:
     scenario.attacking(P1, bears)
     text = render_view(view_for(scenario.build(), P0))
     assert f"Combat (defending: player 1): Grizzly Bears #{bears} attacking player 1." in text
+
+
+def test_render_view_shows_a_blocked_attacker_whose_blockers_left_and_no_attackers() -> None:
+    """509.1h: blocked stays blocked when its blockers are gone; a combat whose attackers were
+    all removed still shows its defending players."""
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    (wall,) = scenario.battlefield(P1, ["Test Wall"])
+    scenario.at(TurnStep.DECLARE_BLOCKERS)
+    scenario.attacking(P1, bears)
+    scenario.blocking(wall, bears)
+    state = scenario.build()
+    assert state.turn is not None and state.turn.combat is not None
+    del state.turn.combat.blockers[wall]
+    assert f"Grizzly Bears #{bears} attacking player 1, blocked." in render_view(
+        view_for(state, P0)
+    )
+    state.turn.combat.attackers.clear()
+    assert "Combat (defending: player 1): no attackers." in render_view(view_for(state, P0))

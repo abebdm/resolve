@@ -116,6 +116,15 @@ def _attacks_the_active_player(state: GameState, ids: dict[str, ObjectId]) -> No
     _attack(AttackRecord(ids["giant"], AttackPlayer(P0)))(state, ids)
 
 
+def _blocks_twice(state: GameState, ids: dict[str, ObjectId]) -> None:
+    wall, bears = ids["wall"], ids["bears"]
+    combat_of(state).blockers[wall] = BlockRecord(wall, (bears, bears))
+
+
+def _repeated_defender(state: GameState, ids: dict[str, ObjectId]) -> None:
+    combat_of(state).defending_players = (P1, P2, P1)
+
+
 def _outside_combat(state: GameState, ids: dict[str, ObjectId]) -> None:
     assert state.turn is not None
     state.turn.phase, state.turn.step = Phase.POSTCOMBAT_MAIN, None
@@ -179,6 +188,8 @@ def _unknown_defender(state: GameState, ids: dict[str, ObjectId]) -> None:
         (_no_attacks_happened, "attacks_happened is False (508.8)"),
         (_active_player_defends, "the active player can't be a defending player (506.2)"),
         (_unknown_defender, "defending player 7 isn't a player"),
+        (_blocks_twice, "blocks the same attacker twice"),
+        (_repeated_defender, "aren't distinct"),
     ],
 )
 def test_combat_state_invariants(
@@ -189,6 +200,60 @@ def test_combat_state_invariants(
     assert any(problem in found for found in invariant_violations(state)), invariant_violations(
         state
     )
+
+
+def test_a_noncreature_blocker_is_caught() -> None:
+    """506.3: only a creature can block (P0's Forest, as a blocker record)."""
+    state, ids = combat_board()
+    forest = ids["forest"]
+    combat_of(state).blockers[forest] = BlockRecord(forest, (ids["bears"],))
+    problems = invariant_violations(state)
+    assert f"blocker {forest} isn't a creature on the battlefield (506.3)" in problems
+
+
+def test_control_not_ownership_decides_who_attacks_and_blocks() -> None:
+    """506.2, 508.1a, 509.1a: attackers are the active player's creatures and blockers the
+    defending player's by control. P0 attacks with Savannah Lions that P1 owns; P1 blocks with
+    Grizzly Bears that P0 owns: legal. The other way round, each is caught."""
+    scenario = Scenario(2)
+    (stolen,) = scenario.battlefield(P0, ["Savannah Lions"], owner=P1)
+    (borrowed,) = scenario.battlefield(P1, ["Grizzly Bears"], owner=P0)
+    scenario.at(Step.DECLARE_BLOCKERS, number=3)
+    scenario.attacking(P1, stolen)
+    scenario.blocking(borrowed, stolen)
+    state = scenario.build()
+    assert invariant_violations(state) == []
+
+    scenario = Scenario(2)
+    (lent,) = scenario.battlefield(P1, ["Savannah Lions"], owner=P0)
+    (taken,) = scenario.battlefield(P0, ["Grizzly Bears"], owner=P1)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    scenario.at(Step.DECLARE_BLOCKERS, number=3)
+    scenario.attacking(P1, lent, bears)
+    scenario.blocking(taken, bears)
+    state = scenario._state  # pyright: ignore[reportPrivateUsage] (not built: it is illegal)
+    problems = invariant_violations(state)
+    assert f"attacker {lent} isn't controlled by the active player (506.2, 508.1a)" in problems
+    assert f"blocker {taken} isn't controlled by a defending player (509.1a)" in problems
+
+
+def test_states_combat_reaches_that_are_legal() -> None:
+    """Not flagged: a blocked attacker whose blockers have all left stays blocked (509.1h); a
+    tapped attacker or blocker stays in combat (506.4b); a defending player who has left the
+    game stays a defending player (damage to them isn't assigned, 800.4e)."""
+    state, ids = combat_board()
+    combat = combat_of(state)
+    del combat.blockers[ids["wall"]]
+    assert combat.attackers[ids["bears"]].blocked is True
+    state.objects[ids["bears"]].tapped = True
+    state.objects[ids["giant"]].tapped = True
+    assert invariant_violations(state) == []
+
+    state, ids = combat_board()
+    state.objects[ids["wall"]].tapped = True
+    concede(state, P2)
+    assert P2 in combat_of(state).defending_players
+    assert invariant_violations(state) == []
 
 
 def test_a_creature_put_onto_the_battlefield_attacking_didnt_make_attacks_happen() -> None:

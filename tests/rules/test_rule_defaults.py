@@ -31,7 +31,7 @@ import pytest
 from resolve.citations import cited_rules
 from resolve.data.types import CardType
 from resolve.decisions.spaces import CastSpellOption
-from resolve.errors import NotImplementedRule
+from resolve.errors import EngineError, NotImplementedRule
 from resolve.rules import defaults
 from resolve.state.config import GameConfig
 from resolve.state.ids import PlayerId
@@ -350,6 +350,14 @@ def test_510_1a_a_creature_assigns_combat_damage_equal_to_its_power() -> None:
     )
     state = scenario.build()
     assert [defaults.combat_damage_amount(state, c) for c in creatures] == [3, 2, 0, 0]
+
+
+def test_510_1a_an_object_without_power_has_no_combat_damage_amount() -> None:
+    """208.3: a noncreature has no power, so asking its combat damage is an engine error."""
+    scenario = Scenario(2)
+    (ring,) = scenario.battlefield(P0, ["Sol Ring"])
+    with pytest.raises(EngineError, match="power"):
+        defaults.combat_damage_amount(scenario.build(), ring)
 
 
 def test_509_1a_a_creature_blocks_one_attacker() -> None:

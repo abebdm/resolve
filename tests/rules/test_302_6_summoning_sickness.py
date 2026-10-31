@@ -27,7 +27,7 @@ from resolve.agents.scripted import choose
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import ActivateAbilityOption, PassOption, Pick, PlayLandOption
 from resolve.engine.api import submit
-from resolve.errors import InvalidAnswer
+from resolve.errors import EngineError, InvalidAnswer
 from resolve.events.spells import ActionReversed, PermanentSpellResolved
 from resolve.rules import defaults
 from resolve.state.game import GameState
@@ -304,3 +304,34 @@ def test_702_10_haste_doesnt_let_a_tapped_creature_tap() -> None:
     scenario.at(Phase.PRECOMBAT_MAIN, number=1)
     state = scenario.build()
     assert not offered(state, hasty, HASTY_MANA)
+
+
+def test_302_6_a_tap_cost_asks_about_tap_abilities_not_attacking(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Seam, by purpose: ``TapSelfCost`` asks ``summoning_sick`` for ``TAP_ABILITY`` (302.6,
+    602.5a), never ``ATTACK``. "Sick only for tapping" hides an old Elves' ability; "sick only
+    for attacking" offers a new Elves' (Thousand-Year Elixir, M5, will lift only the first)."""
+    scenario = Scenario(2)
+    (old,) = scenario.battlefield(P0, ["Llanowar Elves"])
+    scenario.at(Phase.PRECOMBAT_MAIN, number=3)
+    patch_sickness(monkeypatch, lambda state, obj, purpose: purpose is TAP)
+    assert not offered(scenario.build(), old)
+
+    scenario = Scenario(2)
+    (new,) = scenario.battlefield(P0, ["Llanowar Elves"], entered_turn=3)
+    scenario.at(Phase.PRECOMBAT_MAIN, number=3)
+    patch_sickness(
+        monkeypatch, lambda state, obj, purpose: purpose is defaults.SicknessPurpose.ATTACK
+    )
+    assert offered(scenario.build(), new)
+
+
+def test_302_6_only_a_permanent_has_summoning_sickness() -> None:
+    """302.6 is about creatures under a controller's control: asking about a creature card in a
+    hand is an engine error, not an answer."""
+    scenario = Scenario(2)
+    (card,) = scenario.hand(P0, ["Llanowar Elves"])
+    state = scenario.build()
+    with pytest.raises(EngineError, match="permanent"):
+        defaults.summoning_sick(state, card, TAP)
