@@ -39,6 +39,7 @@ from resolve.decisions.spaces import (
     CastSpellOption,
     ChooseOne,
     ChooseSubset,
+    ObjectOption,
     Option,
     PassOption,
     Pick,
@@ -75,7 +76,17 @@ from resolve.state.turn import TURN_SEQUENCE, Phase, Segment, Step
 from resolve.state.zones import EXILE, Zone, ZoneKind
 from resolve.tasks import Done, Task, TaskResult
 from tests.casting_support import pass_
-from tests.combat_support import declare_attackers, may_attack, pass_to
+from tests.combat_support import (
+    assign_damage,
+    block_space,
+    blockable,
+    damage_sources,
+    declare_attackers,
+    declare_blockers,
+    may_attack,
+    may_block,
+    pass_to,
+)
 from tests.game_fixtures import answer, decks, pass_until, request_of
 from tests.scenario import Scenario, names, run_script
 from tests.seams import (
@@ -983,3 +994,104 @@ def test_302_6_a_creature_the_function_calls_not_sick_may_attack(
     state = scenario.build()
     assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
     assert ActivateAbilityOption(elves, 0) in options(state)  # its {T} ability isn't affected
+
+
+# --- 509.1, 509.1a, 510.1: blocks and damage assignment (M3.3) ---------------------------------
+
+
+def test_509_1_the_block_declarer_is_asked_to_declare(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The function says P0 declares P1's blockers (Master Warcraft, M5): P0 is asked, the items
+    are still P1's creatures, and P0's declaration makes P1's Bears block. Two defending players
+    (three players): each one's declaration goes to whom the function names for that player."""
+    patch(monkeypatch, "block_declarer", lambda state, player: P0)
+    scenario = Scenario(2)
+    (giant,) = scenario.battlefield(P0, ["Hill Giant"])
+    (bears,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, giant)
+    state = scenario.build()
+    request = request_of(state)
+    assert (request.kind, request.player) == (DecisionKind.DECLARE_BLOCKERS, P0)
+    assert may_block(state) == (bears,)
+    declare_blockers(state, {bears: (giant,)})
+    turn = state.turn
+    assert turn is not None and turn.combat is not None
+    assert turn.combat.blockers_of(giant) == (bears,)
+
+    patch(monkeypatch, "block_declarer", lambda state, player: P2 if player == P1 else P1)
+    scenario = Scenario(3)
+    giant, lions = scenario.battlefield(P0, ["Hill Giant", "Savannah Lions"])
+    (wall1,) = scenario.battlefield(P1, ["Test Wall"])
+    (wall2,) = scenario.battlefield(P2, ["Test Wall"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, giant)
+    scenario.attacking(P2, lions)
+    state = scenario.build()
+    assert (request_of(state).player, may_block(state)) == (P2, (wall1,))
+    declare_blockers(state, {})
+    assert (request_of(state).player, may_block(state)) == (P1, (wall2,))
+
+
+def test_509_1a_blocks_allowed_is_what_the_function_says(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The function says every creature may block two attackers ("can block an additional
+    creature", M5): Test Wall may block both the Giant and the Bears, and does. Saying 0 means
+    nothing can block, so P1 isn't asked. Saying ``None`` means any number (Palace Guard): the
+    maximum is the number of attackers it may block."""
+    patch_object(monkeypatch, "blocks_allowed", lambda state, creature: 2)
+    scenario = Scenario(2)
+    giant, bears, lions = scenario.battlefield(
+        P0, ["Hill Giant", "Grizzly Bears", "Savannah Lions"]
+    )
+    (wall,) = scenario.battlefield(P1, ["Test Wall"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, giant, bears, lions)
+    state = scenario.build()
+    assert block_space(state).maxima == (2,)
+    declare_blockers(state, {wall: (giant, bears)})
+    turn = state.turn
+    assert turn is not None and turn.combat is not None
+    assert turn.combat.blockers[wall].blocking == (giant, bears)
+    assert turn.combat.attackers[lions].blocked is False
+
+    patch_object(monkeypatch, "blocks_allowed", lambda state, creature: 0)
+    scenario = Scenario(2)
+    (giant,) = scenario.battlefield(P0, ["Hill Giant"])
+    scenario.battlefield(P1, ["Test Wall"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, giant)
+    state = scenario.build()
+    assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
+
+    patch_object(monkeypatch, "blocks_allowed", lambda state, creature: None)
+    scenario = Scenario(2)
+    giant, bears = scenario.battlefield(P0, ["Hill Giant", "Grizzly Bears"])
+    (wall,) = scenario.battlefield(P1, ["Test Wall"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, giant, bears)
+    state = scenario.build()
+    assert blockable(state, wall) == (giant, bears)
+    assert block_space(state).maxima == (2,)
+
+
+def test_510_1_the_combat_damage_assigner_is_asked(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The function says the defending player assigns every creature's combat damage (banding,
+    702.22j, M9): P1, not P0, divides the Giant's damage between P1's two blockers; P1 is asked
+    once, for both the Giant and P1's own Palace Guard, which blocks two attackers."""
+    patch_object(monkeypatch, "combat_damage_assigner", lambda state, creature: P1)
+    scenario = Scenario(2)
+    giant, bears, lions = scenario.battlefield(
+        P0, ["Hill Giant", "Grizzly Bears", "Savannah Lions"]
+    )
+    wall, wall2, guard = scenario.battlefield(P1, ["Test Wall", "Test Wall", "Palace Guard"])
+    scenario.at(Step.COMBAT_DAMAGE, begin=True)
+    scenario.attacking(P1, giant, bears, lions)
+    scenario.blocking(wall, giant)
+    scenario.blocking(wall2, giant)
+    scenario.blocking(guard, bears, lions)
+    state = scenario.build()
+    request = request_of(state)
+    assert (request.kind, request.player) == (DecisionKind.ASSIGN_COMBAT_DAMAGE, P1)
+    assert damage_sources(state) == (giant, guard)
+    assign_damage(state, {giant: {ObjectOption(wall2): 3}, guard: {ObjectOption(bears): 1}})
+    assert state.objects[wall2].damage == 3 and state.objects[wall].damage == 0
+    assert request_of(state).kind is DecisionKind.PRIORITY_ACTION

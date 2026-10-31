@@ -6,12 +6,11 @@
   players option, 802). The combat state is created as the combat phase's first step begins
   (``CombatBegan``, 506.2), before this step's turn-based actions.
 - **declare attackers**: ``DeclareAttackers`` (508.1).
-- **declare blockers**: ``DeclareBlockers`` (509.1): blocks are M3.3's. Until then a defending
-  player who is attacked and controls an untapped creature could block, which is the gap
-  ``NotImplementedRule("509.1")``; otherwise no block is possible, and every attacker becomes
-  unblocked (509.1h).
-- **combat damage**: ``CombatDamage`` (510.1-510.2), for unblocked attackers. Damage to and by
-  blocking creatures (510.1c-d) is M3.3's gap.
+- **declare blockers**: ``DeclareBlockers`` (509.1, 802.4): each defending player declares
+  their blockers, in APNAP order.
+- **combat damage**: ``CombatDamage`` (510.1-510.2, 802.5): damage is assigned, each player
+  dividing their creatures' damage among two or more recipients in APNAP order, then dealt at
+  once.
 - **end of combat**: none (511.1); as the step ends, ``CombatEnded`` removes everything from
   combat (511.3).
 
@@ -25,9 +24,18 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from resolve.cards.keywords import Vigilance, has_keyword
-from resolve.data.types import CardType
 from resolve.decisions.kinds import DecisionKind
-from resolve.decisions.spaces import AnswerValue, Assignment, ChooseAssignment
+from resolve.decisions.spaces import (
+    AmountsEach,
+    AnswerValue,
+    Assignment,
+    ChooseAssignment,
+    Distribute,
+    DistributeEach,
+    ObjectOption,
+    Option,
+    PlayerOption,
+)
 from resolve.effects.characteristics import characteristics
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.base import Event
@@ -36,9 +44,16 @@ from resolve.events.damage import DamageDealt
 from resolve.events.permanents import PermanentTapped
 from resolve.events.pipeline import ApplyEvents
 from resolve.rules import defaults
-from resolve.rules.combat import attack_declaration, declared_attacks
-from resolve.state.combat import AttackPlayer, CombatState
-from resolve.state.ids import ObjectId
+from resolve.rules.combat import (
+    attack_declaration,
+    block_declaration,
+    damage_recipients,
+    declared_attacks,
+    declared_blocks,
+)
+from resolve.state.combat import CombatState
+from resolve.state.game import apnap_order
+from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.zones import ZoneKind
 from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
 
@@ -101,85 +116,191 @@ class DeclareAttackers(Task):
 
 @dataclass(slots=True)
 class DeclareBlockers(Task):
-    """509.1, until M3.3: whether any block is possible. A defending player still in the game who
-    is attacked (509.1a, 802.4a: only creatures attacking them can be blocked by theirs) and
-    controls an untapped creature that isn't a battle could block: declaring blocks is the gap.
-    Otherwise the declaration is empty, and every attacker becomes unblocked (509.1h)."""
+    """509.1, 802.4: each defending player, in APNAP order, declares their blockers.
+
+    For each defending player still in the game (in ``CombatState.defending_players``' order,
+    which is APNAP order, 506.2), from ``next`` on:
+
+    1. 509.1a: a ``DECLARE_BLOCKERS`` decision for ``defaults.block_declarer``, the
+       ``ChooseAssignment`` compiled by ``resolve.rules.combat.block_declaration``; not asked
+       when none of their creatures may block (one possible declaration, none). The space
+       validates the answer, so an illegal declaration is refused before anything changes
+       (509.1, 733).
+    2. 509.1b-c (restrictions and requirements on the whole declaration) and 509.1d-f (costs to
+       block) have nothing to apply yet: their cards arrive in M3.4 and M3.5.
+    3. 509.1g-h: ``BlockersDeclared(defending_player=...)`` makes their blockers and fixes the
+       blocked status of the creatures attacking them, before the next player declares (802.4:
+       "the first defending player declares all their blocks, then the second").
+
+    Then a ``BlockersDeclared`` without a player makes every attacker still undecided unblocked
+    (those attacking a player who wasn't asked, or who left, 800.4a), if any. 509.2a's triggers
+    are M4's.
+
+    The task records which player is next in ``next``, so after a concession (104.3a) it runs
+    again from the player being asked, and the declarations already made stay made.
+    """
+
+    next: int = 0
 
     def run(self, state: GameState) -> TaskResult:
         combat = _combat(state)
-        attacked = {
-            record.target.player
-            for record in combat.attackers.values()
-            if isinstance(record.target, AttackPlayer)
-        }
-        for obj in state.battlefield:
-            permanent = state.objects[obj]
-            if permanent.controller not in attacked or permanent.tapped:
-                continue
-            types = characteristics(state, obj).card_types
-            if CardType.CREATURE in types and CardType.BATTLE not in types:
-                raise NotImplementedRule("509.1: declaring blockers (M3.3)")
+        players = combat.defending_players
+        while self.next < len(players):
+            player = players[self.next]
+            if not state.player(player).left_game:
+                space = block_declaration(state, player)
+                if space is not None:
+                    return NeedDecision(
+                        player=defaults.block_declarer(state, player),
+                        kind=DecisionKind.DECLARE_BLOCKERS,
+                        space=space,
+                        prompt=(
+                            f"Declare player {player}'s blockers: choose which attackers each "
+                            "creature blocks, if any."
+                        ),
+                        rules=("509.1", "509.1a", "802.4"),
+                    )
+            self.next += 1
         if not any(record.blocked is None for record in combat.attackers.values()):
             return Done()
         declared = BlockersDeclared(rules=("509.1h", "509.1g"))
         return Push((ApplyEvents((declared,)),))
+
+    def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
+        if not isinstance(request.space, ChooseAssignment) or not isinstance(answer, Assignment):
+            raise EngineError(f"DeclareBlockers can't resume with {answer!r}")
+        player = _combat(state).defending_players[self.next]
+        declared = BlockersDeclared(
+            blocks=declared_blocks(request.space, answer.picks),
+            defending_player=player,
+            rules=("509.1g", "509.1h", "802.4"),
+        )
+        self.next += 1
+        return Push((ApplyEvents((declared,)), self))
 
 
 @dataclass(slots=True)
 class CombatDamage(Task):
     """510.1-510.2: combat damage is assigned, then dealt all at once.
 
-    510.1: each attacking creature, in declaration order, assigns ``defaults.combat_damage_amount``
-    (its power, 510.1a; 0 or less: none):
+    510.1: each attacking creature, then each blocking creature (``rules.combat.
+    damage_recipients``), assigns ``defaults.combat_damage_amount`` (its power, 510.1a; 0 or
+    less: none) among its possible recipients:
 
-    - unblocked, to the player it attacks (510.1b); nothing if it attacks nothing, or a player
-      who has left the game (800.4e). One recipient is one possible assignment, so nobody is
-      asked (design.md §6).
-    - blocked, with no creature blocking it any more: nothing (510.1c).
-    - blocked with blockers, and blockers' damage (510.1c-d): M3.3's, a gap until then.
+    - none (an unblocked creature attacking nothing or a player who left, 510.1b, 800.4e; a
+      blocked one with no blocker left, 510.1c; a blocker blocking nothing, 510.1d): nothing;
+    - one: all of it to that one, without a question (design.md §6: one possible assignment);
+    - two or more (510.1c-d): divided as ``defaults.combat_damage_assigner`` (its controller)
+      chooses. Each player assigns all the damage they divide in one ``ASSIGN_COMBAT_DAMAGE``
+      decision, a ``DistributeEach`` with one ``Distribute`` per creature (minimum 0 each),
+      in APNAP order (510.1: the active player first, then the defending players; 802.5). The
+      space checks the total assignment (510.1e), so an illegal one is refused and the player
+      assigns again (733).
 
     510.2: the assigned damage is dealt simultaneously, one ``DamageDealt`` per source
-    (``combat=True``, 120.4b) in one set of events. Combat damage a commander would deal to a
-    player must be tallied (903.10a, M7): a gap until then, raised before anything is dealt.
+    (``combat=True``, 120.4b) in one set of events, after every player has assigned. Combat damage
+    a commander would deal to a player must be tallied (903.10a, M7): a gap until then, raised
+    before anyone is asked or anything is dealt.
+
+    ``answered`` keeps each player's assignment with the space it answered. Run again after a
+    concession (104.3a), the task keeps an answer only if that player's space is unchanged,
+    and asks again otherwise.
     """
 
+    answered: tuple[tuple[PlayerId, DistributeEach, AmountsEach], ...] = ()
+
     def run(self, state: GameState) -> TaskResult:
-        combat = _combat(state)
-        if any(record.blocking for record in combat.blockers.values()):
-            raise NotImplementedRule(
-                "510.1c: combat damage assigned to and by blocking creatures (M3.3)"
-            )
-        events: list[Event] = []
-        for attacker, record in combat.attackers.items():
-            if record.blocked is None:
-                raise EngineError(f"attacker {attacker} is neither blocked nor unblocked (509.1h)")
-            if record.blocked:
-                continue  # 510.1c: no creature is blocking it
-            target = record.target
-            if target is None:
-                continue  # 510.1b: it attacks nothing (506.4c)
-            player = target.player
-            if state.player(player).left_game:
-                continue  # 800.4e
-            amount = defaults.combat_damage_amount(state, attacker)
+        fixed: list[tuple[ObjectId, tuple[tuple[Option, int], ...]]] = []
+        divided: dict[PlayerId, list[tuple[ObjectId, Distribute]]] = {}
+        for creature, recipients in damage_recipients(state):
+            if not recipients:
+                continue  # 510.1b-d: it assigns no combat damage
+            amount = defaults.combat_damage_amount(state, creature)
             if amount <= 0:
                 continue  # 510.1a
-            if _is_commander(state, attacker):
+            if any(isinstance(r, PlayerOption) for r in recipients) and _is_commander(
+                state, creature
+            ):
                 raise NotImplementedRule(
                     "903.10a: tallying the combat damage a commander deals to a player (M7)"
                 )
-            events.append(
-                DamageDealt(
-                    source=attacker,
-                    to_players=((player, amount),),
-                    combat=True,
-                    rules=("510.2", "510.1b", "120.3a"),
-                )
+            if len(recipients) == 1:
+                fixed.append((creature, ((recipients[0], amount),)))
+                continue
+            assigner = defaults.combat_damage_assigner(state, creature)
+            divided.setdefault(assigner, []).append(
+                (creature, Distribute(recipients, amount, minimum_each=0))
             )
+        kept: list[tuple[PlayerId, DistributeEach, AmountsEach]] = []
+        for player in apnap_order(state):
+            parts = divided.get(player)
+            if not parts:
+                continue
+            space = DistributeEach(
+                tuple(ObjectOption(creature) for creature, _ in parts),
+                tuple(part for _, part in parts),
+            )
+            previous = next((a for p, sp, a in self.answered if p == player and sp == space), None)
+            if previous is None:
+                self.answered = tuple(kept)
+                return NeedDecision(
+                    player=player,
+                    kind=DecisionKind.ASSIGN_COMBAT_DAMAGE,
+                    space=space,
+                    prompt="Assign combat damage: divide each creature's damage among the "
+                    "creatures it is blocking or blocked by.",
+                    rules=("510.1", "510.1c", "510.1d", "510.1e", "802.5"),
+                )
+            kept.append((player, space, previous))
+        assignments = list(fixed)
+        for _, space, answer in kept:
+            for source, part, amounts in zip(
+                space.sources, space.parts, answer.amounts, strict=True
+            ):
+                if not isinstance(source, ObjectOption):
+                    raise EngineError(f"{source!r} isn't a creature dealing combat damage")
+                assignments.append(
+                    (source.object, tuple(zip(part.recipients, amounts.amounts, strict=True)))
+                )
+        events = _damage_events(state, assignments)
         if not events:
             return Done()
-        return Push((ApplyEvents(tuple(events)),))
+        return Push((ApplyEvents(events),))
+
+    def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
+        if not isinstance(request.space, DistributeEach) or not isinstance(answer, AmountsEach):
+            raise EngineError(f"CombatDamage can't resume with {answer!r}")
+        self.answered = (*self.answered, (request.player, request.space, answer))
+        return Push((self,))
+
+
+def _damage_events(
+    state: GameState, assignments: list[tuple[ObjectId, tuple[tuple[Option, int], ...]]]
+) -> tuple[Event, ...]:
+    """510.2: one ``DamageDealt`` per source that assigned any damage, attackers first, then
+    blockers (``damage_recipients``' order); 0 damage isn't dealt (120.8)."""
+    order = {creature: index for index, (creature, _) in enumerate(damage_recipients(state))}
+    events: list[Event] = []
+    for source, assigned in sorted(assignments, key=lambda item: order[item[0]]):
+        to_objects = tuple(
+            (r.object, amount) for r, amount in assigned if isinstance(r, ObjectOption) and amount
+        )
+        to_players = tuple(
+            (r.player, amount) for r, amount in assigned if isinstance(r, PlayerOption) and amount
+        )
+        if not to_objects and not to_players:
+            continue
+        rules = ("510.2", "510.1b", "120.3a") if to_players else ("510.2", "510.1c", "120.3e")
+        events.append(
+            DamageDealt(
+                source=source,
+                to_objects=to_objects,
+                to_players=to_players,
+                combat=True,
+                rules=rules,
+            )
+        )
+    return tuple(events)
 
 
 def _is_commander(state: GameState, obj: ObjectId) -> bool:

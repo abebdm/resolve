@@ -19,8 +19,8 @@ From the pinned CR:
   still been declared, so they aren't.
 - 511.3: as the end of combat step ends, everything is removed from combat.
 - 508.1, 733: an illegal declaration is refused, and the game is as before it.
-- 509.1: declaring blockers is M3.3's; until then a defending player who is attacked and
-  controls an untapped creature is a gap.
+- 509.1: a defending player who is attacked and controls an untapped creature declares
+  blockers (M3.3; test_509_declare_blockers.py); with no possible blocker nobody is asked.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import Assignment
 from resolve.engine.api import submit
 from resolve.engine.concede import concede
-from resolve.errors import InvalidAnswer, NotImplementedRule
+from resolve.errors import InvalidAnswer
 from resolve.events.base import AnswerRecord
 from resolve.events.combat import AttackersDeclared, CombatBegan, CombatEnded
 from resolve.events.permanents import PermanentTapped
@@ -369,27 +369,29 @@ def test_508_1_an_illegal_attacker_is_rejected_and_nothing_changes() -> None:
     assert list(combat_of(state).attackers) == [bears]
 
 
-# --- 509.1: blocks are M3.3's ------------------------------------------------------------------
+# --- 509.1: who is asked to declare blockers ---------------------------------------------------
 
 
-def test_509_1_blocks_are_a_gap_until_m3_3() -> None:
+def test_509_1_an_attacked_player_who_could_block_is_asked() -> None:
     """Hill Giant attacks P1, who controls an untapped Grizzly Bears: P1 could block, so the
-    declare blockers step stops at the 509.1 gap (until M3.3)."""
+    declare blockers step asks P1 to declare blockers (509.1; the declaration itself is tested in
+    test_509_declare_blockers.py)."""
     scenario = Scenario(2)
     (giant,) = scenario.battlefield(P0, ["Hill Giant"])
     scenario.battlefield(P1, ["Grizzly Bears"])
     scenario.at(Step.DECLARE_ATTACKERS, begin=True)
     state = scenario.build()
     declare_attackers(state, {giant: P1})
-    with pytest.raises(NotImplementedRule) as gap:
-        pass_to(state, Phase.POSTCOMBAT_MAIN)
-    assert gap.value.rule == "509.1"
+    pass_to(state, Phase.COMBAT, Step.DECLARE_BLOCKERS)
+    request = request_of(state)
+    assert (request.kind, request.player) == (DecisionKind.DECLARE_BLOCKERS, P1)
 
 
-def test_509_1_no_possible_blocker_means_no_gap() -> None:
+def test_509_1_no_possible_blocker_means_no_declaration() -> None:
     """Three players. Hill Giant attacks P1, whose only creature is tapped; P2 controls an
     untapped Grizzly Bears, but P2 isn't attacked, so it can't block (509.1a, 802.4a). No
-    blocks are possible: the Giant is unblocked (509.1h) and deals its damage."""
+    blocks are possible, so nobody is asked: the Giant is unblocked (509.1h) and deals its
+    damage."""
     scenario = Scenario(3)
     (giant,) = scenario.battlefield(P0, ["Hill Giant"])
     (lions,) = scenario.battlefield(P1, ["Savannah Lions"])
@@ -499,7 +501,7 @@ def test_508_2_the_active_player_gets_priority_after_the_declaration() -> None:
 
 def test_509_1_an_attacked_player_with_only_noncreatures_untapped_cant_block() -> None:
     """P1, attacked, controls an untapped Forest and Sol Ring but no creature: no block is
-    possible (506.3: only creatures block), so no 509.1 gap; the Giant deals 3."""
+    possible (506.3: only creatures block), so P1 isn't asked; the Giant deals 3."""
     scenario = Scenario(2)
     (giant,) = scenario.battlefield(P0, ["Hill Giant"])
     scenario.battlefield(P1, ["Forest", "Sol Ring"])

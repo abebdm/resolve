@@ -97,9 +97,9 @@ def decks_for(players: int, commander: bool, seed: int) -> list[Deck]:
     Most decks hold 8 to 11 cards, so games get past the opening hands into turns and priority
     (a deck of 6 or fewer would make every player draw from an empty library during 103.5 and
     lose at the first state-based-action check, 704.5b). Every deck holds two elves, so random
-    agents soon cast one, and the game stops at the 509.1 gap once an elf attacks a player
-    who could block it (or at 903.8, casting a commander); long games are the patient and
-    land-only tests' job. Seat 1's deck is empty in one game of four.
+    agents soon cast one, and elves attack and block; a Commander game stops at the 903.8 gap
+    once a commander is cast; long games are the patient and land-only tests' job. Seat 1's
+    deck is empty in one game of four.
     """
     commanders = [DAYBREAKER] if commander else []
     return [
@@ -372,9 +372,9 @@ def fuzz(
 def test_a_disallowed_gap_is_a_failure() -> None:
     with pytest.raises(FuzzFailure, match=r"gap that isn't allowed: 601\.2: a test gap"):
         fuzz(GapOnAnswer("601.2"), allowed_gaps=())
-    config = GameConfig.standard()
-    with pytest.raises(FuzzFailure, match=r"isn't allowed: 509\.1"):
-        fuzz_game(config, [deck(10, 2), deck(10, 2)], 2, allowed_gaps=())
+    config = GameConfig.commander_game()
+    with pytest.raises(FuzzFailure, match=r"isn't allowed: 903\.8"):
+        fuzz_game(config, decks_for(2, True, 2), 2, allowed_gaps=())
 
 
 def test_an_allowed_gap_ends_the_game() -> None:
@@ -1178,3 +1178,9 @@ def test_a_checked_log_entry_that_changes_is_reported(change: str) -> None:
         expected = f"state.event_log[{len(state.event_log)}] was replaced or removed"
     problems = state_problems(state, checked)
     assert any(p.startswith(expected) for p in problems)
+
+
+def test_from_m3_3_the_only_allowed_gap_is_the_commander_tax() -> None:
+    """M3.3 declares blockers, so 509.1 is no longer a gap a fuzz game may end at; only casting
+    a commander from the command zone (903.8, the commander tax, M7) is (the M3 plan, section 8)."""
+    assert fuzz_tool.ALLOWED_GAPS == ("903.8",)

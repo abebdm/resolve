@@ -367,6 +367,9 @@ DECIMATE = spell(
 
 # Invented cards for targets, damage and destruction (M2.6).
 TEST_WALL = vanilla("Test Wall", "{1}{W}", 2.0, "Wall", ("0", "4"), "W")
+# 510.1c's example creatures (M3.3): a 4/3 attacker and a 2/3 blocker, as vanilla creatures.
+TEST_REGROWER = vanilla("Test Regrower", "{3}{G}", 4.0, "Elf", ("4", "3"), "G")
+TEST_SPAWN = vanilla("Test Spawn", "{2}{B}", 3.0, "Vampire", ("2", "3"), "B")
 TEST_SHATTER = spell("Test Shatter", "{1}{R}", 2.0, "Instant", ["R"], "Destroy target artifact.")
 TEST_TOTEM = spell("Test Totem", "{1}", 1.0, "Enchantment", [], "")
 TEST_ARTIFACT_LAND_CREATURE: dict[str, Any] = {
@@ -472,6 +475,11 @@ ALABORN_GRENADIER = keyword_creature(
 WALL_OF_STONE = keyword_creature(
     "Wall of Stone", "{1}{R}{R}", 3.0, "Wall", ("0", "8"), "R",
     "Defender (This creature can't attack.)",
+)  # fmt: skip
+# M3.3's combat-rules card (Oracle text from the 2026-10-31 snapshot).
+PALACE_GUARD = keyword_creature(
+    "Palace Guard", "{2}{W}", 3.0, "Human Soldier", ("1", "4"), "W",
+    "This creature can block any number of creatures.",
 )  # fmt: skip
 # Invented creatures with haste (702.10c) and a {T} mana ability (M3.1).
 TEST_HASTY_ELVES = keyword_creature(

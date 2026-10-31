@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 from resolve.cards.definitions import (
     basic_lands,
     card_draw,
+    combat,
     cost_reducers,
     counterspells,
     keyword_examples,
@@ -209,8 +210,9 @@ def scenario_registry() -> CardRegistry:
     """``registry()`` plus the other basic lands, the vanilla creatures, the mana rocks, mana
     creatures and nonbasic lands, the removal spells, the fixture instants (Test Shock, Test
     Shatter), sorcery (Test Ponder), split card, nonbasic Forest, Test Raptor, Test Mox ({0}),
-    Test Ember ({1}{C}), Test Wall (0/4), Test Totem (an enchantment), Test Artifact Land
-    Creature, the keyword example cards, Cryptic Command and M2.8's keyword fixtures (and an
+    Test Ember ({1}{C}), Test Wall (0/4), Test Regrower (4/3) and Test Spawn (2/3), Test Totem
+    (an enchantment), Test Artifact Land Creature, the keyword example cards, Palace Guard,
+    Cryptic Command and M2.8's keyword fixtures (and an
     adventurer, Test Adventurer // Test Quest), the cost reducers, Test Thorn (a cost increase),
     Test Growth ({X}{G}), Rishkar's Expertise, Test Two-Tone ({1}{W/U}{W/U}, no text), Test
     Insight (no mana cost) and Test Quake // Test Pebble (a split card of mana value 8 whose
@@ -228,6 +230,8 @@ def scenario_registry() -> CardRegistry:
         "Test Mox",
         "Test Ember",
         "Test Wall",
+        "Test Regrower",
+        "Test Spawn",
         "Test Totem",
         "Test Artifact Land Creature",
         "Test Artifact Totem",
@@ -253,6 +257,7 @@ def scenario_registry() -> CardRegistry:
             TEST_TWIN_BLAZE,
             TEST_COMMAND,
             *keyword_examples.DEFINITIONS,
+            *combat.DEFINITIONS,
             *counterspells.DEFINITIONS,
             TEST_REDPROOF_BEAR,
             TEST_MULTIPROOF_KNIGHT,
@@ -284,6 +289,7 @@ def scenario_database() -> CardDatabase:
     extra += [fx.COMMAND_TOWER, fx.TEMPLE_OF_THE_FALSE_GOD, fx.AVACYNS_PILGRIM]
     extra += [fx.IXALLIS_LOREKEEPER, fx.TEST_RAPTOR, fx.TEST_MOX, fx.TEST_EMBER]
     extra += [fx.SWORDS_TO_PLOWSHARES, fx.CHANDRAS_IGNITION, fx.DECIMATE, fx.TEST_WALL]
+    extra += [fx.TEST_REGROWER, fx.TEST_SPAWN]
     extra += [fx.TEST_SHATTER, fx.TEST_TOTEM, fx.TEST_ARTIFACT_LAND_CREATURE]
     extra += [fx.FIERY_CONFLUENCE, fx.TEST_BLAZE, fx.TEST_TWIN_BLAZE, fx.TEST_COMMAND]
     extra += [fx.TEST_ARTIFACT_TOTEM]
@@ -293,7 +299,7 @@ def scenario_database() -> CardDatabase:
     extra += [fx.TEST_PRISMATIC_KNIGHT, fx.TEST_UNTOUCHABLE, fx.TEST_TWIN_FLASH]
     extra += [fx.TEST_INDESTRUCTIBLE_WISP, fx.TEST_STUBBORN_SPELL, fx.TEST_GOLD_SHOCK]
     extra += [fx.TEST_HASTY_ELVES, fx.TEST_TWICE_HASTY_ELVES]
-    extra += [fx.RAGING_GOBLIN, fx.ALABORN_GRENADIER, fx.WALL_OF_STONE]
+    extra += [fx.RAGING_GOBLIN, fx.ALABORN_GRENADIER, fx.WALL_OF_STONE, fx.PALACE_GUARD]
     extra += [fx.TEST_ADVENTURER, fx.EMERALD_MEDALLION, fx.KINJALLIS_CALLER, fx.TEST_THORN]
     extra += [fx.TEST_GROWTH, fx.RISHKARS_EXPERTISE, fx.TEST_TWO_TONE, fx.TEST_INSIGHT]
     extra += [fx.BIG_SPLIT_CARD]
@@ -332,7 +338,7 @@ def request_of(state: GameState) -> DecisionRequest:
 
 class Passer:
     """An agent that keeps every hand and passes every priority (for turn-structure tests), and
-    declares no attackers.
+    declares no attackers or blockers.
 
     It discards the first cards of its hand when it must (514.1) and keeps any order offered.
     ``requests`` records every request it answered, with the turn's number, phase and step at
@@ -359,6 +365,8 @@ class Passer:
                 value = Order(tuple(range(len(options))))
             case DecisionKind.DECLARE_ATTACKERS, ChooseAssignment(items=items):
                 value = Assignment(((),) * len(items))  # 508.1a: no creature attacks
+            case DecisionKind.DECLARE_BLOCKERS, ChooseAssignment(items=items):
+                value = Assignment(((),) * len(items))  # 509.1a: no creature blocks
             case _:
                 raise AssertionError(f"Passer can't answer {request.kind}: {request.prompt}")
         return DecisionAnswer(request.id, request.player, value)
