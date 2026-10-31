@@ -421,8 +421,9 @@ def test_attacking_and_blocking_set_the_combat_state() -> None:
     scenario.at(TurnStep.COMBAT_DAMAGE, begin=True)
     scenario.attacking(P1, bears, giant, declared=False)
     scenario.blocking(wall, giant)
-    combat = scenario._state.turn.combat  # pyright: ignore[reportPrivateUsage]
-    assert combat is not None
+    turn = scenario._state.turn  # pyright: ignore[reportPrivateUsage]
+    assert turn is not None and turn.combat is not None
+    combat = turn.combat
     assert list(combat.attackers) == [bears, giant]
     assert combat.attackers[bears].blocked is False
     assert combat.attackers[giant] == AttackRecord(giant, AttackPlayer(P1), False, True)
@@ -445,7 +446,7 @@ def test_blocks_need_blockers_declared_and_an_attacker() -> None:
     (wall,) = scenario.battlefield(P1, ["Test Wall"])
     scenario.at(TurnStep.DECLARE_BLOCKERS, begin=True)
     scenario.attacking(P1, bears)
-    with pytest.raises(ScenarioError, match="509.1"):
+    with pytest.raises(ScenarioError, match=r"509\.1"):
         scenario.blocking(wall, bears)
 
     scenario = Scenario(2)

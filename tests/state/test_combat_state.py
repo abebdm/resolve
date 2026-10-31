@@ -104,6 +104,18 @@ def _attack(record: AttackRecord) -> Callable[[GameState, dict[str, ObjectId]], 
     return change
 
 
+def _forest_attacks(state: GameState, ids: dict[str, ObjectId]) -> None:
+    _attack(AttackRecord(ids["forest"], AttackPlayer(P1)))(state, ids)
+
+
+def _missing_object_attacks(state: GameState, ids: dict[str, ObjectId]) -> None:
+    _attack(AttackRecord(ObjectId(999), AttackPlayer(P1)))(state, ids)
+
+
+def _attacks_the_active_player(state: GameState, ids: dict[str, ObjectId]) -> None:
+    _attack(AttackRecord(ids["giant"], AttackPlayer(P0)))(state, ids)
+
+
 def _outside_combat(state: GameState, ids: dict[str, ObjectId]) -> None:
     assert state.turn is not None
     state.turn.phase, state.turn.step = Phase.POSTCOMBAT_MAIN, None
@@ -157,18 +169,9 @@ def _unknown_defender(state: GameState, ids: dict[str, ObjectId]) -> None:
         (_outside_combat, "a combat state outside the combat phase (506.1, 511.3)"),
         (_opponent_attacks, "isn't controlled by the active player (506.2, 508.1a)"),
         (_attacker_blocks, "isn't controlled by a defending player (509.1a)"),
-        (
-            lambda state, ids: _attack(AttackRecord(ids["forest"], AttackPlayer(P1)))(state, ids),
-            "isn't a creature on the battlefield (506.3)",
-        ),
-        (
-            lambda state, ids: _attack(AttackRecord(ObjectId(999), AttackPlayer(P1)))(state, ids),
-            "isn't a creature on the battlefield (506.3)",
-        ),
-        (
-            lambda state, ids: _attack(AttackRecord(ids["giant"], AttackPlayer(P0)))(state, ids),
-            "attacks player 0, who isn't a defending player (506.2)",
-        ),
+        (_forest_attacks, "isn't a creature on the battlefield (506.3)"),
+        (_missing_object_attacks, "isn't a creature on the battlefield (506.3)"),
+        (_attacks_the_active_player, "attacks player 0, who isn't a defending player (506.2)"),
         (_blocks_a_non_attacker, "which isn't attacking (509.1a)"),
         (_blocks_another_players_attacker, "attacking another player (509.1a, 802.4a)"),
         (_blocked_says_unblocked, "has blockers but isn't recorded as blocked (509.1h)"),
@@ -183,8 +186,8 @@ def test_combat_state_invariants(
 ) -> None:
     state, ids = combat_board()
     change(state, ids)
-    assert any(problem in found for found in invariant_violations(state)), (
-        invariant_violations(state)
+    assert any(problem in found for found in invariant_violations(state)), invariant_violations(
+        state
     )
 
 

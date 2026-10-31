@@ -29,7 +29,12 @@ The functions and their defaults:
 | ``can_lose_game``                | 104.3                | yes                                  |
 | ``deciding_player``              | 723.5                | the player themselves                |
 | ``knows_identity``               | 400.2, 402.3, 723.4  | zones, owners and controllers        |
-| ``can_tap_for_cost``             | 302.6                | the summoning-sickness rule          |
+| ``summoning_sick``               | 302.6, 702.10b-c     | the summoning-sickness rule; haste   |
+| ``attack_declarer``              | 508.1                | the active player                    |
+| ``block_declarer``               | 509.1                | each defending player                |
+| ``combat_damage_assigner``       | 510.1                | the creature's controller            |
+| ``combat_damage_amount``         | 510.1a               | the creature's power                 |
+| ``blocks_allowed``               | 509.1a               | one attacker                         |
 | ``player_abilities``             | 702.11c, 702.18a     | none                                 |
 | ``opening_hand_actions``         | 103.6                | none                                 |
 | ``mulligan_options``             | 103.5                | keep, mulligan                       |
@@ -394,39 +399,83 @@ class SicknessPurpose(Enum):
 
 
 def summoning_sick(state: GameState, obj: ObjectId, purpose: SicknessPurpose) -> bool:
-    """STUB (M3.1, tests first): 302.6 without haste."""
-    if not characteristics(state, obj).is_a(CardType.CREATURE):
+    """Whether the permanent ``obj`` has summoning sickness for ``purpose`` (302.6): it is a
+    creature that hasn't been under its controller's control continuously since their most
+    recent turn began, and has no haste.
+
+    - "Since their most recent turn began": it came under that control (``entered_turn``) during
+      a turn before the one their most recent turn began in (``last_turn_began``); before a
+      player's first turn every creature of theirs is sick.
+    - Only creatures (302.6): a land or a noncreature artifact never is.
+    - Haste (702.10b, 702.10c) lifts it for both purposes; multiple instances are redundant
+      (702.10d).
+    - ``TAP_ABILITY``: {T} or {Q} in the cost of the creature's own activated ability (302.6,
+      602.5a; ``TapSelfCost``). ``ATTACK``: declaring it as an attacker (302.6, 508.1a; M3.2).
+
+    It is the one place effects plug in: "as though it had haste" (Thousand-Year Elixir, for
+    ``TAP_ABILITY`` only, M5). Tapping creatures for other costs (convoke 702.51, improvise
+    702.126, crew 702.122, saddle, "tap an untapped creature you control") ignores summoning
+    sickness and must not call it.
+    """
+    from resolve.cards.keywords import Haste, has_keyword
+
+    computed = characteristics(state, obj)
+    if not computed.is_a(CardType.CREATURE):
+        return False
+    if has_keyword(computed, Haste):
         return False
     permanent = state.object(obj)
     if permanent.controller is None:
-        return True
+        raise EngineError(
+            f"object {obj} isn't a permanent; only permanents have summoning sickness"
+        )
     last_turn = state.player(permanent.controller).last_turn_began
-    return not (last_turn is not None and permanent.entered_turn < last_turn)
+    return last_turn is None or permanent.entered_turn >= last_turn
+
+
+# --- Combat ------------------------------------------------------------------------------------
 
 
 def attack_declarer(state: GameState) -> PlayerId:
-    """STUB (M3.1, tests first)."""
-    raise NotImplementedRule("508.1: attack_declarer")
+    """The player who declares attackers (508.1): the active player. Master Warcraft and Odric,
+    Master Tactician (M5) choose instead; 723.5's control of a player is ``deciding_player``."""
+    turn = state.turn
+    if turn is None:
+        raise EngineError("attackers are declared only during a turn (508.1)")
+    return turn.active_player
 
 
 def block_declarer(state: GameState, player: PlayerId) -> PlayerId:
-    """STUB (M3.1, tests first)."""
-    raise NotImplementedRule("509.1: block_declarer")
+    """The player who declares the blocks of the defending player ``player`` (509.1): that
+    player. Master Warcraft and Brutal Hordechief (M5) choose instead."""
+    return player
 
 
 def combat_damage_assigner(state: GameState, creature: ObjectId) -> PlayerId:
-    """STUB (M3.1, tests first)."""
-    raise NotImplementedRule("510.1: combat_damage_assigner")
+    """The player who assigns ``creature``'s combat damage (510.1): its controller. Banding
+    (702.22j-k, M9) lets the defending player assign an attacker's damage, or the attacking
+    player a blocker's."""
+    controller = state.object(creature).controller
+    if controller is None:
+        raise EngineError(f"object {creature} isn't a permanent, so it deals no combat damage")
+    return controller
 
 
 def combat_damage_amount(state: GameState, creature: ObjectId) -> int:
-    """STUB (M3.1, tests first)."""
-    raise NotImplementedRule("510.1a: combat_damage_amount")
+    """The combat damage ``creature`` assigns (510.1a): its power. Doran, the Siege Tower and
+    Belligerent Brontodon (M5) make it the toughness. A result of 0 or less means it assigns none
+    (510.1a); the combat damage step applies that."""
+    power = characteristics(state, creature).power
+    if power is None:
+        raise EngineError(f"object {creature} has no power, so it isn't a creature (208.3)")
+    return power
 
 
 def blocks_allowed(state: GameState, creature: ObjectId) -> int | None:
-    """STUB (M3.1, tests first)."""
-    raise NotImplementedRule("509.1a: blocks_allowed")
+    """How many attackers ``creature`` may block (509.1a): one. ``None`` means any number
+    (Palace Guard, its own static ability in M3.3); "can block an additional creature" (M5)
+    raises it."""
+    return 1
 
 
 def player_abilities(state: GameState, player: PlayerId) -> tuple[Ability, ...]:

@@ -16,8 +16,8 @@ through an object's computed characteristics (``has_keyword``, ``keywords``) or,
   ``Destroy`` and by 704.5g.
 
 "From A and from B" and "from each [characteristic]" are separate abilities (702.16g-h,
-702.11f-g: ``protection_from_each_color``). Multiple instances are redundant (702.8b, 702.10d, 702.11h,
-702.12c, 702.16m, 702.18b): each is checked on its own, and none counts twice.
+702.11f-g: ``protection_from_each_color``). Multiple instances are redundant (702.8b, 702.10d,
+702.11h, 702.12c, 702.16m, 702.18b): each is checked on its own, and none counts twice.
 """
 
 from __future__ import annotations

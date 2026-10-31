@@ -12,6 +12,9 @@ An answer space describes every answer a decision accepts:
 |                  |                       | ``minimum_each``, adding up to ``total``           |
 | ``ChooseCounts`` | ``Amounts(amounts)``  | one amount per option, each from 0 to its maximum,  |
 |                  |                       | adding up to ``total``                              |
+| ``ChooseAssign-  | ``Assignment(picks)`` | per item, strictly increasing indices of its own    |
+| ment``           |                       | choices, at most its maximum                        |
+| ``DistributeEach``| ``AmountsEach(...)`` | per part, ``Amounts`` valid for that ``Distribute`` |
 
 ``ChooseOne`` lists every option (an *enumerated* space, which the AI will search). The others are
 *constrained* spaces, described by bounds rather than listed.
@@ -387,26 +390,110 @@ class ChooseCounts(AnswerSpace):
 
 @dataclass(frozen=True)
 class ChooseAssignment(AnswerSpace):
-    """STUB (M3.1, tests first)."""
+    """Give each item up to its maximum of its own choices (design.md §17.8, §17.18).
+
+    The space of attack and block declarations (508.1, 509.1): the items are the creatures that
+    may attack (or block), ``choices[i]`` what item ``i`` may pick (what it may attack, or the
+    attackers it may block), and ``maxima[i]`` how many it may pick (1 to attack, 508.1b;
+    ``defaults.blocks_allowed`` to block, 509.1a). Any item may pick nothing ("if any", 508.1a,
+    509.1a). The answer, ``Assignment``, gives each item strictly increasing choice indices, so
+    one declaration has exactly one answer (§6).
+
+    Declaration-wide restrictions, requirements and the picks that need a cost (508.1c-d,
+    509.1b-c; §17.18's constraint model) join it in M3.4 and M3.5.
+    """
 
     items: tuple[Option, ...]
     choices: tuple[tuple[Option, ...], ...]
     maxima: tuple[int, ...]
 
-    def validate(self, answer: AnswerValue) -> None:
-        from resolve.errors import NotImplementedRule
+    def __post_init__(self) -> None:
+        if not self.items:
+            raise ValueError("ChooseAssignment needs at least one item")
+        if len(self.choices) != len(self.items):
+            raise ValueError(
+                f"ChooseAssignment needs one tuple of choices per item: {len(self.items)} items, "
+                f"{len(self.choices)} choices"
+            )
+        if len(self.maxima) != len(self.items):
+            raise ValueError(
+                f"ChooseAssignment needs one maximum per item: {len(self.items)} items, "
+                f"{len(self.maxima)} maxima"
+            )
+        for choices, maximum in zip(self.choices, self.maxima, strict=True):
+            if not 0 <= maximum <= len(choices):
+                raise ValueError(
+                    f"ChooseAssignment needs each maximum from 0 to its item's number of "
+                    f"choices, got {maximum} for {len(choices)}"
+                )
 
-        raise NotImplementedRule("508.1: ChooseAssignment")
+    def validate(self, answer: AnswerValue) -> None:
+        picks = _expect(answer, Assignment).picks
+        # An agent's answer: its types are checked, not trusted.
+        if not isinstance(picks, tuple):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise InvalidAnswer("the picks must be a tuple, one per item")
+        items: tuple[object, ...] = picks  # pyright: ignore[reportUnknownVariableType]
+        if len(items) != len(self.items):
+            raise InvalidAnswer(f"give exactly one tuple of picks for each of {len(self.items)}")
+        for number, (item, choices, maximum) in enumerate(
+            zip(items, self.choices, self.maxima, strict=True)
+        ):
+            indices = _int_tuple(item, f"item {number}'s picks")
+            if any(index < 0 or index >= len(choices) for index in indices):
+                raise InvalidAnswer(
+                    f"item {number} has {len(choices)} choices; its picks must be indices of them"
+                )
+            if any(a >= b for a, b in pairwise(indices)):
+                raise InvalidAnswer(
+                    f"item {number}'s picks must be strictly increasing (no repeats)"
+                )
+            if len(indices) > maximum:
+                raise InvalidAnswer(f"item {number} may pick at most {maximum}")
+
+    def chosen(self, answer: Assignment) -> tuple[tuple[Option, ...], ...]:
+        """The choices an (already validated) answer gives each item, in choice order."""
+        return tuple(
+            tuple(choices[index] for index in picks)
+            for choices, picks in zip(self.choices, answer.picks, strict=True)
+        )
 
 
 @dataclass(frozen=True)
 class DistributeEach(AnswerSpace):
-    """STUB (M3.1, tests first)."""
+    """Divide each part's total among its recipients, the parts answered together (design.md
+    §17.8, §17.18).
+
+    The space of combat damage assignment (510.1): one ``Distribute`` per creature that has a
+    choice, ``sources[i]`` naming the creature whose damage ``parts[i]`` divides. It is one
+    space because 510.1e checks the total assignment, not each creature's; the constraint that
+    needs it (trample's lethal damage first, 702.19b) joins it in M3.6. The answer,
+    ``AmountsEach``, gives one ``Amounts`` per part, each valid for its part.
+    """
 
     sources: tuple[Option, ...]
     parts: tuple[Distribute, ...]
 
-    def validate(self, answer: AnswerValue) -> None:
-        from resolve.errors import NotImplementedRule
+    def __post_init__(self) -> None:
+        if not self.parts:
+            raise ValueError("DistributeEach needs at least one part")
+        if len(self.sources) != len(self.parts):
+            raise ValueError(
+                f"DistributeEach needs one source per part: {len(self.parts)} parts, "
+                f"{len(self.sources)} sources"
+            )
 
-        raise NotImplementedRule("510.1: DistributeEach")
+    def validate(self, answer: AnswerValue) -> None:
+        amounts = _expect(answer, AmountsEach).amounts
+        # An agent's answer: its types are checked, not trusted.
+        if not isinstance(amounts, tuple):  # pyright: ignore[reportUnnecessaryIsInstance]
+            raise InvalidAnswer("the amounts must be a tuple, one Amounts per part")
+        each: tuple[object, ...] = amounts  # pyright: ignore[reportUnknownVariableType]
+        if len(each) != len(self.parts):
+            raise InvalidAnswer(f"give exactly one Amounts for each of {len(self.parts)} parts")
+        for number, (part_answer, part) in enumerate(zip(each, self.parts, strict=True)):
+            if not isinstance(part_answer, Amounts):  # pyright: ignore[reportUnnecessaryIsInstance]
+                raise InvalidAnswer(f"part {number}'s answer must be an Amounts")
+            try:
+                part.validate(part_answer)
+            except InvalidAnswer as error:
+                raise InvalidAnswer(f"part {number}: {error}") from None

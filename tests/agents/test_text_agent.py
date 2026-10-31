@@ -465,8 +465,7 @@ def test_render_request_lists_each_part_with_its_recipients() -> None:
         6, P0, P0, DecisionKind.ASSIGN_COMBAT_DAMAGE, space, "Assign.", ("510.1",)
     )
     assert render_request(request, own).splitlines()[1] == (
-        f"  0: Llanowar Elves #{ids['elves']} divides 3 (at least 0 each): "
-        "0: player 1, 1: player 2"
+        f"  0: Llanowar Elves #{ids['elves']} divides 3 (at least 0 each): 0: player 1, 1: player 2"
     )
 
 
@@ -474,7 +473,7 @@ def test_render_request_lists_each_part_with_its_recipients() -> None:
     ("space", "text", "kind"),
     [
         (ATTACKS, "1; -\n", DecisionKind.DECLARE_ATTACKERS),
-        (BLOCKS, "2 0; 1 2 0\n", DecisionKind.DECLARE_BLOCKERS),
+        (BLOCKS, "2; 1 2 0\n", DecisionKind.DECLARE_BLOCKERS),
         (DAMAGE, "nonsense\n0 4; 2\n", DecisionKind.ASSIGN_COMBAT_DAMAGE),
     ],
 )

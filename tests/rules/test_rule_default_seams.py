@@ -83,6 +83,7 @@ from tests.seams import (
     patch_may_cast_now,
     patch_next_turn,
     patch_object,
+    patch_sickness,
     patch_skip,
 )
 

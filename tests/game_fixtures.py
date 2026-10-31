@@ -36,8 +36,8 @@ from resolve.cards.keywords import (
     Protection,
     protection_from_each_color,
 )
-from resolve.cards.primitives.cost_modifiers import CostModifier, ModifierStep, SpellCostModifier
 from resolve.cards.primitives.abilities import ActivatedManaAbility
+from resolve.cards.primitives.cost_modifiers import CostModifier, ModifierStep, SpellCostModifier
 from resolve.cards.primitives.costs import TapSelfCost
 from resolve.cards.primitives.effects import AddMana, DealDamage, Destroy, DrawCards
 from resolve.cards.primitives.refs import TargetRef

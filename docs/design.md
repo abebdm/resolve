@@ -299,9 +299,10 @@ module's docstring; the recipe is in `docs/howto.md` ("Add or change a rule defa
   `has_sorcery_timing`, `may_cast_now` (305.2, 305.1, 601.3, 903.8, 117.1a), with legality
   questions asked through `resolve.rules.legality.allowed` (§17.2);
 - `resolved_spell_destination` (608.2n);
-- from M3 (§17.18): `attack_declarer`, `block_declarer`, `combat_damage_assigner`,
-  `combat_damage_amount`, `blocks_allowed` (508.1, 509.1, 509.1a, 510.1, 510.1a), and
-  `summoning_sick(state, obj, purpose)` (302.6), which replaces `can_tap_for_cost`.
+- from M3 (§17.18; built in M3.1, called from M3.2 on): `attack_declarer`, `block_declarer`,
+  `combat_damage_assigner`, `combat_damage_amount`, `blocks_allowed` (508.1, 509.1, 509.1a,
+  510.1, 510.1a), and `summoning_sick(state, obj, purpose)` (302.6, 702.10b-c), which replaced
+  `can_tap_for_cost`.
 
 ---
 
@@ -335,6 +336,8 @@ independent of the kind:
 | `ChooseNumber(minimum, maximum or None)` | `Number(value)` | within bounds |
 | `Distribute(recipients, total, minimum_each)` | `Amounts(amounts)` | one per recipient, each at least the minimum, adding up to the total (601.2d) |
 | `ChooseCounts(options, maxima, total)` | `Amounts(amounts)` | one per option, each from 0 to its maximum, adding up to the total (601.2h; "Paying costs" below) |
+| `ChooseAssignment(items, choices, maxima)` | `Assignment(picks)` | per item, strictly increasing indices of its own choices, at most its maximum (508.1, 509.1; constraints from M3.4, §17.18) |
+| `DistributeEach(sources, parts)` | `AmountsEach(amounts)` | one `Amounts` per part, each valid for that part's `Distribute`; `sources[i]` is the creature whose damage part `i` divides (510.1, 510.1e; constraints from M3.6, §17.18) |
 
 Every outcome has exactly one valid answer (canonical forms), which helps AI search. Options are
 typed (`PlayerOption`, `ObjectOption`, `NamedOption`, and the priority actions `PassOption`,

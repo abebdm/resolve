@@ -368,9 +368,7 @@ class Scenario:
             )
         return self
 
-    def attacking(
-        self, target: PlayerId, *attackers: ObjectId, declared: bool = True
-    ) -> Scenario:
+    def attacking(self, target: PlayerId, *attackers: ObjectId, declared: bool = True) -> Scenario:
         """Make ``attackers`` attack the player ``target`` (508.1k; ``declared=False``: put onto
         the battlefield attacking, 508.4), in this order after any earlier ones.
 

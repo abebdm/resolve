@@ -170,6 +170,17 @@ drive decisions with a script.
    arrived during turn N. `at(...)` sets each player's most recent turn as if turns had gone
    around in order up to this one (the active player's is `number`); `at(..., last_turns=
    {player: n or None})` overrides it.
+   Haste lifts it (`defaults.summoning_sick`; fixture Test Hasty Elves, whose mana ability is
+   its ability 1, after Haste). In a seam test, replace it with `seams.patch_sickness`.
+8. **Combat (506-511).** After `at(...)` in the combat phase, `scenario.attacking(player,
+   *creatures)` makes creatures attack that player (`declared=False`: put onto the battlefield
+   attacking, 508.4) and `scenario.blocking(blocker, *attackers)` makes a creature block, in
+   declaration order. The first call creates `TurnState.combat` with the defending players
+   (`resolve.rules.combat.defending_players`: every opponent still in the game, 506.2, 802.2).
+   Blocks need blockers to have been declared: `at(Step.DECLARE_BLOCKERS)` with priority, or a
+   later combat step; from then on an attacker not named by `blocking` is unblocked (509.1h).
+   Legality is left to the invariants, checked by `build()`. Until M3.2 ends combat (511.3), a
+   scenario combat state outlives its phase if the test plays on into the postcombat main phase.
 
 ### Write an engine test with test-only tasks
 
@@ -324,7 +335,7 @@ all six pass. Before pushing:
 1. Add the kind to `DecisionKind` (`src/resolve/decisions/kinds.py`) with its CR rule in a
    comment, if it isn't there yet.
 2. Use an existing answer space if one fits (`ChooseOne`, `ChooseSubset`, `ChooseOrder`,
-   `ChooseNumber`, `Distribute`, `ChooseCounts`). A new space goes in `spaces.py`: a frozen `AnswerSpace` with a
+   `ChooseNumber`, `Distribute`, `ChooseCounts`, `ChooseAssignment`, `DistributeEach`). A new space goes in `spaces.py`: a frozen `AnswerSpace` with a
    `__post_init__` that raises `ValueError` if the space can't be answered, a `validate` that
    raises `InvalidAnswer`, a canonical answer value (one valid answer per outcome), and tests of
    valid, invalid, empty and boundary answers in `tests/decisions/test_answer_spaces.py`. Give

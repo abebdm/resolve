@@ -252,9 +252,11 @@ The approved plan is `docs/plans/m3.md` (steps M3.0 to M3.9).
 - [x] The plan, and its documentation changes: design.md §17.18, the coverage-map and
   torture-test corrections (M3.0).
 - [ ] The answer spaces `ChooseAssignment` (attack and block declarations as constraint models)
-  and `DistributeEach` (combat damage assignment), with agent support (M3.1, M3.4, M3.5).
+  and `DistributeEach` (combat damage assignment), with agent support (M3.1, M3.4, M3.5). M3.1
+  ✓: both spaces without constraints, the random and text agents, the fuzz probes.
 - [ ] The combat rule defaults: `attack_declarer`, `block_declarer`, `combat_damage_assigner`,
-  `combat_damage_amount`, `blocks_allowed` (rule 12; M3.1 to M3.3).
+  `combat_damage_amount`, `blocks_allowed` (rule 12; M3.1 to M3.3). M3.1 ✓: the functions,
+  each returning the CR's default; their callers and seam tests come with M3.2 and M3.3.
 - [ ] Beginning of combat, declare attackers, declare blockers, combat damage, end of combat
   (506–511), and removing the 508.1 gap (M3.2, M3.3).
 - [ ] Attack and block requirements and restrictions (508.1c-d, 509.1b-c), with attack and block
@@ -268,12 +270,14 @@ The approved plan is `docs/plans/m3.md` (steps M3.0 to M3.9).
   (M3.2 to M3.6).
 - [ ] Defender (702.3); the retired evergreen evasion keywords intimidate (702.13), landwalk
   (702.14) and fear (702.36) (M3.2, M3.4).
-- [ ] Haste (702.10), including its 302.6 part (M3.1, M3.2).
+- [ ] Haste (702.10), including its 302.6 part (M3.1, M3.2). M3.1 ✓: `Haste` and its {T} half
+  (702.10c) in `summoning_sick`; its attack half is read once attackers are declared (M3.2).
 - [ ] Summoning sickness for attacking (302.6): `defaults.can_tap_for_cost` becomes
   `summoning_sick(state, obj, purpose)`, for a creature's own {T}/{Q} abilities and for
   attacking; the tap costs of convoke (702.51), improvise (702.126), crew (702.122), saddle and
   "tap an untapped creature you control" ignore summoning sickness and never call it (M3.1;
-  docs/decisions.md, 2026-10-21 "Deferred from M2.4").
+  docs/decisions.md, 2026-10-21 "Deferred from M2.4"). M3.1 ✓: the rename and both purposes;
+  declaring attackers reads `ATTACK` in M3.2.
 - [ ] Protection's blocking part (702.16f, j, k) (M3.4).
 - [ ] Multiplayer attacks: choosing which player each creature attacks, blocks and damage
   assignment in APNAP order (802), leaving room for attacking planeswalkers and battles (306,
@@ -293,7 +297,7 @@ The approved plan is `docs/plans/m3.md` (steps M3.0 to M3.9).
 
 **From M2:** protection's blocking part (702.16f) and combat damage reach the 702.16e gap in
 `DamageDealt.apply`; `TapAll` taps without attacking; haste plugs into
-`defaults.can_tap_for_cost` (renamed `summoning_sick` in M3.1).
+`defaults.can_tap_for_cost` (renamed `summoning_sick` in M3.1 ✓).
 
 ## M4 — Activated and triggered abilities
 
@@ -399,7 +403,7 @@ The approved plan is `docs/plans/m3.md` (steps M3.0 to M3.9).
 
 **From M2:**
 
-- Control changes must set `GameObject.entered_turn` (302.6, `defaults.summoning_sick` from M3.1)
+- Control changes must set `GameObject.entered_turn` (302.6, `defaults.summoning_sick` from M3.1 ✓)
   and remove the creature from combat (506.4, `remove_from_combat`).
 - Keyword grants need no engine change (read from characteristics); Leyline of Sanctity and
   Shalai give players hexproof through `defaults.player_abilities` (seam test
@@ -576,8 +580,8 @@ completes a step (CLAUDE.md, "Documentation requirements").
   `spells` and `creatures` deck recipes with commanders in every other Commander game, allows
   the 508.1 and 903.8 gaps, and reports casts, resolutions, reversals, casts per card and gaps.
 - **Done (M2.4, mana abilities beyond basic lands, and summoning sickness):** 302.6 in
-  `defaults.can_tap_for_cost`, with `GameObject.entered_turn` (set as a permanent is created)
-  and `Player.last_turn_began` (set by `TurnBegan`); primitives `ManaPaymentCost`,
+  `defaults.can_tap_for_cost` (renamed `summoning_sick` in M3.1), with `GameObject.entered_turn`
+  (set as a permanent is created) and `Player.last_turn_began` (set by `TurnBegan`); primitives `ManaPaymentCost`,
   `AddManaOfAnyColor`, `ControlsAtLeast` (`resolve.cards.primitives.conditions`),
   `SpendOnlyOnSubtype` (`resolve.cards.primitives.restrictions`) and
   `ActivatedManaAbility.activate_only_if`; `ManaRestriction`, `Mana.restriction`, `ForSpell` and
@@ -688,6 +692,23 @@ completes a step (CLAUDE.md, "Documentation requirements").
   (`tests/tooling/test_coverage_map.py`) checking `tools/gaps.py` against the coverage map, whose
   M2 rows read "M2 ✓"; rules tests for enchantment spells (303.1-303.2) and exile (406.2-406.3).
   M2 is complete.
+- **Done (M3.0, documentation):** the approved M3 plan (`docs/plans/m3.md`), design.md §17.18,
+  the M3 checklist, the coverage-map and torture-test corrections.
+- **Done (M3.1, foundations: the spaces, summoning sickness, the combat state):** the answer
+  spaces `ChooseAssignment` (answer `Assignment`: per item, strictly increasing choice indices,
+  at most its maximum) and `DistributeEach` (`sources` and one `Distribute` per part, answer
+  `AmountsEach`) in `resolve.decisions.spaces`, without constraints yet, with `RandomAgent`,
+  `TextAgent` (`;` between items or parts) and the fuzz harness's `invalid_answers`; the
+  decision kind `CHOOSE_ATTACK_TARGET` (508.4); `defaults.summoning_sick(state, obj, purpose)`
+  (`SicknessPurpose.TAP_ABILITY`, `ATTACK`), renamed from `can_tap_for_cost` and read by
+  `TapSelfCost`, with haste; the keyword `Haste` (`resolve.cards.keywords.evergreen`); the
+  combat defaults `attack_declarer`, `block_declarer`, `combat_damage_assigner`,
+  `combat_damage_amount` and `blocks_allowed`, each returning the CR's default with no caller
+  yet; `resolve.state.combat` (`CombatState`, `AttackRecord`, `BlockRecord`, `AttackPlayer`,
+  `TurnState.combat`) with its invariants (`resolve.state.invariants`), `PlayerView.combat`
+  (`CombatView`) and the text renderer's combat line; `resolve.rules.combat.defending_players`
+  (506.2, 802.2); `Scenario.attacking` and `Scenario.blocking`; fixtures Test Hasty Elves and
+  Test Twice Hasty Elves. No game behavior changed but haste's {T} half.
 
 ---
 
@@ -758,7 +779,7 @@ earlier milestones must leave room for every row in this map.
 | 213 | Information Below the Text Box | out of scope | — | no game rules |
 | 300 | General | M1 ✓ | E |  |
 | 301 | Artifacts | M2 ✓ (casting artifact spells: M2.3 ✓); Equipment M4; Vehicles M5; Fortifications M9 | E |  |
-| 302 | Creatures | M1 ✓, M2 ✓ (302.6 for {T} costs: M2.4 ✓), M3 (302.6 for attacking) | E | `can_tap_for_cost` (renamed `summoning_sick` in M3.1), `GameObject.entered_turn`, `Player.last_turn_began` |
+| 302 | Creatures | M1 ✓, M2 ✓ (302.6 for {T} costs: M2.4 ✓), M3 (302.6 for attacking) | E | `defaults.summoning_sick(state, obj, purpose)` (M3.1 ✓, both purposes; declaring attackers reads it in M3.2), `GameObject.entered_turn`, `Player.last_turn_began` |
 | 303 | Enchantments | M2 ✓ (casting enchantment spells, 303.1-303.2: M2.3); Auras M4 | E | Sagas, Classes, Cases and Rooms have their own rows |
 | 304 | Instants | M2 ✓ (304.1 timing: M2.3, flash M2.8; 304.2 resolving: M2.6); 304.4 with the first effect that puts a card onto the battlefield (M4); 304.5 with activated abilities (M4) | E |  |
 | 305 | Lands | M1 ✓; modifiers M5 | E | `land_plays_allowed`, `land_play_options`: default functions in place (M2.1 ✓) |
@@ -876,7 +897,7 @@ earlier milestones must leave room for every row in this map.
 | 702.7 | First Strike | M3 | E | D |
 | 702.8 | Flash | M2 ✓ (M2.8 ✓) | E | `Flash`, read by `may_cast_now` |
 | 702.9 | Flying | M3 | E | D |
-| 702.10 | Haste | M3 | E | D; the 302.6 hook is `defaults.can_tap_for_cost` (M2.4 ✓), renamed `summoning_sick(state, obj, purpose)` in M3.1 for both halves |
+| 702.10 | Haste | M3 | E | D; `Haste` in `defaults.summoning_sick(state, obj, purpose)` for both halves (M3.1 ✓; 702.10c tested with Test Hasty Elves); 702.10b tested with declaring attackers (M3.2) |
 | 702.11 | Hexproof | M2 ✓ (M2.8); a player with "hexproof from" (702.11d) M5, with its first card | E | D; including "hexproof from"; a player's from `player_abilities` |
 | 702.12 | Indestructible | M2 ✓ (M2.8 ✓) | E | D |
 | 702.13 | Intimidate | M3 | E | retired evergreen |

@@ -11,8 +11,8 @@ Tests call these, and the fuzz harness (``tools/fuzz.py``) calls them before eve
 - ``mutable_parts``: anything inside a value that would break ``Immutable``'s promise. Deeply
   immutable means scalars, enums, tuples and frozen ``Immutable`` dataclasses only.
 - ``invariant_violations``: zone bookkeeping and counters (400.1, 400.3, 109.4, 613.7d), spells
-  only on the stack and cast records only on permanents (112.1, 400.7d), and the turn and
-  priority bookkeeping (500.1, 117.3, 117.4).
+  only on the stack and cast records only on permanents (112.1, 400.7d), the turn and
+  priority bookkeeping (500.1, 117.3, 117.4), and the combat state (506-509).
 
 Each returns a list of problems, each naming where it is (``state.tasks[0].events``); empty means
 fine. The ``check_*`` functions raise ``EngineError`` listing them.
@@ -27,8 +27,9 @@ from resolve.decisions.kinds import DecisionKind
 from resolve.errors import EngineError
 from resolve.state.checkpoint import Checkpoint
 from resolve.state.game import GameObject, GameState, Player, zone_list
+from resolve.state.ids import ObjectId
 from resolve.state.rng import Rng
-from resolve.state.turn import TURN_SEQUENCE, Step, gives_priority
+from resolve.state.turn import TURN_SEQUENCE, Phase, Step, gives_priority
 from resolve.state.zones import Zone, ZoneKind
 from resolve.values import Immutable
 
@@ -261,6 +262,7 @@ def invariant_violations(state: GameState) -> list[str]:
             problems.append(f"card {card_id} is stored under the wrong key (its id is {card.id})")
 
     problems += _turn_violations(state)
+    problems += _combat_violations(state)
 
     if state.pending is not None and not state.tasks:
         problems.append("a decision is pending but the task stack is empty")
@@ -320,6 +322,80 @@ def _turn_violations(state: GameState) -> list[str]:
             )
         if not gives_priority(turn.step) and turn.step is not Step.CLEANUP:
             problems.append(f"priority is asked in the {turn.step} step (502.4)")
+    return problems
+
+
+def _combat_violations(state: GameState) -> list[str]:
+    """The combat state (506-509): only in a combat phase; attackers are creatures on the
+    battlefield the active player controls, attacking defending players; blockers are creatures
+    a defending player controls, blocking creatures that attack that player; an attacker with
+    blockers is blocked (509.1h); an attacker means attacks happened (508.8)."""
+    from resolve.data.types import CardType
+    from resolve.effects.characteristics import characteristics
+
+    turn = state.turn
+    combat = None if turn is None else turn.combat
+    if turn is None or combat is None:
+        return []
+    problems: list[str] = []
+    if turn.phase is not Phase.COMBAT:
+        problems.append("a combat state outside the combat phase (506.1, 511.3)")
+    count = len(state.players)
+    defending = combat.defending_players
+    for player in defending:
+        if not 0 <= player < count:
+            problems.append(f"defending player {player} isn't a player")
+    if len(set(defending)) != len(defending):
+        problems.append(f"the defending players {defending} aren't distinct")
+    if turn.active_player in defending:
+        problems.append("the active player can't be a defending player (506.2)")
+
+    def creature_on_battlefield(obj: ObjectId) -> bool:
+        game_object = state.objects.get(obj)
+        return (
+            game_object is not None
+            and game_object.zone.kind is ZoneKind.BATTLEFIELD
+            and characteristics(state, obj).is_a(CardType.CREATURE)
+        )
+
+    for obj, record in combat.attackers.items():
+        where = f"attacker {obj}"
+        if record.attacker != obj:
+            problems.append(f"{where} is stored under the wrong key ({record.attacker})")
+        if not creature_on_battlefield(obj):
+            problems.append(f"{where} isn't a creature on the battlefield (506.3)")
+        elif state.objects[obj].controller != turn.active_player:
+            problems.append(f"{where} isn't controlled by the active player (506.2, 508.1a)")
+        target = record.target
+        if target is not None and target.player not in defending:
+            problems.append(
+                f"{where} attacks player {target.player}, who isn't a defending player (506.2)"
+            )
+        if combat.blockers_of(obj) and record.blocked is not True:
+            problems.append(f"{where} has blockers but isn't recorded as blocked (509.1h)")
+        if not combat.attacks_happened:
+            problems.append(f"{where} is attacking but attacks_happened is False (508.8)")
+    for obj, block in combat.blockers.items():
+        where = f"blocker {obj}"
+        if block.blocker != obj:
+            problems.append(f"{where} is stored under the wrong key ({block.blocker})")
+        controller = None
+        if not creature_on_battlefield(obj):
+            problems.append(f"{where} isn't a creature on the battlefield (506.3)")
+        else:
+            controller = state.objects[obj].controller
+            if controller not in defending:
+                problems.append(f"{where} isn't controlled by a defending player (509.1a)")
+        if len(set(block.blocking)) != len(block.blocking):
+            problems.append(f"{where} blocks the same attacker twice")
+        for attacker in block.blocking:
+            record = combat.attackers.get(attacker)
+            if record is None:
+                problems.append(f"{where} blocks {attacker}, which isn't attacking (509.1a)")
+            elif record.target is not None and controller not in (None, record.target.player):
+                problems.append(
+                    f"{where} blocks {attacker}, attacking another player (509.1a, 802.4a)"
+                )
     return problems
 
 

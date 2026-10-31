@@ -68,7 +68,16 @@ SAMPLES = 2000
 # Critical values of the chi-square distribution at p = 0.001, by degrees of freedom (standard
 # tables). A uniform sampler exceeds them one time in a thousand; the seeds are fixed, so the
 # tests are deterministic, and a biased sampler (see the naive-shuffle test) exceeds them by far.
-CHI_SQUARE_0_001 = {2: 13.816, 8: 26.124, 3: 16.266, 4: 18.467, 5: 20.515, 6: 22.458, 14: 36.123, 23: 49.728}
+CHI_SQUARE_0_001 = {
+    2: 13.816,
+    8: 26.124,
+    3: 16.266,
+    4: 18.467,
+    5: 20.515,
+    6: 22.458,
+    14: 36.123,
+    23: 49.728,
+}
 
 
 def chi_square(counts: Counter[object], categories: int) -> float:

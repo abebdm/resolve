@@ -54,8 +54,12 @@ G = ManaType.GREEN
 TAP = defaults.SicknessPurpose.TAP_ABILITY
 
 
-def offered(state: GameState, obj: ObjectId) -> bool:
-    return ActivateAbilityOption(obj, 0) in options(state)
+def offered(state: GameState, obj: ObjectId, ability: int = 0) -> bool:
+    return ActivateAbilityOption(obj, ability) in options(state)
+
+
+# Test Hasty Elves' and Test Twice Hasty Elves' mana ability comes after their haste.
+HASTY_MANA, TWICE_HASTY_MANA = 1, 2
 
 
 def test_302_6_a_creature_cant_tap_for_mana_the_turn_it_arrives() -> None:
@@ -249,10 +253,10 @@ def test_302_6_a_creature_with_haste_can_pay_its_tap_cost_the_turn_it_arrives() 
     scenario.at(Phase.PRECOMBAT_MAIN, number=3)
     state = scenario.build()
     assert not defaults.summoning_sick(state, hasty, TAP)
-    assert offered(state, hasty)
+    assert offered(state, hasty, HASTY_MANA)
     run_script(state, cast(bears, P0))
-    assert ActivateAbilityOption(hasty, 0) in options(state)
-    run_script(state, activate(hasty), activate(forest))
+    assert ActivateAbilityOption(hasty, HASTY_MANA) in options(state)
+    run_script(state, activate(hasty, HASTY_MANA), activate(forest))
     assert state.objects[hasty].tapped
     assert names(state, STACK) == ["Grizzly Bears"]  # paid with the hasty Elves' {G}
 
@@ -277,8 +281,8 @@ def test_702_10c_haste_works_on_another_players_turn_and_for_a_player_who_hasnt_
     scenario.at(Phase.PRECOMBAT_MAIN, number=1, passed=[P0, P1], priority=P2)
     state = scenario.build()
     assert not offered(state, elves)
-    assert offered(state, hasty)
-    run_script(state, activate_with_priority(hasty))
+    assert offered(state, hasty, HASTY_MANA)
+    run_script(state, activate_with_priority(hasty, HASTY_MANA))
     assert state.player(P2).mana_pool == [Mana(G, hasty)]
 
 
@@ -289,7 +293,7 @@ def test_702_10d_two_instances_of_haste_are_one() -> None:
     scenario.at(Phase.PRECOMBAT_MAIN, number=1)
     state = scenario.build()
     assert not defaults.summoning_sick(state, hasty, TAP)
-    assert offered(state, hasty)
+    assert offered(state, hasty, TWICE_HASTY_MANA)
 
 
 def test_702_10_haste_doesnt_let_a_tapped_creature_tap() -> None:
@@ -299,4 +303,4 @@ def test_702_10_haste_doesnt_let_a_tapped_creature_tap() -> None:
     scenario.tap(hasty)
     scenario.at(Phase.PRECOMBAT_MAIN, number=1)
     state = scenario.build()
-    assert not offered(state, hasty)
+    assert not offered(state, hasty, HASTY_MANA)

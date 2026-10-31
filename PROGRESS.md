@@ -24,7 +24,7 @@ Task: implement step M3.1 of `docs/plans/m3.md` (user prompt in session; branch
 
 ## In progress
 
-- Implementing.
+- Implemented; docs updated; running the full suite and fuzz, then the test-reviewer.
 
 ## Next
 

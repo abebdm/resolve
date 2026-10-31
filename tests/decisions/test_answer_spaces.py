@@ -247,7 +247,11 @@ def test_choose_counts_survives_copy_and_pickle() -> None:
 
 # --- ChooseAssignment (508.1, 509.1; design.md 17.8, 17.18) -------------------------------------
 
-BEARS, GIANT, LIONS = ObjectOption(ObjectId(20)), ObjectOption(ObjectId(21)), ObjectOption(ObjectId(22))
+BEARS, GIANT, LIONS = (
+    ObjectOption(ObjectId(20)),
+    ObjectOption(ObjectId(21)),
+    ObjectOption(ObjectId(22)),
+)
 P1, P2 = PlayerOption(PlayerId(1)), PlayerOption(PlayerId(2))
 
 
@@ -262,7 +266,9 @@ def blocks() -> ChooseAssignment:
     (as if it could block any number, Palace Guard) up to three; the third has no choices."""
     attackers = (BEARS, GIANT, LIONS)
     blocker_a, blocker_b, blocker_c = (ObjectOption(ObjectId(n)) for n in (30, 31, 32))
-    return ChooseAssignment((blocker_a, blocker_b, blocker_c), (attackers, attackers, ()), (1, 3, 0))
+    return ChooseAssignment(
+        (blocker_a, blocker_b, blocker_c), (attackers, attackers, ()), (1, 3, 0)
+    )
 
 
 def test_choose_assignment_accepts_one_pick_tuple_per_item() -> None:
@@ -332,9 +338,7 @@ def test_choose_assignment_has_one_valid_answer_per_outcome() -> None:
     """Two items, three choices each, at most two picks each: 1 + 3 + 3 = 7 subsets each."""
     space = ChooseAssignment((BEARS, GIANT), ((P1, P2, BEARS), (P1, P2, BEARS)), (2, 2))
     picks = [(), (0,), (1,), (2,), (0, 1), (0, 2), (1, 2), (1, 0), (0, 0), (0, 1, 2)]
-    valid = [
-        Assignment((a, b)) for a in picks for b in picks if accepts(space, Assignment((a, b)))
-    ]
+    valid = [Assignment((a, b)) for a in picks for b in picks if accepts(space, Assignment((a, b)))]
     assert len(valid) == len(set(valid)) == 49
 
 

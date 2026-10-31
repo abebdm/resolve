@@ -12,6 +12,8 @@ Agents only ever see a ``PlayerView``: a frozen snapshot holding what one player
 - **The turn**: its number, the active player, the phase and step, and who holds priority are
   public (``TurnView``), as is whether each player has lost or left the game, each mana pool
   (announced when its player passes, 106.4b) and which permanents are tapped.
+- **Combat** is public (``CombatView``): the defending players, what each attacker attacks, the
+  blockers and the attackers each blocks, and which attackers are blocked (506-509).
 - **The pending decision**: everyone sees who is deciding and what kind of decision it is; only
   the deciding player gets the request itself.
 - **The log**: the entries this player may see, and the redacted form of those hidden from them
@@ -211,6 +213,19 @@ def view_for(state: GameState, viewer: PlayerId) -> PlayerView:
             for task in state.tasks  # the bottom first: the outermost action
             if (payment := task.payment_under_way()) is not None
         ),
+        combat=_combat_view(state),
+    )
+
+
+def _combat_view(state: GameState) -> CombatView | None:
+    combat = None if state.turn is None else state.turn.combat
+    if combat is None:
+        return None
+    return CombatView(
+        combat.defending_players,
+        tuple(combat.attackers.values()),
+        tuple(combat.blockers.values()),
+        combat.attacks_happened,
     )
 
 
