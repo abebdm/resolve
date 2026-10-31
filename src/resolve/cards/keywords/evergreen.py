@@ -1,10 +1,12 @@
-"""Evergreen keyword abilities of M2 (702.8, 702.11, 702.12, 702.16, 702.18).
+"""Evergreen keyword abilities (702.8, 702.10, 702.11, 702.12, 702.16, 702.18).
 
 Each is an ``Ability`` value a definition lists (or, from M5, an effect grants), read only
 through an object's computed characteristics (``has_keyword``, ``keywords``) or, for a player,
 ``defaults.player_abilities``. What each one does lives where the rule it changes is decided:
 
 - ``Flash`` (702.8a): instant timing, in ``defaults.may_cast_now``.
+- ``Haste`` (702.10b-c): no summoning sickness, in ``defaults.summoning_sick`` (302.6), for its
+  {T} abilities and (from M3.2, with declaring attackers) for attacking.
 - ``Hexproof``, ``Shroud`` and ``Protection`` (702.11b-d, 702.18a, 702.16b, 702.16j): the
   prohibitions of ``legality.allowed(TargetAction)``, used by ``targeting.target_problem``.
   Protection's other parts arrive with their systems: blocking (702.16f, M3), Auras and Equipment
@@ -14,7 +16,7 @@ through an object's computed characteristics (``has_keyword``, ``keywords``) or,
   ``Destroy`` and by 704.5g.
 
 "From A and from B" and "from each [characteristic]" are separate abilities (702.16g-h,
-702.11f-g: ``protection_from_each_color``). Multiple instances are redundant (702.8b, 702.11h,
+702.11f-g: ``protection_from_each_color``). Multiple instances are redundant (702.8b, 702.10d, 702.11h,
 702.12c, 702.16m, 702.18b): each is checked on its own, and none counts twice.
 """
 
@@ -38,6 +40,17 @@ class Flash(Ability):
     @property
     def text(self) -> str:
         return "Flash"
+
+
+@dataclass(frozen=True)
+class Haste(Ability):
+    """702.10b-c: this creature can attack, and its controller can activate its abilities whose
+    cost includes {T} or {Q}, even if it hasn't been under their control continuously since their
+    most recent turn began (302.6)."""
+
+    @property
+    def text(self) -> str:
+        return "Haste"
 
 
 @dataclass(frozen=True)

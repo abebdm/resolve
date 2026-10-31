@@ -1,12 +1,13 @@
 """Keyword abilities and keyword actions (CR 701-702), built from primitives.
 
-- ``evergreen``: flash, hexproof, shroud, indestructible, protection (702.8, 702.11, 702.12,
-  702.16, 702.18), with ``has_keyword`` and ``keywords``;
+- ``evergreen``: flash, haste, hexproof, shroud, indestructible, protection (702.8, 702.10,
+  702.11, 702.12, 702.16, 702.18), with ``has_keyword`` and ``keywords``;
 - ``qualities``: what protection and "hexproof from" are from (702.16a).
 """
 
 from resolve.cards.keywords.evergreen import (
     Flash,
+    Haste,
     Hexproof,
     Indestructible,
     Protection,
@@ -31,6 +32,7 @@ __all__ = [
     "ColorQuality",
     "Everything",
     "Flash",
+    "Haste",
     "Hexproof",
     "Indestructible",
     "MonocoloredQuality",

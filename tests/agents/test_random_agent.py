@@ -9,13 +9,17 @@ import pytest
 from resolve.agents.random_agent import DEFAULT_UNBOUNDED_SPAN, RandomAgent
 from resolve.decisions.spaces import (
     Amounts,
+    AmountsEach,
     AnswerSpace,
+    Assignment,
+    ChooseAssignment,
     ChooseCounts,
     ChooseNumber,
     ChooseOne,
     ChooseOrder,
     ChooseSubset,
     Distribute,
+    DistributeEach,
     Number,
     Order,
     Pick,
@@ -49,6 +53,14 @@ SPACES: list[AnswerSpace] = [
     ChooseCounts(OPTIONS[:2], (2, 1), 2),
     ChooseCounts(OPTIONS[:2], (2, 1), 0),
     ChooseCounts(OPTIONS[:1], (5,), 5),
+    ChooseAssignment(OPTIONS[:2], (OPTIONS[2:], OPTIONS[2:]), (1, 1)),
+    ChooseAssignment(OPTIONS[:3], (OPTIONS, (), OPTIONS[:2]), (4, 0, 1)),
+    ChooseAssignment(OPTIONS[:1], ((),), (0,)),
+    DistributeEach(OPTIONS[:1], (Distribute(OPTIONS[:3], 7, minimum_each=0),)),
+    DistributeEach(
+        OPTIONS[:2],
+        (Distribute(OPTIONS[:2], 0, minimum_each=0), Distribute(OPTIONS[2:], 5, minimum_each=0)),
+    ),
 ]
 
 SAMPLES = 2000
@@ -56,7 +68,7 @@ SAMPLES = 2000
 # Critical values of the chi-square distribution at p = 0.001, by degrees of freedom (standard
 # tables). A uniform sampler exceeds them one time in a thousand; the seeds are fixed, so the
 # tests are deterministic, and a biased sampler (see the naive-shuffle test) exceeds them by far.
-CHI_SQUARE_0_001 = {3: 16.266, 4: 18.467, 5: 20.515, 6: 22.458, 14: 36.123, 23: 49.728}
+CHI_SQUARE_0_001 = {2: 13.816, 8: 26.124, 3: 16.266, 4: 18.467, 5: 20.515, 6: 22.458, 14: 36.123, 23: 49.728}
 
 
 def chi_square(counts: Counter[object], categories: int) -> float:
@@ -187,6 +199,51 @@ def test_choose_counts_with_one_answer_gives_it() -> None:
     assert agent.random_value(ChooseCounts(OPTIONS[:2], (2, 1), 0)) == Amounts((0, 0))
     assert agent.random_value(ChooseCounts(OPTIONS[:1], (5,), 5)) == Amounts((5,))
     assert agent.random_value(ChooseCounts(OPTIONS[:2], (1, 1), 2)) == Amounts((1, 1))
+
+
+def test_random_agent_answers_inside_both_spaces() -> None:
+    """Over many seeds, every answer to ``ChooseAssignment`` and ``DistributeEach`` validates
+    (the combat spaces, design.md 17.18)."""
+    combat = [s for s in SPACES if isinstance(s, ChooseAssignment | DistributeEach)]
+    assert len(combat) == 5
+    for seed in range(50):
+        agent = RandomAgent(seed)
+        for space in combat:
+            for _ in range(20):
+                space.validate(agent.random_value(space))
+
+
+def test_choose_assignment_picks_each_item_like_a_subset() -> None:
+    """Each item, as ``ChooseSubset`` from 0 to its maximum: a size uniformly in range, then each
+    subset of that size equally likely. Three choices, at most two: sizes 0, 1 and 2 equally
+    often, and the three single picks and three pairs each equally often."""
+    agent = RandomAgent(seed=15)
+    space = ChooseAssignment(OPTIONS[:1], (OPTIONS[:3],), (2,))
+    answers = [agent.random_value(space) for _ in range(SAMPLES * 3)]
+    picks = [a.picks[0] for a in answers if isinstance(a, Assignment)]
+    assert len(picks) == len(answers)
+    assert_uniform(Counter[object](len(p) for p in picks), 3)
+    assert_uniform(Counter[object](p for p in picks if len(p) == 1), 3)
+    assert_uniform(Counter[object](p for p in picks if len(p) == 2), 3)
+
+
+def test_choose_assignment_picks_the_items_independently() -> None:
+    """Two items, two choices each, at most one: each item's three answers reached with every
+    answer of the other (nine in all)."""
+    agent = RandomAgent(seed=16)
+    space = ChooseAssignment(OPTIONS[:2], (OPTIONS[2:], OPTIONS[2:]), (1, 1))
+    seen = {agent.random_value(space) for _ in range(SAMPLES)}
+    assert len(seen) == 9
+
+
+def test_distribute_each_is_uniform_over_the_answers() -> None:
+    """Two parts, each 2 between two recipients with minimum 0: 3 x 3 = 9 answers."""
+    agent = RandomAgent(seed=17)
+    part = Distribute(OPTIONS[:2], 2, minimum_each=0)
+    space = DistributeEach(OPTIONS[2:], (part, part))
+    counts = Counter[object](agent.random_value(space) for _ in range(SAMPLES * 3))
+    assert AmountsEach((Amounts((2, 0)), Amounts((0, 2)))) in counts
+    assert_uniform(counts, 9)
 
 
 def test_the_same_seed_gives_the_same_answers() -> None:

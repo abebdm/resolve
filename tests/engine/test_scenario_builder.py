@@ -15,6 +15,7 @@ from resolve.decisions.spaces import Number, PlayerOption
 from resolve.engine.api import pending_decision, view_for
 from resolve.engine.start import StartGame
 from resolve.errors import DeckError, EngineError, InvalidAnswer, NotImplementedRule
+from resolve.state.combat import AttackPlayer, AttackRecord, BlockRecord
 from resolve.state.config import GameConfig
 from resolve.state.game import turn_order
 from resolve.state.ids import PlayerId
@@ -395,3 +396,77 @@ def test_tasks_given_to_build_run_before_the_turn_resumes() -> None:
     run_script(state, Step(Number(2)), Step(Number(4)))
     request = pending_decision(state)
     assert request is not None and request.kind is DecisionKind.PRIORITY_ACTION
+
+
+# --- Combat (506-511) --------------------------------------------------------------------------
+
+
+def test_attacking_and_blocking_set_the_combat_state() -> None:
+    """In the declare attackers step (blocks not declared yet) an attacker's blocked status is
+    undecided; once blockers are declared it is unblocked unless ``blocking`` names it (509.1h).
+    Two players: the defending player is the nonactive one (506.2)."""
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    scenario.at(TurnStep.DECLARE_ATTACKERS)
+    scenario.attacking(P1, bears)
+    state = scenario.build()
+    assert state.turn is not None and state.turn.combat is not None
+    assert state.turn.combat.defending_players == (P1,)
+    assert state.turn.combat.attackers[bears] == AttackRecord(bears, AttackPlayer(P1))
+    assert state.turn.combat.attacks_happened
+
+    scenario = Scenario(2)
+    bears, giant = scenario.battlefield(P0, ["Grizzly Bears", "Hill Giant"])
+    (wall,) = scenario.battlefield(P1, ["Test Wall"])
+    scenario.at(TurnStep.COMBAT_DAMAGE, begin=True)
+    scenario.attacking(P1, bears, giant, declared=False)
+    scenario.blocking(wall, giant)
+    combat = scenario._state.turn.combat  # pyright: ignore[reportPrivateUsage]
+    assert combat is not None
+    assert list(combat.attackers) == [bears, giant]
+    assert combat.attackers[bears].blocked is False
+    assert combat.attackers[giant] == AttackRecord(giant, AttackPlayer(P1), False, True)
+    assert combat.blockers[wall] == BlockRecord(wall, (giant,))
+
+
+def test_combat_needs_the_combat_phase() -> None:
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    with pytest.raises(ScenarioError, match="combat phase"):
+        scenario.attacking(P1, bears)
+    scenario.at(Phase.POSTCOMBAT_MAIN)
+    with pytest.raises(ScenarioError, match="combat phase"):
+        scenario.attacking(P1, bears)
+
+
+def test_blocks_need_blockers_declared_and_an_attacker() -> None:
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    (wall,) = scenario.battlefield(P1, ["Test Wall"])
+    scenario.at(TurnStep.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, bears)
+    with pytest.raises(ScenarioError, match="509.1"):
+        scenario.blocking(wall, bears)
+
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    (wall,) = scenario.battlefield(P1, ["Test Wall"])
+    scenario.at(TurnStep.DECLARE_BLOCKERS)
+    with pytest.raises(ScenarioError, match="isn't attacking"):
+        scenario.blocking(wall, bears)
+    scenario.attacking(P1, bears)
+    with pytest.raises(ScenarioError, match="already attacking"):
+        scenario.attacking(P1, bears)
+    scenario.blocking(wall, bears)
+    with pytest.raises(ScenarioError, match="already blocking"):
+        scenario.blocking(wall, bears)
+
+
+def test_an_illegal_combat_is_refused_when_built() -> None:
+    """The builder leaves legality to the invariants: an attacker of the nonactive player."""
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    scenario.at(TurnStep.DECLARE_ATTACKERS)
+    scenario.attacking(P1, bears)
+    with pytest.raises(EngineError, match="active player"):
+        scenario.build()

@@ -47,7 +47,8 @@ class TapSelfCost(Cost):
     """{T}: tap this permanent (107.5). An already tapped permanent can't pay it (118.3).
 
     A creature's {T} ability also needs the creature to have been controlled continuously since
-    its controller's most recent turn began (302.6, 602.5a); ``defaults.can_tap_for_cost`` decides.
+    its controller's most recent turn began, unless it has haste (302.6, 602.5a, 702.10c);
+    ``defaults.summoning_sick`` decides.
     """
 
     def can_pay(self, state: GameState, source: ObjectId, player: PlayerId) -> bool:
@@ -56,7 +57,7 @@ class TapSelfCost(Cost):
         obj = state.object(source)
         if obj.zone.kind is not ZoneKind.BATTLEFIELD or obj.tapped:
             return False
-        return defaults.can_tap_for_cost(state, source)  # 302.6
+        return not defaults.summoning_sick(state, source, defaults.SicknessPurpose.TAP_ABILITY)
 
     def payment(self, state: GameState, source: ObjectId, player: PlayerId) -> tuple[Event, ...]:
         return (PermanentTapped(obj=source, rules=("107.5", "701.26a")),)

@@ -35,6 +35,7 @@ from resolve.engine.payment import PayCosts
 from resolve.errors import NotImplementedRule
 from resolve.events.base import LogEntry
 from resolve.rules import defaults
+from resolve.state.combat import AttackRecord, BlockRecord
 from resolve.state.game import GameObject, GameResult, GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana, ManaRestriction, ManaType, PaymentPurpose
@@ -129,6 +130,19 @@ class TurnView(Immutable):
 
 
 @dataclass(frozen=True)
+class CombatView(Immutable):
+    """The combat of the current combat phase, which every player can see (506; design.md
+    §17.18): the defending players (506.2, 802.2), the attackers and the blockers in
+    declaration order, each as its record (``resolve.state.combat``), and whether any creature
+    attacked this combat (508.8)."""
+
+    defending_players: tuple[PlayerId, ...]
+    attackers: tuple[AttackRecord, ...]
+    blockers: tuple[BlockRecord, ...]
+    attacks_happened: bool
+
+
+@dataclass(frozen=True)
 class WaitingFor(Immutable):
     """Who the game is waiting for, and for what kind of decision."""
 
@@ -154,6 +168,7 @@ class PlayerView(Immutable):
     log: tuple[LogEntry, ...]
     result: GameResult | None
     payments: tuple[PaymentView, ...] = ()  # outermost first
+    combat: CombatView | None = None  # during a combat phase
 
 
 def view_for(state: GameState, viewer: PlayerId) -> PlayerView:

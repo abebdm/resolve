@@ -386,26 +386,47 @@ def _knows(obj: GameObject, viewer: PlayerId) -> bool:
 # --- Costs and abilities -----------------------------------------------------------------------
 
 
-def can_tap_for_cost(state: GameState, obj: ObjectId) -> bool:
-    """Whether the permanent ``obj`` may be tapped to pay a cost (302.6, 602.5a): a creature's
-    {T} ability needs it to have been under its controller's control continuously since their
-    most recent turn began. That is, it came under that control (``entered_turn``) during a turn
-    before the one their most recent turn began in (``last_turn_began``); before a player's first
-    turn none of their creatures can. Anything else that isn't a creature may (302.6). Haste
-    (702.10, M3) plugs in here.
+class SicknessPurpose(Enum):
+    """What summoning sickness (302.6) is checked for, by ``summoning_sick``."""
 
-    It is for a permanent's own {T} in an ability's cost (``TapSelfCost``); {Q} (M9) needs the
-    same. Tapping creatures for other costs (convoke 702.51, improvise, crew 702.122, "tap an
-    untapped creature you control") ignores summoning sickness and must not call it. M3's attack
-    half of 302.6 shares the "controlled since the turn began" test.
-    """
+    TAP_ABILITY = "tap ability"  # 302.6, 602.5a: {T} or {Q} in the creature's own ability's cost
+    ATTACK = "attack"  # 302.6, 508.1a
+
+
+def summoning_sick(state: GameState, obj: ObjectId, purpose: SicknessPurpose) -> bool:
+    """STUB (M3.1, tests first): 302.6 without haste."""
     if not characteristics(state, obj).is_a(CardType.CREATURE):
-        return True
+        return False
     permanent = state.object(obj)
     if permanent.controller is None:
-        return False
+        return True
     last_turn = state.player(permanent.controller).last_turn_began
-    return last_turn is not None and permanent.entered_turn < last_turn
+    return not (last_turn is not None and permanent.entered_turn < last_turn)
+
+
+def attack_declarer(state: GameState) -> PlayerId:
+    """STUB (M3.1, tests first)."""
+    raise NotImplementedRule("508.1: attack_declarer")
+
+
+def block_declarer(state: GameState, player: PlayerId) -> PlayerId:
+    """STUB (M3.1, tests first)."""
+    raise NotImplementedRule("509.1: block_declarer")
+
+
+def combat_damage_assigner(state: GameState, creature: ObjectId) -> PlayerId:
+    """STUB (M3.1, tests first)."""
+    raise NotImplementedRule("510.1: combat_damage_assigner")
+
+
+def combat_damage_amount(state: GameState, creature: ObjectId) -> int:
+    """STUB (M3.1, tests first)."""
+    raise NotImplementedRule("510.1a: combat_damage_amount")
+
+
+def blocks_allowed(state: GameState, creature: ObjectId) -> int | None:
+    """STUB (M3.1, tests first)."""
+    raise NotImplementedRule("509.1a: blocks_allowed")
 
 
 def player_abilities(state: GameState, player: PlayerId) -> tuple[Ability, ...]:

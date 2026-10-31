@@ -1,10 +1,12 @@
-"""302.6: summoning sickness, for the {T} abilities of creatures (602.5a).
+"""302.6: summoning sickness, for the {T} abilities of creatures (602.5a), and haste (702.10c).
 
 From the pinned CR:
 
 - 302.6: a creature's activated ability with {T} in its cost can't be activated unless the
   creature has been under its controller's control continuously since their most recent turn
-  began. 602.5a says the same, and that haste (702.10, M3) ignores it.
+  began. 602.5a says the same, and that haste ignores it: 702.10c, a creature with haste may
+  activate its {T} abilities even if it hasn't been controlled continuously since its
+  controller's most recent turn began. 702.10d: multiple instances are redundant.
 - 605.3a: a mana ability may be activated whenever its controller has priority or is paying a
   cost, so the rule applies in both places.
 - Only creatures are affected (302.6 is in the creature section): a land or a noncreature
@@ -13,7 +15,8 @@ From the pinned CR:
 - 400.7: a permanent that entered this turn is a new object, which hasn't been under anyone's
   control since any turn began.
 
-``defaults.can_tap_for_cost`` is the one place this is decided (rule 12; haste plugs in there).
+``defaults.summoning_sick(state, obj, TAP_ABILITY)`` is the one place this is decided (rule 12).
+Its attack half (302.6, 702.10b, 508.1a) is tested with declaring attackers (M3.2).
 """
 
 from __future__ import annotations
@@ -31,6 +34,7 @@ from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana, ManaType
 from resolve.state.turn import Phase, Step
+from resolve.state.zones import STACK
 from tests.casting_support import (
     activate,
     activate_with_priority,
@@ -42,11 +46,12 @@ from tests.casting_support import (
     records,
 )
 from tests.game_fixtures import answer, request_of
-from tests.scenario import Scenario, run_script
-from tests.seams import patch_object
+from tests.scenario import Scenario, names, run_script
+from tests.seams import patch_sickness
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 G = ManaType.GREEN
+TAP = defaults.SicknessPurpose.TAP_ABILITY
 
 
 def offered(state: GameState, obj: ObjectId) -> bool:
@@ -66,7 +71,7 @@ def test_302_6_a_creature_cant_tap_for_mana_the_turn_it_arrives() -> None:
     elves = resolved.permanent
     assert elves is not None and elves in state.battlefield
     assert state.objects[elves].entered_turn == 1
-    assert not defaults.can_tap_for_cost(state, elves)
+    assert defaults.summoning_sick(state, elves, TAP)
     assert not offered(state, elves)
     run_script(state, cast(bears, P0))
     request = request_of(state)
@@ -97,7 +102,7 @@ def test_302_6_it_can_once_its_controllers_turn_has_begun() -> None:
         run_script(state, pass_())
     assert state.turn.step is Step.UPKEEP
     assert state.player(P0).last_turn_began == 3
-    assert defaults.can_tap_for_cost(state, elves)
+    assert not defaults.summoning_sick(state, elves, TAP)
     run_script(state, activate_with_priority(elves))
     assert state.player(P0).mana_pool == [Mana(G, elves)]
 
@@ -127,7 +132,7 @@ def test_302_6_its_controllers_own_turn_counts_only_from_its_beginning() -> None
     (elves,) = scenario.battlefield(P0, ["Llanowar Elves"], entered_turn=3)
     scenario.at(Phase.POSTCOMBAT_MAIN, number=3)
     state = scenario.build()
-    assert not defaults.can_tap_for_cost(state, elves)
+    assert defaults.summoning_sick(state, elves, TAP)
     assert not offered(state, elves)
 
 
@@ -164,8 +169,10 @@ def test_302_6_lands_and_noncreature_artifacts_arent_affected() -> None:
     assert offered(state, ring)
     assert not offered(state, dryad)
     assert offered(state, old_dryad)
-    assert defaults.can_tap_for_cost(state, forest) and defaults.can_tap_for_cost(state, ring)
-    assert not defaults.can_tap_for_cost(state, dryad)
+    assert not defaults.summoning_sick(state, forest, TAP) and not defaults.summoning_sick(
+        state, ring, TAP
+    )
+    assert defaults.summoning_sick(state, dryad, TAP)
 
 
 def test_302_6_a_land_played_this_turn_taps_but_a_land_creature_played_this_turn_doesnt() -> None:
@@ -180,15 +187,16 @@ def test_302_6_a_land_played_this_turn_taps_but_a_land_creature_played_this_turn
     assert not offered(state, played)
 
 
-def test_302_6_goes_through_can_tap_for_cost(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Seam: with ``can_tap_for_cost`` saying yes (as haste will, M3), a creature that arrived this
-    turn offers its ability, with priority and while paying; saying no hides even a Forest's."""
+def test_302_6_goes_through_summoning_sick(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Seam: with ``summoning_sick`` saying no (as Thousand-Year Elixir will, M5), a creature
+    that arrived this turn offers its ability, with priority and while paying; saying yes hides
+    even a Forest's."""
     scenario = Scenario(2)
     (bears,) = scenario.hand(P0, ["Grizzly Bears"])
     (elves,) = scenario.battlefield(P0, ["Llanowar Elves"], entered_turn=1)
     (forest,) = scenario.battlefield(P0, ["Forest"])
     scenario.at(Phase.PRECOMBAT_MAIN, number=1)
-    patch_object(monkeypatch, "can_tap_for_cost", lambda state, obj: True)
+    patch_sickness(monkeypatch, lambda state, obj, purpose: False)
     state = scenario.build()
     assert offered(state, elves)
     run_script(state, cast(bears, P0))
@@ -200,7 +208,7 @@ def test_302_6_goes_through_can_tap_for_cost(monkeypatch: pytest.MonkeyPatch) ->
     (forest,) = scenario.battlefield(P0, ["Forest"])
     (lions,) = scenario.hand(P0, ["Savannah Lions"])
     scenario.at(Phase.PRECOMBAT_MAIN, number=1)
-    patch_object(monkeypatch, "can_tap_for_cost", lambda state, obj: False)
+    patch_sickness(monkeypatch, lambda state, obj, purpose: True)
     state = scenario.build()
     assert not offered(state, forest)
     # Nor while paying: no mana ability is offered, so the cast is reversed at once.
@@ -229,3 +237,66 @@ def test_302_6_every_mana_creature_has_summoning_sickness(name: str) -> None:
     state = scenario.build()
     assert not offered(state, new)
     assert offered(state, old)
+
+
+def test_302_6_a_creature_with_haste_can_pay_its_tap_cost_the_turn_it_arrives() -> None:
+    """702.10c: Test Hasty Elves (Haste; {T}: Add {G}) came under P0's control this turn, yet
+    its {T} ability is offered with priority and while paying, and adds {G}."""
+    scenario = Scenario(2)
+    (hasty,) = scenario.battlefield(P0, ["Test Hasty Elves"], entered_turn=3)
+    (bears,) = scenario.hand(P0, ["Grizzly Bears"])
+    (forest,) = scenario.battlefield(P0, ["Forest"])
+    scenario.at(Phase.PRECOMBAT_MAIN, number=3)
+    state = scenario.build()
+    assert not defaults.summoning_sick(state, hasty, TAP)
+    assert offered(state, hasty)
+    run_script(state, cast(bears, P0))
+    assert ActivateAbilityOption(hasty, 0) in options(state)
+    run_script(state, activate(hasty), activate(forest))
+    assert state.objects[hasty].tapped
+    assert names(state, STACK) == ["Grizzly Bears"]  # paid with the hasty Elves' {G}
+
+
+def test_302_6_without_haste_it_cant() -> None:
+    """The same board with Llanowar Elves (no haste): its ability isn't offered (302.6)."""
+    scenario = Scenario(2)
+    (elves,) = scenario.battlefield(P0, ["Llanowar Elves"], entered_turn=3)
+    scenario.at(Phase.PRECOMBAT_MAIN, number=3)
+    state = scenario.build()
+    assert defaults.summoning_sick(state, elves, TAP)
+    assert not offered(state, elves)
+
+
+def test_702_10c_haste_works_on_another_players_turn_and_for_a_player_who_hasnt_had_a_turn() -> (
+    None
+):
+    """Three players, turn 1: P2 hasn't had a turn (``last_turn_began`` is ``None``), so Llanowar
+    Elves is sick, but Test Hasty Elves taps for mana while P2 holds priority."""
+    scenario = Scenario(3)
+    (elves, hasty) = scenario.battlefield(P2, ["Llanowar Elves", "Test Hasty Elves"])
+    scenario.at(Phase.PRECOMBAT_MAIN, number=1, passed=[P0, P1], priority=P2)
+    state = scenario.build()
+    assert not offered(state, elves)
+    assert offered(state, hasty)
+    run_script(state, activate_with_priority(hasty))
+    assert state.player(P2).mana_pool == [Mana(G, hasty)]
+
+
+def test_702_10d_two_instances_of_haste_are_one() -> None:
+    """Test Twice Hasty Elves (Haste, Haste; {T}: Add {G}) behaves exactly as with one."""
+    scenario = Scenario(2)
+    (hasty,) = scenario.battlefield(P0, ["Test Twice Hasty Elves"], entered_turn=1)
+    scenario.at(Phase.PRECOMBAT_MAIN, number=1)
+    state = scenario.build()
+    assert not defaults.summoning_sick(state, hasty, TAP)
+    assert offered(state, hasty)
+
+
+def test_702_10_haste_doesnt_let_a_tapped_creature_tap() -> None:
+    """Haste lifts only 302.6; an already tapped creature still can't pay {T} (118.3)."""
+    scenario = Scenario(2)
+    (hasty,) = scenario.battlefield(P0, ["Test Hasty Elves"], entered_turn=1)
+    scenario.tap(hasty)
+    scenario.at(Phase.PRECOMBAT_MAIN, number=1)
+    state = scenario.build()
+    assert not offered(state, hasty)

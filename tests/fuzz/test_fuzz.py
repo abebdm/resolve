@@ -30,12 +30,14 @@ from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer, DecisionRequest, validate_answer
 from resolve.decisions.spaces import (
     AnswerSpace,
+    ChooseAssignment,
     ChooseCounts,
     ChooseNumber,
     ChooseOne,
     ChooseOrder,
     ChooseSubset,
     Distribute,
+    DistributeEach,
     Number,
     PlayerOption,
 )
@@ -793,6 +795,14 @@ SPACES: list[AnswerSpace] = [
     Distribute(OPTIONS[:2], 5),
     ChooseCounts(OPTIONS[:2], (2, 1), 2),
     ChooseCounts(OPTIONS, (3, 3, 3), 4),
+    ChooseAssignment(OPTIONS[:2], (OPTIONS[1:], OPTIONS[1:]), (1, 1)),
+    ChooseAssignment(OPTIONS[:1], (OPTIONS,), (3,)),
+    ChooseAssignment(OPTIONS[:1], ((),), (0,)),
+    DistributeEach(OPTIONS[:1], (Distribute(OPTIONS[1:], 3, minimum_each=0),)),
+    DistributeEach(
+        OPTIONS[:2],
+        (Distribute(OPTIONS[:1], 2, minimum_each=0), Distribute(OPTIONS, 0, minimum_each=0)),
+    ),
 ]
 
 

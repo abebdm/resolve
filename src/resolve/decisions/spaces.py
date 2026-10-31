@@ -178,7 +178,22 @@ class Amounts(Immutable):
     amounts: tuple[int, ...]
 
 
-AnswerValue = Pick | PickMany | Order | Number | Amounts
+@dataclass(frozen=True)
+class Assignment(Immutable):
+    """For each item of a ``ChooseAssignment``, in item order, the indices of the choices it
+    picks, in increasing order (none: an empty tuple)."""
+
+    picks: tuple[tuple[int, ...], ...]
+
+
+@dataclass(frozen=True)
+class AmountsEach(Immutable):
+    """For each part of a ``DistributeEach``, in part order, its ``Amounts``."""
+
+    amounts: tuple[Amounts, ...]
+
+
+AnswerValue = Pick | PickMany | Order | Number | Amounts | Assignment | AmountsEach
 
 
 def _is_int(value: object) -> bool:
@@ -368,3 +383,30 @@ class ChooseCounts(AnswerSpace):
                 raise InvalidAnswer(f"each amount must be between 0 and its maximum {maximum}")
         if sum(amounts) != self.total:
             raise InvalidAnswer(f"the amounts must add up to {self.total}, not {sum(amounts)}")
+
+
+@dataclass(frozen=True)
+class ChooseAssignment(AnswerSpace):
+    """STUB (M3.1, tests first)."""
+
+    items: tuple[Option, ...]
+    choices: tuple[tuple[Option, ...], ...]
+    maxima: tuple[int, ...]
+
+    def validate(self, answer: AnswerValue) -> None:
+        from resolve.errors import NotImplementedRule
+
+        raise NotImplementedRule("508.1: ChooseAssignment")
+
+
+@dataclass(frozen=True)
+class DistributeEach(AnswerSpace):
+    """STUB (M3.1, tests first)."""
+
+    sources: tuple[Option, ...]
+    parts: tuple[Distribute, ...]
+
+    def validate(self, answer: AnswerValue) -> None:
+        from resolve.errors import NotImplementedRule
+
+        raise NotImplementedRule("510.1: DistributeEach")
