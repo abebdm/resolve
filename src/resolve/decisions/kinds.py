@@ -33,6 +33,7 @@ class DecisionKind(Enum):
     CAST_DURING_RESOLUTION = "cast_during_resolution"  # 608.2g: which spell to cast, if any
     CHOOSE_COLOR = "choose_color"  # 106.1a, 605.3b: the color of mana an ability adds
     DECLARE_ATTACKERS = "declare_attackers"  # 508.1
+    CHOOSE_ATTACK_TARGET = "choose_attack_target"  # 508.4: what an entering attacker attacks
     DECLARE_BLOCKERS = "declare_blockers"  # 509.1
     ASSIGN_COMBAT_DAMAGE = "assign_combat_damage"  # 510.1
     ORDER_TRIGGERS = "order_triggers"  # 603.3b

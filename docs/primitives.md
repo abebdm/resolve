@@ -290,8 +290,9 @@ that pay it.
 
 ### `TapSelfCost` (`resolve.cards.primitives.costs`)
 {T}: tap this permanent. A tapped permanent, or an object off the battlefield, can't pay it; nor
-can a creature with summoning sickness (`defaults.can_tap_for_cost`).
-- **Rules:** 107.5, 118.3, 701.26a, 302.6, 602.5a.
+can a creature with summoning sickness (`defaults.summoning_sick(state, obj, TAP_ABILITY)`,
+which haste lifts).
+- **Rules:** 107.5, 118.3, 701.26a, 302.6, 602.5a, 702.10c.
 - **Example:** the cost of the Forest's intrinsic ability; Llanowar Elves'.
 
 ### `ManaPaymentCost` (`resolve.cards.primitives.costs`)
@@ -356,6 +357,16 @@ characteristics (`has_keyword(chars, Kind)`, `keywords(chars, Kind)`) or, for a 
 from whatever zone a permission allows (it adds no zone).
 - **Rules:** 702.8a, 702.8b, 117.1a, 304.1.
 - **Example:** Ashcoat Bear: `CardDefinition("Ashcoat Bear", abilities=(Flash(),))`.
+
+### `Haste` (`resolve.cards.keywords.evergreen`)
+The creature can attack, and its {T} and {Q} abilities can be activated, even if it hasn't been
+under its controller's control continuously since their most recent turn began: read by
+`defaults.summoning_sick` for both of its purposes (`SicknessPurpose.TAP_ABILITY`, `ATTACK`).
+Multiple instances are redundant.
+- **Rules:** 702.10a-d, 302.6, 602.5a, 508.1a.
+- **Example:** the fixture Test Hasty Elves (`CardDefinition("Test Hasty Elves",
+  abilities=(Haste(), tap_for_green))`, `tests/game_fixtures.py`); the real example card,
+  Raging Goblin, arrives with declaring attackers (M3.2).
 
 ### `Hexproof(quality=None)` (`resolve.cards.keywords.evergreen`)
 Can't be the target of spells or abilities its controller's (a player's: their) opponents

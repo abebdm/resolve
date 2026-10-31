@@ -43,6 +43,14 @@ def patch_object(
     monkeypatch.setattr(defaults, name, function)
 
 
+def patch_sickness(
+    monkeypatch: pytest.MonkeyPatch,
+    function: Callable[[GameState, ObjectId, defaults.SicknessPurpose], bool],
+) -> None:
+    """Replace ``defaults.summoning_sick``."""
+    monkeypatch.setattr(defaults, "summoning_sick", function)
+
+
 def patch_skip(
     monkeypatch: pytest.MonkeyPatch, function: Callable[[GameState, Segment], bool]
 ) -> None:

@@ -31,7 +31,8 @@ prevention comes with prevention effects). Permanents can make spells cost less 
 generic mana, after any increases, never changing a spell's mana value). A spell can let its
 caster cast another spell from their hand for free while it resolves (with nobody getting
 priority in between, and X counted as 0). Mana comes
-from lands, artifacts and creatures (which can't tap the turn they arrive), including mana of a
+from lands, artifacts and creatures (which can't tap the turn they arrive unless they have
+haste), including mana of a
 color you choose, mana only some spells may use, and abilities that cost mana themselves. The
 cards implemented so far are the basic lands, three vanilla creatures, Sol Ring, Arcane Signet,
 Selesnya Signet, Command Tower, Temple of the False God, Llanowar Elves, Avacyn's Pilgrim,
@@ -48,8 +49,11 @@ lists the hardest cards; a test keeps the map in step with the Comprehensive Rul
 rules the engine still refuses loudly. The rules that cards can change (land plays, hand size,
 the turn sequence, who decides) each live in one function that effects will plug into. The test
 games that check the engine now include players who cast every spell they can, so they reach
-counterspells and the expensive spells. M3 (combat) has an approved plan
-([`docs/plans/m3.md`](docs/plans/m3.md)). **Next:** its first code step, M3.1.
+counterspells and the expensive spells. M3 (combat) is under way
+([`docs/plans/m3.md`](docs/plans/m3.md)): its first step built the groundwork (how attacks,
+blocks and combat damage will be asked and answered, and how a combat is recorded and shown to
+every player), but creatures can't attack yet. **Next:** declaring attackers, and the damage of
+unblocked attackers (M3.2).
 Details:
 "Current status" in [`CLAUDE.md`](CLAUDE.md).
 

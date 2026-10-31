@@ -26,9 +26,12 @@ from resolve.decisions.request import DecisionRequest
 from resolve.decisions.spaces import (
     ActivateAbilityOption,
     Amounts,
+    AmountsEach,
     AnswerSpace,
     AnswerValue,
+    Assignment,
     CastSpellOption,
+    ChooseAssignment,
     ChooseCounts,
     ChooseNumber,
     ChooseOne,
@@ -36,6 +39,7 @@ from resolve.decisions.spaces import (
     ChooseSubset,
     ColorOption,
     Distribute,
+    DistributeEach,
     ManaActivationOption,
     ManaOption,
     ModesOption,
@@ -77,6 +81,12 @@ from tests.scenario import Scenario, run_script
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 OPTIONS = (PlayerOption(P0), PlayerOption(P1), PlayerOption(P2))
+ATTACKS = ChooseAssignment(OPTIONS[:2], (OPTIONS[1:], OPTIONS[1:]), (1, 1))
+BLOCKS = ChooseAssignment(OPTIONS[:2], (OPTIONS, OPTIONS), (1, 3))
+DAMAGE = DistributeEach(
+    OPTIONS[:2],
+    (Distribute(OPTIONS[1:], 4, minimum_each=0), Distribute(OPTIONS[:1], 2, minimum_each=0)),
+)
 
 
 def board() -> tuple[PlayerView, PlayerView, dict[str, ObjectId]]:
@@ -187,6 +197,10 @@ def test_render_request_numbers_the_options_of_a_counts_space() -> None:
         (Distribute(OPTIONS[:2], 3), "adding up to 3."),
         (ChooseCounts(OPTIONS[:2], (2, 1), 2), "at most 2, 1"),
         (ChooseCounts(OPTIONS[:2], (2, 1), 2), "adding up to 2."),
+        (BLOCKS, "For each item in order, type its choice numbers ('-' for none)"),
+        (BLOCKS, "separated by ';'"),
+        (DAMAGE, "For each part in order, type one amount per recipient"),
+        (DAMAGE, "separated by ';'"),
     ],
 )
 def test_render_request_explains_how_to_answer(space: AnswerSpace, hint: str) -> None:
@@ -209,6 +223,12 @@ def test_render_request_explains_how_to_answer(space: AnswerSpace, hint: str) ->
         (ChooseCounts(OPTIONS[:2], (2, 1), 2), "1 1", Amounts((1, 1))),
         (ChooseCounts(OPTIONS[:2], (2, 1), 2), "2,0", Amounts((2, 0))),
         (ChooseOne(OPTIONS), "7", Pick(7)),  # out of range: the engine rejects it, not the parser
+        (ATTACKS, "0; -", Assignment(((0,), ()))),
+        (ATTACKS, " - ; 1 ", Assignment(((), (1,)))),
+        (BLOCKS, "2 0;1,2", Assignment(((0, 2), (1, 2)))),
+        (BLOCKS, "-;-", Assignment(((), ()))),
+        (DAMAGE, "1 3; 2", AmountsEach((Amounts((1, 3)), Amounts((2,))))),
+        (DAMAGE, "4,0;2", AmountsEach((Amounts((4, 0)), Amounts((2,))))),
     ],
 )
 def test_parse_answer(space: AnswerSpace, text: str, value: AnswerValue) -> None:
@@ -223,6 +243,12 @@ def test_parse_answer(space: AnswerSpace, text: str, value: AnswerValue) -> None
         (ChooseOne(OPTIONS), "1 2"),
         (ChooseNumber(0), "1.5"),
         (ChooseOrder(OPTIONS), "-"),
+        (ATTACKS, "0"),  # one item's picks for two items
+        (ATTACKS, "0; 1; 0"),
+        (ATTACKS, "zero; 1"),
+        (ATTACKS, "0;"),
+        (DAMAGE, "1 3"),
+        (DAMAGE, "1 3; -"),
     ],
 )
 def test_parse_answer_refuses_text_of_the_wrong_shape(space: AnswerSpace, text: str) -> None:
@@ -413,3 +439,98 @@ def test_700_2_a_choice_of_modes_is_numbered_as_printed() -> None:
     own, _, _ = board()
     assert describe_option(ModesOption((0, 0, 2)), own) == "modes 1, 1 and 3"
     assert describe_option(ModesOption((1,)), own) == "mode 2"
+
+
+def test_render_request_lists_each_item_with_its_choices() -> None:
+    """A declaration (508.1, 509.1): each item on a line, with its maximum and its numbered
+    choices."""
+    own, _, ids = board()
+    elves = ObjectOption(ids["elves"])
+    space = ChooseAssignment((elves,), ((PlayerOption(P0), PlayerOption(P2)),), (1,))
+    request = DecisionRequest(
+        5, P0, P0, DecisionKind.DECLARE_ATTACKERS, space, "Declare attackers.", ("508.1",)
+    )
+    assert render_request(request, own).splitlines()[:2] == [
+        "Player 0: Declare attackers. (declare_attackers; CR 508.1)",
+        f"  0: Llanowar Elves #{ids['elves']} (at most 1): 0: player 0 (you), 1: player 2",
+    ]
+
+
+def test_render_request_lists_each_part_with_its_recipients() -> None:
+    """A damage assignment (510.1): each creature, the damage it divides, and its recipients."""
+    own, _, ids = board()
+    elves = ObjectOption(ids["elves"])
+    space = DistributeEach((elves,), (Distribute(OPTIONS[1:], 3, minimum_each=0),))
+    request = DecisionRequest(
+        6, P0, P0, DecisionKind.ASSIGN_COMBAT_DAMAGE, space, "Assign.", ("510.1",)
+    )
+    assert render_request(request, own).splitlines()[1] == (
+        f"  0: Llanowar Elves #{ids['elves']} divides 3 (at least 0 each): 0: player 1, 1: player 2"
+    )
+
+
+@pytest.mark.parametrize(
+    ("space", "text", "kind"),
+    [
+        (ATTACKS, "1; -\n", DecisionKind.DECLARE_ATTACKERS),
+        (BLOCKS, "2; 1 2 0\n", DecisionKind.DECLARE_BLOCKERS),
+        (DAMAGE, "nonsense\n0 4; 2\n", DecisionKind.ASSIGN_COMBAT_DAMAGE),
+    ],
+)
+def test_text_agent_answers_the_combat_spaces(
+    space: AnswerSpace, text: str, kind: DecisionKind
+) -> None:
+    """The typed answer comes back as a value the space accepts (the round trip)."""
+    own, _, _ = board()
+    request = DecisionRequest(7, P0, P0, kind, space, "Decide.", ("508.1",))
+    agent, _ = agent_with(text)
+    answer = agent.decide(own, request)
+    space.validate(answer.value)
+    assert parse_answer(space, text.splitlines()[-1]) == answer.value
+
+
+def test_render_view_shows_combat() -> None:
+    """Every player sees the attackers, what each attacks, its blockers and whether it is
+    blocked (506, 509.1h)."""
+    scenario = Scenario(3)
+    bears, giant = scenario.battlefield(P0, ["Grizzly Bears", "Hill Giant"])
+    (wall,) = scenario.battlefield(P1, ["Test Wall"])
+    scenario.at(TurnStep.DECLARE_BLOCKERS)
+    scenario.attacking(P1, bears)
+    scenario.attacking(P2, giant)
+    scenario.blocking(wall, bears)
+    text = render_view(view_for(scenario.build(), P2))
+    assert (
+        f"Combat (defending: player 1, player 2 (you)): Grizzly Bears #{bears} attacking "
+        f"player 1, blocked by Test Wall #{wall}; Hill Giant #{giant} attacking player 2 (you), "
+        "unblocked."
+    ) in text
+    assert "Combat" not in render_view(view_for(Scenario(2).build(), P0))
+
+
+def test_render_view_shows_attackers_before_blocks() -> None:
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    scenario.at(TurnStep.DECLARE_ATTACKERS)
+    scenario.attacking(P1, bears)
+    text = render_view(view_for(scenario.build(), P0))
+    assert f"Combat (defending: player 1): Grizzly Bears #{bears} attacking player 1." in text
+
+
+def test_render_view_shows_a_blocked_attacker_whose_blockers_left_and_no_attackers() -> None:
+    """509.1h: blocked stays blocked when its blockers are gone; a combat whose attackers were
+    all removed still shows its defending players."""
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    (wall,) = scenario.battlefield(P1, ["Test Wall"])
+    scenario.at(TurnStep.DECLARE_BLOCKERS)
+    scenario.attacking(P1, bears)
+    scenario.blocking(wall, bears)
+    state = scenario.build()
+    assert state.turn is not None and state.turn.combat is not None
+    del state.turn.combat.blockers[wall]
+    assert f"Grizzly Bears #{bears} attacking player 1, blocked." in render_view(
+        view_for(state, P0)
+    )
+    state.turn.combat.attackers.clear()
+    assert "Combat (defending: player 1): no attackers." in render_view(view_for(state, P0))

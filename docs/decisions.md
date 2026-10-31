@@ -19,6 +19,40 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-31: M3.1: the combat spaces and the combat state as built
+- **Decision:**
+  - `ChooseAssignment(items, choices, maxima)` has no constraint fields yet: `constraints`,
+    `requirements` and `costly` (design.md §17.18) join it in M3.4 and M3.5, with the solver.
+    A maximum must lie between 0 and its item's number of choices (the compiler clamps
+    `blocks_allowed`, and `None` becomes the number of attackers); a space needs one item.
+  - `DistributeEach(sources, parts)` names the creature whose damage each part divides
+    (`sources`, one per part), which the plan's `DistributeEach(parts, constraints)` left
+    unnamed: a UI and the text agent must say whose damage is being divided. Its answer is
+    `AmountsEach(amounts)`, one `Amounts` per part. `LethalBeforeExcess` joins it in M3.6.
+  - `RandomAgent` answers `ChooseAssignment` item by item as `ChooseSubset` from 0 to the
+    maximum (a size uniformly, then a subset of that size), so a creature with one possible
+    target attacks half the time; `DistributeEach` part by part as `Distribute` (uniform over
+    all answers). M3.4's `random_legal` replaces the first once constraints exist.
+  - The text agent types both with `;` between items or parts (`0; -; 1 2`, `1 3; 2`); the
+    number of groups must match.
+  - `CombatState` has no phase number (numbered segments arrive in M3.8) and no first-strike
+    record (M3.6) yet. Records (`AttackRecord`, `BlockRecord`) are immutable and carry their
+    creature's ID, which the invariants check against the key, as for `state.objects`.
+    `AttackTarget` is `AttackPlayer` alone until M4 adds planeswalkers and battles.
+  - The defending players are `resolve.rules.combat.defending_players`: every opponent still in
+    the game, in APNAP order (506.2, 802.2), not a rule default (2026-10-18).
+  - `summoning_sick` raises `EngineError` for an object that isn't a permanent (no controller)
+    rather than answering; `can_tap_for_cost` answered "can't tap", but no caller asks about a
+    nonpermanent (`TapSelfCost` checks the battlefield first).
+  - The scenario builder creates a combat state only when `attacking` or `blocking` is called,
+    never from `at(...)` alone, so existing tests set in the combat phase are unchanged.
+- **Why:** M3.1 delivers the foundations without behavior (plan step M3.1); each deferred field
+  is added by the step that first needs it, with its tests.
+- **Rules:** 302.6, 506.2, 508.1, 508.4, 509.1, 509.1a, 509.1h, 510.1, 510.1e, 702.10, 802.2.
+- **Where:** `resolve.decisions.spaces`, `resolve.agents.random_agent`, `resolve.agents.text`,
+  `tools/fuzz.py`, `resolve.state.combat`, `resolve.state.invariants`, `resolve.rules.combat`,
+  `resolve.rules.defaults`, `resolve.engine.view`, `tests/scenario.py`.
+
 ### 2026-10-30: The M3 plan: combat as constraint models, numbered phases, stand-ins for two torture tests
 - **Decision (the user's, approving `docs/plans/m3.md` with its questions Q1 to Q8 as
   proposed):**

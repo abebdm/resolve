@@ -23,6 +23,8 @@ What a scenario can set:
   302.6; default 0, before the first turn, so no summoning sickness once its controller's turn
   has begun);
 - each player's commanders (903.3), in any zone;
+- during a combat phase, the combat (506): which creatures attack which player
+  (``attacking``, 508.1) and which block which attackers (``blocking``, 509.1);
 - the starting player (103.1), which fixes turn order; ``None`` means not chosen yet;
 - with ``at(...)``, the turn in progress: its number, the active player, the phase and step, who
   receives priority next and who has already passed in succession (117.4), and the lands played
@@ -56,6 +58,8 @@ from resolve.engine.priority import PriorityRound
 from resolve.engine.setup import initial_state
 from resolve.engine.turns import RunStep, StepStage, TakeTurn
 from resolve.rules import defaults
+from resolve.rules.combat import defending_players
+from resolve.state.combat import AttackPlayer, AttackRecord, BlockRecord, CombatState
 from resolve.state.config import GameConfig
 from resolve.state.game import Card, GameState, create_object, zone_list
 from resolve.state.ids import CardId, ObjectId, PlayerId
@@ -364,6 +368,48 @@ class Scenario:
             )
         return self
 
+    def attacking(self, target: PlayerId, *attackers: ObjectId, declared: bool = True) -> Scenario:
+        """Make ``attackers`` attack the player ``target`` (508.1k; ``declared=False``: put onto
+        the battlefield attacking, 508.4), in this order after any earlier ones.
+
+        Needs ``at(...)`` in the combat phase first; the combat state (``TurnState.combat``) is
+        created with its defending players (506.2, 802.2) on the first call. An attacker made
+        once blockers have been declared (at the declare blockers step with priority, or later)
+        is unblocked until ``blocking`` names it (509.1h); before that, its blocked status is
+        undecided. Whether the board is legal (a creature of the active player, a defending
+        player) is checked when the state is built (``check_invariants``).
+        """
+        combat = self._combat()
+        blocked = False if self._blockers_declared() else None
+        for attacker in attackers:
+            if attacker in combat.attackers:
+                raise ScenarioError(f"object {attacker} is already attacking")
+            combat.attackers[attacker] = AttackRecord(
+                attacker, AttackPlayer(target), declared=declared, blocked=blocked
+            )
+        combat.attacks_happened = combat.attacks_happened or bool(attackers)
+        return self
+
+    def blocking(self, blocker: ObjectId, *attackers: ObjectId, declared: bool = True) -> Scenario:
+        """Make ``blocker`` block ``attackers``, in this order (509.1g; ``declared=False``: put
+        onto the battlefield blocking, 506.3e); each of them becomes blocked (509.1h).
+
+        Needs blockers to have been declared: ``at`` the declare blockers step with priority, or
+        a later combat step.
+        """
+        combat = self._combat()
+        if not self._blockers_declared():
+            raise ScenarioError("blockers are declared as the declare blockers step begins (509.1)")
+        if blocker in combat.blockers:
+            raise ScenarioError(f"object {blocker} is already blocking")
+        for attacker in attackers:
+            if attacker not in combat.attackers:
+                raise ScenarioError(f"object {attacker} isn't attacking, so it can't be blocked")
+        combat.blockers[blocker] = BlockRecord(blocker, tuple(attackers), declared=declared)
+        for attacker in attackers:
+            combat.attackers[attacker] = replace(combat.attackers[attacker], blocked=True)
+        return self
+
     def build(self, *tasks: Task) -> GameState:
         """The finished state, checked; with tasks or a turn (``at``), run to a pause.
 
@@ -387,6 +433,24 @@ class Scenario:
         if self._built:
             raise ScenarioError("this scenario has already been built")
         return self._state
+
+    def _combat(self) -> CombatState:
+        """The combat state of the turn ``at`` set, created on first use (506.2, 802.2)."""
+        turn = self._open().turn
+        if turn is None or turn.phase is not Phase.COMBAT:
+            raise ScenarioError("combat needs at(...) in the combat phase first (506.1)")
+        if turn.combat is None:
+            turn.combat = CombatState(defending_players(self._state))
+        return turn.combat
+
+    def _blockers_declared(self) -> bool:
+        """Whether 509.1's declaration has happened in this turn's combat: at the declare
+        blockers step resumed with priority, or a later step."""
+        turn = self._state.turn
+        assert turn is not None
+        if turn.step is Step.DECLARE_BLOCKERS:
+            return isinstance(self._resume[0], PriorityRound)
+        return turn.step in (Step.COMBAT_DAMAGE, Step.END_OF_COMBAT)
 
     def _pile(self, zone: Zone, owner: PlayerId, names: Sequence[str]) -> list[ObjectId]:
         # The last element of a pile is its top, so the bottom card is created first.

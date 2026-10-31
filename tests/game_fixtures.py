@@ -29,14 +29,17 @@ from resolve.cards.keywords import (
     ColorQuality,
     Everything,
     Flash,
+    Haste,
     Hexproof,
     Indestructible,
     MulticoloredQuality,
     Protection,
     protection_from_each_color,
 )
+from resolve.cards.primitives.abilities import ActivatedManaAbility
 from resolve.cards.primitives.cost_modifiers import CostModifier, ModifierStep, SpellCostModifier
-from resolve.cards.primitives.effects import DealDamage, Destroy, DrawCards
+from resolve.cards.primitives.costs import TapSelfCost
+from resolve.cards.primitives.effects import AddMana, DealDamage, Destroy, DrawCards
 from resolve.cards.primitives.refs import TargetRef
 from resolve.cards.primitives.spells import Mode, ModeChoice, SpellAbility
 from resolve.cards.primitives.statics import CantBeCountered
@@ -66,6 +69,7 @@ from resolve.engine.view import PlayerView
 from resolve.errors import NotImplementedRule
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState
+from resolve.state.mana import ManaType
 from resolve.state.turn import Phase, Step
 from tests import scryfall_fixtures as fx
 
@@ -126,6 +130,12 @@ TEST_PRISMATIC_KNIGHT = CardDefinition(
 TEST_UNTOUCHABLE = CardDefinition("Test Untouchable", abilities=(Protection(Everything()),))
 TEST_TWIN_FLASH = CardDefinition("Test Twin Flash", abilities=(Flash(), Flash()))
 TEST_INDESTRUCTIBLE_WISP = CardDefinition("Test Indestructible Wisp", abilities=(Indestructible(),))
+# Haste; {T}: Add {G}. (702.10c), and the same with two instances of haste (702.10d).
+_TAP_FOR_GREEN = ActivatedManaAbility((TapSelfCost(),), AddMana((ManaType.GREEN,)))
+TEST_HASTY_ELVES = CardDefinition("Test Hasty Elves", abilities=(Haste(), _TAP_FOR_GREEN))
+TEST_TWICE_HASTY_ELVES = CardDefinition(
+    "Test Twice Hasty Elves", abilities=(Haste(), Haste(), _TAP_FOR_GREEN)
+)
 # This spell can't be countered. Test Stubborn Spell deals 1 damage to any target.
 TEST_STUBBORN_SPELL = CardDefinition(
     "Test Stubborn Spell",
@@ -248,6 +258,8 @@ def scenario_registry() -> CardRegistry:
             TEST_UNTOUCHABLE,
             TEST_TWIN_FLASH,
             TEST_INDESTRUCTIBLE_WISP,
+            TEST_HASTY_ELVES,
+            TEST_TWICE_HASTY_ELVES,
             TEST_STUBBORN_SPELL,
             TEST_GOLD_SHOCK,
             TEST_ADVENTURER,
@@ -278,6 +290,7 @@ def scenario_database() -> CardDatabase:
     extra += [fx.CRYPTIC_COMMAND, fx.TEST_REDPROOF_BEAR, fx.TEST_MULTIPROOF_KNIGHT]
     extra += [fx.TEST_PRISMATIC_KNIGHT, fx.TEST_UNTOUCHABLE, fx.TEST_TWIN_FLASH]
     extra += [fx.TEST_INDESTRUCTIBLE_WISP, fx.TEST_STUBBORN_SPELL, fx.TEST_GOLD_SHOCK]
+    extra += [fx.TEST_HASTY_ELVES, fx.TEST_TWICE_HASTY_ELVES]
     extra += [fx.TEST_ADVENTURER, fx.EMERALD_MEDALLION, fx.KINJALLIS_CALLER, fx.TEST_THORN]
     extra += [fx.TEST_GROWTH, fx.RISHKARS_EXPERTISE, fx.TEST_TWO_TONE, fx.TEST_INSIGHT]
     extra += [fx.BIG_SPLIT_CARD]

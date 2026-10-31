@@ -12,7 +12,11 @@ The expected values are worked from the pinned CR:
 - 500.7: extra turns come before the normal turn order (none here); 103.1: turn order proceeds
   clockwise.
 - 502.3: the active player untaps all their permanents. 500.5: all unspent mana empties.
-- 104.3: a player loses by the usual means. 302.6: summoning sickness.
+- 104.3: a player loses by the usual means. 302.6: summoning sickness, for a creature's {T}
+  abilities and for attacking, which haste lifts (702.10b-c).
+- 508.1: the active player declares attackers; 509.1: each defending player declares their
+  blockers; 509.1a: a creature blocks one attacker; 510.1: a creature's controller assigns its
+  combat damage, 510.1a: equal to its power.
 - 723.5: nobody decides for another player by default; 723.4, 400.2, 402.3: who knows what.
 - 103.4, 103.5, 903.10a: the game configuration. 103.6: no actions from opening hands by
   default. 702.11c, 702.18a: no player has hexproof or shroud by default.
@@ -27,7 +31,7 @@ import pytest
 from resolve.citations import cited_rules
 from resolve.data.types import CardType
 from resolve.decisions.spaces import CastSpellOption
-from resolve.errors import NotImplementedRule
+from resolve.errors import EngineError, NotImplementedRule
 from resolve.rules import defaults
 from resolve.state.config import GameConfig
 from resolve.state.ids import PlayerId
@@ -65,7 +69,12 @@ CITATIONS = {
     "can_lose_game": ["104.3"],
     "deciding_player": ["723.5"],
     "knows_identity": ["400.2", "402.3", "723.4"],
-    "can_tap_for_cost": ["302.6"],
+    "summoning_sick": ["302.6", "702.10b", "702.10c"],
+    "attack_declarer": ["508.1"],
+    "block_declarer": ["509.1"],
+    "combat_damage_assigner": ["510.1"],
+    "combat_damage_amount": ["510.1a"],
+    "blocks_allowed": ["509.1a"],
     "player_abilities": ["702.11c", "702.18a"],
     "opening_hand_actions": ["103.6"],
     "mulligan_options": ["103.5"],
@@ -270,29 +279,92 @@ def test_723_5_nobody_decides_for_another_player_by_default() -> None:
     assert [defaults.deciding_player(state, p) for p in (P0, P1, P2)] == [P0, P1, P2]
 
 
-def test_302_6_a_creature_taps_for_a_cost_only_if_controlled_since_its_controllers_turn_began() -> (
-    None
-):
-    """In P0's turn 2: a Forest and a Sol Ring that arrived this turn may be tapped for a cost; a
-    creature (Llanowar Elves, Test Land Creature) only if it came under P0's control before turn
-    2 began. A creature of P1, who hasn't had a turn yet, can't."""
+@pytest.mark.parametrize("purpose", list(defaults.SicknessPurpose))
+def test_302_6_a_creature_is_sick_unless_controlled_since_its_controllers_turn_began(
+    purpose: defaults.SicknessPurpose,
+) -> None:
+    """302.6, for {T} abilities and for attacking alike. In P0's turn 2: a Forest and a Sol Ring
+    that arrived this turn aren't sick (302.6 is about creatures); a creature (Llanowar Elves,
+    Test Land Creature) isn't only if it came under P0's control before turn 2 began. A creature
+    of P1, who hasn't had a turn yet, is. Test Hasty Elves, arrived this turn, isn't (702.10b-c)."""
     scenario = Scenario(2)
-    forest, ring, new_elves, new_dryad = scenario.battlefield(
-        P0, ["Forest", "Sol Ring", "Llanowar Elves", "Test Land Creature"], entered_turn=2
+    forest, ring, new_elves, new_dryad, hasty = scenario.battlefield(
+        P0,
+        ["Forest", "Sol Ring", "Llanowar Elves", "Test Land Creature", "Test Hasty Elves"],
+        entered_turn=2,
     )
     old_elves, old_dryad = scenario.battlefield(
         P0, ["Llanowar Elves", "Test Land Creature"], entered_turn=1
     )
-    (theirs,) = scenario.battlefield(P1, ["Llanowar Elves"])
+    theirs, their_hasty = scenario.battlefield(P1, ["Llanowar Elves", "Test Hasty Elves"])
     scenario.at(Phase.PRECOMBAT_MAIN, number=2, last_turns={P0: 2, P1: None})
     state = scenario.build()
-    assert defaults.can_tap_for_cost(state, forest) and defaults.can_tap_for_cost(state, ring)
-    assert defaults.can_tap_for_cost(state, old_elves) and defaults.can_tap_for_cost(
-        state, old_dryad
+    sick = {obj: defaults.summoning_sick(state, obj, purpose) for obj in state.battlefield}
+    assert sick == {
+        forest: False,
+        ring: False,
+        new_elves: True,
+        new_dryad: True,
+        hasty: False,
+        old_elves: False,
+        old_dryad: False,
+        theirs: True,
+        their_hasty: False,
+    }
+
+
+def test_508_1_the_active_player_declares_attackers() -> None:
+    for active in (P0, P1, P2):
+        scenario = Scenario(3)
+        scenario.at(Step.BEGINNING_OF_COMBAT, active=active, number=2)
+        assert defaults.attack_declarer(scenario.build()) == active
+
+
+def test_509_1_each_defending_player_declares_their_own_blockers() -> None:
+    scenario = Scenario(4)
+    scenario.at(Step.BEGINNING_OF_COMBAT, active=P1, number=2)
+    state = scenario.build()
+    assert [defaults.block_declarer(state, p) for p in (P0, P2, PlayerId(3))] == [
+        P0,
+        P2,
+        PlayerId(3),
+    ]
+
+
+def test_510_1_a_creatures_controller_assigns_its_combat_damage() -> None:
+    """Its controller, not its owner: P1 controls a Grizzly Bears that P0 owns."""
+    scenario = Scenario(2)
+    (giant,) = scenario.battlefield(P0, ["Hill Giant"])
+    (borrowed,) = scenario.battlefield(P1, ["Grizzly Bears"], owner=P0)
+    state = scenario.build()
+    assert defaults.combat_damage_assigner(state, giant) == P0
+    assert defaults.combat_damage_assigner(state, borrowed) == P1
+
+
+def test_510_1a_a_creature_assigns_combat_damage_equal_to_its_power() -> None:
+    """Hill Giant (3/3) 3, Grizzly Bears (2/2) 2, Darksteel Myr (0/1) and Test Wall (0/4) 0.
+    That 0 or less assigns nothing is the combat damage step's to apply (510.1a, M3.2)."""
+    scenario = Scenario(2)
+    creatures = scenario.battlefield(
+        P0, ["Hill Giant", "Grizzly Bears", "Darksteel Myr", "Test Wall"]
     )
-    assert not defaults.can_tap_for_cost(state, new_elves)
-    assert not defaults.can_tap_for_cost(state, new_dryad)
-    assert not defaults.can_tap_for_cost(state, theirs)
+    state = scenario.build()
+    assert [defaults.combat_damage_amount(state, c) for c in creatures] == [3, 2, 0, 0]
+
+
+def test_510_1a_an_object_without_power_has_no_combat_damage_amount() -> None:
+    """208.3: a noncreature has no power, so asking its combat damage is an engine error."""
+    scenario = Scenario(2)
+    (ring,) = scenario.battlefield(P0, ["Sol Ring"])
+    with pytest.raises(EngineError, match="power"):
+        defaults.combat_damage_amount(scenario.build(), ring)
+
+
+def test_509_1a_a_creature_blocks_one_attacker() -> None:
+    scenario = Scenario(2)
+    creatures = scenario.battlefield(P1, ["Grizzly Bears", "Test Wall", "Llanowar Elves"])
+    state = scenario.build()
+    assert [defaults.blocks_allowed(state, c) for c in creatures] == [1, 1, 1]
 
 
 def test_702_11c_no_player_has_abilities_by_default() -> None:

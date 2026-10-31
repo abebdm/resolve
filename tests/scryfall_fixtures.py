@@ -461,6 +461,14 @@ TEST_TWIN_FLASH = keyword_creature(
 TEST_INDESTRUCTIBLE_WISP = keyword_creature(
     "Test Indestructible Wisp", "{G}", 1.0, "Spirit", ("1", "0"), "G", "Indestructible"
 )
+# Invented creatures with haste (702.10c) and a {T} mana ability (M3.1).
+TEST_HASTY_ELVES = keyword_creature(
+    "Test Hasty Elves", "{G}", 1.0, "Elf Druid", ("1", "1"), "G", "Haste\n{T}: Add {G}."
+)
+TEST_TWICE_HASTY_ELVES = keyword_creature(
+    "Test Twice Hasty Elves", "{G}", 1.0, "Elf Druid", ("1", "1"), "G",
+    "Haste\nHaste\n{T}: Add {G}.",
+)  # fmt: skip
 TEST_STUBBORN_SPELL = spell(
     "Test Stubborn Spell", "{1}{R}", 2.0, "Instant", ["R"],
     "This spell can't be countered.\nTest Stubborn Spell deals 1 damage to any target.",

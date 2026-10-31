@@ -14,6 +14,8 @@ Answers are typed as option indices, starting at 0, matching the engine's ``Pick
 | ``ChooseNumber`` | a number                                | ``4``     |
 | ``Distribute``   | one amount per recipient, in order      | ``2 1``   |
 | ``ChooseCounts`` | one amount per option, in order         | ``2 0``   |
+| ``ChooseAssignment`` | per item, its choices (``-``: none), ``;`` between | ``0; -; 1 2`` |
+| ``DistributeEach`` | per part, its amounts, ``;`` between | ``1 3; 2``   |
 
 Besides answers, ``view`` reprints the view, ``log`` prints the whole visible log, ``help``
 explains the syntax, and ``quit`` (or the end of input) raises ``QuitGame``.
@@ -29,9 +31,12 @@ from resolve.decisions.request import DecisionAnswer, DecisionRequest
 from resolve.decisions.spaces import (
     ActivateAbilityOption,
     Amounts,
+    AmountsEach,
     AnswerSpace,
     AnswerValue,
+    Assignment,
     CastSpellOption,
+    ChooseAssignment,
     ChooseCounts,
     ChooseNumber,
     ChooseOne,
@@ -39,6 +44,7 @@ from resolve.decisions.spaces import (
     ChooseSubset,
     ColorOption,
     Distribute,
+    DistributeEach,
     ManaActivationOption,
     ManaOption,
     ModesOption,
@@ -53,9 +59,10 @@ from resolve.decisions.spaces import (
     PlayerOption,
     PlayLandOption,
 )
-from resolve.engine.view import ObjectView, PaymentView, PlayerView
+from resolve.engine.view import CombatView, ObjectView, PaymentView, PlayerView
 from resolve.events.base import AnswerRecord, LogEntry
-from resolve.state.ids import ObjectId
+from resolve.state.combat import AttackPlayer
+from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import ForAbility, ForSpell, describe_mana
 from resolve.state.spell import Target, TargetObject, TargetPlayer, describe_variant
 from resolve.state.zones import ZoneKind
@@ -155,6 +162,37 @@ def describe_turn(view: PlayerView) -> str | None:
     return f"Turn {turn.number}, player {turn.active_player}'s turn: {where}; {holder}."
 
 
+def _player(view: PlayerView, player: PlayerId) -> str:
+    return f"player {player}" + (" (you)" if player == view.viewer else "")
+
+
+def _combat_line(view: PlayerView, combat: CombatView) -> str:
+    """``"Combat (defending: player 1): Grizzly Bears #3 attacking player 1, blocked by Test
+    Wall #5."``: each attacker, what it attacks and its blocked status (506, 509.1h)."""
+    defending = ", ".join(_player(view, player) for player in combat.defending_players)
+    shown: list[str] = []
+    for record in combat.attackers:
+        text = _named(view, record.attacker)
+        match record.target:
+            case AttackPlayer(player=player):
+                text += f" attacking {_player(view, player)}"
+            case None:
+                text += " attacking nothing"  # 506.4c
+        blockers = [
+            _named(view, block.blocker)
+            for block in combat.blockers
+            if record.attacker in block.blocking
+        ]
+        if blockers:
+            text += f", blocked by {', '.join(blockers)}"
+        elif record.blocked is True:
+            text += ", blocked"  # 509.1h: still blocked after its blockers left
+        elif record.blocked is False:
+            text += ", unblocked"
+        shown.append(text)
+    return f"Combat (defending: {defending}): " + ("; ".join(shown) or "no attackers") + "."
+
+
 def _zone_line(label: str, objects: tuple[ObjectView, ...]) -> str:
     shown = ", ".join(describe_object(obj) for obj in objects) if objects else "(empty)"
     return f"  {label}: {shown}"
@@ -219,6 +257,8 @@ def render_view(view: PlayerView, *, recent_log: int = RECENT_LOG) -> str:
     turn = describe_turn(view)
     if turn is not None:
         lines.append(turn)
+    if view.combat is not None:
+        lines.append(_combat_line(view, view.combat))
     if view.payments:
         lines.append("Paying: " + "; ".join(_payment(view, p) for p in view.payments) + ".")
     if view.result is not None:
@@ -257,6 +297,16 @@ def _answer_hint(space: AnswerSpace) -> str:
                 f"Type one amount per option (at most {', '.join(map(str, maxima))}), "
                 f"adding up to {total}."
             )
+        case ChooseAssignment():
+            return (
+                "For each item in order, type its choice numbers ('-' for none), at most its "
+                "maximum, items separated by ';'."
+            )
+        case DistributeEach():
+            return (
+                "For each part in order, type one amount per recipient, adding up to its total, "
+                "parts separated by ';'."
+            )
         case _:
             return "This kind of answer can't be typed yet."
 
@@ -274,8 +324,41 @@ def render_request(request: DecisionRequest, view: PlayerView) -> str:
     lines.extend(
         f"  {index}: {describe_option(option, view)}" for index, option in enumerate(options)
     )
+    if isinstance(space, ChooseAssignment):
+        for index, (item, choices, maximum) in enumerate(
+            zip(space.items, space.choices, space.maxima, strict=True)
+        ):
+            lines.append(
+                f"  {index}: {describe_option(item, view)} "
+                + (
+                    f"(at most {maximum}): {_numbered(choices, view)}"
+                    if choices
+                    else "(no choices)"
+                )
+            )
+    elif isinstance(space, DistributeEach):
+        for index, (source, part) in enumerate(zip(space.sources, space.parts, strict=True)):
+            lines.append(
+                f"  {index}: {describe_option(source, view)} divides {part.total} "
+                f"(at least {part.minimum_each} each): {_numbered(part.recipients, view)}"
+            )
     lines.append(_answer_hint(space))
     return "\n".join(lines)
+
+
+def _numbered(options: tuple[Option, ...], view: PlayerView) -> str:
+    """``"0: player 1, 1: player 2"``: options numbered from 0 on one line."""
+    return ", ".join(f"{i}: {describe_option(option, view)}" for i, option in enumerate(options))
+
+
+def _groups(text: str, count: int, what: str) -> list[str]:
+    """``text`` split at ``;`` into exactly ``count`` nonempty groups, one per ``what``."""
+    groups = [group.strip() for group in text.split(";")]
+    if len(groups) != count:
+        raise AnswerSyntaxError(f"type one group per {what} ({count}), separated by ';'")
+    if not all(groups):
+        raise AnswerSyntaxError(f"a {what} has nothing typed: use '-' for no picks")
+    return groups
 
 
 def _numbers(text: str) -> tuple[int, ...]:
@@ -305,6 +388,14 @@ def parse_answer(space: AnswerSpace, text: str) -> AnswerValue:
             return Order(_numbers(text))
         case Distribute() | ChooseCounts():
             return Amounts(_numbers(text))
+        case ChooseAssignment(items=items):
+            groups = _groups(text, len(items), "item")
+            return Assignment(
+                tuple(() if group == "-" else tuple(sorted(_numbers(group))) for group in groups)
+            )
+        case DistributeEach(parts=parts):
+            groups = _groups(text, len(parts), "part")
+            return AmountsEach(tuple(Amounts(_numbers(group)) for group in groups))
         case _:
             raise AnswerSyntaxError(f"a {type(space).__name__} can't be typed yet")
 
@@ -313,6 +404,8 @@ HELP = """\
 Answer with option numbers (from 0) or numbers:
   one option: 2        a subset: 3 0 (or - for none)    an order: 1 0 2
   a number: 4          amounts per recipient or option: 2 1
+  per item, its choices (attackers, blockers): 0; -; 1 2
+  per part, its amounts (combat damage): 1 3; 2
 Commands: view (show the game again), log (the whole log), help, quit."""
 
 

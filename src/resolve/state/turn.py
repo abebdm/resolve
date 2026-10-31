@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 
+from resolve.state.combat import CombatState
 from resolve.state.ids import PlayerId
 
 
@@ -100,6 +101,8 @@ class TurnState:
     - ``segments``: the phases and steps still to begin this turn, in order (500.1), as data so
       effects can insert and remove them (500.8-500.10). A turn starts with all of them; the one
       in progress is not among them.
+    - ``combat``: the combat state during a combat phase (506; ``resolve.state.combat``),
+      ``None`` otherwise.
     """
 
     number: int
@@ -110,6 +113,7 @@ class TurnState:
     passed: list[PlayerId] = field(default_factory=list[PlayerId])
     lands_played: int = 0
     segments: list[Segment] = field(default_factory=list[Segment])
+    combat: CombatState | None = None
 
     @property
     def segment(self) -> Segment:

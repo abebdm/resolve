@@ -89,13 +89,17 @@ from resolve.decisions.request import DecisionAnswer, DecisionRequest
 from resolve.decisions.spaces import (
     ActivateAbilityOption,
     Amounts,
+    AmountsEach,
     AnswerValue,
+    Assignment,
+    ChooseAssignment,
     ChooseCounts,
     ChooseNumber,
     ChooseOne,
     ChooseOrder,
     ChooseSubset,
     Distribute,
+    DistributeEach,
     Number,
     Order,
     Pick,
@@ -488,6 +492,32 @@ def invalid_answers(
                 answer(Amounts((total + 1,) + (0,) * (len(options) - 1))),
                 answer(Amounts((maxima[0] + 1,) + (0,) * (len(options) - 1))),
                 answer(Amounts((-1,) + (0,) * (len(options) - 1))),
+            ]
+        case ChooseAssignment(choices=choices, maxima=maxima):
+            empty = ((),) * (len(choices) - 1)
+            wrong += [
+                answer(Assignment(())),
+                answer(Assignment(((),) * (len(choices) + 1))),
+                answer(Assignment(((len(choices[0]),), *empty))),
+                answer(Assignment(((-1,), *empty))),
+            ]
+            for index, (options, maximum) in enumerate(zip(choices, maxima, strict=True)):
+                before, after = ((),) * index, ((),) * (len(choices) - index - 1)
+                if maximum < len(options):
+                    picks = tuple(range(maximum + 1))
+                    wrong.append(answer(Assignment((*before, picks, *after))))
+                if len(options) >= 2 and maximum >= 2:
+                    wrong.append(answer(Assignment((*before, (1, 0), *after))))
+        case DistributeEach(parts=parts):
+            fitting = tuple(Amounts((p.total,) + (0,) * (len(p.recipients) - 1)) for p in parts)
+            first, rest = parts[0], fitting[1:]
+            too_much = Amounts((first.total + 1,) + (0,) * (len(first.recipients) - 1))
+            too_many = Amounts((first.total,) * (len(first.recipients) + 1))
+            wrong += [
+                answer(AmountsEach(())),
+                answer(AmountsEach((*fitting, fitting[0]))),
+                answer(AmountsEach((too_much, *rest))),
+                answer(AmountsEach((too_many, *rest))),
             ]
         case _:
             pass

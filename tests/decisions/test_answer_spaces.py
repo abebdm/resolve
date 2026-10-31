@@ -6,14 +6,18 @@ import pytest
 
 from resolve.decisions.spaces import (
     Amounts,
+    AmountsEach,
     AnswerSpace,
     AnswerValue,
+    Assignment,
+    ChooseAssignment,
     ChooseCounts,
     ChooseNumber,
     ChooseOne,
     ChooseOrder,
     ChooseSubset,
     Distribute,
+    DistributeEach,
     Number,
     ObjectOption,
     Order,
@@ -239,3 +243,157 @@ def test_choose_counts_survives_copy_and_pickle() -> None:
     space = ChooseCounts(THREE[:2], maxima=(2, 1), total=2)
     assert pickle.loads(pickle.dumps(space)) == space
     assert copy.deepcopy(space) == space
+
+
+# --- ChooseAssignment (508.1, 509.1; design.md 17.8, 17.18) -------------------------------------
+
+BEARS, GIANT, LIONS = (
+    ObjectOption(ObjectId(20)),
+    ObjectOption(ObjectId(21)),
+    ObjectOption(ObjectId(22)),
+)
+P1, P2 = PlayerOption(PlayerId(1)), PlayerOption(PlayerId(2))
+
+
+def attacks() -> ChooseAssignment:
+    """Two creatures of the active player, each able to attack either of two defending players
+    (802.2, 508.1b): one pick at most each (a creature attacks one player)."""
+    return ChooseAssignment((BEARS, GIANT), ((P1, P2), (P1, P2)), (1, 1))
+
+
+def blocks() -> ChooseAssignment:
+    """Two blockers facing three attackers: the first may block one of them (509.1a), the second
+    (as if it could block any number, Palace Guard) up to three; the third has no choices."""
+    attackers = (BEARS, GIANT, LIONS)
+    blocker_a, blocker_b, blocker_c = (ObjectOption(ObjectId(n)) for n in (30, 31, 32))
+    return ChooseAssignment(
+        (blocker_a, blocker_b, blocker_c), (attackers, attackers, ()), (1, 3, 0)
+    )
+
+
+def test_choose_assignment_accepts_one_pick_tuple_per_item() -> None:
+    space = attacks()
+    assert accepts(space, Assignment(((0,), (1,))))  # Bears at player 1, Giant at player 2
+    assert accepts(space, Assignment(((1,), (1,))))
+    assert space.chosen(Assignment(((0,), (1,)))) == ((P1,), (P2,))
+    assert not accepts(space, Assignment(((0,),)))  # one item missing
+    assert not accepts(space, Assignment(((0,), (0,), (0,))))  # one too many
+    assert not accepts(space, Number(0))  # the wrong kind of answer
+    assert not accepts(space, PickMany((0, 1)))
+
+
+def test_choose_assignment_rejects_a_pick_out_of_range() -> None:
+    space = attacks()
+    assert not accepts(space, Assignment(((2,), ())))
+    assert not accepts(space, Assignment(((-1,), ())))
+    assert not accepts(blocks(), Assignment(((), (), (0,))))  # the third has no choices
+
+
+def test_choose_assignment_rejects_more_picks_than_the_maximum() -> None:
+    """509.1a: by default a creature blocks one attacker; one allowed three blocks up to three."""
+    space = blocks()
+    assert not accepts(space, Assignment(((0, 1), (), ())))
+    assert accepts(space, Assignment(((0,), (0, 1, 2), ())))
+    assert not accepts(attacks(), Assignment(((0, 1), ())))  # a creature attacks one player
+
+
+def test_choose_assignment_rejects_unsorted_or_repeated_picks() -> None:
+    """Canonical answers (design.md 6): one valid answer per outcome, so picks are strictly
+    increasing."""
+    space = blocks()
+    assert accepts(space, Assignment(((), (0, 2), ())))
+    assert not accepts(space, Assignment(((), (2, 0), ())))
+    assert not accepts(space, Assignment(((), (1, 1), ())))
+
+
+def test_choose_assignment_accepts_no_picks() -> None:
+    """508.1a, 509.1a: "which creatures ..., if any": no attackers or no blockers is legal."""
+    assert accepts(attacks(), Assignment(((), ())))
+    assert accepts(blocks(), Assignment(((), (), ())))
+
+
+def test_choose_assignment_accepts_only_integers_in_tuples() -> None:
+    space = attacks()
+    assert not accepts(space, Assignment(((True,), ())))  # a bool isn't an index
+    assert not accepts(space, Assignment(((0.0,), ())))  # pyright: ignore[reportArgumentType]
+    assert not accepts(space, Assignment([(0,), ()]))  # pyright: ignore[reportArgumentType]
+    assert not accepts(space, Assignment(([0], ())))  # pyright: ignore[reportArgumentType]
+
+
+def test_choose_assignment_that_cannot_be_built_is_a_bug() -> None:
+    with pytest.raises(ValueError, match="item"):
+        ChooseAssignment((), (), ())
+    with pytest.raises(ValueError, match="choices"):
+        ChooseAssignment((BEARS, GIANT), ((P1,),), (1, 1))
+    with pytest.raises(ValueError, match="maxim"):
+        ChooseAssignment((BEARS,), ((P1,),), (1, 1))
+    with pytest.raises(ValueError, match="maxim"):
+        ChooseAssignment((BEARS,), ((P1,),), (-1,))
+    with pytest.raises(ValueError, match="maxim"):
+        ChooseAssignment((BEARS,), ((P1,),), (2,))  # more picks than choices
+    assert accepts(ChooseAssignment((BEARS,), ((),), (0,)), Assignment(((),)))
+
+
+def test_choose_assignment_has_one_valid_answer_per_outcome() -> None:
+    """Two items, three choices each, at most two picks each: 1 + 3 + 3 = 7 subsets each."""
+    space = ChooseAssignment((BEARS, GIANT), ((P1, P2, BEARS), (P1, P2, BEARS)), (2, 2))
+    picks = [(), (0,), (1,), (2,), (0, 1), (0, 2), (1, 2), (1, 0), (0, 0), (0, 1, 2)]
+    valid = [Assignment((a, b)) for a in picks for b in picks if accepts(space, Assignment((a, b)))]
+    assert len(valid) == len(set(valid)) == 49
+
+
+# --- DistributeEach (510.1, 510.1e; design.md 17.18) --------------------------------------------
+
+
+def damage() -> DistributeEach:
+    """One player's assignment: an attacker with 4 power blocked by two creatures divides its
+    damage between them (510.1c), and one with 2 power blocked by two others divides its damage
+    between those (510.1c). Each part may give a recipient 0."""
+    blockers = tuple(ObjectOption(ObjectId(n)) for n in (30, 31, 32, 33))
+    return DistributeEach(
+        (BEARS, GIANT),
+        (
+            Distribute(blockers[:2], 4, minimum_each=0),
+            Distribute(blockers[2:], 2, minimum_each=0),
+        ),
+    )
+
+
+def test_distribute_each_needs_one_amounts_per_part_adding_up_to_each_total() -> None:
+    space = damage()
+    assert accepts(space, AmountsEach((Amounts((1, 3)), Amounts((2, 0)))))
+    assert accepts(space, AmountsEach((Amounts((4, 0)), Amounts((1, 1)))))
+    assert not accepts(space, AmountsEach((Amounts((1, 3)),)))  # a part missing
+    assert not accepts(space, AmountsEach((Amounts((1, 3)), Amounts((2, 0)), Amounts((2, 0)))))
+    assert not accepts(space, AmountsEach((Amounts((1, 2)), Amounts((2, 0)))))  # adds up to 3
+    assert not accepts(space, AmountsEach((Amounts((1, 3)), Amounts((2,)))))  # amount missing
+    assert not accepts(space, AmountsEach((Amounts((5, -1)), Amounts((2, 0)))))  # negative
+    assert not accepts(space, Amounts((1, 3)))  # the wrong kind of answer
+    assert not accepts(space, AmountsEach([Amounts((1, 3)), Amounts((2, 0))]))  # pyright: ignore[reportArgumentType]
+    assert not accepts(space, AmountsEach(((1, 3), (2, 0))))  # pyright: ignore[reportArgumentType]
+
+
+def test_510_1c_the_example_has_exactly_five_divisions() -> None:
+    """510.1c's example: 4 damage between a 2/3 and a 1/1: (0, 4), (1, 3), (2, 2), (3, 1),
+    (4, 0)."""
+    spawn, hunter = ObjectOption(ObjectId(30)), ObjectOption(ObjectId(31))
+    space = DistributeEach((BEARS,), (Distribute((spawn, hunter), 4, minimum_each=0),))
+    valid = [(a, b) for a in range(-1, 6) for b in range(-1, 6)]
+    accepted = [v for v in valid if accepts(space, AmountsEach((Amounts(v),)))]
+    assert accepted == [(0, 4), (1, 3), (2, 2), (3, 1), (4, 0)]
+
+
+def test_distribute_each_that_cannot_be_built_is_a_bug() -> None:
+    with pytest.raises(ValueError, match="part"):
+        DistributeEach((), ())
+    with pytest.raises(ValueError, match="source"):
+        DistributeEach((BEARS, GIANT), (Distribute((LIONS,), 2, minimum_each=0),))
+
+
+def test_the_combat_spaces_survive_copy_and_pickle() -> None:
+    import copy
+    import pickle
+
+    for value in (attacks(), blocks(), damage(), Assignment(((0,), ())), AmountsEach(())):
+        assert pickle.loads(pickle.dumps(value)) == value
+        assert copy.deepcopy(value) == value

@@ -83,6 +83,7 @@ from tests.seams import (
     patch_may_cast_now,
     patch_next_turn,
     patch_object,
+    patch_sickness,
     patch_skip,
 )
 
@@ -674,7 +675,7 @@ def test_302_6_a_permanent_that_cant_tap_for_a_cost_offers_no_ability(
     scenario = Scenario(2)
     (forest,) = scenario.battlefield(P0, ["Forest"])
     scenario.at(Phase.PRECOMBAT_MAIN)
-    patch_object(monkeypatch, "can_tap_for_cost", lambda state, obj: False)
+    patch_sickness(monkeypatch, lambda state, obj, purpose: True)
     state = scenario.build()
     assert not [o for o in options(state) if isinstance(o, ActivateAbilityOption)]
     assert not TapSelfCost().can_pay(state, forest, P0)
@@ -688,7 +689,7 @@ def test_302_6_a_creature_the_function_allows_to_tap_offers_its_ability(
     scenario = Scenario(2)
     (dryad,) = scenario.battlefield(P0, ["Test Land Creature"])
     scenario.at(Phase.PRECOMBAT_MAIN)
-    patch_object(monkeypatch, "can_tap_for_cost", lambda state, obj: True)
+    patch_sickness(monkeypatch, lambda state, obj, purpose: False)
     state = scenario.build()
     assert ActivateAbilityOption(dryad, 0) in options(state)
 
@@ -700,7 +701,7 @@ def test_118_3_an_already_tapped_permanent_cant_pay_a_tap_cost_whatever_the_func
     (forest,) = scenario.battlefield(P0, ["Forest"])
     scenario.tap(forest)
     scenario.at(Phase.PRECOMBAT_MAIN)
-    patch_object(monkeypatch, "can_tap_for_cost", lambda state, obj: True)
+    patch_sickness(monkeypatch, lambda state, obj, purpose: False)
     state = scenario.build()
     assert not TapSelfCost().can_pay(state, forest, P0)
 
