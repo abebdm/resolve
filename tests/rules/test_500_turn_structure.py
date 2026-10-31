@@ -6,7 +6,7 @@ Expected values are worked from the pinned CR:
 - 500.1: five phases, in order; 501.1, 506.1, 512.1: the steps of the beginning, combat and
   ending phases. 505.2: a main phase has no steps.
 - 508.8: with no attackers declared, the declare blockers and combat damage steps are skipped.
-  No creature can attack in these tests (nobody controls a creature).
+  No creature attacks in these tests (``Passer`` declares no attackers).
 - 103.8a: in a two-player game the starting player skips the draw step of their first turn;
   103.8c: in other multiplayer games no player does.
 - 502.4, 514.3: no player receives priority in the untap step, nor normally in cleanup.
@@ -22,7 +22,7 @@ from collections.abc import Callable
 import pytest
 
 from resolve.decisions.kinds import DecisionKind
-from resolve.errors import NotImplementedRule
+from resolve.decisions.spaces import ChooseAssignment, ObjectOption
 from resolve.events.turn import StepBegan, TurnBegan
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState
@@ -167,17 +167,22 @@ def test_502_4_514_3_no_player_receives_priority_in_the_untap_or_cleanup_step() 
     }
 
 
-def test_508_1_declaring_attackers_with_a_creature_is_a_gap() -> None:
-    """Until M3, any creature the active player controls stops the game at 508.1."""
+def test_508_1_a_creature_of_the_active_player_is_offered_as_an_attacker() -> None:
+    """508.1 (M3.2, replacing M2's gap): the declare attackers step's turn-based action asks the
+    active player to declare, offering their Llanowar Elves."""
     scenario = Scenario(2)
-    scenario.battlefield(P0, ["Llanowar Elves"])
+    (elves,) = scenario.battlefield(P0, ["Llanowar Elves"])
     scenario.at(Step.DECLARE_ATTACKERS, begin=True)
-    with pytest.raises(NotImplementedRule) as gap:
-        scenario.build()
-    assert gap.value.rule == "508.1"
+    state = scenario.build()
+    request = request_of(state)
+    assert (request.kind, request.player) == (DecisionKind.DECLARE_ATTACKERS, P0)
+    assert isinstance(request.space, ChooseAssignment)
+    assert request.space.items == (ObjectOption(elves),)
 
 
 def test_508_1_an_opponents_creature_doesnt_stop_the_declaration() -> None:
+    """Only the active player's creatures attack (508.1a): with P1's creature alone nothing is
+    asked, and P0 receives priority in the declare attackers step."""
     scenario = Scenario(2)
     scenario.battlefield(P1, ["Llanowar Elves"])
     scenario.at(Step.DECLARE_ATTACKERS, begin=True)
@@ -185,6 +190,7 @@ def test_508_1_an_opponents_creature_doesnt_stop_the_declaration() -> None:
     turn = state.turn
     assert turn is not None and turn.step is Step.DECLARE_ATTACKERS
     assert request_of(state).player == P0
+    assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
 
 
 @pytest.mark.parametrize("players", [2, 3])

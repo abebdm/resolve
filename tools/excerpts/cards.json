@@ -6,18 +6,18 @@
       "oracle_cards": {
         "type": "oracle_cards",
         "file": "oracle-cards.jsonl.gz",
-        "updated_at": "2026-10-27T21:02:43.600+00:00",
-        "size": 25165222,
-        "sha256": "2f8afacba1b8f5375723cdeec3bc00adb3c6b97d038acc6406fa774129d7cf0a",
-        "source": "https://data.scryfall.io/oracle-cards/oracle-cards-20261027210243.jsonl.gz"
+        "updated_at": "2026-10-30T21:02:01.127+00:00",
+        "size": 25288113,
+        "sha256": "e8b920b7d77e0b314575d18312b53f4307c6cda75eaea52008ae93550f66af54",
+        "source": "https://data.scryfall.io/oracle-cards/oracle-cards-20261030210201.jsonl.gz"
       },
       "rulings": {
         "type": "rulings",
         "file": "rulings.jsonl.gz",
-        "updated_at": "2026-10-27T21:00:33.257+00:00",
+        "updated_at": "2026-10-30T21:00:34.143+00:00",
         "size": 5422271,
-        "sha256": "c05694d5f8d54ffe18b7202191012f3b5943a2e0aba1befafdf91bce58072f13",
-        "source": "https://data.scryfall.io/rulings/rulings-20261027210033.jsonl.gz"
+        "sha256": "ed07018faec96fdb368b7756d9004d3e718eb9eca2fdbc3f5b375e56d218925e",
+        "source": "https://data.scryfall.io/rulings/rulings-20261030210034.jsonl.gz"
       }
     }
   },
@@ -494,6 +494,69 @@
         "G"
       ],
       "keywords": []
+    },
+    {
+      "object": "card",
+      "oracle_id": "30997b43-fc13-41d3-8064-1ccc2cb6fd2b",
+      "name": "Raging Goblin",
+      "layout": "normal",
+      "mana_cost": "{R}",
+      "cmc": 1.0,
+      "type_line": "Creature — Goblin Berserker",
+      "oracle_text": "Haste (This creature can attack and {T} as soon as it comes under your control.)",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Haste"
+      ],
+      "power": "1",
+      "toughness": "1"
+    },
+    {
+      "object": "card",
+      "oracle_id": "69c4429e-a8a4-49c3-bb43-9dce4cc6b90a",
+      "name": "Alaborn Grenadier",
+      "layout": "normal",
+      "mana_cost": "{W}{W}",
+      "cmc": 2.0,
+      "type_line": "Creature — Human Soldier",
+      "oracle_text": "Vigilance",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": [
+        "Vigilance"
+      ],
+      "power": "2",
+      "toughness": "2"
+    },
+    {
+      "object": "card",
+      "oracle_id": "cd4cadb4-3156-49bd-b36e-12ba5c85938b",
+      "name": "Wall of Stone",
+      "layout": "normal",
+      "mana_cost": "{1}{R}{R}",
+      "cmc": 3.0,
+      "type_line": "Creature — Wall",
+      "oracle_text": "Defender (This creature can't attack.)",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Defender"
+      ],
+      "power": "0",
+      "toughness": "8"
     }
   ],
   "rulings": [

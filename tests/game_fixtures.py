@@ -54,6 +54,8 @@ from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer, DecisionRequest
 from resolve.decisions.spaces import (
     AnswerValue,
+    Assignment,
+    ChooseAssignment,
     ChooseOne,
     ChooseOrder,
     ChooseSubset,
@@ -291,6 +293,7 @@ def scenario_database() -> CardDatabase:
     extra += [fx.TEST_PRISMATIC_KNIGHT, fx.TEST_UNTOUCHABLE, fx.TEST_TWIN_FLASH]
     extra += [fx.TEST_INDESTRUCTIBLE_WISP, fx.TEST_STUBBORN_SPELL, fx.TEST_GOLD_SHOCK]
     extra += [fx.TEST_HASTY_ELVES, fx.TEST_TWICE_HASTY_ELVES]
+    extra += [fx.RAGING_GOBLIN, fx.ALABORN_GRENADIER, fx.WALL_OF_STONE]
     extra += [fx.TEST_ADVENTURER, fx.EMERALD_MEDALLION, fx.KINJALLIS_CALLER, fx.TEST_THORN]
     extra += [fx.TEST_GROWTH, fx.RISHKARS_EXPERTISE, fx.TEST_TWO_TONE, fx.TEST_INSIGHT]
     extra += [fx.BIG_SPLIT_CARD]
@@ -328,7 +331,8 @@ def request_of(state: GameState) -> DecisionRequest:
 
 
 class Passer:
-    """An agent that keeps every hand and passes every priority (for turn-structure tests).
+    """An agent that keeps every hand and passes every priority (for turn-structure tests), and
+    declares no attackers.
 
     It discards the first cards of its hand when it must (514.1) and keeps any order offered.
     ``requests`` records every request it answered, with the turn's number, phase and step at
@@ -353,6 +357,8 @@ class Passer:
                 value = PickMany(tuple(range(minimum)))
             case DecisionKind.ORDER_CARDS, ChooseOrder(options=options):
                 value = Order(tuple(range(len(options))))
+            case DecisionKind.DECLARE_ATTACKERS, ChooseAssignment(items=items):
+                value = Assignment(((),) * len(items))  # 508.1a: no creature attacks
             case _:
                 raise AssertionError(f"Passer can't answer {request.kind}: {request.prompt}")
         return DecisionAnswer(request.id, request.player, value)

@@ -11,8 +11,9 @@ Every legality question is an ``Action`` value. ``allowed(state, action)`` works
    (101.2a).
 
 Playing a land, casting a spell, targeting (``TargetAction``, through
-``resolve.rules.targeting.target_problem``), destroying (``DestroyAction``) and countering
-(``CounterAction``) exist so far; attacking and blocking join them in M3, and activating
+``resolve.rules.targeting.target_problem``), destroying (``DestroyAction``), countering
+(``CounterAction``) and attacking (``AttackAction``, 508.1a) exist so far; blocking joins them
+in M3.3, and activating
 abilities in M4 (until then a mana ability's own conditions decide: 602.5 in
 ``ActivatedManaAbility.can_activate``). A function that asks the question calls
 ``legality.allowed`` through the module, so a test or an effect that replaces ``permissions`` or
@@ -26,7 +27,8 @@ change here:
   protection (702.16b, 702.16j), on a permanent or a player; a spell on the stack keeps none of
   them (113.6: a permanent's abilities function on the battlefield);
 - destroying: indestructible (702.12b);
-- countering: "can't be countered" (113.6g).
+- countering: "can't be countered" (113.6g);
+- attacking: defender (702.3b).
 """
 
 from __future__ import annotations
@@ -34,7 +36,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from resolve.cards.keywords import Hexproof, Indestructible, Protection, Shroud
+from resolve.cards.keywords import (
+    Defender,
+    Hexproof,
+    Indestructible,
+    Protection,
+    Shroud,
+    has_keyword,
+)
 from resolve.cards.keywords.qualities import Everything
 from resolve.cards.primitives.base import Ability
 from resolve.cards.primitives.statics import CantBeCountered
@@ -47,6 +56,7 @@ from resolve.effects.characteristics import (
 )
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.rules import defaults
+from resolve.state.combat import AttackPlayer, AttackTarget
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.spell import CastPermission, CastVariant, Target, TargetObject, TargetPlayer
 from resolve.state.zones import Zone, ZoneKind
@@ -123,6 +133,15 @@ class CounterAction(Action):
 
 
 @dataclass(frozen=True)
+class AttackAction(Action):
+    """``player``, the attacking player (506.2), declares ``creature`` as an attacker attacking
+    ``target`` (508.1a-b, 802.3), during a combat (``TurnState.combat``)."""
+
+    creature: ObjectId
+    target: AttackTarget
+
+
+@dataclass(frozen=True)
 class Permission(Immutable):
     """A rule or effect that allows an action: the CR ``rule`` and what it lets the player do."""
 
@@ -160,6 +179,8 @@ def permissions(state: GameState, action: Action) -> tuple[Permission, ...]:
         return _destroy_permissions(state, action)
     if isinstance(action, CounterAction):
         return _counter_permissions(state, action)
+    if isinstance(action, AttackAction):
+        return _attack_permissions(state, action)
     raise EngineError(f"no rule of legality covers {action!r}")
 
 
@@ -176,6 +197,8 @@ def prohibitions(state: GameState, action: Action) -> tuple[Prohibition, ...]:
         return _destroy_prohibitions(state, action)
     if isinstance(action, CounterAction):
         return _counter_prohibitions(state, action)
+    if isinstance(action, AttackAction):
+        return _attack_prohibitions(state, action)
     raise EngineError(f"no rule of legality covers {action!r}")
 
 
@@ -205,6 +228,8 @@ def _basis(action: Action) -> tuple[str, ...]:
         return ("701.8a",)
     if isinstance(action, CounterAction):
         return ("701.6a",)
+    if isinstance(action, AttackAction):
+        return ("508.1a", "506.2")
     return ("101.2",)
 
 
@@ -365,4 +390,43 @@ def _counter_prohibitions(state: GameState, action: CounterAction) -> tuple[Proh
     # 113.6g: "This spell can't be countered." functions on the stack.
     if any(isinstance(a, CantBeCountered) for a in characteristics(state, action.spell).abilities):
         return (Prohibition("113.6g", "it can't be countered"),)
+    return ()
+
+
+def _attack_permissions(state: GameState, action: AttackAction) -> tuple[Permission, ...]:
+    # 508.1a: during a combat, the active player (the attacking player, 506.2) may declare an
+    # untapped creature they control that isn't a battle and isn't summoning sick (302.6;
+    # haste, 702.10b, is read by ``summoning_sick``), attacking a defending player still in
+    # the game (506.2, 802.2, 800.4a). 506.3: only a creature can attack. These are the
+    # permission's conditions, not prohibitions: "can attack as though it didn't have
+    # defender" or "as though it were untapped" effects (M5) add a permission.
+    turn = state.turn
+    combat = None if turn is None else turn.combat
+    if turn is None or combat is None or action.player != turn.active_player:
+        return ()
+    obj = state.objects.get(action.creature)
+    if obj is None or obj.zone.kind is not ZoneKind.BATTLEFIELD:
+        return ()
+    if obj.controller != action.player or obj.tapped:
+        return ()
+    types = characteristics(state, action.creature).card_types
+    if CardType.CREATURE not in types or CardType.BATTLE in types:
+        return ()
+    if defaults.summoning_sick(state, action.creature, defaults.SicknessPurpose.ATTACK):
+        return ()
+    match action.target:
+        case AttackPlayer(player=player):
+            if player not in combat.defending_players or state.player(player).left_game:
+                return ()
+    return (
+        Permission("508.1a", "attack with an untapped creature controlled since the turn began"),
+    )
+
+
+def _attack_prohibitions(state: GameState, action: AttackAction) -> tuple[Prohibition, ...]:
+    # 702.3b: a creature with defender can't attack (redundant instances forbid it once). The
+    # other restrictions on one creature arrive with their cards: "can't attack (unless ...)"
+    # and Ghostly Prison's cost (M3.5).
+    if has_keyword(characteristics(state, action.creature), Defender):
+        return (Prohibition("702.3b", "it has defender"),)
     return ()

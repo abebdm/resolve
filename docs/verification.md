@@ -49,13 +49,16 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
      response; a Cancel or Cryptic Command cast by a caster seat with mana left open), so a 0
      in one of them, after an engine change, is worth a note rather than a failure: the rules
      and card tests cover both;
-   - `Damage:` above zero (Fiery Confluence; Chandra's Ignition only after M3);
+   - `Damage:` above zero (Fiery Confluence; Chandra's Ignition only after M3), with some combat
+     damage (M3.2);
    - `Casts per card:` lists every card of `tools/excerpts/cards.json` but the lands (played,
      not cast), Repentant Blacksmith (kept out of the fuzz decks until M6, 702.16e) and the
      cards under "Not yet reachable"; a rarely cast card (Cryptic Command, with three blue
      symbols, or a creature that only one recipe holds) may be missing in one run and is then
      worth a note, not a failure;
-   - `Gaps:` lists only `508.1` and `903.8`;
+   - `Gaps:` lists only `509.1` and `903.8` (`508.1` until M3.2; `509.1`, declaring blockers,
+     until M3.3);
+   - `Combat:` shows combats, and attackers declared above zero (M3.2);
    - `Turns per game:` reaches a maximum of several tens of turns, and `Played:` shows
      hundreds of lands and mana abilities, and some reversed mana ability activations
      (Selesnya Signet activated with nothing to pay its {1});
@@ -92,13 +95,13 @@ run can't meet yet; each says why and when it becomes reachable (docs/decisions.
 2026-10-28, "M2.11"):
 
 - **Endings by decking and by life total** (`decked`, `life total` may be 0), and much damage:
-  most games stop at the 508.1 gap (declaring attackers) soon after a creature resolves, long
-  before a library runs out or a life total reaches 0 from spells alone. **M3** implements
-  attacking and removes 508.1 from the allowed gaps; its roadmap item restores these
-  expectations.
+  most games stop at the 509.1 gap (declaring blockers, until M3.3; 508.1 until M3.2) as soon
+  as a creature attacks a player who controls an untapped creature, long before a library runs
+  out or a life total reaches 0. **M3.3** implements blocking and removes 509.1 from the
+  allowed gaps; M3.9 restores these expectations.
 - **Chandra's Ignition cast:** it needs a creature its caster controls as its target and five
-  mana in a main phase, and a game with a creature on the battlefield stops at its
-  controller's next combat (508.1). Reachable in **M3**, with the endings above.
+  mana in a main phase, and a game with creatures on both sides stops at the first attack
+  (509.1). Reachable in **M3.3**, with the endings above.
 - **Decimate cast:** it needs a target artifact, creature, enchantment and land, and no card in
   the fuzz decks is an enchantment. Reachable when the first enchantment card is implemented
   and joins the fuzz excerpt (the card and rules tests cover Decimate meanwhile).

@@ -39,7 +39,8 @@ Selesnya Signet, Command Tower, Temple of the False God, Llanowar Elves, Avacyn'
 Ixalli's Lorekeeper, Emerald Medallion, Kinjalli's Caller, Swords to Plowshares, Chandra's
 Ignition, Decimate, Fiery Confluence, Cryptic Command, Cancel, Rishkar's Expertise, and one
 card for each keyword: Ashcoat Bear, Gladecover Scout, Humble
-Budoka, Darksteel Relic, Darksteel Myr, Repentant Blacksmith and Nacatl Savage.
+Budoka, Darksteel Relic, Darksteel Myr, Repentant Blacksmith, Nacatl Savage, Raging Goblin,
+Alaborn Grenadier and Wall of Stone.
 Tools compare a new Comprehensive Rules version or card data snapshot against
 the pinned ones (`tools/rules_diff.py`, `tools/card_diff.py`), and `tools/rule.py` prints any
 rule of the pinned Comprehensive Rules by number. The rules coverage map in
@@ -50,10 +51,12 @@ rules the engine still refuses loudly. The rules that cards can change (land pla
 the turn sequence, who decides) each live in one function that effects will plug into. The test
 games that check the engine now include players who cast every spell they can, so they reach
 counterspells and the expensive spells. M3 (combat) is under way
-([`docs/plans/m3.md`](docs/plans/m3.md)): its first step built the groundwork (how attacks,
-blocks and combat damage will be asked and answered, and how a combat is recorded and shown to
-every player), but creatures can't attack yet. **Next:** declaring attackers, and the damage of
-unblocked attackers (M3.2).
+([`docs/plans/m3.md`](docs/plans/m3.md)): creatures can now attack (not the turn they arrive,
+unless they have haste; never with defender), choosing which opponent each attacks in a
+multiplayer game; attacking taps them unless they have vigilance, and unblocked attackers deal
+their combat damage, which can win the game. Blocking isn't implemented yet: when an attacked
+player could block, the game stops loudly. **Next:** declaring blockers, and dividing damage
+among blockers (M3.3).
 Details:
 "Current status" in [`CLAUDE.md`](CLAUDE.md).
 

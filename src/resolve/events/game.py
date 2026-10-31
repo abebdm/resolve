@@ -7,9 +7,10 @@ from typing import TYPE_CHECKING
 
 from resolve.errors import EngineError
 from resolve.events.base import Event
+from resolve.state.combat import remove_from_combat
 from resolve.state.game import GameResult, move_object, zone_list
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.zones import COMMAND, Zone
+from resolve.state.zones import COMMAND, Zone, ZoneKind
 
 if TYPE_CHECKING:
     from resolve.state.game import GameState
@@ -139,7 +140,8 @@ class PlayerLeftGame(Event):
 
     As applied, ``removed`` names the objects that left from every zone but the library, and
     ``library_size`` counts the library's: library object IDs survive shuffles, so the public
-    log never shows them (design.md §9). A player who leaves also loses their unspent mana.
+    log never shows them (design.md §9). A player who leaves also loses their unspent mana, and
+    their permanents leave combat (506.4).
     Objects they control but don't own, and effects giving them control, can't exist yet:
     ``LeaveGame`` raises ``NotImplementedRule`` before proposing this event if they would.
     """
@@ -162,6 +164,9 @@ class PlayerLeftGame(Event):
             for obj, game_object in state.objects.items()
             if game_object.owner == self.player and game_object.zone != Zone.library(self.player)
         )
+        for obj in removed:
+            if state.objects[obj].zone.kind is ZoneKind.BATTLEFIELD:
+                remove_from_combat(state, obj)  # 506.4
         for obj in (*removed, *player.library):
             zone_list(state, state.objects[obj].zone).remove(obj)
             del state.objects[obj]

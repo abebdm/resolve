@@ -54,6 +54,24 @@ class Haste(Ability):
 
 
 @dataclass(frozen=True)
+class Vigilance(Ability):
+    """702.20b: attacking doesn't cause this creature to tap (508.1f)."""
+
+    @property
+    def text(self) -> str:
+        return "Vigilance"
+
+
+@dataclass(frozen=True)
+class Defender(Ability):
+    """702.3b: this creature can't attack."""
+
+    @property
+    def text(self) -> str:
+        return "Defender"
+
+
+@dataclass(frozen=True)
 class Hexproof(Ability):
     """702.11b-c: this permanent (or player) can't be the target of spells or abilities its
     controller's (or the player's) opponents control. With a ``quality``, "hexproof from

@@ -15,7 +15,7 @@ from resolve.decisions.spaces import Number, PlayerOption
 from resolve.engine.api import pending_decision, view_for
 from resolve.engine.start import StartGame
 from resolve.errors import DeckError, EngineError, InvalidAnswer, NotImplementedRule
-from resolve.state.combat import AttackPlayer, AttackRecord, BlockRecord
+from resolve.state.combat import AttackPlayer, AttackRecord, BlockRecord, CombatState
 from resolve.state.config import GameConfig
 from resolve.state.game import turn_order
 from resolve.state.ids import PlayerId
@@ -471,3 +471,20 @@ def test_an_illegal_combat_is_refused_when_built() -> None:
     scenario.attacking(P1, bears)
     with pytest.raises(EngineError, match="active player"):
         scenario.build()
+
+
+def test_a_combat_step_has_the_combat_state_but_beginning_of_combat_from_its_start() -> None:
+    """In the combat phase ``at`` creates the combat state (no attackers yet), as the engine
+    has by then (506.2); at the beginning of combat step started from its beginning the engine
+    creates it as the step begins."""
+    scenario = Scenario(3)
+    scenario.at(TurnStep.DECLARE_ATTACKERS)
+    turn = scenario._state.turn  # pyright: ignore[reportPrivateUsage]
+    assert turn is not None and turn.combat == CombatState((P1, P2))
+
+    scenario = Scenario(2)
+    scenario.at(TurnStep.BEGINNING_OF_COMBAT, begin=True)
+    turn = scenario._state.turn  # pyright: ignore[reportPrivateUsage]
+    assert turn is not None and turn.combat is None
+    state = scenario.build()
+    assert state.turn is not None and state.turn.combat == CombatState((P1,))

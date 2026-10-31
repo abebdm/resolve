@@ -256,9 +256,13 @@ The approved plan is `docs/plans/m3.md` (steps M3.0 to M3.9).
   ✓: both spaces without constraints, the random and text agents, the fuzz probes.
 - [ ] The combat rule defaults: `attack_declarer`, `block_declarer`, `combat_damage_assigner`,
   `combat_damage_amount`, `blocks_allowed` (rule 12; M3.1 to M3.3). M3.1 ✓: the functions,
-  each returning the CR's default; their callers and seam tests come with M3.2 and M3.3.
+  each returning the CR's default. M3.2 ✓: `attack_declarer` and `combat_damage_amount` called,
+  with seam tests; the others come with M3.3.
 - [ ] Beginning of combat, declare attackers, declare blockers, combat damage, end of combat
-  (506–511), and removing the 508.1 gap (M3.2, M3.3).
+  (506–511), and removing the 508.1 gap (M3.2, M3.3). M3.2 ✓: the combat state's beginning and
+  end (506.2, 511.3), declaring attackers (508.1a-b, f, k), 508.8, leaving combat (506.4),
+  unblocked combat damage (510.1a-b, 510.2), 800.4e, the 903.10a gap; the 508.1 gap is gone,
+  blocks are the gap 509.1 until M3.3.
 - [ ] Attack and block requirements and restrictions (508.1c-d, 509.1b-c), with attack and block
   costs (508.1g-j, 509.1d-f): the primitives of "can't attack or block unless" (Topiary Stomper),
   "can't be blocked" (Rogue's Passage) and power-based blocking restrictions (Champion of
@@ -267,33 +271,35 @@ The approved plan is `docs/plans/m3.md` (steps M3.0 to M3.9).
   Ghalta and Mavren, which needs triggers and tokens, in M4 (M3.7).
 - [ ] First strike and double strike damage steps; trample; deathtouch; lifelink; flying and reach;
   vigilance; menace. Deathtouch and lifelink apply to noncombat damage too (M2's damage table)
-  (M3.2 to M3.6).
+  (M3.2 to M3.6). M3.2 ✓: vigilance.
 - [ ] Defender (702.3); the retired evergreen evasion keywords intimidate (702.13), landwalk
-  (702.14) and fear (702.36) (M3.2, M3.4).
-- [ ] Haste (702.10), including its 302.6 part (M3.1, M3.2). M3.1 ✓: `Haste` and its {T} half
-  (702.10c) in `summoning_sick`; its attack half is read once attackers are declared (M3.2).
+  (702.14) and fear (702.36) (M3.2, M3.4). M3.2 ✓: defender (Wall of Stone).
+- [x] Haste (702.10), including its 302.6 part (M3.1, M3.2). M3.1 ✓: `Haste` and its {T} half
+  (702.10c) in `summoning_sick`; M3.2 ✓: its attack half (702.10b, Raging Goblin).
 - [ ] Summoning sickness for attacking (302.6): `defaults.can_tap_for_cost` becomes
   `summoning_sick(state, obj, purpose)`, for a creature's own {T}/{Q} abilities and for
   attacking; the tap costs of convoke (702.51), improvise (702.126), crew (702.122), saddle and
   "tap an untapped creature you control" ignore summoning sickness and never call it (M3.1;
   docs/decisions.md, 2026-10-21 "Deferred from M2.4"). M3.1 ✓: the rename and both purposes;
-  declaring attackers reads `ATTACK` in M3.2.
+  M3.2 ✓: declaring attackers reads `ATTACK`.
 - [ ] Protection's blocking part (702.16f, j, k) (M3.4).
 - [ ] Multiplayer attacks: choosing which player each creature attacks, blocks and damage
   assignment in APNAP order (802), leaving room for attacking planeswalkers and battles (306,
-  310) (M3.2, M3.3).
+  310) (M3.2, M3.3). M3.2 ✓: each attacker chooses a defending player (802.3).
 - [ ] Extra turns, phases and steps (500.7–500.10), on M2.1's `TurnState.segments` (with numbered
   phases) and `next_turn` (Time Walk, Relentless Assault; M3.8).
 - [ ] Ending turns and phases (724): the design must allow it; implemented in M9 (exotic).
 - [ ] Cards: 14 keyword example cards, 7 combat-rules cards, the torture tests Time Walk and
   Relentless Assault, and Zetalpa, Primal Dawn (`docs/plans/m3.md` §7); the torture tests'
-  rules for Lure and Basilisk Collar (the cards themselves in M5).
+  rules for Lure and Basilisk Collar (the cards themselves in M5). M3.2 ✓: Raging Goblin,
+  Alaborn Grenadier, Wall of Stone.
 - [ ] Restore the thorough fuzz run's expectations that the 508.1 gap blocks
   (`docs/verification.md`, "Not yet reachable"): with attacks, games end by life total and by
   decking, damage is dealt, and Chandra's Ignition is cast (a game with a creature no longer
   stops at its controller's first combat). Remove 508.1 from `ALLOWED_GAPS` and move those
   expectations back into the checklist; Decimate too, once Ghostly Prison (an enchantment) is
-  in the fuzz decks (M3.2, M3.5, M3.9).
+  in the fuzz decks (M3.2, M3.5, M3.9). M3.2 ✓: 508.1 left `ALLOWED_GAPS` (509.1 stands in until
+  M3.3).
 
 **From M2:** protection's blocking part (702.16f) and combat damage reach the 702.16e gap in
 `DamageDealt.apply`; `TapAll` taps without attacking; haste plugs into
@@ -709,6 +715,22 @@ completes a step (CLAUDE.md, "Documentation requirements").
   (`CombatView`) and the text renderer's combat line; `resolve.rules.combat.defending_players`
   (506.2, 802.2); `Scenario.attacking` and `Scenario.blocking`; fixtures Test Hasty Elves and
   Test Twice Hasty Elves. No game behavior changed but haste's {T} half.
+- **Done (M3.2, declaring attackers and unblocked damage):** the combat state's beginning
+  (`CombatBegan`, as the combat phase's first step begins: 506.2, 802.2; no 507.1 choice) and end
+  (`CombatEnded`, 511.3) and `AttackersDeclared` (508.1k) and `BlockersDeclared` (509.1g-h) in
+  `resolve.events.combat`; `remove_from_combat` (506.4) in `resolve.state.combat`, called by
+  `move_object` and `PlayerLeftGame`; `legality.AttackAction` (508.1a's permission with 302.6,
+  defender's prohibition 702.3b); `resolve.rules.combat.attack_targets`, `attack_declaration`
+  (the `ChooseAssignment` of 508.1a-b, 802.3) and `declared_attacks`; the tasks
+  `DeclareAttackers` (508.1, for `defaults.attack_declarer`; 508.1f taps without vigilance),
+  `DeclareBlockers` (the gap `509.1` when an attacked player controls an untapped creature,
+  otherwise every attacker unblocked) and `CombatDamage` (510.1a-c, 510.2, 800.4e, the gaps
+  `510.1c` and `903.10a`) in `resolve.engine.combat`; `defaults.is_skipped` reading 508.8 from the
+  combat state; `DamageDealt.combat`; the keywords `Vigilance` and `Defender`; Raging Goblin,
+  Alaborn Grenadier and Wall of Stone (`keyword_examples`); the fuzz harness's `Combat:` line and
+  combat damage on its `Damage:` line, `ALLOWED_GAPS` 509.1 and 903.8; `tests/combat_support.py`;
+  `Passer` declares no attackers; the scenario builder's `at(...)` creates the combat state in
+  the combat phase.
 
 ---
 
@@ -779,7 +801,7 @@ earlier milestones must leave room for every row in this map.
 | 213 | Information Below the Text Box | out of scope | — | no game rules |
 | 300 | General | M1 ✓ | E |  |
 | 301 | Artifacts | M2 ✓ (casting artifact spells: M2.3 ✓); Equipment M4; Vehicles M5; Fortifications M9 | E |  |
-| 302 | Creatures | M1 ✓, M2 ✓ (302.6 for {T} costs: M2.4 ✓), M3 (302.6 for attacking) | E | `defaults.summoning_sick(state, obj, purpose)` (M3.1 ✓, both purposes; declaring attackers reads it in M3.2), `GameObject.entered_turn`, `Player.last_turn_began` |
+| 302 | Creatures | M1 ✓, M2 ✓ (302.6 for {T} costs: M2.4 ✓), M3 ✓ (302.6 for attacking: M3.2 ✓) | E | `defaults.summoning_sick(state, obj, purpose)` (M3.1 ✓, both purposes; `legality.AttackAction` reads `ATTACK`, M3.2 ✓), `GameObject.entered_turn`, `Player.last_turn_began` |
 | 303 | Enchantments | M2 ✓ (casting enchantment spells, 303.1-303.2: M2.3); Auras M4 | E | Sagas, Classes, Cases and Rooms have their own rows |
 | 304 | Instants | M2 ✓ (304.1 timing: M2.3, flash M2.8; 304.2 resolving: M2.6); 304.4 with the first effect that puts a card onto the battlefield (M4); 304.5 with activated abilities (M4) | E |  |
 | 305 | Lands | M1 ✓; modifiers M5 | E | `land_plays_allowed`, `land_play_options`: default functions in place (M2.1 ✓) |
@@ -808,12 +830,12 @@ earlier milestones must leave room for every row in this map.
 | 503 | Upkeep Step | M1 ✓ | E |  |
 | 504 | Draw Step | M1 ✓ | E | `draw_step_draws`: default function in place (M2.1 ✓) |
 | 505 | Main Phase | M1 ✓; 505.3-505.5 M9 | E |  |
-| 506 | Combat Phase | M3 | E | 506.8 (spells timed by combat) as a predicate, `combat_point`, tested with a fixture; its first real cards in M9 |
-| 507 | Beginning of Combat Step | M3 | E |  |
-| 508 | Declare Attackers Step | M3 | E |  |
-| 509 | Declare Blockers Step | M3 | E |  |
-| 510 | Combat Damage Step | M3 | E |  |
-| 511 | End of Combat Step | M3 | E |  |
+| 506 | Combat Phase | M3 (506.2, 506.3, 506.4 on leaving the battlefield: M3.2 ✓) | E | `CombatBegan`, `remove_from_combat` (M3.2 ✓); 506.8 (spells timed by combat) as a predicate, `combat_point`, tested with a fixture; its first real cards in M9 |
+| 507 | Beginning of Combat Step | M3 ✓ | E | 507.1: no choice (802, the attack multiple players option); the combat state is created as the phase begins (M3.2 ✓) |
+| 508 | Declare Attackers Step | M3 (508.1a-b, f, k and 508.8: M3.2 ✓) | E | `DeclareAttackers`, `attack_declaration`, `AttackersDeclared`; 508.1c-d, g-j in M3.5, 508.4 in M3.7, 508.1m triggers in M4 |
+| 509 | Declare Blockers Step | M3 | E | until M3.3, `NotImplementedRule("509.1")` when a block is possible; otherwise every attacker is unblocked (509.1h, M3.2 ✓) |
+| 510 | Combat Damage Step | M3 (510.1a-b, 510.1c with no blockers left, 510.2: M3.2 ✓) | E | `CombatDamage`, `DamageDealt.combat`; damage to and by blockers (510.1c-e) is the M3.3 gap `510.1c`; 510.4 in M3.6 |
+| 511 | End of Combat Step | M3 ✓ (511.2's triggers M4, "until end of combat" effects M5) | E | `CombatEnded` (511.3, M3.2 ✓) |
 | 512 | Ending Phase | M1 ✓ | E |  |
 | 513 | End Step | M1 ✓ | E |  |
 | 514 | Cleanup Step | M1 ✓; 514.2 effects ending M5 | E |  |
@@ -866,9 +888,9 @@ earlier milestones must leave room for every row in this map.
 | 731 | Day and Night | M7 | S |  |
 | 732 | Taking Shortcuts | M7 | E | how much of it is worth implementing: design.md §16 |
 | 733 | Handling Illegal Actions | M2 ✓ (M2.3 ✓; reversing a mana ability activation and the kept-abilities dependency check of 733.1: M2.4 ✓; 733.2 for a cast during resolution, asked again: M2.10 ✓); keeping the results of sacrifice and discard (733.1) M4 | E | checkpoint and restore (`resolve.state.checkpoint`), `resolve.engine.reversal` |
-| 800 | General | M1 ✓ (800.4a, h, j, k); the rest M7 | E |  |
+| 800 | General | M1 ✓ (800.4a, h, j, k), M3 ✓ (800.4e: M3.2 ✓); the rest M7 | E |  |
 | 801 | Limited Range of Influence Option | out of scope | — | Commander doesn't use it (903.2) |
-| 802 | Attack Multiple Players Option | M3, M7 | E | Commander's multiplayer default |
+| 802 | Attack Multiple Players Option | M3 (802.2, 802.3: M3.2 ✓), M7 | E | Commander's multiplayer default |
 | 803 | Attack Left and Attack Right Options | out of scope | — | a multiplayer option Commander doesn't use |
 | 804 | Deploy Creatures Option | out of scope | — | a team option |
 | 805 | Shared Team Turns Option | out of scope | — | a team option |
@@ -881,7 +903,7 @@ earlier milestones must leave room for every row in this map.
 | 900 | General | — | — | nothing to implement |
 | 901 | Planechase | out of scope | — | a casual variant |
 | 902 | Vanguard | out of scope | — | a casual variant |
-| 903 | Commander | M7 (903.4, 903.4a, 903.4f for mana: M2.4 ✓; 903.8 cast gap M2.3 ✓); 903.12 Brawl and 903.13 Commander Draft out of scope | E | the project's format; `commander_color_identity` |
+| 903 | Commander | M7 (903.4, 903.4a, 903.4f for mana: M2.4 ✓; 903.8 cast gap M2.3 ✓; 903.10a combat damage gap M3.2 ✓); 903.12 Brawl and 903.13 Commander Draft out of scope | E | the project's format; `commander_color_identity` |
 | 904 | Archenemy | out of scope | — | a casual variant |
 | 905 | Conspiracy Draft | out of scope | — | the draft itself (905.1-905.2) isn't a game the engine plays; the game's conspiracy rules are 315 and 702.106, which are in scope |
 
@@ -890,14 +912,14 @@ earlier milestones must leave room for every row in this map.
 | CR | Name | Milestone | Tier | Notes |
 |---|---|---|---|---|
 | 702.2 | Deathtouch | M3 | E | noncombat damage too (the M2 damage table leaves room) |
-| 702.3 | Defender | M3 | E | D |
+| 702.3 | Defender | M3 ✓ | E | D; `Defender`, a prohibition of `legality.AttackAction` (M3.2 ✓); Wall of Stone |
 | 702.4 | Double Strike | M3 | E | D |
 | 702.5 | Enchant | M4 | E | Aura spells' targets use M2's targeting |
 | 702.6 | Equip | M4 | E | D |
 | 702.7 | First Strike | M3 | E | D |
 | 702.8 | Flash | M2 ✓ (M2.8 ✓) | E | `Flash`, read by `may_cast_now` |
 | 702.9 | Flying | M3 | E | D |
-| 702.10 | Haste | M3 | E | D; `Haste` in `defaults.summoning_sick(state, obj, purpose)` for both halves (M3.1 ✓; 702.10c tested with Test Hasty Elves); 702.10b tested with declaring attackers (M3.2) |
+| 702.10 | Haste | M3 ✓ | E | D; `Haste` in `defaults.summoning_sick(state, obj, purpose)` for both halves (M3.1 ✓; 702.10c tested with Test Hasty Elves); 702.10b with Raging Goblin (M3.2 ✓) |
 | 702.11 | Hexproof | M2 ✓ (M2.8); a player with "hexproof from" (702.11d) M5, with its first card | E | D; including "hexproof from"; a player's from `player_abilities` |
 | 702.12 | Indestructible | M2 ✓ (M2.8 ✓) | E | D |
 | 702.13 | Intimidate | M3 | E | retired evergreen |
@@ -907,7 +929,7 @@ earlier milestones must leave room for every row in this map.
 | 702.17 | Reach | M3 | E | D |
 | 702.18 | Shroud | M2 ✓ (M2.8 ✓) | E | D |
 | 702.19 | Trample | M3 | E | D |
-| 702.20 | Vigilance | M3 | E | D |
+| 702.20 | Vigilance | M3 ✓ | E | D; `Vigilance`, read by `DeclareAttackers` (508.1f, M3.2 ✓); Alaborn Grenadier |
 | 702.21 | Ward | M4 | E | D; M2 logs the targets chosen |
 | 702.22 | Banding | M3 | X |  |
 | 702.23 | Rampage | M5 | S |  |

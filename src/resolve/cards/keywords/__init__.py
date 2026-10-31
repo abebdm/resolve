@@ -6,12 +6,14 @@
 """
 
 from resolve.cards.keywords.evergreen import (
+    Defender,
     Flash,
     Haste,
     Hexproof,
     Indestructible,
     Protection,
     Shroud,
+    Vigilance,
     has_keyword,
     keywords,
     protection_from_each_color,
@@ -30,6 +32,7 @@ from resolve.cards.keywords.qualities import (
 __all__ = [
     "CardTypeQuality",
     "ColorQuality",
+    "Defender",
     "Everything",
     "Flash",
     "Haste",
@@ -41,6 +44,7 @@ __all__ = [
     "Quality",
     "Shroud",
     "SubtypeQuality",
+    "Vigilance",
     "each_color",
     "has_keyword",
     "keywords",

@@ -364,9 +364,23 @@ under its controller's control continuously since their most recent turn began: 
 `defaults.summoning_sick` for both of its purposes (`SicknessPurpose.TAP_ABILITY`, `ATTACK`).
 Multiple instances are redundant.
 - **Rules:** 702.10a-d, 302.6, 602.5a, 508.1a.
-- **Example:** the fixture Test Hasty Elves (`CardDefinition("Test Hasty Elves",
-  abilities=(Haste(), tap_for_green))`, `tests/game_fixtures.py`); the real example card,
-  Raging Goblin, arrives with declaring attackers (M3.2).
+- **Example:** Raging Goblin: `CardDefinition("Raging Goblin", abilities=(Haste(),))`; the
+  fixture Test Hasty Elves (`CardDefinition("Test Hasty Elves", abilities=(Haste(),
+  tap_for_green))`, `tests/game_fixtures.py`) for its {T} half.
+
+### `Vigilance` (`resolve.cards.keywords.evergreen`)
+Attacking doesn't cause the creature to tap: read by `DeclareAttackers`
+(`resolve.engine.combat`) from the characteristics as attackers are declared (508.1f).
+Multiple instances are redundant.
+- **Rules:** 702.20a-b, 508.1f.
+- **Example:** Alaborn Grenadier: `CardDefinition("Alaborn Grenadier",
+  abilities=(Vigilance(),))`.
+
+### `Defender` (`resolve.cards.keywords.evergreen`)
+The creature can't attack: a prohibition of `legality.allowed(AttackAction)` (101.2: it wins
+over 508.1a's permission). It can still block. Multiple instances are redundant.
+- **Rules:** 702.3a-c, 508.1a.
+- **Example:** Wall of Stone: `CardDefinition("Wall of Stone", abilities=(Defender(),))`.
 
 ### `Hexproof(quality=None)` (`resolve.cards.keywords.evergreen`)
 Can't be the target of spells or abilities its controller's (a player's: their) opponents

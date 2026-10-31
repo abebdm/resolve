@@ -175,12 +175,19 @@ drive decisions with a script.
 8. **Combat (506-511).** After `at(...)` in the combat phase, `scenario.attacking(player,
    *creatures)` makes creatures attack that player (`declared=False`: put onto the battlefield
    attacking, 508.4) and `scenario.blocking(blocker, *attackers)` makes a creature block, in
-   declaration order. The first call creates `TurnState.combat` with the defending players
-   (`resolve.rules.combat.defending_players`: every opponent still in the game, 506.2, 802.2).
-   Blocks need blockers to have been declared: `at(Step.DECLARE_BLOCKERS)` with priority, or a
-   later combat step; from then on an attacker not named by `blocking` is unblocked (509.1h).
-   Legality is left to the invariants, checked by `build()`. Until M3.2 ends combat (511.3), a
-   scenario combat state outlives its phase if the test plays on into the postcombat main phase.
+   declaration order. `at(...)` in the combat phase creates `TurnState.combat` with the
+   defending players (`resolve.rules.combat.defending_players`: every opponent still in the
+   game, 506.2, 802.2), except at the beginning of combat step with `begin=True`, where the
+   engine creates it as the step begins. Blocks need blockers to have been declared:
+   `at(Step.DECLARE_BLOCKERS)` with priority, or a later combat step; from then on an attacker
+   not named by `blocking` is unblocked (509.1h). Legality is left to the invariants, checked
+   by `build()`. The end of combat step ends it (511.3).
+   To play combat out, `at(Step.DECLARE_ATTACKERS, begin=True)` stops at the declaration
+   (`DECLARE_ATTACKERS`, not asked when no creature may attack); `tests/combat_support.py` has
+   `declare_attackers(state, {creature: player})` (empty: no attackers), `may_attack(state)`
+   and `attack_targets(state, creature)` (what the declaration offers), `attack_answer` (the
+   `Assignment`, to submit by hand) and `pass_to(state, phase, step)` (pass priority until
+   there). `Passer` declares no attackers.
 
 ### Write an engine test with test-only tasks
 
@@ -226,8 +233,8 @@ override either.
    10 games are one game of each. The decks come from two recipes (`recipe_deck`): the same
    number of each basic land (`tools/excerpts/basic_lands.json`) plus half as many (at least
    one) of each card of `tools/excerpts/cards.json`: its noncreature cards (`spells`: long
-   games) or all of them but `FUZZ_EXCLUSIONS` (`creatures`: these end at the 508.1 gap once a
-   creature's controller reaches combat). Each `--copies` number gives both recipes, cycled
+   games) or all of them but `FUZZ_EXCLUSIONS` (`creatures`: these end at the 509.1 gap once a
+   creature attacks a player who could block it, until M3.3). Each `--copies` number gives both recipes, cycled
    among the seats; every other Commander game (odd seeds) gives each seat one of the excerpt's
    creatures as its commander (casting one is the 903.8 gap). No snapshot is needed. Games play
    turns (lands, mana, casting, resolving, cleanup) until players concede, draw from an empty
@@ -257,7 +264,7 @@ override either.
    answers) cost time that grows with the game; the bookkeeping invariants run before every
    decision and every game is replayed at the end whatever `--check-every` says. Each full check
    walks only the log entries added since the last one (`CheckedLog`).
-6. When a milestone changes which gaps games can reach (after M2.3: 508.1 and 903.8), update
+6. When a milestone changes which gaps games can reach (after M2.3: 508.1 and 903.8; after M3.2: 509.1 and 903.8), update
    `ALLOWED_GAPS` in `tools/fuzz.py`, the fuzz tests' expectations and the roadmap together.
    Random agents stop at the first offered gap they pick; the fuzz tests' `PatientAgent`
    (`tests/engine_support.py`) mostly passes, so its games reach later turns. A new registered

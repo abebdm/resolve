@@ -321,6 +321,10 @@ class Scenario:
         receives priority next, after ``passed`` have passed in succession (117.4). With
         ``begin`` (always, for untap and cleanup) the step starts from its beginning instead.
 
+        In the combat phase the combat state exists, with no attackers yet (``attacking``,
+        ``blocking``), unless ``where`` is the beginning of combat step started from its
+        beginning: the engine creates it as that step begins (506.2).
+
         Each player's most recent turn (``Player.last_turn_began``, 302.6) is set as if turns had
         gone around in turn order up to this one: the active player's is ``number``, the player
         before them in turn order had ``number - 1``, and so on (``None``: no turn yet).
@@ -352,6 +356,10 @@ class Scenario:
             passed=list(passed),
             lands_played=lands_played,
         )
+        if phase is Phase.COMBAT and not (step is Step.BEGINNING_OF_COMBAT and start):
+            # The combat phase began earlier, with its combat state (506.2, 802.2); at the
+            # beginning of combat step started from its beginning, the engine creates it.
+            state.turn.combat = CombatState(defending_players(state))
         structure = defaults.turn_structure(state, active)
         # A structure the effects changed may lack this segment: then nothing remains.
         state.turn.segments = (
@@ -372,8 +380,8 @@ class Scenario:
         """Make ``attackers`` attack the player ``target`` (508.1k; ``declared=False``: put onto
         the battlefield attacking, 508.4), in this order after any earlier ones.
 
-        Needs ``at(...)`` in the combat phase first; the combat state (``TurnState.combat``) is
-        created with its defending players (506.2, 802.2) on the first call. An attacker made
+        Needs ``at(...)`` in the combat phase first, which creates the combat state
+        (``TurnState.combat``) with its defending players (506.2, 802.2). An attacker made
         once blockers have been declared (at the declare blockers step with priority, or later)
         is unblocked until ``blocking`` names it (509.1h); before that, its blocked status is
         undecided. Whether the board is legal (a creature of the active player, a defending
@@ -435,7 +443,8 @@ class Scenario:
         return self._state
 
     def _combat(self) -> CombatState:
-        """The combat state of the turn ``at`` set, created on first use (506.2, 802.2)."""
+        """The combat state of the turn ``at`` set (created there, or here at the beginning of
+        combat step started from its beginning: 506.2, 802.2)."""
         turn = self._open().turn
         if turn is None or turn.phase is not Phase.COMBAT:
             raise ScenarioError("combat needs at(...) in the combat phase first (506.1)")

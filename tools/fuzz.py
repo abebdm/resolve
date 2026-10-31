@@ -116,6 +116,7 @@ from resolve.engine.view import ObjectView, PlayerView
 from resolve.errors import DeckError, InvalidAnswer, NotImplementedRule
 from resolve.events.base import AnswerRecord, LogEntry
 from resolve.events.cards import CardDrawn, CardsPutOnBottom
+from resolve.events.combat import AttackersDeclared, CombatBegan
 from resolve.events.damage import DamageDealt
 from resolve.events.game import PlayerLost
 from resolve.events.mana import ManaAdded
@@ -137,9 +138,9 @@ from resolve.state.mana import ForSpell
 from resolve.state.rng import Rng
 from resolve.state.zones import ZoneKind
 
-# Gaps that end a fuzz game normally: declaring attackers once the active player controls a
-# creature (M3), and casting a commander from the command zone (the commander tax, M7).
-ALLOWED_GAPS: tuple[str, ...] = ("508.1", "903.8")
+# Gaps that end a fuzz game normally: declaring blockers once an attacked player controls an
+# untapped creature (M3.3), and casting a commander from the command zone (the commander tax, M7).
+ALLOWED_GAPS: tuple[str, ...] = ("509.1", "903.8")
 # A game that hasn't ended after this many answers is reported as a failure (a runaway game).
 MAX_ANSWERS = 10_000
 
@@ -811,8 +812,11 @@ class GameStats:
     - ``gap``: the rule of the gap the game stopped at, if any.
     - ``did_not_resolve``: spells whose every target was illegal (``SpellDidNotResolve``,
       608.2b).
-    - ``damage``: the damage dealt in all (``DamageDealt``, 120.3).
+    - ``damage``: the damage dealt in all (``DamageDealt``, 120.3); ``combat_damage``: the part
+      of it that was combat damage (``DamageDealt.combat``, 510.2).
     - ``countered``: spells countered (``SpellCountered``, 701.6a).
+    - ``combats``: combat phases begun (``CombatBegan``, 506.2); ``attackers``: creatures
+      declared as attackers (``AttackersDeclared``, 508.1k).
     """
 
     answers: int
@@ -833,6 +837,9 @@ class GameStats:
     did_not_resolve: int = 0
     damage: int = 0
     countered: int = 0
+    combat_damage: int = 0
+    combats: int = 0
+    attackers: int = 0
 
     @staticmethod
     def of(result: FuzzResult) -> GameStats:
@@ -879,6 +886,15 @@ class GameStats:
             did_not_resolve=sum(isinstance(record, SpellDidNotResolve) for record in records),
             damage=sum(record.total for record in records if isinstance(record, DamageDealt)),
             countered=sum(isinstance(record, SpellCountered) for record in records),
+            combat_damage=sum(
+                record.total
+                for record in records
+                if isinstance(record, DamageDealt) and record.combat
+            ),
+            combats=sum(isinstance(record, CombatBegan) for record in records),
+            attackers=sum(
+                len(record.attacks) for record in records if isinstance(record, AttackersDeclared)
+            ),
         )
 
 
@@ -919,7 +935,10 @@ def summary_lines(games: Sequence[GameStats]) -> list[str]:
         f"{sum(game.did_not_resolve for game in games)} didn't resolve, "
         f"{sum(game.countered for game in games)} countered, "
         f"{sum(game.reversed for game in games)} reversed.",
-        f"Damage: {sum(game.damage for game in games)} dealt.",
+        f"Combat: {sum(game.combats for game in games)} combats, "
+        f"{sum(game.attackers for game in games)} attackers declared.",
+        f"Damage: {sum(game.damage for game in games)} dealt, "
+        f"{sum(game.combat_damage for game in games)} of it combat damage.",
         f"Reversed casts: auto-pay seats {autopay_reversed} of {autopay_reversed + autopay_cast} "
         f"attempts, {autopay_payable} of {autopay_payable + autopay_cast} payable; random seats "
         f"{random_reversed} of {random_reversed + random_cast}, {random_payable} of "
@@ -988,7 +1007,7 @@ FUZZ_EXCLUSIONS: dict[str, str] = {
 def recipe_cards(recipe: str, excerpt: Path = CARDS_EXCERPT) -> tuple[str, ...]:
     """The excerpt's cards a recipe adds to the basic lands, sorted by name: every noncreature
     card (``SPELLS``: long games), or every card but ``FUZZ_EXCLUSIONS`` (``CREATURES``: these end
-    at the 508.1 gap once a creature's controller reaches combat)."""
+    at the 509.1 gap once a creature attacks a player who could block it)."""
     cards = sorted(load_card_excerpt(excerpt).cards(), key=lambda card: card.name)
     if recipe == SPELLS:
         return tuple(

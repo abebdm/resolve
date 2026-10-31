@@ -41,6 +41,7 @@ class DamageDealt(Event):
     source: ObjectId
     to_objects: tuple[tuple[ObjectId, int], ...] = ()
     to_players: tuple[tuple[PlayerId, int], ...] = ()
+    combat: bool = False
 
     def apply(self, state: GameState) -> None:
         from resolve.effects.characteristics import characteristics

@@ -27,6 +27,13 @@ def patch(
     monkeypatch.setattr(defaults, name, function)
 
 
+def patch_state(
+    monkeypatch: pytest.MonkeyPatch, name: str, function: Callable[[GameState], Any]
+) -> None:
+    """Replace the rule default ``defaults.<name>(state)``."""
+    monkeypatch.setattr(defaults, name, function)
+
+
 def patch_card(
     monkeypatch: pytest.MonkeyPatch,
     name: str,

@@ -29,7 +29,8 @@ from resolve.decisions.spaces import ActivateAbilityOption, PassOption, Pick, Pl
 from resolve.engine.api import submit
 from resolve.errors import EngineError, InvalidAnswer
 from resolve.events.spells import ActionReversed, PermanentSpellResolved
-from resolve.rules import defaults
+from resolve.rules import defaults, legality
+from resolve.state.combat import AttackPlayer
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import Mana, ManaType
@@ -45,6 +46,7 @@ from tests.casting_support import (
     pay,
     records,
 )
+from tests.combat_support import declare_attackers, may_attack, pass_to
 from tests.game_fixtures import answer, request_of
 from tests.scenario import Scenario, names, run_script
 from tests.seams import patch_sickness
@@ -52,6 +54,7 @@ from tests.seams import patch_sickness
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 G = ManaType.GREEN
 TAP = defaults.SicknessPurpose.TAP_ABILITY
+ATTACK = defaults.SicknessPurpose.ATTACK
 
 
 def offered(state: GameState, obj: ObjectId, ability: int = 0) -> bool:
@@ -335,3 +338,46 @@ def test_302_6_only_a_permanent_has_summoning_sickness() -> None:
     state = scenario.build()
     with pytest.raises(EngineError, match="permanent"):
         defaults.summoning_sick(state, card, TAP)
+
+
+# --- Attacking (302.6, 508.1a, 702.10b) -------------------------------------------------------
+
+
+def test_302_6_a_creature_that_came_under_control_this_turn_cant_attack() -> None:
+    """Grizzly Bears came under P0's control during this turn (turn 3): it hasn't been
+    controlled continuously since P0's most recent turn began, so it can't attack; with no other
+    creature, no declaration is asked."""
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"], entered_turn=3)
+    scenario.at(Step.DECLARE_ATTACKERS, number=3, begin=True)
+    state = scenario.build()
+    assert defaults.summoning_sick(state, bears, ATTACK)
+    assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
+    verdict = legality.allowed(state, legality.AttackAction(P0, bears, AttackPlayer(P1)))
+    assert not verdict.allowed
+
+
+def test_302_6_a_creature_controlled_since_the_turn_began_can_attack() -> None:
+    """Hill Giant came under P0's control during P1's turn 2 and Grizzly Bears during P0's turn
+    1: both have been controlled continuously since P0's turn 3 began, so both may attack."""
+    scenario = Scenario(2)
+    (giant,) = scenario.battlefield(P0, ["Hill Giant"], entered_turn=2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"], entered_turn=1)
+    scenario.at(Step.DECLARE_ATTACKERS, number=3, begin=True)
+    state = scenario.build()
+    assert may_attack(state) == (giant, bears)
+
+
+def test_702_10b_haste_lets_raging_goblin_attack_the_turn_it_arrives() -> None:
+    """Raging Goblin came under P0's control this turn, but it has haste (702.10b): it may
+    attack, and deals 1 damage to P1. Grizzly Bears, arrived with it, may not."""
+    scenario = Scenario(2)
+    goblin, bears = scenario.battlefield(P0, ["Raging Goblin", "Grizzly Bears"], entered_turn=3)
+    scenario.at(Step.DECLARE_ATTACKERS, number=3, begin=True)
+    state = scenario.build()
+    assert not defaults.summoning_sick(state, goblin, ATTACK)
+    assert may_attack(state) == (goblin,)
+    assert bears not in may_attack(state)
+    declare_attackers(state, {goblin: P1})
+    pass_to(state, Phase.POSTCOMBAT_MAIN)
+    assert state.player(P1).life == 19

@@ -1,12 +1,15 @@
 """The keyword example cards (docs/primitives.md): Ashcoat Bear (flash), Gladecover Scout
 (hexproof), Humble Budoka (shroud), Darksteel Relic and Darksteel Myr (indestructible),
-Repentant Blacksmith (protection from red), Nacatl Savage (protection from artifacts) and Cancel
-("Counter target spell.").
+Repentant Blacksmith (protection from red), Nacatl Savage (protection from artifacts), Cancel
+("Counter target spell."), and M3.2's Raging Goblin (haste), Alaborn Grenadier (vigilance) and
+Wall of Stone (defender).
 
-Oracle text and rulings checked against the Scryfall snapshot of 2026-10-26
-(``tools/excerpts/cards.json``). Their behavior is tested with the keyword's rules:
+Oracle text and rulings checked against the Scryfall snapshot of 2026-10-26 (M3.2's cards:
+2026-10-30, ``tools/excerpts/cards.json``). Their behavior is tested with the keyword's rules:
 tests/rules/test_702_8_flash.py, test_702_11_hexproof.py, test_702_18_shroud.py,
-test_702_12_indestructible.py, test_702_16_protection.py and test_701_6_counter.py.
+test_702_12_indestructible.py, test_702_16_protection.py and test_701_6_counter.py; haste
+(702.10b) in test_302_6_summoning_sickness.py, vigilance (702.20b) and defender (702.3b) in
+test_508_declare_attackers.py. M3.2's three cards have no rulings.
 
 Only Nacatl Savage has a ruling (2009-02-01), "Protection from artifacts" means:
 
@@ -27,11 +30,14 @@ import pytest
 
 from resolve.cards.definitions import keyword_examples
 from resolve.cards.keywords import (
+    Defender,
     Flash,
+    Haste,
     Hexproof,
     Indestructible,
     Protection,
     Shroud,
+    Vigilance,
     has_keyword,
 )
 from resolve.cards.primitives.base import Ability
@@ -52,6 +58,9 @@ KEYWORDS: dict[str, type[Ability]] = {
     "Darksteel Myr": Indestructible,
     "Repentant Blacksmith": Protection,
     "Nacatl Savage": Protection,
+    "Raging Goblin": Haste,
+    "Alaborn Grenadier": Vigilance,
+    "Wall of Stone": Defender,
 }
 
 

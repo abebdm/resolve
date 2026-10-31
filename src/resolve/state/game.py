@@ -350,12 +350,16 @@ def move_object(
     this.
 
     An object leaving the battlefield or the stack leaves its last known information behind
-    (``GameState.last_known``, 608.2h).
+    (``GameState.last_known``, 608.2h); one leaving the battlefield is removed from combat
+    (506.4).
     """
+    from resolve.state.combat import remove_from_combat
     from resolve.state.last_known import snapshot
 
     old = state.object(obj_id)
     zone = _destination(old.owner, zone, controller)
+    if old.zone.kind is ZoneKind.BATTLEFIELD:
+        remove_from_combat(state, obj_id)  # 506.4
     if old.zone.kind in (ZoneKind.BATTLEFIELD, ZoneKind.STACK) and old.card is not None:
         # Objects without a card (copies, abilities on the stack: M4, M5) have no characteristics
         # to compute yet, so their last known information arrives with them.

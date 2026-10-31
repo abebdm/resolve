@@ -5,7 +5,8 @@ into ``tools/excerpts/basic_lands.json``) plus the cards of ``tools/excerpts/car
 noncreature cards (``spells``) or all of them (``creatures``). Its games play turns: lands are
 played (305.1) and tapped for mana (605.3a), spells are cast (601.2), resolve (608) or are
 reversed (733.1), until a player draws from an empty library (704.5b), concedes (104.3a), or the
-game reaches an allowed gap (508.1, 903.8).
+game reaches an allowed gap (509.1, 903.8). Creatures attack (508.1) and deal combat damage
+(510.2).
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ from resolve.engine.api import submit, view_for
 from resolve.engine.concede import concede
 from resolve.engine.deck import Deck
 from resolve.events.base import LogEntry
+from resolve.events.combat import AttackersDeclared, CombatBegan
 from resolve.events.damage import DamageDealt
 from resolve.events.game import PlayerLost
 from resolve.events.mana import ManaAdded
@@ -46,6 +48,7 @@ from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.mana import ManaType
 from resolve.state.turn import Phase
+from resolve.state.turn import Step as TurnStep
 from tests.casting_support import (
     activate,
     activate_with_priority,
@@ -56,6 +59,7 @@ from tests.casting_support import (
     records,
     reverse,
 )
+from tests.combat_support import declare_attackers, pass_to
 from tests.engine_support import EndGame, running
 from tests.game_fixtures import answer, deck, pass_until, request_of, started_game
 from tests.scenario import Scenario, run_script
@@ -187,7 +191,8 @@ def test_the_summary_lines() -> None:
         "other (704.5c) x1.",
         "Played: 5 lands, 9 mana abilities activated, 0 reversed.",
         "Spells: 0 cast, 0 resolved, 0 didn't resolve, 0 countered, 0 reversed.",
-        "Damage: 0 dealt.",
+        "Combat: 0 combats, 0 attackers declared.",
+        "Damage: 0 dealt, 0 of it combat damage.",
         "Reversed casts: auto-pay seats 0 of 0 attempts, 0 of 0 payable; random seats 0 of 0, "
         "0 of 0 payable.",
         "Casts per card: none.",
@@ -197,20 +202,22 @@ def test_the_summary_lines() -> None:
 
 def test_the_summary_counts_spells_casts_per_card_and_gaps() -> None:
     games = [
-        GameStats(10, 0, 3, RULES_GAP, 2, 5, (("Sol Ring", 2),), 2, 4, "508.1"),
+        GameStats(10, 0, 3, RULES_GAP, 2, 5, (("Sol Ring", 2),), 2, 4, "509.1"),
         GameStats(
             20, 0, 5, RULES_GAP, 3, 4, (("Grizzly Bears", 1), ("Sol Ring", 1)), 1, 0, "903.8"
         ),
-        GameStats(5, 0, 1, RULES_GAP, 0, 0, (), 0, 1, "508.1"),
+        GameStats(5, 0, 1, RULES_GAP, 0, 0, (), 0, 1, "509.1"),
     ]
-    games[1] = replace(games[1], did_not_resolve=2, damage=7, countered=1)
+    games[1] = replace(games[1], did_not_resolve=2, damage=7, countered=1, combat_damage=4)
+    games[2] = replace(games[2], combats=2, attackers=3, combat_damage=2, damage=2)
     assert summary_lines(games)[5:] == [
         "Spells: 4 cast, 3 resolved, 2 didn't resolve, 1 countered, 5 reversed.",
-        "Damage: 7 dealt.",
+        "Combat: 2 combats, 3 attackers declared.",
+        "Damage: 9 dealt, 6 of it combat damage.",
         "Reversed casts: auto-pay seats 0 of 0 attempts, 0 of 0 payable; random seats 5 of 9, "
         "0 of 4 payable.",
         "Casts per card: Grizzly Bears x1, Sol Ring x3.",
-        "Gaps: 508.1 x2, 903.8 x1.",
+        "Gaps: 509.1 x2, 903.8 x1.",
     ]
 
 
@@ -225,9 +232,9 @@ def test_game_stats_count_casts_resolutions_reversals_and_the_gap() -> None:
     run_script(state, cast(ring), activate(forest), pass_(), pass_())
     (permanent,) = [o for o in state.battlefield if o != forest]
     run_script(state, cast(bears), activate(permanent), reverse())
-    stats = GameStats.of(FuzzResult(9, 0, "508.1: declaring attackers", state))
+    stats = GameStats.of(FuzzResult(9, 0, "509.1: declaring blockers", state))
     assert stats.casts == (("Sol Ring", 1),)
-    assert (stats.resolved, stats.reversed, stats.gap) == (1, 1, "508.1")
+    assert (stats.resolved, stats.reversed, stats.gap) == (1, 1, "509.1")
     assert stats.abilities_reversed == 0
 
 
@@ -239,7 +246,7 @@ def test_game_stats_count_reversed_mana_abilities_apart_from_reversed_casts() ->
     scenario.at(Phase.PRECOMBAT_MAIN)
     state = scenario.build()
     run_script(state, activate_with_priority(signet), activate_with_priority(signet))
-    stats = GameStats.of(FuzzResult(2, 0, "508.1: declaring attackers", state))
+    stats = GameStats.of(FuzzResult(2, 0, "509.1: declaring blockers", state))
     assert (stats.reversed, stats.abilities_reversed) == (0, 2)
     games = [stats, GameStats(1, 0, 1, DRAW, 0, 0, abilities_reversed=1)]
     assert summary_lines(games)[4] == "Played: 0 lands, 0 mana abilities activated, 3 reversed."
@@ -256,7 +263,7 @@ def test_game_stats_count_casts_and_reversals_of_the_auto_paying_seats() -> None
     state = scenario.build()
     run_script(state, cast(ring), activate(forest), pass_(), pass_())
     run_script(state, cast(bears), pay())
-    stats = GameStats.of(FuzzResult(9, 0, "508.1: declaring attackers", state))
+    stats = GameStats.of(FuzzResult(9, 0, "509.1: declaring blockers", state))
     assert (stats.reversed, stats.autopay_casts, stats.autopay_reversed) == (1, 1, 1)
 
 
@@ -304,9 +311,32 @@ def test_a_cast_whose_first_question_is_the_payment_is_payable() -> None:
     assert len(records(state, SpellCast)) == 1
 
 
+def test_game_stats_count_combats_attackers_and_combat_damage() -> None:
+    """M3.2, deterministically (approval note 2 of the M3 plan: the pinned games cast no
+    creature, so they can't show an attack). Grizzly Bears and Hill Giant attack P1 (508.1k) and
+    deal 5 combat damage (510.2); a Test Shock then deals 2 noncombat damage. The statistics
+    count one combat, two attackers and 7 damage of which 5 is combat damage; the summary says
+    so."""
+    scenario = Scenario(2)
+    bears, giant = scenario.battlefield(PlayerId(0), ["Grizzly Bears", "Hill Giant"])
+    scenario.at(TurnStep.BEGINNING_OF_COMBAT, begin=True)
+    state = scenario.build()
+    run_script(state, pass_(PlayerId(0)), pass_(PlayerId(1)))
+    declare_attackers(state, {bears: PlayerId(1), giant: PlayerId(1)})
+    pass_to(state, Phase.POSTCOMBAT_MAIN)
+    shock = DamageDealt(source=giant, to_players=((PlayerId(1), 2),), rules=("120.3a",))
+    shock.apply(state)
+    state.event_log.append(LogEntry(len(state.event_log), shock, None))
+    stats = GameStats.of(FuzzResult(9, 0, "509.1: declaring blockers", state))
+    assert (stats.combats, stats.attackers, stats.damage, stats.combat_damage) == (1, 2, 7, 5)
+    lines = summary_lines([stats])
+    assert "Combat: 1 combats, 2 attackers declared." in lines
+    assert "Damage: 7 dealt, 5 of it combat damage." in lines
+
+
 def test_game_stats_count_payable_reversals_by_seat() -> None:
     state, _ = bears_with([])
-    result = FuzzResult(1, 0, "508.1: declaring attackers", state, (PlayerId(1), PlayerId(0)))
+    result = FuzzResult(1, 0, "509.1: declaring blockers", state, (PlayerId(1), PlayerId(0)))
     stats = GameStats.of(result)
     assert (stats.payable_reversed, stats.autopay_payable_reversed) == (2, 1)
 
@@ -315,10 +345,10 @@ def test_the_summary_compares_the_auto_paying_seats_with_the_random_ones() -> No
     """Of the attempts (casts and reversed casts) of each kind of seat, how many were reversed;
     and of the payable ones (casts, and casts reversed although payable), how many."""
     games = [
-        GameStats(10, 0, 3, RULES_GAP, 2, 5, (("Sol Ring", 3),), 2, 4, "508.1", 0, 2, 1, 3, 0),
+        GameStats(10, 0, 3, RULES_GAP, 2, 5, (("Sol Ring", 3),), 2, 4, "509.1", 0, 2, 1, 3, 0),
         GameStats(5, 0, 1, DRAW, 0, 0, (("Sol Ring", 1),), 0, 2, None, 0, 0, 0, 1, 0),
     ]
-    assert summary_lines(games)[7] == (
+    assert summary_lines(games)[8] == (
         "Reversed casts: auto-pay seats 1 of 3 attempts, 0 of 2 payable; random seats 5 of 7, "
         "4 of 6 payable."
     )
@@ -332,7 +362,7 @@ def test_a_payable_cast_reversed_is_counted_for_its_kind_of_seat() -> None:
     same. In a third, P0 tries the Bears with one Forest: reversed, but it couldn't be paid
     (107.4b). The summary counts the first two as payable reversals, each for its kind of seat,
     and the third only as an attempt."""
-    gap = "508.1: declaring attackers"
+    gap = "509.1: declaring blockers"
     results: list[FuzzResult] = []
     for player, lands in ((PlayerId(0), 2), (PlayerId(1), 2), (PlayerId(0), 1)):
         scenario = Scenario(2)
@@ -344,7 +374,7 @@ def test_a_payable_cast_reversed_is_counted_for_its_kind_of_seat() -> None:
         assert len(records(state, ActionReversed)) == 1 and records(state, SpellCast) == []
         results.append(FuzzResult(2, 0, gap, state, tuple(reversed_)))
     assert [result.payable_reversed for result in results] == [(PlayerId(0),), (PlayerId(1),), ()]
-    assert summary_lines([GameStats.of(result) for result in results])[7] == (
+    assert summary_lines([GameStats.of(result) for result in results])[8] == (
         "Reversed casts: auto-pay seats 1 of 1 attempts, 1 of 1 payable; random seats 2 of 2, "
         "1 of 1 payable."
     )
@@ -401,9 +431,9 @@ NONCREATURES = [
 ]  # fmt: skip
 # Repentant Blacksmith is left out (``FUZZ_EXCLUSIONS``: 702.16e until M6).
 CREATURES = [
-    "Ashcoat Bear", "Avacyn's Pilgrim", "Darksteel Myr", "Gladecover Scout", "Grizzly Bears",
-    "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper", "Kinjalli's Caller", "Llanowar Elves",
-    "Nacatl Savage", "Savannah Lions",
+    "Alaborn Grenadier", "Ashcoat Bear", "Avacyn's Pilgrim", "Darksteel Myr", "Gladecover Scout",
+    "Grizzly Bears", "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper", "Kinjalli's Caller",
+    "Llanowar Elves", "Nacatl Savage", "Raging Goblin", "Savannah Lions", "Wall of Stone",
 ]  # fmt: skip
 
 
@@ -425,12 +455,13 @@ def test_the_recipes_hold_the_excerpt_minus_the_exclusions() -> None:
         "Temple of the False God",
     )  # fmt: skip
     assert fuzz_tool.recipe_cards("creatures") == (
-        "Arcane Signet", "Ashcoat Bear", "Avacyn's Pilgrim", "Cancel", "Chandra's Ignition",
-        "Command Tower", "Cryptic Command", "Darksteel Myr", "Darksteel Relic", "Decimate",
-        "Emerald Medallion", "Fiery Confluence", "Gladecover Scout", "Grizzly Bears", "Hill Giant",
-        "Humble Budoka", "Ixalli's Lorekeeper", "Kinjalli's Caller", "Llanowar Elves",
-        "Nacatl Savage", "Rishkar's Expertise", "Savannah Lions", "Selesnya Signet", "Sol Ring",
-        "Swords to Plowshares", "Temple of the False God",
+        "Alaborn Grenadier", "Arcane Signet", "Ashcoat Bear", "Avacyn's Pilgrim", "Cancel",
+        "Chandra's Ignition", "Command Tower", "Cryptic Command", "Darksteel Myr",
+        "Darksteel Relic", "Decimate", "Emerald Medallion", "Fiery Confluence",
+        "Gladecover Scout", "Grizzly Bears", "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper",
+        "Kinjalli's Caller", "Llanowar Elves", "Nacatl Savage", "Raging Goblin",
+        "Rishkar's Expertise", "Savannah Lions", "Selesnya Signet", "Sol Ring",
+        "Swords to Plowshares", "Temple of the False God", "Wall of Stone",
     )  # fmt: skip
     assert list(fuzz_tool.FUZZ_EXCLUSIONS) == ["Repentant Blacksmith"]
     for recipe in fuzz_tool.RECIPES:
@@ -483,7 +514,7 @@ def check_summary(recorder: Recorder, text: str, formats: str) -> Totals:
     answers: list[int] = []
     turns: list[int] = []
     lands = mana = cast = resolved = reversed_ = abilities_reversed = 0
-    did_not_resolve = damage = countered = 0
+    did_not_resolve = damage = countered = combat_damage = combats = attackers = 0
     casts: Counter[str] = Counter()
     gaps: Counter[str] = Counter()
     endings: Counter[str] = Counter()
@@ -517,6 +548,13 @@ def check_summary(recorder: Recorder, text: str, formats: str) -> Totals:
         did_not_resolve += sum(1 for record in records if isinstance(record, SpellDidNotResolve))
         countered += sum(1 for record in records if isinstance(record, SpellCountered))
         damage += sum(record.total for record in records if isinstance(record, DamageDealt))
+        combat_damage += sum(
+            record.total for record in records if isinstance(record, DamageDealt) and record.combat
+        )
+        combats += sum(1 for record in records if isinstance(record, CombatBegan))
+        attackers += sum(
+            len(record.attacks) for record in records if isinstance(record, AttackersDeclared)
+        )
         reversed_ += sum(
             1
             for record in records
@@ -573,7 +611,14 @@ def check_summary(recorder: Recorder, text: str, formats: str) -> Totals:
         r"(\d+) reversed\.",
         text,
     ) == (cast, resolved, did_not_resolve, countered, reversed_)
-    assert numbers(r"Damage: (\d+) dealt\.", text) == (damage,)
+    assert numbers(r"Combat: (\d+) combats, (\d+) attackers declared\.", text) == (
+        combats,
+        attackers,
+    )
+    assert numbers(r"Damage: (\d+) dealt, (\d+) of it combat damage\.", text) == (
+        damage,
+        combat_damage,
+    )
     payable_reversed = Counter(
         "auto-pay" if player % 3 else "random"
         for result in recorder.results
