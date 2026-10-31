@@ -44,6 +44,7 @@ from resolve.decisions.spaces import (
     Pick,
     PlayLandOption,
 )
+from resolve.effects.characteristics import characteristics
 from resolve.engine.api import new_game, submit, view_for
 from resolve.engine.sba import state_based_actions
 from resolve.engine.turns import turn_frame_index
@@ -74,6 +75,7 @@ from resolve.state.turn import TURN_SEQUENCE, Phase, Segment, Step
 from resolve.state.zones import EXILE, Zone, ZoneKind
 from resolve.tasks import Done, Task, TaskResult
 from tests.casting_support import pass_
+from tests.combat_support import declare_attackers, may_attack, pass_to
 from tests.game_fixtures import answer, decks, pass_until, request_of
 from tests.scenario import Scenario, names, run_script
 from tests.seams import (
@@ -85,6 +87,7 @@ from tests.seams import (
     patch_object,
     patch_sickness,
     patch_skip,
+    patch_state,
 )
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
@@ -902,3 +905,75 @@ def test_608_2g_the_free_cast_asks_may_cast_now(monkeypatch: pytest.MonkeyPatch)
     assert isinstance(request.space, ChooseOne)
     offered = [o.object for o in request.space.options if isinstance(o, CastSpellOption)]
     assert offered == [bears]
+
+
+# --- 508.1, 510.1a, 302.6: combat ---------------------------------------------------------------
+
+
+def test_508_1_the_attack_declarer_is_asked_to_declare(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The function says P1 declares P0's attackers (Master Warcraft, M5): P1 is asked, the
+    items are still P0's creatures, and P1's declaration makes them attack P1."""
+    patch_state(monkeypatch, "attack_declarer", lambda state: P1)
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    scenario.at(Step.DECLARE_ATTACKERS, begin=True)
+    state = scenario.build()
+    request = request_of(state)
+    assert request.kind is DecisionKind.DECLARE_ATTACKERS
+    assert request.player == P1
+    assert may_attack(state) == (bears,)
+    declare_attackers(state, {bears: P1})
+    turn = state.turn
+    assert turn is not None and turn.combat is not None and bears in turn.combat.attackers
+    assert state.objects[bears].controller == P0
+
+
+def test_510_1a_the_combat_damage_amount_is_what_the_function_says(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The function says creatures assign combat damage equal to their toughness (Doran, M5):
+    Savannah Lions (2/1) deals 1 combat damage, not 2; a creature whose amount is 0 assigns
+    none (510.1a)."""
+
+    def toughness(state: GameState, creature: ObjectId) -> int:
+        value = characteristics(state, creature).toughness
+        assert value is not None
+        return value
+
+    patch_object(monkeypatch, "combat_damage_amount", toughness)
+    scenario = Scenario(2)
+    (lions,) = scenario.battlefield(P0, ["Savannah Lions"])
+    scenario.at(Step.DECLARE_ATTACKERS, begin=True)
+    state = scenario.build()
+    declare_attackers(state, {lions: P1})
+    pass_to(state, Phase.POSTCOMBAT_MAIN)
+    assert state.player(P1).life == 19
+
+    patch_object(monkeypatch, "combat_damage_amount", lambda state, creature: 0)
+    scenario = Scenario(2)
+    (giant,) = scenario.battlefield(P0, ["Hill Giant"])
+    scenario.at(Step.DECLARE_ATTACKERS, begin=True)
+    state = scenario.build()
+    declare_attackers(state, {giant: P1})
+    pass_to(state, Phase.POSTCOMBAT_MAIN)
+    assert state.player(P1).life == 20
+
+
+def test_302_6_a_creature_the_function_calls_not_sick_may_attack(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The function says nothing is summoning sick for attacking (an "as though it had haste"
+    effect for attacking): Grizzly Bears, arrived this turn, may attack. Saying everything is
+    sick for attacking keeps an old Hill Giant home, and tapping for mana is unaffected."""
+    attack = defaults.SicknessPurpose.ATTACK
+    patch_sickness(monkeypatch, lambda state, obj, purpose: False)
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"], entered_turn=3)
+    scenario.at(Step.DECLARE_ATTACKERS, number=3, begin=True)
+    assert may_attack(scenario.build()) == (bears,)
+
+    patch_sickness(monkeypatch, lambda state, obj, purpose: purpose is attack)
+    scenario = Scenario(2)
+    scenario.battlefield(P0, ["Hill Giant"])
+    scenario.at(Step.DECLARE_ATTACKERS, number=3, begin=True)
+    assert request_of(scenario.build()).kind is DecisionKind.PRIORITY_ACTION

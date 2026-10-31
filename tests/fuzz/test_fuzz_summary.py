@@ -29,6 +29,7 @@ from resolve.engine.api import submit, view_for
 from resolve.engine.concede import concede
 from resolve.engine.deck import Deck
 from resolve.events.base import LogEntry
+from resolve.events.combat import AttackersDeclared
 from resolve.events.damage import DamageDealt
 from resolve.events.game import PlayerLost
 from resolve.events.mana import ManaAdded
@@ -657,6 +658,15 @@ def test_a_default_run_plays_turns_lands_and_spells_and_reports_them(
         if isinstance(entry.record, SpellCast) and entry.record.player % 3 == 1
     ]
     assert caster_casts, "the caster seats cast spells"
+    # M3.2: the pinned creatures attack (508.1); approval note 2 of the M3 plan: on the pinned
+    # recipes only, never a threshold on decks that grow.
+    declared = [
+        entry.record
+        for result in recorder.results
+        for entry in result.state.event_log
+        if isinstance(entry.record, AttackersDeclared)
+    ]
+    assert declared, "the pinned games declare attackers"
 
 
 def test_the_default_run_with_every_current_card_completes_and_reports_consistently(

@@ -15,8 +15,10 @@ import pytest
 from resolve.cards.keywords import (
     CardTypeQuality,
     ColorQuality,
+    Defender,
     Everything,
     Flash,
+    Haste,
     Hexproof,
     Indestructible,
     MonocoloredQuality,
@@ -25,6 +27,7 @@ from resolve.cards.keywords import (
     Quality,
     Shroud,
     SubtypeQuality,
+    Vigilance,
     each_color,
     has_keyword,
     keywords,
@@ -86,6 +89,9 @@ def test_the_abilities_text() -> None:
     red = ColorQuality(ColorWord(R))
     assert [a.text for a in (Flash(), Shroud(), Indestructible(), Hexproof())] == [
         "Flash", "Shroud", "Indestructible", "Hexproof",
+    ]  # fmt: skip
+    assert [a.text for a in (Haste(), Vigilance(), Defender())] == [
+        "Haste", "Vigilance", "Defender",
     ]  # fmt: skip
     assert Hexproof(red).text == "Hexproof from red"
     assert Protection(red).text == "Protection from red"

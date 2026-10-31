@@ -45,6 +45,11 @@ CANCEL = CardDefinition(
     ),
 )
 
+# Haste, Vigilance, Defender (M3.2)
+RAGING_GOBLIN = CardDefinition("Raging Goblin")
+ALABORN_GRENADIER = CardDefinition("Alaborn Grenadier")
+WALL_OF_STONE = CardDefinition("Wall of Stone")
+
 DEFINITIONS = (
     ASHCOAT_BEAR,
     GLADECOVER_SCOUT,
@@ -54,4 +59,7 @@ DEFINITIONS = (
     REPENTANT_BLACKSMITH,
     NACATL_SAVAGE,
     CANCEL,
+    RAGING_GOBLIN,
+    ALABORN_GRENADIER,
+    WALL_OF_STONE,
 )

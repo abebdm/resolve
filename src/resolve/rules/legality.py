@@ -47,6 +47,7 @@ from resolve.effects.characteristics import (
 )
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.rules import defaults
+from resolve.state.combat import AttackTarget
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.spell import CastPermission, CastVariant, Target, TargetObject, TargetPlayer
 from resolve.state.zones import Zone, ZoneKind
@@ -123,6 +124,14 @@ class CounterAction(Action):
 
 
 @dataclass(frozen=True)
+class AttackAction(Action):
+    """Stub (M3.2)."""
+
+    creature: ObjectId
+    target: AttackTarget
+
+
+@dataclass(frozen=True)
 class Permission(Immutable):
     """A rule or effect that allows an action: the CR ``rule`` and what it lets the player do."""
 
@@ -160,6 +169,8 @@ def permissions(state: GameState, action: Action) -> tuple[Permission, ...]:
         return _destroy_permissions(state, action)
     if isinstance(action, CounterAction):
         return _counter_permissions(state, action)
+    if isinstance(action, AttackAction):
+        raise NotImplementedRule("508.1a: attacking (M3.2)")
     raise EngineError(f"no rule of legality covers {action!r}")
 
 

@@ -238,6 +238,29 @@ def test_103_8a_508_8_the_default_skips() -> None:
     assert not defaults.is_skipped(state, (Phase.BEGINNING, Step.DRAW))
 
 
+def test_508_8_the_default_reads_whether_attacks_happened() -> None:
+    """508.8: in a combat where a creature was declared as an attacker, the declare blockers and
+    combat damage steps aren't skipped, even once it has left combat; in a combat with none
+    declared (the combat state's ``attacks_happened``), they are."""
+    later = ((Phase.COMBAT, Step.DECLARE_BLOCKERS), (Phase.COMBAT, Step.COMBAT_DAMAGE))
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    scenario.at(Step.DECLARE_ATTACKERS, number=2)
+    scenario.attacking(P1, bears)
+    state = scenario.build()
+    assert [defaults.is_skipped(state, segment) for segment in later] == [False, False]
+    turn = state.turn
+    assert turn is not None and turn.combat is not None
+    turn.combat.attackers.clear()  # it left combat; it was still declared
+    assert [defaults.is_skipped(state, segment) for segment in later] == [False, False]
+
+    scenario = Scenario(2)
+    scenario.battlefield(P0, ["Grizzly Bears"])
+    scenario.at(Step.DECLARE_ATTACKERS, number=2)
+    state = scenario.build()
+    assert [defaults.is_skipped(state, segment) for segment in later] == [True, True]
+
+
 def test_500_7_103_1_the_next_turn_is_the_next_player_in_turn_order() -> None:
     state = Scenario(3).build()
     assert defaults.next_turn(state, P0) == defaults.NextTurn(P1, extra=False)

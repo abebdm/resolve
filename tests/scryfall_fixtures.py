@@ -461,6 +461,18 @@ TEST_TWIN_FLASH = keyword_creature(
 TEST_INDESTRUCTIBLE_WISP = keyword_creature(
     "Test Indestructible Wisp", "{G}", 1.0, "Spirit", ("1", "0"), "G", "Indestructible"
 )
+# M3.2's keyword example cards (Oracle text from the 2026-10-30 snapshot).
+RAGING_GOBLIN = keyword_creature(
+    "Raging Goblin", "{R}", 1.0, "Goblin Berserker", ("1", "1"), "R",
+    "Haste (This creature can attack and {T} as soon as it comes under your control.)",
+)  # fmt: skip
+ALABORN_GRENADIER = keyword_creature(
+    "Alaborn Grenadier", "{W}{W}", 2.0, "Human Soldier", ("2", "2"), "W", "Vigilance"
+)
+WALL_OF_STONE = keyword_creature(
+    "Wall of Stone", "{1}{R}{R}", 3.0, "Wall", ("0", "8"), "R",
+    "Defender (This creature can't attack.)",
+)  # fmt: skip
 # Invented creatures with haste (702.10c) and a {T} mana ability (M3.1).
 TEST_HASTY_ELVES = keyword_creature(
     "Test Hasty Elves", "{G}", 1.0, "Elf Druid", ("1", "1"), "G", "Haste\n{T}: Add {G}."
