@@ -6,18 +6,18 @@
       "oracle_cards": {
         "type": "oracle_cards",
         "file": "oracle-cards.jsonl.gz",
-        "updated_at": "2026-10-31T09:01:54.814+00:00",
-        "size": 25301399,
-        "sha256": "84c9e6c8324732918b9ca2b7584bf2b701211290a7a7b09efc3117e8266f6eda",
-        "source": "https://data.scryfall.io/oracle-cards/oracle-cards-20261031090154.jsonl.gz"
+        "updated_at": "2026-10-31T21:02:00.540+00:00",
+        "size": 25301405,
+        "sha256": "5f0918898329cb56bbaa499f94e5c6bc3e3d9e2b8a32c6efaff49e006ea97a27",
+        "source": "https://data.scryfall.io/oracle-cards/oracle-cards-20261031210200.jsonl.gz"
       },
       "rulings": {
         "type": "rulings",
         "file": "rulings.jsonl.gz",
-        "updated_at": "2026-10-31T09:00:32.478+00:00",
+        "updated_at": "2026-10-31T21:00:33.045+00:00",
         "size": 5422271,
-        "sha256": "62a070330985941573c8ef45e739d17b6264fe67dc46d3c84f5491952e1da3d6",
-        "source": "https://data.scryfall.io/rulings/rulings-20261031090032.jsonl.gz"
+        "sha256": "faaed931d4566a211b4d829cb5bac81a50f34b1a9bc9143d2503159d70b0e41f",
+        "source": "https://data.scryfall.io/rulings/rulings-20261031210033.jsonl.gz"
       }
     }
   },
@@ -576,6 +576,152 @@
       "keywords": [],
       "power": "1",
       "toughness": "4"
+    },
+    {
+      "object": "card",
+      "oracle_id": "d6ffdaf0-ac08-4de9-bbce-2eab2f86bcca",
+      "name": "Wind Drake",
+      "layout": "normal",
+      "mana_cost": "{2}{U}",
+      "cmc": 3.0,
+      "type_line": "Creature — Drake",
+      "oracle_text": "Flying",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [
+        "Flying"
+      ],
+      "power": "2",
+      "toughness": "2"
+    },
+    {
+      "object": "card",
+      "oracle_id": "e740ce2f-2134-473c-afa1-1b6d2d1e38ef",
+      "name": "Giant Spider",
+      "layout": "normal",
+      "mana_cost": "{3}{G}",
+      "cmc": 4.0,
+      "type_line": "Creature — Spider",
+      "oracle_text": "Reach (This creature can block creatures with flying.)",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [
+        "Reach"
+      ],
+      "power": "2",
+      "toughness": "4"
+    },
+    {
+      "object": "card",
+      "oracle_id": "6f246109-8c8b-4909-9888-561bc46ad776",
+      "name": "Deranged Whelp",
+      "layout": "normal",
+      "mana_cost": "{1}{R}",
+      "cmc": 2.0,
+      "type_line": "Creature — Wolf",
+      "oracle_text": "Menace (This creature can't be blocked except by two or more creatures.)",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [
+        "Menace"
+      ],
+      "power": "2",
+      "toughness": "1"
+    },
+    {
+      "object": "card",
+      "oracle_id": "1c145f2d-8345-4902-b869-afb70145dec7",
+      "name": "Highborn Ghoul",
+      "layout": "normal",
+      "mana_cost": "{B}{B}",
+      "cmc": 2.0,
+      "type_line": "Creature — Zombie",
+      "oracle_text": "Intimidate (This creature can't be blocked except by artifact creatures and/or creatures that share a color with it.)",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Intimidate"
+      ],
+      "power": "2",
+      "toughness": "1"
+    },
+    {
+      "object": "card",
+      "oracle_id": "34a8a658-a5f6-406f-99d8-c32ea2e26202",
+      "name": "Severed Legion",
+      "layout": "normal",
+      "mana_cost": "{1}{B}{B}",
+      "cmc": 3.0,
+      "type_line": "Creature — Zombie",
+      "oracle_text": "Fear (This creature can't be blocked except by artifact creatures and/or black creatures.)",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Fear"
+      ],
+      "power": "2",
+      "toughness": "2"
+    },
+    {
+      "object": "card",
+      "oracle_id": "60824fae-20ed-4122-82c9-e99a1b679c54",
+      "name": "Bog Raiders",
+      "layout": "normal",
+      "mana_cost": "{2}{B}",
+      "cmc": 3.0,
+      "type_line": "Creature — Zombie",
+      "oracle_text": "Swampwalk (This creature can't be blocked as long as defending player controls a Swamp.)",
+      "colors": [
+        "B"
+      ],
+      "color_identity": [
+        "B"
+      ],
+      "keywords": [
+        "Landwalk",
+        "Swampwalk"
+      ],
+      "power": "2",
+      "toughness": "2"
+    },
+    {
+      "object": "card",
+      "oracle_id": "23745133-e5e2-4ce3-b94a-73d0d3d8a013",
+      "name": "Phantom Warrior",
+      "layout": "normal",
+      "mana_cost": "{1}{U}{U}",
+      "cmc": 3.0,
+      "type_line": "Creature — Illusion Warrior",
+      "oracle_text": "This creature can't be blocked.",
+      "colors": [
+        "U"
+      ],
+      "color_identity": [
+        "U"
+      ],
+      "keywords": [],
+      "power": "2",
+      "toughness": "2"
     }
   ],
   "rulings": [
@@ -830,6 +976,13 @@
       "source": "wotc",
       "published_at": "2023-07-28",
       "comment": "The cost reduction can apply to alternative costs such as flashback costs."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "e740ce2f-2134-473c-afa1-1b6d2d1e38ef",
+      "source": "wotc",
+      "published_at": "2008-04-01",
+      "comment": "This card now uses the Reach keyword ability to enable the blocking of flying creatures. This works because a creature with flying can only be blocked by creatures with flying or reach."
     },
     {
       "object": "ruling",

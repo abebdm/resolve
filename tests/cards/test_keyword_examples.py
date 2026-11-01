@@ -1,15 +1,21 @@
 """The keyword example cards (docs/primitives.md): Ashcoat Bear (flash), Gladecover Scout
 (hexproof), Humble Budoka (shroud), Darksteel Relic and Darksteel Myr (indestructible),
 Repentant Blacksmith (protection from red), Nacatl Savage (protection from artifacts), Cancel
-("Counter target spell."), and M3.2's Raging Goblin (haste), Alaborn Grenadier (vigilance) and
-Wall of Stone (defender).
+("Counter target spell."), M3.2's Raging Goblin (haste), Alaborn Grenadier (vigilance) and
+Wall of Stone (defender), and M3.4's Wind Drake (flying), Giant Spider (reach), Deranged Whelp
+(menace), Highborn Ghoul (intimidate), Severed Legion (fear) and Bog Raiders (swampwalk).
 
 Oracle text and rulings checked against the Scryfall snapshot of 2026-10-26 (M3.2's cards:
-2026-10-30, ``tools/excerpts/cards.json``). Their behavior is tested with the keyword's rules:
-tests/rules/test_702_8_flash.py, test_702_11_hexproof.py, test_702_18_shroud.py,
-test_702_12_indestructible.py, test_702_16_protection.py and test_701_6_counter.py; haste
-(702.10b) in test_302_6_summoning_sickness.py, vigilance (702.20b) and defender (702.3b) in
-test_508_declare_attackers.py. M3.2's three cards have no rulings.
+2026-10-30; M3.4's: 2026-10-31, ``tools/excerpts/cards.json``). Their behavior is tested with
+the keyword's rules: tests/rules/test_702_8_flash.py, test_702_11_hexproof.py,
+test_702_18_shroud.py, test_702_12_indestructible.py, test_702_16_protection.py and
+test_701_6_counter.py; haste (702.10b) in test_302_6_summoning_sickness.py, vigilance
+(702.20b) and defender (702.3b) in
+test_508_declare_attackers.py; M3.4's evasion in test_702_9_flying_and_reach.py,
+test_702_111_menace.py and test_702_13_14_36_retired_evasion.py. M3.2's three cards have no
+rulings; of M3.4's, only Giant Spider has one (2008-04-01: it uses reach to block flyers,
+"because a creature with flying can only be blocked by creatures with flying or reach":
+``test_702_9b_a_flyer_can_be_blocked_by_giant_spider_and_by_another_flyer``).
 
 Only Nacatl Savage has a ruling (2009-02-01), "Protection from artifacts" means:
 
@@ -32,16 +38,24 @@ import pytest
 from resolve.cards.definitions import keyword_examples
 from resolve.cards.keywords import (
     Defender,
+    Fear,
     Flash,
+    Flying,
     Haste,
     Hexproof,
     Indestructible,
+    Intimidate,
+    LandTypeQuality,
+    Landwalk,
+    Menace,
     Protection,
+    Reach,
     Shroud,
     Vigilance,
     has_keyword,
 )
 from resolve.cards.primitives.base import Ability
+from resolve.cards.primitives.words import LandTypeWord
 from resolve.cards.registry import default_registry
 from resolve.data.cards import load_card_excerpt
 from resolve.effects.characteristics import characteristics
@@ -62,6 +76,22 @@ KEYWORDS: dict[str, type[Ability]] = {
     "Raging Goblin": Haste,
     "Alaborn Grenadier": Vigilance,
     "Wall of Stone": Defender,
+    "Wind Drake": Flying,
+    "Giant Spider": Reach,
+    "Deranged Whelp": Menace,
+    "Highborn Ghoul": Intimidate,
+    "Severed Legion": Fear,
+    "Bog Raiders": Landwalk,
+}
+
+# M3.4's cards as the M3 plan lists them (section 7): cost, type line, power and toughness.
+M3_4_CARDS = {
+    "Wind Drake": ("{2}{U}", "Creature — Drake", "2", "2"),
+    "Giant Spider": ("{3}{G}", "Creature — Spider", "2", "4"),
+    "Deranged Whelp": ("{1}{R}", "Creature — Wolf", "2", "1"),
+    "Highborn Ghoul": ("{B}{B}", "Creature — Zombie", "2", "1"),
+    "Severed Legion": ("{1}{B}{B}", "Creature — Zombie", "2", "2"),
+    "Bog Raiders": ("{2}{B}", "Creature — Zombie", "2", "2"),
 }
 
 
@@ -101,3 +131,20 @@ def test_the_keyword_is_read_through_characteristics(name: str) -> None:
     chars = characteristics(state, obj)
     for kind in dict.fromkeys(KEYWORDS.values()):
         assert has_keyword(chars, kind) == (kind is KEYWORDS[name])
+
+
+@pytest.mark.parametrize("name", list(M3_4_CARDS))
+def test_m3_4_card_data_matches_the_plan(name: str) -> None:
+    """The excerpt (copied from the snapshot) has the cost, type line, power and toughness the
+    M3 plan lists for the card (approval note 4)."""
+    card = load_card_excerpt(EXCERPT).get(name)
+    face = card.faces[0]
+    assert (face.mana_cost, card.type_line, face.power, face.toughness) == M3_4_CARDS[name]
+
+
+def test_bog_raiders_walks_swamps() -> None:
+    """Swampwalk is landwalk whose quality is the land type Swamp (702.14a), a typed word
+    (612.2)."""
+    (ability,) = default_registry().get("Bog Raiders").abilities
+    assert ability == Landwalk(LandTypeQuality(LandTypeWord("Swamp")))
+    assert ability.text == "Swampwalk"

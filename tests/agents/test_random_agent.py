@@ -20,6 +20,7 @@ from resolve.decisions.spaces import (
     ChooseSubset,
     Distribute,
     DistributeEach,
+    NoneOrAtLeast,
     Number,
     Order,
     Pick,
@@ -220,6 +221,22 @@ def test_random_agent_answers_inside_both_spaces() -> None:
         for space in combat:
             for _ in range(20):
                 space.validate(agent.random_value(space))
+
+
+def test_random_agent_obeys_a_declarations_constraints() -> None:
+    """Menace (702.111b) as a ``NoneOrAtLeast`` constraint: four blockers, each able to block
+    one of two attackers, the first needing two blockers. Over many seeds the agent's answers
+    (``random_legal``) always validate, and some do block the first attacker."""
+    blocked = 0
+    space = ChooseAssignment(
+        OPTIONS[:4], ((OPTIONS[0], OPTIONS[1]),) * 4, (1,) * 4, (NoneOrAtLeast(OPTIONS[0], 2),)
+    )
+    for seed in range(100):
+        value = RandomAgent(seed).random_value(space)
+        space.validate(value)
+        assert isinstance(value, Assignment)
+        blocked += any(0 in picks for picks in value.picks)
+    assert blocked > 0
 
 
 def test_choose_assignment_picks_each_item_like_a_subset() -> None:

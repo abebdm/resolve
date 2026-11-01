@@ -3,10 +3,13 @@ cards", section 7). Their characteristics come from the card data."""
 
 from __future__ import annotations
 
-from resolve.cards.primitives.combat import BlocksAnyNumber
+from resolve.cards.primitives.combat import BlocksAnyNumber, CantBeBlocked
 from resolve.cards.registry import CardDefinition
 
 # This creature can block any number of creatures.
 PALACE_GUARD = CardDefinition("Palace Guard", abilities=(BlocksAnyNumber(),))
 
-DEFINITIONS = (PALACE_GUARD,)
+# This creature can't be blocked.
+PHANTOM_WARRIOR = CardDefinition("Phantom Warrior", abilities=(CantBeBlocked(),))
+
+DEFINITIONS = (PALACE_GUARD, PHANTOM_WARRIOR)

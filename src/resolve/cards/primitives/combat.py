@@ -1,9 +1,18 @@
 """Static abilities of creatures that change how they attack or block (506-509; design.md §17.18),
 read through the creature's computed characteristics, so granted ones (M5) need no change.
 
-So far: ``BlocksAnyNumber``, "This creature can block any number of creatures." (Palace Guard),
-read by ``defaults.blocks_allowed`` (509.1a). The rest of the M3 plan's list (``CantBeBlocked``,
-``AttacksEachCombat``, ``MustBeBlockedByAll``, ...) arrives with its cards in M3.4 and M3.5.
+So far:
+
+- ``BlocksAnyNumber``, "This creature can block any number of creatures." (Palace Guard), read by
+  ``defaults.blocks_allowed`` (509.1a);
+- ``CantBeBlocked``, "This creature can't be blocked." (Phantom Warrior), a prohibition of
+  ``legality.allowed(BlockAction)`` read from the attacker (509.1b);
+- ``PowerBlockRestriction``, "Creatures with power less than this creature's power can't block
+  creatures you control." (Champion of Lambholt), a prohibition of the same, collected from the
+  permanents on the battlefield (509.1b), as M2.9 collects cost modifiers.
+
+The rest of the M3 plan's list (``AttacksEachCombat``, ``MustBeBlockedByAll``, ...) arrives with
+its cards in M3.5.
 """
 
 from __future__ import annotations
@@ -28,3 +37,33 @@ class BlocksAnyNumber(Ability):
     @property
     def text(self) -> str:
         return "This creature can block any number of creatures."
+
+
+@dataclass(frozen=True)
+class CantBeBlocked(Ability):
+    """ "This creature can't be blocked.": a restriction on every creature that would block it
+    (509.1b), checked as blockers are declared; it doesn't remove a block already declared."""
+
+    scope: ThisObject = _THIS_OBJECT
+
+    @property
+    def text(self) -> str:
+        return "This creature can't be blocked."
+
+
+@dataclass(frozen=True)
+class PowerBlockRestriction(Ability):
+    """ "Creatures with power less than this creature's power can't block creatures you
+    control." (Champion of Lambholt): while its permanent is on the battlefield, a creature whose
+    power is less than the permanent's can't block a creature the permanent's controller controls,
+    whether or not the permanent is attacking (its ruling). A restriction (509.1b): the powers are
+    compared only as blockers are declared, so later changes don't undo a block (its ruling)."""
+
+    scope: ThisObject = _THIS_OBJECT
+
+    @property
+    def text(self) -> str:
+        return (
+            "Creatures with power less than this creature's power can't block creatures you "
+            "control."
+        )

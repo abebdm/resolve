@@ -481,6 +481,42 @@ PALACE_GUARD = keyword_creature(
     "Palace Guard", "{2}{W}", 3.0, "Human Soldier", ("1", "4"), "W",
     "This creature can block any number of creatures.",
 )  # fmt: skip
+# M3.4's keyword example cards and combat-rules card (Oracle text from the 2026-10-31 snapshot).
+WIND_DRAKE = keyword_creature("Wind Drake", "{2}{U}", 3.0, "Drake", ("2", "2"), "U", "Flying")
+GIANT_SPIDER = keyword_creature(
+    "Giant Spider", "{3}{G}", 4.0, "Spider", ("2", "4"), "G",
+    "Reach (This creature can block creatures with flying.)",
+)  # fmt: skip
+DERANGED_WHELP = keyword_creature(
+    "Deranged Whelp", "{1}{R}", 2.0, "Wolf", ("2", "1"), "R",
+    "Menace (This creature can't be blocked except by two or more creatures.)",
+)  # fmt: skip
+HIGHBORN_GHOUL = keyword_creature(
+    "Highborn Ghoul", "{B}{B}", 2.0, "Zombie", ("2", "1"), "B",
+    "Intimidate (This creature can't be blocked except by artifact creatures and/or creatures "
+    "that share a color with it.)",
+)  # fmt: skip
+SEVERED_LEGION = keyword_creature(
+    "Severed Legion", "{1}{B}{B}", 3.0, "Zombie", ("2", "2"), "B",
+    "Fear (This creature can't be blocked except by artifact creatures and/or black creatures.)",
+)  # fmt: skip
+BOG_RAIDERS = keyword_creature(
+    "Bog Raiders", "{2}{B}", 3.0, "Zombie", ("2", "2"), "B",
+    "Swampwalk (This creature can't be blocked as long as defending player controls a Swamp.)",
+)  # fmt: skip
+PHANTOM_WARRIOR = keyword_creature(
+    "Phantom Warrior", "{1}{U}{U}", 3.0, "Illusion Warrior", ("2", "2"), "U",
+    "This creature can't be blocked.",
+)  # fmt: skip
+# Invented creatures for M3.4: Champion of Lambholt's restriction alone (a 3/3), and two evasion
+# abilities on one creature (509.1b: cumulative).
+TEST_LAMBHOLT_WARDEN = keyword_creature(
+    "Test Lambholt Warden", "{1}{G}{G}", 3.0, "Human Warrior", ("3", "3"), "G",
+    "Creatures with power less than this creature's power can't block creatures you control.",
+)  # fmt: skip
+TEST_FLYING_BRUTE = keyword_creature(
+    "Test Flying Brute", "{3}{R}", 4.0, "Dragon", ("3", "3"), "R", "Flying\nMenace"
+)
 # Invented creatures with haste (702.10c) and a {T} mana ability (M3.1).
 TEST_HASTY_ELVES = keyword_creature(
     "Test Hasty Elves", "{G}", 1.0, "Elf Druid", ("1", "1"), "G", "Haste\n{T}: Add {G}."

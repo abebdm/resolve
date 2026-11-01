@@ -143,6 +143,29 @@ Option = (
     | ColorOption
 )
 
+# --- Constraints of declarations --------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class NoneOrAtLeast(Immutable):
+    """A constraint of a ``ChooseAssignment`` (design.md §17.18): ``choice`` is picked by no item
+    or by at least ``minimum`` items. Menace (702.111b): an attacker blocked by none or by two or
+    more creatures. Choices are compared by value, so the same attacker offered to several
+    blockers is one choice."""
+
+    choice: Option
+    minimum: int
+
+    def __post_init__(self) -> None:
+        if self.minimum < 2:
+            raise ValueError(f"NoneOrAtLeast needs a minimum of at least 2, got {self.minimum}")
+
+
+Constraint = NoneOrAtLeast
+"""The closed vocabulary of declaration-wide constraints (design.md §17.18); ``NotAlone`` and
+``AtMost`` join it in M3.5."""
+
+
 # --- Answer values -----------------------------------------------------------------------------
 
 
@@ -399,13 +422,16 @@ class ChooseAssignment(AnswerSpace):
     509.1a). The answer, ``Assignment``, gives each item strictly increasing choice indices, so
     one declaration has exactly one answer (§6).
 
-    Declaration-wide restrictions, requirements and the picks that need a cost (508.1c-d,
-    509.1b-c; §17.18's constraint model) join it in M3.4 and M3.5.
+    ``constraints`` are the declaration-wide restrictions (509.1b; §17.18's closed vocabulary,
+    ``Constraint``): an answer must satisfy every one, checked by the solver
+    (``resolve.decisions.assignment``) without the state. Requirements and the picks that need a
+    cost (508.1c-d, 509.1c) join it in M3.5.
     """
 
     items: tuple[Option, ...]
     choices: tuple[tuple[Option, ...], ...]
     maxima: tuple[int, ...]
+    constraints: tuple[Constraint, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.items:
