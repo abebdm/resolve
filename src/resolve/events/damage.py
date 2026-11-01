@@ -12,8 +12,8 @@ from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.zones import ZoneKind
 
 if TYPE_CHECKING:
-    from resolve.effects.characteristics import Characteristics
     from resolve.state.game import GameState
+    from resolve.state.last_known import LastKnown
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -54,7 +54,7 @@ class DamageDealt(Event):
         known = information(state, self.source)
         if known is None:
             raise EngineError(f"nothing is known of the damage source {self.source}")
-        _protection_gap(state, known.characteristics, self)
+        _protection_gap(state, known, self)
         marked: list[tuple[ObjectId, int]] = []
         for obj, amount in self.to_objects:
             game_object = state.object(obj)
@@ -82,11 +82,12 @@ class DamageDealt(Event):
         return sum(amount for _, amount in (*self.to_objects, *self.to_players))
 
 
-def _protection_gap(state: GameState, source: Characteristics, event: DamageDealt) -> None:
+def _protection_gap(state: GameState, source: LastKnown, event: DamageDealt) -> None:
     """702.16e: damage a source with the quality would deal to a permanent or player with
-    protection from it is prevented (702.16j: from everything, all damage). Prevention is the
-    replacement stage's (615, M6), so until then such damage is a gap; damage from any other
-    source is dealt as normal."""
+    protection from it is prevented (702.16j: from everything, all damage; 702.16k: from a
+    player, damage from sources they control, or own and no other player controls). Prevention
+    is the replacement stage's (615, M6), so until then such damage is a gap; damage from any
+    other source is dealt as normal."""
     from resolve.cards.keywords import Protection
     from resolve.effects.characteristics import characteristics
     from resolve.rules import defaults
@@ -95,7 +96,9 @@ def _protection_gap(state: GameState, source: Characteristics, event: DamageDeal
     recipients += [defaults.player_abilities(state, player) for player, _ in event.to_players]
     for abilities in recipients:
         for ability in abilities:
-            if isinstance(ability, Protection) and ability.quality.matches(source):
+            if isinstance(ability, Protection) and ability.quality.matches_source(
+                source.characteristics, source.controller, source.owner
+            ):
                 raise NotImplementedRule(
                     "702.16e: preventing damage from a source with a quality a permanent or "
                     "player has protection from (M6)"

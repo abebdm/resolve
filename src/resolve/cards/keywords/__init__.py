@@ -9,7 +9,6 @@
 """
 
 from resolve.cards.keywords.combat import Fear, Flying, Intimidate, Landwalk, Menace, Reach
-
 from resolve.cards.keywords.evergreen import (
     Defender,
     Flash,

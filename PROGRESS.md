@@ -7,11 +7,16 @@ Task: implement step M3.4 of `docs/plans/m3.md` (the user's prompt in this sessi
   `docs/rules/README.md` left unchanged); the seven cards' text matches the plan.
 - `tools/excerpts/cards.json` rewritten with the seven new cards.
 
+- Tests first written and confirmed failing; implementation done; docs drafted (decisions,
+  primitives, howto, roadmap, torture tests, plan handoff, CLAUDE.md, README).
+- Non-fuzz suite 2813 passed; ruff, format, pyright clean; quick fuzz run 10 games passed.
+
 ## In progress
-- Stubs, then the "Tests first" list, then the implementation.
+- Timing tests/fuzz (slow: over 15 minutes, comparing with main in /tmp/mainwt).
+- test-reviewer.
 
 ## Next
-- Implementation, checks, fuzz, test-reviewer, docs, PR.
+- Handle review findings, full suite, PR.
 
 ## Decisions not yet in the docs
 - `NoneOrAtLeast(choice, minimum)` lives in `resolve.decisions.spaces` (data); the solver

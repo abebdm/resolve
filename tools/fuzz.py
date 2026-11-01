@@ -494,7 +494,7 @@ def invalid_answers(
                 answer(Amounts((maxima[0] + 1,) + (0,) * (len(options) - 1))),
                 answer(Amounts((-1,) + (0,) * (len(options) - 1))),
             ]
-        case ChooseAssignment(choices=choices, maxima=maxima):
+        case ChooseAssignment(choices=choices, maxima=maxima, constraints=constraints):
             empty = ((),) * (len(choices) - 1)
             wrong += [
                 answer(Assignment(())),
@@ -509,6 +509,14 @@ def invalid_answers(
                     wrong.append(answer(Assignment((*before, picks, *after))))
                 if len(options) >= 2 and maximum >= 2:
                     wrong.append(answer(Assignment((*before, (1, 0), *after))))
+            for constraint in constraints:
+                # 509.1b: one item alone picking a NoneOrAtLeast choice (menace, one blocker).
+                for index, options in enumerate(choices):
+                    if constraint.choice in options:
+                        before, after = ((),) * index, ((),) * (len(choices) - index - 1)
+                        alone = (options.index(constraint.choice),)
+                        wrong.append(answer(Assignment((*before, alone, *after))))
+                        break
         case DistributeEach(parts=parts):
             fitting = tuple(Amounts((p.total,) + (0,) * (len(p.recipients) - 1)) for p in parts)
             first, rest = parts[0], fitting[1:]

@@ -160,6 +160,11 @@ class NoneOrAtLeast(Immutable):
         if self.minimum < 2:
             raise ValueError(f"NoneOrAtLeast needs a minimum of at least 2, got {self.minimum}")
 
+    @property
+    def text(self) -> str:
+        """The constraint in words, with the choice as a value (a UI names it)."""
+        return f"{self.choice!r} is picked by none or by at least {self.minimum}"
+
 
 Constraint = NoneOrAtLeast
 """The closed vocabulary of declaration-wide constraints (design.md §17.18); ``NotAlone`` and
@@ -475,6 +480,16 @@ class ChooseAssignment(AnswerSpace):
                 )
             if len(indices) > maximum:
                 raise InvalidAnswer(f"item {number} may pick at most {maximum}")
+        from resolve.decisions.assignment import broken_constraints
+
+        checked = tuple(_int_tuple(item, "picks") for item in items)
+        broken = broken_constraints(self, checked)
+        if broken:
+            # 509.1b: a declaration that disobeys a restriction is illegal.
+            raise InvalidAnswer(
+                "the declaration breaks a restriction: "
+                + "; ".join(constraint.text for constraint in broken)
+            )
 
     def chosen(self, answer: Assignment) -> tuple[tuple[Option, ...], ...]:
         """The choices an (already validated) answer gives each item, in choice order."""

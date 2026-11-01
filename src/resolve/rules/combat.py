@@ -7,13 +7,14 @@
   what it may attack, all checked by ``legality.allowed(AttackAction)``.
 
 - ``block_declaration``: one defending player's declaration of blockers compiled into a
-  ``ChooseAssignment`` (509.1a, 802.4a-b): its items are their creatures that may block
+  ``ChooseAssignment`` (509.1a-b, 802.4a-b): its items are their creatures that may block
   something, each item's choices the attackers it may block (``legality.allowed(BlockAction)``),
-  its maximum ``defaults.blocks_allowed``.
+  its maximum ``defaults.blocks_allowed``, its constraints menace's (702.111b,
+  ``minimum_blockers``).
 - ``damage_recipients``: what each attacking and blocking creature may assign its combat damage
   to (510.1b-d).
 
-The declaration-wide restrictions and requirements arrive in M3.4 and M3.5. Leaving combat is
+The other declaration-wide restrictions and the requirements arrive in M3.5. Leaving combat is
 ``resolve.state.combat.remove_from_combat``.
 """
 
@@ -21,7 +22,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from resolve.decisions.spaces import ChooseAssignment, ObjectOption, Option, PlayerOption
+from resolve.cards.keywords import Menace, has_keyword
+from resolve.decisions.spaces import (
+    ChooseAssignment,
+    NoneOrAtLeast,
+    ObjectOption,
+    Option,
+    PlayerOption,
+)
+from resolve.effects.characteristics import characteristics
 from resolve.errors import EngineError
 from resolve.state.combat import AttackPlayer, AttackTarget
 from resolve.state.game import apnap_order
@@ -118,15 +127,23 @@ def declared_attacks(
 
 def block_declaration(state: GameState, player: PlayerId) -> ChooseAssignment | None:
     """The declaration of the defending player ``player``'s blockers as a ``ChooseAssignment``
-    (509.1a; design.md §17.18).
+    (509.1a-b; design.md §17.18).
 
     Its items are the creatures ``player`` controls, in battlefield order, that may block at
-    least one attacker (``legality.allowed(BlockAction)``: 509.1a, 802.4a, 702.16f, 702.16j);
-    each item's choices are the attackers it may block, in declaration order; its maximum is
-    ``defaults.blocks_allowed`` (1, 509.1a; ``None``, any number: Palace Guard), at most its
-    number of choices. Other players' attackers and blockers are ignored (802.4b). ``None``
-    when no creature may block: the declaration has one possible answer, no blockers, so it
-    isn't asked (design.md §6). A creature allowed to block none (a maximum of 0) isn't an item.
+    least one attacker (``legality.allowed(BlockAction)``: 509.1a, 802.4a, and the restrictions
+    on one blocker and one attacker, 509.1b: evasion, protection, "can't be blocked", Champion of
+    Lambholt's); each item's choices are the attackers it may block, in declaration order; its
+    maximum is ``defaults.blocks_allowed`` (1, 509.1a; ``None``, any number: Palace Guard), at
+    most its number of choices. Other players' attackers and blockers are ignored (802.4b).
+
+    The restrictions on the whole declaration are its constraints (509.1b): an attacker with
+    menace is blocked by none or by at least two creatures (702.111b, ``NoneOrAtLeast``). An
+    attacker that fewer of ``player``'s creatures may block than its minimum can't be blocked in
+    any legal declaration, so it is no item's choice (and has no constraint).
+
+    ``None`` when no creature may block: the declaration has one possible answer, no blockers,
+    so it isn't asked (design.md §6). A creature allowed to block none (a maximum of 0) isn't an
+    item.
     """
     from resolve.rules import defaults, legality
 
@@ -134,27 +151,57 @@ def block_declaration(state: GameState, player: PlayerId) -> ChooseAssignment | 
     if turn is None or turn.combat is None:
         raise EngineError("blockers are declared only during a combat (509.1)")
     attackers = tuple(turn.combat.attackers)
-    items: list[Option] = []
-    choices: list[tuple[Option, ...]] = []
-    maxima: list[int] = []
+    able: list[tuple[ObjectId, tuple[ObjectId, ...]]] = []
     for obj in state.battlefield:
         allowed = tuple(
-            ObjectOption(attacker)
+            attacker
             for attacker in attackers
             if legality.allowed(state, legality.BlockAction(player, obj, attacker)).allowed
         )
-        if not allowed:
+        if allowed:
+            able.append((obj, allowed))
+    minimums = {
+        attacker: minimum
+        for attacker in attackers
+        if (minimum := minimum_blockers(state, attacker)) is not None
+    }
+    # An attacker fewer creatures may block than its minimum is no one's choice.
+    blockable = {
+        attacker: sum(attacker in allowed for _, allowed in able) >= minimums.get(attacker, 1)
+        for attacker in attackers
+    }
+    items: list[Option] = []
+    choices: list[tuple[Option, ...]] = []
+    maxima: list[int] = []
+    for obj, allowed in able:
+        kept = tuple(ObjectOption(attacker) for attacker in allowed if blockable[attacker])
+        if not kept:
             continue
         limit = defaults.blocks_allowed(state, obj)
-        maximum = len(allowed) if limit is None else min(max(limit, 0), len(allowed))
+        maximum = len(kept) if limit is None else min(max(limit, 0), len(kept))
         if maximum == 0:
             continue
         items.append(ObjectOption(obj))
-        choices.append(allowed)
+        choices.append(kept)
         maxima.append(maximum)
     if not items:
         return None
-    return ChooseAssignment(tuple(items), tuple(choices), tuple(maxima))
+    offered = {choice for own in choices for choice in own}
+    constraints = tuple(
+        NoneOrAtLeast(ObjectOption(attacker), minimum)
+        for attacker, minimum in minimums.items()
+        if ObjectOption(attacker) in offered
+    )
+    return ChooseAssignment(tuple(items), tuple(choices), tuple(maxima), constraints)
+
+
+def minimum_blockers(state: GameState, attacker: ObjectId) -> int | None:
+    """The fewest creatures that may block ``attacker`` if any do, or ``None`` for no minimum
+    (one blocker is enough): 2 for menace (702.111b; several instances are redundant, 702.111c),
+    read from its computed characteristics."""
+    if has_keyword(characteristics(state, attacker), Menace):
+        return 2
+    return None
 
 
 def declared_blocks(

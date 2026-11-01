@@ -14,8 +14,9 @@ For each answer space it picks:
   is capped at ``minimum + unbounded_span``; a random agent can't usefully pick "any" number.
 - ``Distribute``: each division of the total with equal probability (stars and bars).
 - ``ChooseCounts``: each way to reach the total within the maxima with equal probability.
-- ``ChooseAssignment``: each item on its own, as ``ChooseSubset`` from 0 to its maximum. Its
-  constraints and requirements (M3.4, M3.5) will need the solver's ``random_legal``.
+- ``ChooseAssignment``: the solver's ``random_legal`` (``resolve.decisions.assignment``): each
+  item on its own, as ``ChooseSubset`` from 0 to its maximum, then each broken constraint
+  (menace's ``NoneOrAtLeast``) repaired, so the answer is always legal but not uniform.
 - ``DistributeEach``: each part on its own, as ``Distribute``; so each answer is equally likely.
 
 Answers inside the space can still break a rule only the asking task checks (``check_answer``);
@@ -24,13 +25,13 @@ the driver then asks again (``play(..., on_invalid=...)``), and the agent draws 
 
 from __future__ import annotations
 
+from resolve.decisions.assignment import random_legal
 from resolve.decisions.request import DecisionAnswer, DecisionRequest
 from resolve.decisions.spaces import (
     Amounts,
     AmountsEach,
     AnswerSpace,
     AnswerValue,
-    Assignment,
     ChooseAssignment,
     ChooseCounts,
     ChooseNumber,
@@ -83,13 +84,8 @@ class RandomAgent:
                 return Amounts(self._division(len(recipients), total, minimum_each))
             case ChooseCounts(maxima=maxima, total=total):
                 return Amounts(self._counts(maxima, total))
-            case ChooseAssignment(choices=choices, maxima=maxima):
-                return Assignment(
-                    tuple(
-                        self._subset(len(options), 0, maximum)
-                        for options, maximum in zip(choices, maxima, strict=True)
-                    )
-                )
+            case ChooseAssignment():
+                return random_legal(space, rng)
             case DistributeEach(parts=parts):
                 return AmountsEach(
                     tuple(
