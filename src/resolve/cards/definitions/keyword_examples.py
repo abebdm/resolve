@@ -8,11 +8,18 @@ from resolve.cards.keywords import (
     CardTypeQuality,
     ColorQuality,
     Defender,
+    Fear,
     Flash,
+    Flying,
     Haste,
     Hexproof,
     Indestructible,
+    Intimidate,
+    LandTypeQuality,
+    Landwalk,
+    Menace,
     Protection,
+    Reach,
     Shroud,
     Vigilance,
 )
@@ -20,7 +27,7 @@ from resolve.cards.primitives.effects import CounterSpell
 from resolve.cards.primitives.refs import TargetRef
 from resolve.cards.primitives.spells import Mode, SpellAbility
 from resolve.cards.primitives.targets import SpellFilter, TargetSpec
-from resolve.cards.primitives.words import ColorWord
+from resolve.cards.primitives.words import ColorWord, LandTypeWord
 from resolve.cards.registry import CardDefinition
 from resolve.data.types import CardType, Color
 
@@ -55,6 +62,20 @@ RAGING_GOBLIN = CardDefinition("Raging Goblin", abilities=(Haste(),))
 ALABORN_GRENADIER = CardDefinition("Alaborn Grenadier", abilities=(Vigilance(),))
 # Defender
 WALL_OF_STONE = CardDefinition("Wall of Stone", abilities=(Defender(),))
+# Flying
+WIND_DRAKE = CardDefinition("Wind Drake", abilities=(Flying(),))
+# Reach
+GIANT_SPIDER = CardDefinition("Giant Spider", abilities=(Reach(),))
+# Menace
+DERANGED_WHELP = CardDefinition("Deranged Whelp", abilities=(Menace(),))
+# Intimidate
+HIGHBORN_GHOUL = CardDefinition("Highborn Ghoul", abilities=(Intimidate(),))
+# Fear
+SEVERED_LEGION = CardDefinition("Severed Legion", abilities=(Fear(),))
+# Swampwalk
+BOG_RAIDERS = CardDefinition(
+    "Bog Raiders", abilities=(Landwalk(LandTypeQuality(LandTypeWord("Swamp"))),)
+)
 
 DEFINITIONS = (
     ASHCOAT_BEAR,
@@ -68,4 +89,10 @@ DEFINITIONS = (
     RAGING_GOBLIN,
     ALABORN_GRENADIER,
     WALL_OF_STONE,
+    WIND_DRAKE,
+    GIANT_SPIDER,
+    DERANGED_WHELP,
+    HIGHBORN_GHOUL,
+    SEVERED_LEGION,
+    BOG_RAIDERS,
 )

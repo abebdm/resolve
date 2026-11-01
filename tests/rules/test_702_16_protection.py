@@ -22,26 +22,28 @@ from __future__ import annotations
 
 import pytest
 
-from resolve.cards.keywords import ColorQuality, Protection, keywords
+from resolve.cards.keywords import ColorQuality, PlayerQuality, Protection, keywords
 from resolve.cards.primitives.targets import ANY_TARGET
 from resolve.cards.primitives.words import ColorWord
+from resolve.cards.registry import CardDefinition
 from resolve.data.types import Color
 from resolve.decisions.spaces import ObjectOption, PlayerOption
-from resolve.effects.characteristics import characteristics
-from resolve.errors import NotImplementedRule
+from resolve.effects.characteristics import Characteristics, characteristics
+from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.damage import DamageDealt
-from resolve.rules import targeting
+from resolve.rules import legality, targeting
 from resolve.rules.legality import Targeter
 from resolve.state.game import GameState
 from resolve.state.ids import PlayerId
 from resolve.state.mana import ManaType
 from resolve.state.spell import TargetObject
-from resolve.state.turn import Phase
+from resolve.state.turn import Phase, Step
+from tests import scryfall_fixtures as fx
 from tests.casting_support import cast, pass_, records, target_choices
-from tests.scenario import Scenario, run_script
+from tests.scenario import Scenario, run_script, with_cards
 from tests.seams import patch
 
-P0, P1 = PlayerId(0), PlayerId(1)
+P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 W, R = ManaType.WHITE, ManaType.RED
 
 
@@ -232,3 +234,135 @@ def test_702_16e_damage_to_a_player_with_protection_is_a_gap(
     with pytest.raises(NotImplementedRule) as gap:
         _burn(state)
     assert gap.value.rule == "702.16e"
+
+
+# --- 702.16k: protection from a player (M3.4) ---------------------------------------------------
+#
+# 702.16k: "A permanent or player with protection from a specific player has protection from each
+# object that player controls and protection from each object that player owns not controlled by
+# another player, regardless of that object's characteristic values. Such a permanent or player
+# can't be targeted by spells or abilities the specified player controls ... Such a permanent
+# can't be ... blocked by creatures that player controls. All damage that would be dealt to such
+# a permanent or player by sources controlled by the specified player ... is prevented."
+#
+# No card in scope has it (True-Name Nemesis chooses the player as it enters, a choice stored on
+# the permanent: M4), so a fixture knight has protection from P1, a ``PlayerQuality``. Its
+# targeting and blocking parts are checked at predicate level (``target_problem``,
+# ``legality.allowed(BlockAction)``); its damage part reaches the 702.16e gap.
+
+WARDED_KNIGHT = fx.keyword_creature(
+    "Test Warded Knight", "{1}{W}", 2.0, "Knight", ("2", "2"), "W", "Protection from player 1"
+)
+
+
+def warded_scenario(players: int) -> Scenario:
+    """A scenario whose cards include Test Warded Knight, with protection from P1."""
+    knight = CardDefinition("Test Warded Knight", abilities=(Protection(PlayerQuality(P1)),))
+    return with_cards(players, [WARDED_KNIGHT], [knight])
+
+
+def test_702_16k_protection_from_a_player_cant_be_blocked_by_their_creatures() -> None:
+    """Three players: two Warded Knights (protection from P1) attack P1 and P2. P1's Grizzly
+    Bears (green, but "regardless of characteristic values") can't block the one attacking
+    them; P2's Grizzly Bears may block the other, protection from P1 being nothing to P2."""
+    scenario = warded_scenario(3)
+    knight_1, knight_2 = scenario.battlefield(P0, ["Test Warded Knight", "Test Warded Knight"])
+    (bears_1,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    (bears_2,) = scenario.battlefield(P2, ["Grizzly Bears"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, knight_1)
+    scenario.attacking(P2, knight_2)
+    state = scenario.build()
+    refused = legality.allowed(state, legality.BlockAction(P1, bears_1, knight_1))
+    assert not refused.allowed and "702.16k" in refused.rules
+    assert legality.allowed(state, legality.BlockAction(P2, bears_2, knight_2)).allowed
+
+
+def test_702_16k_protection_from_a_player_cant_be_targeted_by_what_they_control() -> None:
+    """P1's Grizzly Bears as the source of an ability (or P1's Test Shock on the stack) can't
+    target P0's Warded Knight (702.16k); the same objects controlled by P0 can, whatever their
+    characteristics: protection from a player isn't protection from a color."""
+    scenario = warded_scenario(2)
+    (knight,) = scenario.battlefield(P0, ["Test Warded Knight"])
+    (theirs,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    (mine,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    (shock,) = scenario.stack(P1, ["Test Shock"])
+    state = scenario.build()
+    for obj, controller in ((theirs, P1), (shock, P1)):
+        targeter = Targeter(controller, obj, characteristics(state, obj))
+        problem = targeting.target_problem(state, targeter, ANY_TARGET, TargetObject(knight))
+        assert problem is not None and "702.16k" in problem.rules
+    targeter = Targeter(P0, mine, characteristics(state, mine))
+    assert targeting.target_problem(state, targeter, ANY_TARGET, TargetObject(knight)) is None
+
+
+def test_702_16k_an_ability_from_a_source_they_control_cant_target_it() -> None:
+    """702.16k: protection from each object P1 controls, so (702.16b) no ability from a source
+    P1 controls may target the Knight, even one P0 controls (the source's controller and the
+    ability's can differ, 113.8)."""
+    scenario = warded_scenario(2)
+    (knight,) = scenario.battlefield(P0, ["Test Warded Knight"])
+    (theirs,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    state = scenario.build()
+    targeter = Targeter(P0, theirs, characteristics(state, theirs))
+    problem = targeting.target_problem(state, targeter, ANY_TARGET, TargetObject(knight))
+    assert problem is not None and "702.16k" in problem.rules
+
+
+def test_702_16k_another_players_spell_may_target_it() -> None:
+    """Three players: protection from P1 is not protection from P0's opponents. P2's Test Shock
+    may target P0's Warded Knight; P1's may not."""
+    scenario = warded_scenario(3)
+    (knight,) = scenario.battlefield(P0, ["Test Warded Knight"])
+    (from_p2,) = scenario.stack(P2, ["Test Shock"])
+    (from_p1,) = scenario.stack(P1, ["Test Shock"])
+    state = scenario.build()
+    allowed = Targeter(P2, from_p2, characteristics(state, from_p2))
+    assert targeting.target_problem(state, allowed, ANY_TARGET, TargetObject(knight)) is None
+    refused = Targeter(P1, from_p1, characteristics(state, from_p1))
+    assert targeting.target_problem(state, refused, ANY_TARGET, TargetObject(knight)) is not None
+
+
+def test_702_16k_damage_from_a_source_they_control_is_a_gap_until_m6() -> None:
+    """Damage from a source P1 controls to the Warded Knight would be prevented (702.16k): the
+    702.16e gap, raised before anything changes. P0's own source deals its damage."""
+    scenario = warded_scenario(2)
+    (knight,) = scenario.battlefield(P0, ["Test Warded Knight"])
+    (theirs,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    (mine,) = scenario.battlefield(P0, ["Grizzly Bears"])
+    state = scenario.build()
+    with pytest.raises(NotImplementedRule) as gap:
+        DamageDealt(source=theirs, to_objects=((knight, 2),), rules=("120.3e",)).apply(state)
+    assert gap.value.rule == "702.16e"
+    assert state.objects[knight].damage == 0
+    DamageDealt(source=mine, to_objects=((knight, 1),), rules=("120.3e",)).apply(state)
+    assert state.objects[knight].damage == 1
+
+
+def test_702_16k_damage_from_a_source_they_own_and_no_one_controls_is_a_gap() -> None:
+    """702.16k: "owned by that player but not controlled by another player": a source in P1's
+    graveyard has no controller (108.4a), so damage from it to the Knight is the 702.16e gap,
+    raised before anything changes."""
+    scenario = warded_scenario(2)
+    (knight,) = scenario.battlefield(P0, ["Test Warded Knight"])
+    (card,) = scenario.graveyard(P1, ["Grizzly Bears"])
+    state = scenario.build()
+    with pytest.raises(NotImplementedRule) as gap:
+        DamageDealt(source=card, to_objects=((knight, 2),), rules=("120.3e",)).apply(state)
+    assert gap.value.rule == "702.16e"
+    assert state.objects[knight].damage == 0
+
+
+def test_702_16k_player_quality_is_judged_by_control_and_ownership() -> None:
+    """The quality itself: an object P1 controls has it, one P0 controls that P1 owns doesn't
+    (it is controlled by another player), one with no controller (a card in a hidden zone,
+    108.4a) has it if P1 owns it. It can't be judged from characteristics alone."""
+    quality = PlayerQuality(P1)
+    chars = Characteristics("Test", (), (), ())
+    assert quality.matches_source(chars, controller=P1, owner=P0)
+    assert not quality.matches_source(chars, controller=P0, owner=P1)
+    assert quality.matches_source(chars, controller=None, owner=P1)
+    assert not quality.matches_source(chars, controller=None, owner=P0)
+    assert Protection(quality).text == "Protection from player 1"
+    with pytest.raises(EngineError):
+        quality.matches(chars)

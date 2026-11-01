@@ -326,6 +326,26 @@ conditions still apply (untapped, blocking only creatures attacking its controll
 - **Rules:** 509.1a, 802.4a.
 - **Example:** Palace Guard: `CardDefinition("Palace Guard", abilities=(BlocksAnyNumber(),))`.
 
+### `CantBeBlocked` (`resolve.cards.primitives.combat`)
+"This creature can't be blocked.": a static ability of a creature, read from the attacker's
+computed characteristics as a prohibition of `legality.allowed(BlockAction)` (a restriction,
+509.1b), so no creature is offered it as a choice. It doesn't stop the creature blocking. Judged
+as blockers are declared. `scope` is `ThisObject()`; "target creature can't be blocked this turn"
+(Rogue's Passage) is a continuous effect with a duration (M5).
+- **Rules:** 509.1b, 101.2.
+- **Example:** Phantom Warrior: `CardDefinition("Phantom Warrior", abilities=(CantBeBlocked(),))`.
+
+### `PowerBlockRestriction` (`resolve.cards.primitives.combat`)
+"Creatures with power less than this creature's power can't block creatures you control.": a
+static ability collected from the permanents on the battlefield (as cost modifiers are): a
+blocker whose computed power is less than the permanent's can't block a creature the permanent's
+controller controls, whether or not the permanent attacks. A prohibition of
+`legality.allowed(BlockAction)`, so the powers are compared only as blockers are declared (the
+card's ruling).
+- **Rules:** 509.1b.
+- **Example:** Test Lambholt Warden (tests): `abilities=(PowerBlockRestriction(),)`; Champion of
+  Lambholt's first ability (the card needs a trigger and counters, M4).
+
 ### `SpellCostReduction(spells, amount=1)` (`resolve.cards.primitives.cost_modifiers`)
 "[Quality] spells you cast cost {N} less to cast.": a static ability of a permanent (113.6: it
 functions only on the battlefield). For a spell its controller casts with the quality `spells`
@@ -391,6 +411,39 @@ over 508.1a's permission). It can still block. Multiple instances are redundant.
 - **Rules:** 702.3a-c, 508.1a.
 - **Example:** Wall of Stone: `CardDefinition("Wall of Stone", abilities=(Defender(),))`.
 
+### `Flying`, `Reach` (`resolve.cards.keywords.combat`)
+Flying: an attacking creature with it can't be blocked except by creatures with flying and/or
+reach, a prohibition of `legality.allowed(BlockAction)` read from the attacker and the blocker.
+A flyer blocks anything. Reach is the exception only; it gives no evasion. Multiple instances are
+redundant.
+- **Rules:** 702.9a-c, 702.17a-c, 509.1b.
+- **Example:** Wind Drake: `Flying()`; Giant Spider: `Reach()`.
+
+### `Menace` (`resolve.cards.keywords.combat`)
+Can't be blocked except by two or more creatures. Not a prohibition of one block: the block
+declaration's space carries `NoneOrAtLeast(attacker, 2)` (`rules.combat.minimum_blockers`, read
+from computed characteristics), which the space validates itself; an attacker fewer creatures
+may block than that isn't offered at all.
+- **Rules:** 702.111a-c, 509.1b.
+- **Example:** Deranged Whelp: `Menace()`; Test Flying Brute (tests): `Flying(), Menace()`.
+
+### `Intimidate`, `Fear` (`resolve.cards.keywords.combat`)
+Intimidate: can't be blocked except by artifact creatures and/or creatures sharing a color with
+it. Fear: except by artifact creatures and/or black creatures. Prohibitions of
+`legality.allowed(BlockAction)`, read from both creatures' computed characteristics.
+- **Rules:** 702.13a-c, 702.36a-c, 509.1b.
+- **Example:** Highborn Ghoul: `Intimidate()`; Severed Legion: `Fear()`.
+
+### `Landwalk(quality)` (`resolve.cards.keywords.combat`)
+"[Quality]walk": can't be blocked as long as the defending player (the player the creature
+attacks, 802.2a) controls a land with `quality`, a prohibition of
+`legality.allowed(BlockAction)`. The quality is usually a `LandTypeQuality` (a typed word, so a
+text change can turn swampwalk into islandwalk); `text` is "Swampwalk", or "Artifact landwalk"
+for another quality. Landwalk abilities don't cancel. "Nonbasic landwalk" needs a negated
+quality (not built).
+- **Rules:** 702.14a-e, 802.2a, 509.1b.
+- **Example:** Bog Raiders: `Landwalk(LandTypeQuality(LandTypeWord("Swamp")))`.
+
 ### `Hexproof(quality=None)` (`resolve.cards.keywords.evergreen`)
 Can't be the target of spells or abilities its controller's (a player's: their) opponents
 control; with a `quality`, only [quality] spells and abilities from [quality] sources. A
@@ -413,24 +466,28 @@ Can't be destroyed: the prohibition of `legality.allowed(DestroyAction)`, used b
 
 ### `Protection(quality)`, `protection_from_each_color()` (`resolve.cards.keywords.evergreen`)
 Can't be targeted by spells with the quality or abilities from sources with it, whoever controls
-them; from `Everything()`, by nothing. Targeting is a prohibition of
-`legality.allowed(TargetAction)`. An attacking creature with it can't be blocked by creatures
-with the quality, and from `Everything()` by none (a prohibition of
-`legality.allowed(BlockAction)`, read from the attacker; protection on the blocker doesn't stop
-it blocking). Damage prevention (702.16e) raises `NotImplementedRule` in `DamageDealt.apply`
+them; from `Everything()`, by nothing; from a player (`PlayerQuality`), by what that player
+controls. Targeting is a prohibition of `legality.allowed(TargetAction)`. An attacking creature
+with it can't be blocked by creatures with the quality, from `Everything()` by none, from a
+player by that player's creatures (a prohibition of `legality.allowed(BlockAction)`, read from
+the attacker; protection on the blocker doesn't stop it blocking). Damage prevention (702.16e) raises `NotImplementedRule` in `DamageDealt.apply`
 until M6; Auras and Equipment (702.16c-d) are M4. `protection_from_each_color()` is five
 abilities, one per color.
-- **Rules:** 702.16a, 702.16b, 702.16e (gap), 702.16f, 702.16h, 702.16j, 702.16m.
+- **Rules:** 702.16a, 702.16b, 702.16e (gap), 702.16f, 702.16h, 702.16j, 702.16k, 702.16m.
 - **Example:** Repentant Blacksmith: `Protection(ColorQuality(ColorWord(Color.RED)))`; Nacatl
   Savage: `Protection(CardTypeQuality(CardType.ARTIFACT))`; Test Prismatic Knight (tests):
   `abilities=protection_from_each_color()`.
 
-### Qualities: `ColorQuality`, `MulticoloredQuality`, `MonocoloredQuality`, `CardTypeQuality`, `SubtypeQuality`, `Everything`, `each_color()` (`resolve.cards.keywords.qualities`)
-What protection and "hexproof from" are from: `matches(characteristics)` over the targeting
-spell's characteristics or an ability's source's (113.7a), `text` ("red", "artifacts",
-"Elves") and `adjective`, the form before a noun ("green", "artifact", "Elf"; empty for
-`Everything`), which `SpellCostReduction` uses. Colors and subtypes are typed words (612.2). Room is kept for a player (702.16k) and a
-name (702.16a).
-- **Rules:** 702.16a, 702.16j, 105.2b, 105.2c, 702.16h (`each_color`).
+### Qualities: `ColorQuality`, `MulticoloredQuality`, `MonocoloredQuality`, `CardTypeQuality`, `SubtypeQuality`, `LandTypeQuality`, `Everything`, `PlayerQuality`, `each_color()` (`resolve.cards.keywords.qualities`)
+What protection and "hexproof from" are from, and landwalk's land: `matches(characteristics)`
+over the targeting spell's characteristics, an ability's source's (113.7a), a blocker's or a
+land's, `text` ("red", "artifacts", "Elves") and `adjective`, the form before a noun ("green",
+"artifact", "Elf"; empty for `Everything`), which `SpellCostReduction` uses. Colors, subtypes
+and land types are typed words (612.2). `matches_source(characteristics, controller, owner)` is
+what protection asks of a source, a blocker or a targeting spell: `matches` for every quality but
+`PlayerQuality(player)` (702.16k), which is judged by control (or, with no controller, ownership)
+and refuses `matches` (`EngineError`). Room is kept for a name (702.16a).
+- **Rules:** 702.16a, 702.16j, 702.16k, 702.14a, 105.2b, 105.2c, 702.16h (`each_color`).
 - **Example:** Nacatl Savage's `CardTypeQuality(CardType.ARTIFACT)`; Test Multiproof Knight
-  (tests): `MulticoloredQuality()`; Emerald Medallion's "green spells".
+  (tests): `MulticoloredQuality()`; Emerald Medallion's "green spells"; Bog Raiders'
+  `LandTypeQuality(LandTypeWord("Swamp"))`; Test Warded Knight (tests): `PlayerQuality(P1)`.

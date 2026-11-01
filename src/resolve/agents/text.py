@@ -336,6 +336,12 @@ def render_request(request: DecisionRequest, view: PlayerView) -> str:
                     else "(no choices)"
                 )
             )
+        for constraint in space.constraints:
+            # 509.1b: menace's restriction (702.111b), on the whole declaration.
+            lines.append(
+                f"  Constraint: {describe_option(constraint.choice, view)} is picked by none or "
+                f"by at least {constraint.minimum}."
+            )
     elif isinstance(space, DistributeEach):
         for index, (source, part) in enumerate(zip(space.sources, space.parts, strict=True)):
             lines.append(

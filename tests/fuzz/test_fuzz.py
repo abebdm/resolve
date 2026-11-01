@@ -30,6 +30,7 @@ from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer, DecisionRequest, validate_answer
 from resolve.decisions.spaces import (
     AnswerSpace,
+    Assignment,
     ChooseAssignment,
     ChooseCounts,
     ChooseNumber,
@@ -38,6 +39,7 @@ from resolve.decisions.spaces import (
     ChooseSubset,
     Distribute,
     DistributeEach,
+    NoneOrAtLeast,
     Number,
     PlayerOption,
 )
@@ -799,12 +801,22 @@ SPACES: list[AnswerSpace] = [
     ChooseAssignment(OPTIONS[:2], (OPTIONS[1:], OPTIONS[1:]), (1, 1)),
     ChooseAssignment(OPTIONS[:1], (OPTIONS,), (3,)),
     ChooseAssignment(OPTIONS[:1], ((),), (0,)),
+    ChooseAssignment(OPTIONS[:3], (OPTIONS[:1],) * 3, (1, 1, 1), (NoneOrAtLeast(OPTIONS[0], 2),)),
     DistributeEach(OPTIONS[:1], (Distribute(OPTIONS[1:], 3, minimum_each=0),)),
     DistributeEach(
         OPTIONS[:2],
         (Distribute(OPTIONS[:1], 2, minimum_each=0), Distribute(OPTIONS, 0, minimum_each=0)),
     ),
 ]
+
+
+def test_a_declaration_is_probed_with_an_answer_breaking_its_constraint() -> None:
+    """For each ``NoneOrAtLeast`` constraint, the probes include one item alone picking the
+    choice (menace, 702.111b: one blocker), an answer otherwise in range."""
+    (space,) = [s for s in SPACES if isinstance(s, ChooseAssignment) and s.constraints]
+    request = DecisionRequest(4, PlayerId(1), PlayerId(1), DecisionKind.MAY, space, "?", ("117.1",))
+    probes = invalid_answers(request, 3, RandomAgent(1).random_value(space))
+    assert Assignment(((0,), (), ())) in [probe.value for probe in probes]
 
 
 @pytest.mark.parametrize("space", SPACES, ids=repr)

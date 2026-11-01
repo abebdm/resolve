@@ -511,6 +511,29 @@ files.
    `tests/cards/test_keyword_primitives.py`; add it to `docs/primitives.md` ("Keywords") and tick
    its coverage-map row.
 
+### Add a blocking (or attacking) restriction
+
+509.1b and 508.1c: a restriction is either about one creature and one attacker (or target), or
+about the whole declaration (design.md §17.18).
+
+1. **One blocker and one attacker** (evasion, protection, "can't be blocked", Champion of
+   Lambholt's comparison): a prohibition in `legality._block_prohibitions` (attacking:
+   `_attack_prohibitions`), citing its rule. Read the attacker's and blocker's computed
+   characteristics; an ability of a third permanent is collected from `state.battlefield`
+   (`_power_restrictions`). "The defending player" of an attacker is the player it attacks
+   (802.2a, `_defending_player_of`). `rules.combat.block_declaration` then leaves the pair out
+   of the space by itself.
+2. **The whole declaration** (menace: how many creatures block): a constraint of the space,
+   from the closed vocabulary in `resolve.decisions.spaces` (`NoneOrAtLeast`; `NotAlone`,
+   `AtMost` from M3.5). The compiler (`block_declaration`) adds it; the solver
+   (`resolve.decisions.assignment`) checks it in `broken_constraints` (so `validate` refuses a
+   breaking answer) and repairs it in `random_legal`. A new constraint kind needs all three, a
+   case in the text agent's `render_request` and in `tools/fuzz.py`'s `invalid_answers`, and its
+   own solver tests (`tests/decisions/test_assignment_solver.py`). A restriction the vocabulary
+   can't express raises `NotImplementedRule` in the compiler.
+3. Test both what it refuses and what it still allows, in multiplayer where "defending player"
+   or control matters, and that a refused declaration changes nothing (733.1).
+
 ### Let an effect cast a spell during its resolution
 
 1. The effect's `tasks` returns `CastDuringResolution(player, permission)`

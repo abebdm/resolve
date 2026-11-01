@@ -906,7 +906,10 @@ in M5. Each milestone's plan may revise it, with the user's sign-off. M2.6 built
 prohibition there. M2.8 built the keywords (`resolve.cards.keywords`: `Flash`, `Hexproof`,
 `Shroud`, `Indestructible`, `Protection`, `has_keyword`) and the qualities but a player
 (702.16k); their prohibitions are in `legality` (docs/decisions.md, 2026-10-27). A spell on the
-stack keeps none of them (113.6).*
+stack keeps none of them (113.6). M3.4 added the evasion keywords and reach
+(`resolve.cards.keywords.combat`), landwalk's `LandTypeQuality` and the player quality
+`PlayerQuality`, judged through `Quality.matches_source` (control and ownership, 702.16k;
+docs/decisions.md, 2026-11-01).*
 
 **Keywords and qualities.**
 

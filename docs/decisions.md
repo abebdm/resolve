@@ -19,6 +19,62 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-11-01: M3.4: menace as a constraint, unblockable attackers left out, a player as a quality
+- **Decision:**
+  - **Menace is a constraint of the block declaration, every other evasion a prohibition.**
+    Flying, reach, intimidate, fear, landwalk, "can't be blocked", protection (702.16f, j, k) and
+    Champion of Lambholt's power comparison concern one blocker and one attacker, so they are
+    prohibitions of `legality.allowed(BlockAction)` and the compiler leaves the pair out of the
+    space. Menace concerns how many creatures block, so the space carries
+    `NoneOrAtLeast(ObjectOption(attacker), 2)` (one per attacker with menace), which the space
+    validates without the state (`resolve.decisions.assignment.broken_constraints`). The
+    constraint compares choices by value, so the same attacker offered to several blockers is
+    one choice; its minimum must be at least 2 (`ValueError` otherwise). The number 2 is
+    menace's definition (702.111b), read by `rules.combat.minimum_blockers`, not a rule default.
+  - **An attacker too few creatures may block is left out.** If fewer of a defending player's
+    creatures may block an attacker than its minimum (one creature against menace, Palace
+    Guard alone included), no legal declaration blocks it, so the compiler drops it from every
+    item's choices (and an item left with none) and adds no constraint for it. The declaration
+    then isn't asked when nothing else can block (design.md §6: one possible answer), and a
+    UI never offers an impossible block. A creature whose `blocks_allowed` is 0 isn't counted
+    (the test review found it was). Dropping is sound (it removes only picks no legal answer
+    has), not complete; M3.5's requirements are computed over the same legal answers.
+  - **`random_legal` draws, then repairs.** Each item draws its picks as before (a number from 0
+    to its maximum uniformly, then a uniform subset), then each choice picked by too few items is
+    filled up (random other items that offer it and have room) or cleared, with equal
+    probability when both are possible. Repairs of different choices don't interfere (filling
+    only adds picks of that choice, clearing only removes them), so the answer is always legal;
+    it isn't uniform over legal answers (the plan allows that). Without constraints it makes
+    the same draws as M3.1's agent. M3.5 turns it into a randomized search for requirements.
+  - **702.16k: `PlayerQuality(player)`, judged by `Quality.matches_source(characteristics,
+    controller, owner)`.** A player quality is "regardless of characteristic values", so the
+    characteristic-only `matches` raises `EngineError` for it; targeting (the spell's or
+    ability's controller, and the controller, or with none the owner, of its object: an ability
+    from a source the player controls is "from" them, 702.16b with 702.16k; the test review
+    found the second part missing), blocking (the blocker's controller) and the 702.16e gap (the source's last known
+    controller and owner) call `matches_source`, which for every other quality is `matches`.
+    With no controller (108.4a), ownership decides. No card in scope has it (True-Name Nemesis
+    chooses the player as it enters, M4's stored choices), so a test-local fixture knight
+    tests it.
+  - **Landwalk's defending player is the player the attacker attacks** (802.2a; Rob's example),
+    read from its attack record, not the blocking player (they are the same by 802.4a, but the
+    attacker's record is what M4's planeswalker targets will extend). Its quality is a
+    `LandTypeQuality(LandTypeWord)`, a typed word a text change can rewrite (612.2).
+  - **Champion of Lambholt's restriction** (`PowerBlockRestriction`) is collected from every
+    permanent on the battlefield, like cost modifiers; it protects every creature its
+    controller controls, attacking or not (its ruling), and compares computed powers as each
+    `BlockAction` is judged, so later changes don't undo a block (its other ruling).
+- **Why:** the plan's section 3.2 and 3.4 split; leaving out impossible blocks keeps agents and
+  UIs from offering them and avoids asking a question with one answer. Characteristic-only
+  qualities can't express 702.16k, and three call sites need the same judgment.
+- **Rules:** 509.1b, 702.9b, 702.13b, 702.14c-d, 702.16f, 702.16j, 702.16k, 702.17b, 702.36b,
+  702.111b-c, 802.2a, 802.4a-b, 108.4a, 612.2, 733.1.
+- **Where:** `resolve.decisions.spaces` (`NoneOrAtLeast`), `resolve.decisions.assignment`,
+  `resolve.agents.random_agent`, `resolve.agents.text`, `tools/fuzz.py`,
+  `resolve.cards.keywords.combat`, `resolve.cards.keywords.qualities`,
+  `resolve.cards.primitives.combat`, `resolve.rules.legality`, `resolve.rules.combat`,
+  `resolve.events.damage`.
+
 ### 2026-10-31: M3.3: blocks per defending player, damage assignment per player, protection's blocking part moved forward
 - **Decision:**
   - **Protection's blocking part (the user's, 2026-10-31):** 702.16f and 702.16j move from M3.4

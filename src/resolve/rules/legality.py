@@ -28,7 +28,11 @@ change here:
 - destroying: indestructible (702.12b);
 - countering: "can't be countered" (113.6g);
 - attacking: defender (702.3b);
-- blocking: protection's blocking part, read from the attacker (702.16f, 702.16j).
+- blocking, read from the attacker: protection (702.16f, 702.16j, 702.16k), flying and reach
+  (702.9b, 702.17b), intimidate (702.13b), fear (702.36b), landwalk (702.14c, against the
+  player it attacks, 802.2a) and "can't be blocked" (509.1b); and, from the permanents on the
+  battlefield, Champion of Lambholt's power comparison (509.1b). Menace (702.111b) concerns the
+  whole declaration: it is a constraint of the declaration's space (``rules.combat``).
 """
 
 from __future__ import annotations
@@ -38,17 +42,23 @@ from typing import TYPE_CHECKING
 
 from resolve.cards.keywords import (
     Defender,
+    Fear,
+    Flying,
     Hexproof,
     Indestructible,
+    Intimidate,
+    Landwalk,
     Protection,
+    Reach,
     Shroud,
     has_keyword,
 )
-from resolve.cards.keywords.qualities import Everything
+from resolve.cards.keywords.qualities import Everything, PlayerQuality, Quality
 from resolve.cards.primitives.base import Ability
+from resolve.cards.primitives.combat import CantBeBlocked, PowerBlockRestriction
 from resolve.cards.primitives.statics import CantBeCountered
 from resolve.cards.primitives.targets import TargetSpec
-from resolve.data.types import CardType
+from resolve.data.types import CardType, Color
 from resolve.effects.characteristics import (
     Characteristics,
     characteristics,
@@ -360,12 +370,33 @@ def _target_prohibitions(state: GameState, action: TargetAction) -> tuple[Prohib
                     forbidden.append(Prohibition("702.11d", f"it has {ability.text.lower()}"))
             case Protection(quality=Everything()):
                 forbidden.append(Prohibition("702.16j", "it has protection from everything"))
-            case Protection(quality=quality) if quality.matches(targeter.characteristics):
+            case Protection(quality=PlayerQuality() as quality) if _from_player(
+                state, targeter, quality
+            ):
+                # 702.16k: not by spells or abilities the player controls, nor (702.16b) by
+                # abilities from a source they control (or own, with no controller).
+                forbidden.append(Prohibition("702.16k", f"it has {ability.text.lower()}"))
+            case Protection(quality=quality) if not isinstance(
+                quality, PlayerQuality
+            ) and quality.matches(targeter.characteristics):
                 forbidden.append(Prohibition("702.16b", f"it has {ability.text.lower()}"))
             case _:
                 pass
     # 702.11h, 702.16m, 702.18b: redundant instances forbid it once.
     return tuple(dict.fromkeys(forbidden))
+
+
+def _from_player(state: GameState, targeter: Targeter, quality: PlayerQuality) -> bool:
+    """Whether a targeting spell or ability is "from" the quality's player (702.16k): the player
+    controls it, or controls its object (the spell, or the ability's source; until M4's
+    abilities name their source, ``targeter.obj`` is it), or owns that object and no one controls
+    it (108.4a)."""
+    if targeter.controller == quality.player:
+        return True
+    obj = state.objects.get(targeter.obj)
+    if obj is None:
+        return False
+    return quality.matches_source(targeter.characteristics, obj.controller, obj.owner)
 
 
 def _candidate_abilities(
@@ -479,22 +510,97 @@ def _block_permissions(state: GameState, action: BlockAction) -> tuple[Permissio
 
 
 def _block_prohibitions(state: GameState, action: BlockAction) -> tuple[Prohibition, ...]:
-    # Protection's blocking part, read from the attacker (the user moved it from M3.4 into M3.3,
-    # 2026-10-31, so that no block 702.16f forbids is accepted): 702.16f, an attacking creature
-    # with protection can't be blocked by creatures that have the stated quality; 702.16j, one
-    # with protection from everything can't be blocked by creatures. Protection on the blocker
-    # doesn't stop it blocking. 702.16k (from a player) has no quality yet (M2.8). Evasion and
-    # "can't block" arrive with their cards (M3.4, M3.5).
+    # 509.1b: the restrictions on one blocker and one attacker. Each applies (evasion abilities
+    # are cumulative), and each is judged now, as blocks are declared: an ability gained or lost
+    # later doesn't undo a block. Restrictions on how many creatures block (menace, 702.111b)
+    # concern the whole declaration: constraints of its space (``rules.combat``).
     attacker = characteristics(state, action.attacker)
     blocker = characteristics(state, action.blocker)
+    blocker_object = state.object(action.blocker)
     forbidden: list[Prohibition] = []
     for ability in attacker.abilities:
         match ability:
             case Protection(quality=Everything()):
+                # 702.16j: protection from everything can't be blocked by creatures.
                 forbidden.append(Prohibition("702.16j", "it has protection from everything"))
-            case Protection(quality=quality) if quality.matches(blocker):
+            case Protection(quality=PlayerQuality() as quality) if quality.matches_source(
+                blocker, blocker_object.controller, blocker_object.owner
+            ):
+                # 702.16k: it can't be blocked by creatures the player controls.
+                forbidden.append(Prohibition("702.16k", f"it has {ability.text.lower()}"))
+            case Protection(quality=quality) if not isinstance(
+                quality, PlayerQuality
+            ) and quality.matches(blocker):
+                # 702.16f: it can't be blocked by creatures that have the stated quality.
                 forbidden.append(Prohibition("702.16f", f"it has {ability.text.lower()}"))
+            case Flying() if not (has_keyword(blocker, Flying) or has_keyword(blocker, Reach)):
+                # 702.9b, 702.17b: only by creatures with flying and/or reach.
+                forbidden.append(Prohibition("702.9b", "it has flying"))
+            case Intimidate() if not (
+                blocker.is_a(CardType.ARTIFACT) or set(blocker.colors) & set(attacker.colors)
+            ):
+                # 702.13b: only by artifact creatures and/or creatures sharing a color with it.
+                forbidden.append(Prohibition("702.13b", "it has intimidate"))
+            case Fear() if not (blocker.is_a(CardType.ARTIFACT) or Color.BLACK in blocker.colors):
+                # 702.36b: only by artifact creatures and/or black creatures.
+                forbidden.append(Prohibition("702.36b", "it has fear"))
+            case Landwalk(quality=quality) if _controls_land(
+                state, _defending_player_of(state, action), quality
+            ):
+                # 702.14c: not while the defending player controls a land with the quality.
+                forbidden.append(Prohibition("702.14c", f"it has {ability.text.lower()}"))
+            case CantBeBlocked():
+                forbidden.append(Prohibition("509.1b", "it can't be blocked"))
             case _:
                 pass
-    # 702.16m: redundant instances forbid it once.
+    forbidden.extend(_power_restrictions(state, action, blocker))
+    # 702.9c, 702.13c, 702.14e, 702.16m, 702.36c: redundant instances forbid it once.
     return tuple(dict.fromkeys(forbidden))
+
+
+def _defending_player_of(state: GameState, action: BlockAction) -> PlayerId:
+    """The defending player an attacker's abilities refer to: the player it attacks (802.2a;
+    a planeswalker's controller or a battle's protector join in M4). The block's permission
+    requires it to attack the blocking player (802.4a)."""
+    turn = state.turn
+    record = (
+        None if turn is None or turn.combat is None else turn.combat.attackers.get(action.attacker)
+    )
+    if record is None or record.target is None:
+        return action.player
+    return record.target.player
+
+
+def _controls_land(state: GameState, player: PlayerId, quality: Quality) -> bool:
+    """Whether ``player`` controls a land with ``quality`` (702.14c)."""
+    for obj in state.battlefield:
+        if state.object(obj).controller != player:
+            continue
+        chars = characteristics(state, obj)
+        if chars.is_a(CardType.LAND) and quality.matches(chars):
+            return True
+    return False
+
+
+def _power_restrictions(
+    state: GameState, action: BlockAction, blocker: Characteristics
+) -> tuple[Prohibition, ...]:
+    """Champion of Lambholt's restriction (``PowerBlockRestriction``), from each permanent on the
+    battlefield that has it: a creature with less power than the permanent can't block a creature
+    the permanent's controller controls (509.1b), compared now (its ruling: only as blockers are
+    declared)."""
+    attacker_controller = state.object(action.attacker).controller
+    forbidden: list[Prohibition] = []
+    for obj in state.battlefield:
+        if state.object(obj).controller != attacker_controller:
+            continue
+        chars = characteristics(state, obj)
+        if not has_keyword(chars, PowerBlockRestriction):
+            continue
+        if chars.power is None or blocker.power is None:
+            raise EngineError(f"comparing powers needs two creatures, not {obj} and a blocker")
+        if blocker.power < chars.power:
+            forbidden.append(
+                Prohibition("509.1b", f"its power is less than {chars.name}'s ({chars.power})")
+            )
+    return tuple(forbidden)

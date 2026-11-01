@@ -30,14 +30,17 @@ from resolve.cards.keywords import (
     ColorQuality,
     Everything,
     Flash,
+    Flying,
     Haste,
     Hexproof,
     Indestructible,
+    Menace,
     MulticoloredQuality,
     Protection,
     protection_from_each_color,
 )
 from resolve.cards.primitives.abilities import ActivatedManaAbility
+from resolve.cards.primitives.combat import PowerBlockRestriction
 from resolve.cards.primitives.cost_modifiers import CostModifier, ModifierStep, SpellCostModifier
 from resolve.cards.primitives.costs import TapSelfCost
 from resolve.cards.primitives.effects import AddMana, DealDamage, Destroy, DrawCards
@@ -139,6 +142,9 @@ TEST_HASTY_ELVES = CardDefinition("Test Hasty Elves", abilities=(Haste(), _TAP_F
 TEST_TWICE_HASTY_ELVES = CardDefinition(
     "Test Twice Hasty Elves", abilities=(Haste(), Haste(), _TAP_FOR_GREEN)
 )
+# M3.4: Champion of Lambholt's restriction alone, and flying with menace (509.1b).
+TEST_LAMBHOLT_WARDEN = CardDefinition("Test Lambholt Warden", abilities=(PowerBlockRestriction(),))
+TEST_FLYING_BRUTE = CardDefinition("Test Flying Brute", abilities=(Flying(), Menace()))
 # This spell can't be countered. Test Stubborn Spell deals 1 damage to any target.
 TEST_STUBBORN_SPELL = CardDefinition(
     "Test Stubborn Spell",
@@ -211,8 +217,9 @@ def scenario_registry() -> CardRegistry:
     creatures and nonbasic lands, the removal spells, the fixture instants (Test Shock, Test
     Shatter), sorcery (Test Ponder), split card, nonbasic Forest, Test Raptor, Test Mox ({0}),
     Test Ember ({1}{C}), Test Wall (0/4), Test Regrower (4/3) and Test Spawn (2/3), Test Totem
-    (an enchantment), Test Artifact Land Creature, the keyword example cards, Palace Guard,
-    Cryptic Command and M2.8's keyword fixtures (and an
+    (an enchantment), Test Artifact Land Creature, the keyword example cards, the combat-rules
+    cards (Palace Guard, Phantom Warrior), Cryptic Command, M2.8's keyword fixtures, Test
+    Lambholt Warden and Test Flying Brute (and an
     adventurer, Test Adventurer // Test Quest), the cost reducers, Test Thorn (a cost increase),
     Test Growth ({X}{G}), Rishkar's Expertise, Test Two-Tone ({1}{W/U}{W/U}, no text), Test
     Insight (no mana cost) and Test Quake // Test Pebble (a split card of mana value 8 whose
@@ -267,6 +274,8 @@ def scenario_registry() -> CardRegistry:
             TEST_INDESTRUCTIBLE_WISP,
             TEST_HASTY_ELVES,
             TEST_TWICE_HASTY_ELVES,
+            TEST_LAMBHOLT_WARDEN,
+            TEST_FLYING_BRUTE,
             TEST_STUBBORN_SPELL,
             TEST_GOLD_SHOCK,
             TEST_ADVENTURER,
@@ -300,6 +309,9 @@ def scenario_database() -> CardDatabase:
     extra += [fx.TEST_INDESTRUCTIBLE_WISP, fx.TEST_STUBBORN_SPELL, fx.TEST_GOLD_SHOCK]
     extra += [fx.TEST_HASTY_ELVES, fx.TEST_TWICE_HASTY_ELVES]
     extra += [fx.RAGING_GOBLIN, fx.ALABORN_GRENADIER, fx.WALL_OF_STONE, fx.PALACE_GUARD]
+    extra += [fx.WIND_DRAKE, fx.GIANT_SPIDER, fx.DERANGED_WHELP, fx.HIGHBORN_GHOUL]
+    extra += [fx.SEVERED_LEGION, fx.BOG_RAIDERS, fx.PHANTOM_WARRIOR]
+    extra += [fx.TEST_LAMBHOLT_WARDEN, fx.TEST_FLYING_BRUTE]
     extra += [fx.TEST_ADVENTURER, fx.EMERALD_MEDALLION, fx.KINJALLIS_CALLER, fx.TEST_THORN]
     extra += [fx.TEST_GROWTH, fx.RISHKARS_EXPERTISE, fx.TEST_TWO_TONE, fx.TEST_INSIGHT]
     extra += [fx.BIG_SPLIT_CARD]

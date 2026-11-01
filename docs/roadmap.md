@@ -253,7 +253,8 @@ The approved plan is `docs/plans/m3.md` (steps M3.0 to M3.9).
   torture-test corrections (M3.0).
 - [ ] The answer spaces `ChooseAssignment` (attack and block declarations as constraint models)
   and `DistributeEach` (combat damage assignment), with agent support (M3.1, M3.4, M3.5). M3.1
-  ✓: both spaces without constraints, the random and text agents, the fuzz probes.
+  ✓: both spaces without constraints, the random and text agents, the fuzz probes. M3.4 ✓:
+  `NoneOrAtLeast` and the solver (`resolve.decisions.assignment`: validation, `random_legal`).
 - [x] The combat rule defaults: `attack_declarer`, `block_declarer`, `combat_damage_assigner`,
   `combat_damage_amount`, `blocks_allowed` (rule 12; M3.1 to M3.3). M3.1 ✓: the functions,
   each returning the CR's default. M3.2 ✓: `attack_declarer` and `combat_damage_amount` called,
@@ -268,14 +269,17 @@ The approved plan is `docs/plans/m3.md` (steps M3.0 to M3.9).
 - [ ] Attack and block requirements and restrictions (508.1c-d, 509.1b-c), with attack and block
   costs (508.1g-j, 509.1d-f): the primitives of "can't attack or block unless" (Topiary Stomper),
   "can't be blocked" (Rogue's Passage) and power-based blocking restrictions (Champion of
-  Lambholt), tested with fixtures; the cards themselves need M4 or M5 (M3.4, M3.5).
+  Lambholt), tested with fixtures; the cards themselves need M4 or M5 (M3.4, M3.5). M3.4 ✓:
+  509.1b's restrictions (`CantBeBlocked`, Phantom Warrior; `PowerBlockRestriction`, Test
+  Lambholt Warden; evasion, cumulative).
 - [ ] Creatures put onto the battlefield tapped and attacking (508.4), tested with a fixture;
   Ghalta and Mavren, which needs triggers and tokens, in M4 (M3.7).
 - [ ] First strike and double strike damage steps; trample; deathtouch; lifelink; flying and reach;
   vigilance; menace. Deathtouch and lifelink apply to noncombat damage too (M2's damage table)
-  (M3.2 to M3.6). M3.2 ✓: vigilance.
-- [ ] Defender (702.3); the retired evergreen evasion keywords intimidate (702.13), landwalk
-  (702.14) and fear (702.36) (M3.2, M3.4). M3.2 ✓: defender (Wall of Stone).
+  (M3.2 to M3.6). M3.2 ✓: vigilance. M3.4 ✓: flying, reach, menace.
+- [x] Defender (702.3); the retired evergreen evasion keywords intimidate (702.13), landwalk
+  (702.14) and fear (702.36) (M3.2, M3.4). M3.2 ✓: defender (Wall of Stone). M3.4 ✓:
+  intimidate (Highborn Ghoul), swampwalk (Bog Raiders), fear (Severed Legion).
 - [x] Haste (702.10), including its 302.6 part (M3.1, M3.2). M3.1 ✓: `Haste` and its {T} half
   (702.10c) in `summoning_sick`; M3.2 ✓: its attack half (702.10b, Raging Goblin).
 - [ ] Summoning sickness for attacking (302.6): `defaults.can_tap_for_cost` becomes
@@ -284,9 +288,10 @@ The approved plan is `docs/plans/m3.md` (steps M3.0 to M3.9).
   "tap an untapped creature you control" ignore summoning sickness and never call it (M3.1;
   docs/decisions.md, 2026-10-21 "Deferred from M2.4"). M3.1 ✓: the rename and both purposes;
   M3.2 ✓: declaring attackers reads `ATTACK`.
-- [ ] Protection's blocking part (702.16f, j, k) (M3.3, M3.4; 702.16f and j moved from M3.4
+- [x] Protection's blocking part (702.16f, j, k) (M3.3, M3.4; 702.16f and j moved from M3.4
   into M3.3 by the user, 2026-10-31, so that M3.3's blocks obey them). M3.3 ✓: 702.16f and
-  702.16j as prohibitions of `BlockAction`; 702.16k (protection from a player) in M3.4.
+  702.16j as prohibitions of `BlockAction`. M3.4 ✓: 702.16k (`PlayerQuality`, a fixture:
+  blocking and targeting; its damage reaches the 702.16e gap).
 - [x] Multiplayer attacks: choosing which player each creature attacks, blocks and damage
   assignment in APNAP order (802), leaving room for attacking planeswalkers and battles (306,
   310) (M3.2, M3.3). M3.2 ✓: each attacker chooses a defending player (802.3). M3.3 ✓: blocks
@@ -297,7 +302,8 @@ The approved plan is `docs/plans/m3.md` (steps M3.0 to M3.9).
 - [ ] Cards: 14 keyword example cards, 7 combat-rules cards, the torture tests Time Walk and
   Relentless Assault, and Zetalpa, Primal Dawn (`docs/plans/m3.md` §7); the torture tests'
   rules for Lure and Basilisk Collar (the cards themselves in M5). M3.2 ✓: Raging Goblin,
-  Alaborn Grenadier, Wall of Stone. M3.3 ✓: Palace Guard.
+  Alaborn Grenadier, Wall of Stone. M3.3 ✓: Palace Guard. M3.4 ✓: Wind Drake, Giant Spider,
+  Deranged Whelp, Highborn Ghoul, Severed Legion, Bog Raiders, Phantom Warrior.
 - [ ] Restore the thorough fuzz run's expectations that the 508.1 gap blocks
   (`docs/verification.md`, "Not yet reachable"): with attacks, games end by life total and by
   decking, damage is dealt, and Chandra's Ignition is cast (a game with a creature no longer
@@ -749,6 +755,20 @@ completes a step (CLAUDE.md, "Documentation requirements").
   harness's `Combat:` line counts blockers and blocked attackers, `ALLOWED_GAPS` is only 903.8;
   `tests/combat_support.py`'s blocking and damage helpers; `Passer` declares no blockers;
   fixtures Test Regrower (4/3) and Test Spawn (2/3), 510.1c's example creatures.
+- **Done (M3.4, evasion and blocking restrictions):** the constraint `NoneOrAtLeast` and
+  `ChooseAssignment.constraints` (`resolve.decisions.spaces`, validated by the space itself);
+  the solver `resolve.decisions.assignment` (`broken_constraints`, `random_legal`), which
+  `RandomAgent` answers declarations with; the text agent shows constraints and `tools/fuzz.py`
+  probes them. `Flying`, `Reach`, `Menace`, `Intimidate`, `Fear`, `Landwalk`
+  (`resolve.cards.keywords.combat`); `LandTypeQuality` and `PlayerQuality` (702.16k), with
+  `Quality.matches_source` (`resolve.cards.keywords.qualities`); `CantBeBlocked` and
+  `PowerBlockRestriction` (`resolve.cards.primitives.combat`). The `BlockAction` prohibitions
+  (509.1b: evasion, landwalk against the player attacked, 802.2a, "can't be blocked", the power
+  comparison, protection from a player, also for targeting and the 702.16e gap) in
+  `resolve.rules.legality`; menace's constraint, and dropping attackers too few creatures may
+  block, in `rules.combat.block_declaration` (`minimum_blockers`). Cards: Wind Drake, Giant
+  Spider, Deranged Whelp, Highborn Ghoul, Severed Legion, Bog Raiders (`keyword_examples`),
+  Phantom Warrior (`combat`); fixtures Test Lambholt Warden and Test Flying Brute.
 
 ---
 
@@ -851,7 +871,7 @@ earlier milestones must leave room for every row in this map.
 | 506 | Combat Phase | M3 (506.2, 506.3, 506.4 on leaving the battlefield: M3.2 ✓) | E | `CombatBegan`, `remove_from_combat` (M3.2 ✓); 506.8 (spells timed by combat) as a predicate, `combat_point`, tested with a fixture; its first real cards in M9 |
 | 507 | Beginning of Combat Step | M3 ✓ | E | 507.1: no choice (802, the attack multiple players option); the combat state is created as the phase begins (M3.2 ✓) |
 | 508 | Declare Attackers Step | M3 (508.1a-b, f, k and 508.8: M3.2 ✓) | E | `DeclareAttackers`, `attack_declaration`, `AttackersDeclared`; 508.1c-d, g-j in M3.5, 508.4 in M3.7, 508.1m triggers in M4 |
-| 509 | Declare Blockers Step | M3 (509.1a, 509.1g-h, 509.2: M3.3 ✓) | E | `DeclareBlockers`, `block_declaration`, `legality.BlockAction`, `BlockersDeclared` (one per defending player, 802.4); 509.1b-c (restrictions and requirements) in M3.4 and M3.5, 509.1d-f (costs) in M3.5, 509.3 triggers in M4 |
+| 509 | Declare Blockers Step | M3 (509.1a, 509.1g-h, 509.2: M3.3 ✓; 509.1b: M3.4 ✓) | E | `DeclareBlockers`, `block_declaration`, `legality.BlockAction`, `BlockersDeclared` (one per defending player, 802.4); 509.1b's restrictions as `BlockAction` prohibitions and the constraint `NoneOrAtLeast` (M3.4); 509.1c (requirements) and 509.1d-f (costs) in M3.5, 509.3 triggers in M4 |
 | 510 | Combat Damage Step | M3 (510.1a-b, 510.2: M3.2 ✓; 510.1c-e: M3.3 ✓) | E | `CombatDamage`, `damage_recipients`, `DamageDealt.combat`; `ASSIGN_COMBAT_DAMAGE` (`DistributeEach`, one per player in APNAP order); trample (702.19) and 510.4 in M3.6 |
 | 511 | End of Combat Step | M3 ✓ (511.2's triggers M4, "until end of combat" effects M5) | E | `CombatEnded` (511.3, M3.2 ✓) |
 | 512 | Ending Phase | M1 ✓ | E |  |
@@ -936,15 +956,15 @@ earlier milestones must leave room for every row in this map.
 | 702.6 | Equip | M4 | E | D |
 | 702.7 | First Strike | M3 | E | D |
 | 702.8 | Flash | M2 ✓ (M2.8 ✓) | E | `Flash`, read by `may_cast_now` |
-| 702.9 | Flying | M3 | E | D |
+| 702.9 | Flying | M3 ✓ (M3.4) | E | D; `Flying`, a `BlockAction` prohibition (Wind Drake) |
 | 702.10 | Haste | M3 ✓ | E | D; `Haste` in `defaults.summoning_sick(state, obj, purpose)` for both halves (M3.1 ✓; 702.10c tested with Test Hasty Elves); 702.10b with Raging Goblin (M3.2 ✓) |
 | 702.11 | Hexproof | M2 ✓ (M2.8); a player with "hexproof from" (702.11d) M5, with its first card | E | D; including "hexproof from"; a player's from `player_abilities` |
 | 702.12 | Indestructible | M2 ✓ (M2.8 ✓) | E | D |
-| 702.13 | Intimidate | M3 | E | retired evergreen |
-| 702.14 | Landwalk | M3 | E | retired evergreen |
+| 702.13 | Intimidate | M3 ✓ (M3.4) | E | retired evergreen; `Intimidate` (Highborn Ghoul) |
+| 702.14 | Landwalk | M3 ✓ (M3.4) | E | retired evergreen; `Landwalk(quality)` (Bog Raiders); "nonbasic landwalk" needs a negated quality, with its first card |
 | 702.15 | Lifelink | M3 | E | D; noncombat damage too |
-| 702.16 | Protection | M2 ✓ (targeting: M2.8 ✓); M3 (blocking: 702.16f, j M3.3 ✓; 702.16k M3.4); M4 (enchant, equip); M6 (damage: `NotImplementedRule("702.16e")` until then) | E | D; a player as the quality (702.16k) with its first card |
-| 702.17 | Reach | M3 | E | D |
+| 702.16 | Protection | M2 ✓ (targeting: M2.8 ✓); M3 ✓ (blocking: 702.16f, j M3.3 ✓; 702.16k M3.4 ✓, `PlayerQuality`, also targeting); M4 (enchant, equip); M6 (damage: `NotImplementedRule("702.16e")` until then) | E | D; a player chosen as it enters (True-Name Nemesis) needs M4's stored choices |
+| 702.17 | Reach | M3 ✓ (M3.4) | E | D; `Reach` (Giant Spider) |
 | 702.18 | Shroud | M2 ✓ (M2.8 ✓) | E | D |
 | 702.19 | Trample | M3 | E | D |
 | 702.20 | Vigilance | M3 ✓ | E | D; `Vigilance`, read by `DeclareAttackers` (508.1f, M3.2 ✓); Alaborn Grenadier |
@@ -963,7 +983,7 @@ earlier milestones must leave room for every row in this map.
 | 702.33 | Kicker | M2 | S |  |
 | 702.34 | Flashback | M6 | S |  |
 | 702.35 | Madness | M6 | S |  |
-| 702.36 | Fear | M3 | E | retired evergreen |
+| 702.36 | Fear | M3 ✓ (M3.4) | E | retired evergreen; `Fear` (Severed Legion) |
 | 702.37 | Morph | M5 | S |  |
 | 702.38 | Amplify | M6 | X |  |
 | 702.39 | Provoke | M4 | X |  |
@@ -1038,7 +1058,7 @@ earlier milestones must leave room for every row in this map.
 | 702.108 | Prowess | M5 | E | very common since 2015 |
 | 702.109 | Dash | M5 | S |  |
 | 702.110 | Exploit | M4 | S |  |
-| 702.111 | Menace | M3 | E |  |
+| 702.111 | Menace | M3 ✓ (M3.4) | E | `Menace`, the declaration constraint `NoneOrAtLeast` (Deranged Whelp) |
 | 702.112 | Renown | M4 | S |  |
 | 702.113 | Awaken | M5 | S |  |
 | 702.114 | Devoid | M5 | S |  |

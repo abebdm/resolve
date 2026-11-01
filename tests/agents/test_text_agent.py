@@ -43,6 +43,7 @@ from resolve.decisions.spaces import (
     ManaActivationOption,
     ManaOption,
     ModesOption,
+    NoneOrAtLeast,
     Number,
     ObjectOption,
     Order,
@@ -454,6 +455,23 @@ def test_render_request_lists_each_item_with_its_choices() -> None:
         "Player 0: Declare attackers. (declare_attackers; CR 508.1)",
         f"  0: Llanowar Elves #{ids['elves']} (at most 1): 0: player 0 (you), 1: player 2",
     ]
+
+
+def test_render_request_lists_a_declarations_constraints() -> None:
+    """Menace's constraint (702.111b) is shown after the items: the choice, and how many items
+    must pick it if any does."""
+    own, _, ids = board()
+    elves = ObjectOption(ids["elves"])
+    space = ChooseAssignment(
+        (elves, PlayerOption(P2)), ((PlayerOption(P0),),) * 2, (1, 1),
+        (NoneOrAtLeast(PlayerOption(P0), 2),),
+    )  # fmt: skip
+    request = DecisionRequest(
+        5, P0, P0, DecisionKind.DECLARE_BLOCKERS, space, "Declare blockers.", ("509.1",)
+    )
+    assert "  Constraint: player 0 (you) is picked by none or by at least 2." in (
+        render_request(request, own).splitlines()
+    )
 
 
 def test_render_request_lists_each_part_with_its_recipients() -> None:

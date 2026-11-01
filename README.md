@@ -40,7 +40,8 @@ Ixalli's Lorekeeper, Emerald Medallion, Kinjalli's Caller, Swords to Plowshares,
 Ignition, Decimate, Fiery Confluence, Cryptic Command, Cancel, Rishkar's Expertise, and one
 card for each keyword: Ashcoat Bear, Gladecover Scout, Humble
 Budoka, Darksteel Relic, Darksteel Myr, Repentant Blacksmith, Nacatl Savage, Raging Goblin,
-Alaborn Grenadier and Wall of Stone, and Palace Guard.
+Alaborn Grenadier, Wall of Stone, Wind Drake, Giant Spider, Deranged Whelp, Highborn Ghoul,
+Severed Legion and Bog Raiders, and Palace Guard and Phantom Warrior.
 Tools compare a new Comprehensive Rules version or card data snapshot against
 the pinned ones (`tools/rules_diff.py`, `tools/card_diff.py`), and `tools/rule.py` prints any
 rule of the pinned Comprehensive Rules by number. The rules coverage map in
@@ -58,8 +59,12 @@ blockers, one after another in turn order (an untapped creature blocks one attac
 Guard any number; a creature with protection can't be blocked by creatures with that quality).
 Attackers and blockers deal their combat damage at once; a creature blocked by two or more
 creatures, or blocking two or more, has its controller divide its damage, and combat damage can
-win the game. **Next:** evasion (flying, reach, menace, intimidate, fear, landwalk) and other
-blocking restrictions (M3.4).
+win the game. Blocks obey evasion: flying (only creatures with flying or reach block it),
+menace (two or more blockers, or none), intimidate, fear, landwalk (judged by the lands of the
+player attacked), "can't be blocked", protection from a player, and restrictions from other
+permanents such as Champion of Lambholt's; an illegal declaration is refused and nothing
+changes. **Next:** attack and block requirements, restrictions on the whole declaration and
+attack costs (M3.5).
 Details:
 "Current status" in [`CLAUDE.md`](CLAUDE.md).
 
