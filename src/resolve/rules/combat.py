@@ -151,15 +151,17 @@ def block_declaration(state: GameState, player: PlayerId) -> ChooseAssignment | 
     if turn is None or turn.combat is None:
         raise EngineError("blockers are declared only during a combat (509.1)")
     attackers = tuple(turn.combat.attackers)
-    able: list[tuple[ObjectId, tuple[ObjectId, ...]]] = []
+    able: list[tuple[ObjectId, tuple[ObjectId, ...], int | None]] = []
     for obj in state.battlefield:
         allowed = tuple(
             attacker
             for attacker in attackers
             if legality.allowed(state, legality.BlockAction(player, obj, attacker)).allowed
         )
-        if allowed:
-            able.append((obj, allowed))
+        limit = defaults.blocks_allowed(state, obj)
+        if allowed and (limit is None or limit > 0):
+            # A creature allowed to block none doesn't count toward a minimum either.
+            able.append((obj, allowed, limit))
     minimums = {
         attacker: minimum
         for attacker in attackers
@@ -167,20 +169,17 @@ def block_declaration(state: GameState, player: PlayerId) -> ChooseAssignment | 
     }
     # An attacker fewer creatures may block than its minimum is no one's choice.
     blockable = {
-        attacker: sum(attacker in allowed for _, allowed in able) >= minimums.get(attacker, 1)
+        attacker: sum(attacker in allowed for _, allowed, _ in able) >= minimums.get(attacker, 1)
         for attacker in attackers
     }
     items: list[Option] = []
     choices: list[tuple[Option, ...]] = []
     maxima: list[int] = []
-    for obj, allowed in able:
+    for obj, allowed, limit in able:
         kept = tuple(ObjectOption(attacker) for attacker in allowed if blockable[attacker])
         if not kept:
             continue
-        limit = defaults.blocks_allowed(state, obj)
-        maximum = len(kept) if limit is None else min(max(limit, 0), len(kept))
-        if maximum == 0:
-            continue
+        maximum = len(kept) if limit is None else min(limit, len(kept))
         items.append(ObjectOption(obj))
         choices.append(kept)
         maxima.append(maximum)

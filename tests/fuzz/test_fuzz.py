@@ -813,8 +813,7 @@ SPACES: list[AnswerSpace] = [
 def test_a_declaration_is_probed_with_an_answer_breaking_its_constraint() -> None:
     """For each ``NoneOrAtLeast`` constraint, the probes include one item alone picking the
     choice (menace, 702.111b: one blocker), an answer otherwise in range."""
-    space = SPACES[12]
-    assert isinstance(space, ChooseAssignment) and space.constraints
+    (space,) = [s for s in SPACES if isinstance(s, ChooseAssignment) and s.constraints]
     request = DecisionRequest(4, PlayerId(1), PlayerId(1), DecisionKind.MAY, space, "?", ("117.1",))
     probes = invalid_answers(request, 3, RandomAgent(1).random_value(space))
     assert Assignment(((0,), (), ())) in [probe.value for probe in probes]

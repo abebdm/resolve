@@ -370,10 +370,11 @@ def _target_prohibitions(state: GameState, action: TargetAction) -> tuple[Prohib
                     forbidden.append(Prohibition("702.11d", f"it has {ability.text.lower()}"))
             case Protection(quality=Everything()):
                 forbidden.append(Prohibition("702.16j", "it has protection from everything"))
-            case Protection(quality=PlayerQuality() as quality) if quality.matches_source(
-                targeter.characteristics, targeter.controller, None
+            case Protection(quality=PlayerQuality() as quality) if _from_player(
+                state, targeter, quality
             ):
-                # 702.16k: not by spells or abilities the player controls.
+                # 702.16k: not by spells or abilities the player controls, nor (702.16b) by
+                # abilities from a source they control (or own, with no controller).
                 forbidden.append(Prohibition("702.16k", f"it has {ability.text.lower()}"))
             case Protection(quality=quality) if not isinstance(
                 quality, PlayerQuality
@@ -383,6 +384,19 @@ def _target_prohibitions(state: GameState, action: TargetAction) -> tuple[Prohib
                 pass
     # 702.11h, 702.16m, 702.18b: redundant instances forbid it once.
     return tuple(dict.fromkeys(forbidden))
+
+
+def _from_player(state: GameState, targeter: Targeter, quality: PlayerQuality) -> bool:
+    """Whether a targeting spell or ability is "from" the quality's player (702.16k): the player
+    controls it, or controls its object (the spell, or the ability's source; until M4's
+    abilities name their source, ``targeter.obj`` is it), or owns that object and no one controls
+    it (108.4a)."""
+    if targeter.controller == quality.player:
+        return True
+    obj = state.objects.get(targeter.obj)
+    if obj is None:
+        return False
+    return quality.matches_source(targeter.characteristics, obj.controller, obj.owner)
 
 
 def _candidate_abilities(

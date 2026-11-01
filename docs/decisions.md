@@ -36,8 +36,9 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
     Guard alone included), no legal declaration blocks it, so the compiler drops it from every
     item's choices (and an item left with none) and adds no constraint for it. The declaration
     then isn't asked when nothing else can block (design.md §6: one possible answer), and a
-    UI never offers an impossible block. Dropping is sound (it removes only picks no legal
-    answer has), not complete; M3.5's requirements are computed over the same legal answers.
+    UI never offers an impossible block. A creature whose `blocks_allowed` is 0 isn't counted
+    (the test review found it was). Dropping is sound (it removes only picks no legal answer
+    has), not complete; M3.5's requirements are computed over the same legal answers.
   - **`random_legal` draws, then repairs.** Each item draws its picks as before (a number from 0
     to its maximum uniformly, then a uniform subset), then each choice picked by too few items is
     filled up (random other items that offer it and have room) or cleared, with equal
@@ -47,8 +48,10 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
     the same draws as M3.1's agent. M3.5 turns it into a randomized search for requirements.
   - **702.16k: `PlayerQuality(player)`, judged by `Quality.matches_source(characteristics,
     controller, owner)`.** A player quality is "regardless of characteristic values", so the
-    characteristic-only `matches` raises `EngineError` for it; targeting (the targeter's
-    controller), blocking (the blocker's controller) and the 702.16e gap (the source's last known
+    characteristic-only `matches` raises `EngineError` for it; targeting (the spell's or
+    ability's controller, and the controller, or with none the owner, of its object: an ability
+    from a source the player controls is "from" them, 702.16b with 702.16k; the test review
+    found the second part missing), blocking (the blocker's controller) and the 702.16e gap (the source's last known
     controller and owner) call `matches_source`, which for every other quality is `matches`.
     With no controller (108.4a), ownership decides. No card in scope has it (True-Name Nemesis
     chooses the player as it enters, M4's stored choices), so a test-local fixture knight

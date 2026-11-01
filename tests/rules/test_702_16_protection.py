@@ -25,8 +25,7 @@ import pytest
 from resolve.cards.keywords import ColorQuality, PlayerQuality, Protection, keywords
 from resolve.cards.primitives.targets import ANY_TARGET
 from resolve.cards.primitives.words import ColorWord
-from resolve.cards.registry import CardDefinition, CardRegistry
-from resolve.data.cards import CardDatabase, parse_oracle_cards
+from resolve.cards.registry import CardDefinition
 from resolve.data.types import Color
 from resolve.decisions.spaces import ObjectOption, PlayerOption
 from resolve.effects.characteristics import Characteristics, characteristics
@@ -41,8 +40,7 @@ from resolve.state.spell import TargetObject
 from resolve.state.turn import Phase, Step
 from tests import scryfall_fixtures as fx
 from tests.casting_support import cast, pass_, records, target_choices
-from tests.game_fixtures import scenario_database, scenario_registry
-from tests.scenario import Scenario, run_script
+from tests.scenario import Scenario, run_script, with_cards
 from tests.seams import patch
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
@@ -259,13 +257,8 @@ WARDED_KNIGHT = fx.keyword_creature(
 
 def warded_scenario(players: int) -> Scenario:
     """A scenario whose cards include Test Warded Knight, with protection from P1."""
-    registry = scenario_registry()
     knight = CardDefinition("Test Warded Knight", abilities=(Protection(PlayerQuality(P1)),))
-    return Scenario(
-        players,
-        database=CardDatabase([*scenario_database().cards(), *parse_oracle_cards([WARDED_KNIGHT])]),
-        registry=CardRegistry([*(registry.get(n) for n in registry.names()), knight]),
-    )
+    return with_cards(players, [WARDED_KNIGHT], [knight])
 
 
 def test_702_16k_protection_from_a_player_cant_be_blocked_by_their_creatures() -> None:
@@ -303,6 +296,33 @@ def test_702_16k_protection_from_a_player_cant_be_targeted_by_what_they_control(
     assert targeting.target_problem(state, targeter, ANY_TARGET, TargetObject(knight)) is None
 
 
+def test_702_16k_an_ability_from_a_source_they_control_cant_target_it() -> None:
+    """702.16k: protection from each object P1 controls, so (702.16b) no ability from a source
+    P1 controls may target the Knight, even one P0 controls (the source's controller and the
+    ability's can differ, 113.8)."""
+    scenario = warded_scenario(2)
+    (knight,) = scenario.battlefield(P0, ["Test Warded Knight"])
+    (theirs,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    state = scenario.build()
+    targeter = Targeter(P0, theirs, characteristics(state, theirs))
+    problem = targeting.target_problem(state, targeter, ANY_TARGET, TargetObject(knight))
+    assert problem is not None and "702.16k" in problem.rules
+
+
+def test_702_16k_another_players_spell_may_target_it() -> None:
+    """Three players: protection from P1 is not protection from P0's opponents. P2's Test Shock
+    may target P0's Warded Knight; P1's may not."""
+    scenario = warded_scenario(3)
+    (knight,) = scenario.battlefield(P0, ["Test Warded Knight"])
+    (from_p2,) = scenario.stack(P2, ["Test Shock"])
+    (from_p1,) = scenario.stack(P1, ["Test Shock"])
+    state = scenario.build()
+    allowed = Targeter(P2, from_p2, characteristics(state, from_p2))
+    assert targeting.target_problem(state, allowed, ANY_TARGET, TargetObject(knight)) is None
+    refused = Targeter(P1, from_p1, characteristics(state, from_p1))
+    assert targeting.target_problem(state, refused, ANY_TARGET, TargetObject(knight)) is not None
+
+
 def test_702_16k_damage_from_a_source_they_control_is_a_gap_until_m6() -> None:
     """Damage from a source P1 controls to the Warded Knight would be prevented (702.16k): the
     702.16e gap, raised before anything changes. P0's own source deals its damage."""
@@ -317,6 +337,20 @@ def test_702_16k_damage_from_a_source_they_control_is_a_gap_until_m6() -> None:
     assert state.objects[knight].damage == 0
     DamageDealt(source=mine, to_objects=((knight, 1),), rules=("120.3e",)).apply(state)
     assert state.objects[knight].damage == 1
+
+
+def test_702_16k_damage_from_a_source_they_own_and_no_one_controls_is_a_gap() -> None:
+    """702.16k: "owned by that player but not controlled by another player": a source in P1's
+    graveyard has no controller (108.4a), so damage from it to the Knight is the 702.16e gap,
+    raised before anything changes."""
+    scenario = warded_scenario(2)
+    (knight,) = scenario.battlefield(P0, ["Test Warded Knight"])
+    (card,) = scenario.graveyard(P1, ["Grizzly Bears"])
+    state = scenario.build()
+    with pytest.raises(NotImplementedRule) as gap:
+        DamageDealt(source=card, to_objects=((knight, 2),), rules=("120.3e",)).apply(state)
+    assert gap.value.rule == "702.16e"
+    assert state.objects[knight].damage == 0
 
 
 def test_702_16k_player_quality_is_judged_by_control_and_ownership() -> None:

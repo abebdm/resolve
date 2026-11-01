@@ -46,11 +46,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
+from typing import Any
 
 from resolve.agents.driver import play
 from resolve.agents.scripted import ScriptedAgent, ScriptStep
-from resolve.cards.registry import CardRegistry
-from resolve.data.cards import CardDatabase
+from resolve.cards.registry import CardDefinition, CardRegistry
+from resolve.data.cards import CardDatabase, parse_oracle_cards
 from resolve.effects.characteristics import variant_characteristics
 from resolve.engine.deck import Deck, DeckCard
 from resolve.engine.loop import run
@@ -472,6 +473,20 @@ class Scenario:
         card = Card(CardId(len(state.cards) + 1), owner, deck_card.data, deck_card.definitions)
         state.cards[card.id] = card
         return card
+
+
+def with_cards(
+    players: int, records: Sequence[dict[str, Any]], definitions: Sequence[CardDefinition]
+) -> Scenario:
+    """A scenario whose cards are the default ones plus test-local cards: their Scryfall-format
+    ``records`` and their ``definitions`` (by the same names)."""
+    registry = game_fixtures.scenario_registry()
+    database = game_fixtures.scenario_database()
+    return Scenario(
+        players,
+        database=CardDatabase([*database.cards(), *parse_oracle_cards(list(records))]),
+        registry=CardRegistry([*(registry.get(n) for n in registry.names()), *definitions]),
+    )
 
 
 def names(state: GameState, zone: Zone) -> list[str]:

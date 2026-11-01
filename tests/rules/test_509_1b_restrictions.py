@@ -157,12 +157,13 @@ def test_champions_restriction_doesnt_protect_other_players_creatures() -> None:
     assert blockable(state, lions) == (bears,)
 
 
-def test_champions_restriction_is_checked_only_as_blocks_are_declared() -> None:
+def test_champions_restriction_doesnt_undo_a_block_already_declared() -> None:
     """Its ruling: the comparison is made only as blockers are declared. P1's Grizzly Bears
-    (power 2) were declared blocking P0's Hill Giant before P0's Test Lambholt Warden (power 3)
-    was on the battlefield (the scenario puts it there after the declaration, as if it had entered
-    since): the block stands through combat damage, the Bears and the Giant dealing damage to
-    each other (510.1c-d)."""
+    (power 2) were declared blocking P0's Hill Giant while no Warden restricted them (the
+    scenario presets the block, as if Test Lambholt Warden, power 3, had entered since): the
+    block stands through combat damage, the Bears and the Giant dealing damage to each other
+    (510.1c-d). Nothing re-checks a declared block. The ruling's own case, a power changing
+    after the declaration, needs counters or pump effects (M4, M5) and is tested then."""
     scenario = Scenario(2)
     giant, _warden = scenario.battlefield(P0, ["Hill Giant", "Test Lambholt Warden"])
     (bears,) = scenario.battlefield(P1, ["Grizzly Bears"])
@@ -175,6 +176,39 @@ def test_champions_restriction_is_checked_only_as_blocks_are_declared() -> None:
     damage = {event.source: event for event in records(state, DamageDealt)}
     assert damage[giant].to_objects == ((bears, 3),)
     assert damage[bears].to_objects == ((giant, 2),)
+
+
+def test_champions_restriction_covers_attacks_on_every_defending_player() -> None:
+    """Three players: P0's Test Lambholt Warden (power 3) protects P0's Grizzly Bears attacking
+    P2 as well: P2's Savannah Lions (power 1) can't block it, P2's Hill Giant (power 3) can."""
+    scenario = Scenario(3)
+    _warden, bears = scenario.battlefield(P0, ["Test Lambholt Warden", "Grizzly Bears"])
+    lions, giant = scenario.battlefield(P2, ["Savannah Lions", "Hill Giant"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P2, bears)
+    state = scenario.build()
+    assert not verdict(state, lions, bears, P2).allowed
+    assert blockable(state, giant) == (bears,)
+    assert may_block(state) == (giant,)
+
+
+def test_509_1b_evasion_doesnt_undo_a_block_already_declared() -> None:
+    """509.1b: "If an attacking creature gains or loses an evasion ability after a legal block
+    has been declared, it doesn't affect that block." Grizzly Bears were declared blocking Wind
+    Drake (the scenario presets it, standing for a Drake that gained flying since: granting
+    abilities is M5's): the block stands, and the two deal combat damage to each other."""
+    scenario = Scenario(2)
+    (drake,) = scenario.battlefield(P0, ["Wind Drake"])
+    (bears,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    scenario.at(Step.DECLARE_BLOCKERS)
+    scenario.attacking(P1, drake)
+    scenario.blocking(bears, drake)
+    state = scenario.build()
+    pass_to(state, Phase.POSTCOMBAT_MAIN)
+    damage = {event.source: event for event in records(state, DamageDealt)}
+    assert damage[drake].to_objects == ((bears, 2),)
+    assert damage[bears].to_objects == ((drake, 2),)
+    assert state.player(P1).life == 20
 
 
 # --- Cumulative evasion; illegal declarations -------------------------------------------------
@@ -215,8 +249,10 @@ def test_509_1b_flying_and_menace_with_one_able_blocker_isnt_blockable() -> None
 
 def test_509_1b_an_illegal_block_is_rejected_and_nothing_changes() -> None:
     """Hill Giant and Wind Drake attack P1, who controls Grizzly Bears: the Bears may block only
-    the Giant, so the space offers it one choice, and an answer picking a second (the Drake's
-    place, index 1) is refused. The pending request, the combat state and the log are unchanged
+    the Giant (702.9b), so the space offers it one choice, and an answer picking a second (the
+    Drake's place, index 1) is refused by the space's shape check. (A refusal of an in-range
+    answer, by a constraint, is in the menace and cumulative-evasion tests.)
+    The pending request, the combat state and the log are unchanged
     (733.1), and a legal declaration is then accepted."""
     scenario = Scenario(2)
     giant, drake = scenario.battlefield(P0, ["Hill Giant", "Wind Drake"])

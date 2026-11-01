@@ -16,15 +16,18 @@ Wind Drake (flying), Giant Spider (reach), Grizzly Bears and Hill Giant (vanilla
 
 from __future__ import annotations
 
+from resolve.cards.keywords import Flying
+from resolve.cards.registry import CardDefinition
 from resolve.decisions.kinds import DecisionKind
 from resolve.rules import legality
 from resolve.state.combat import CombatState
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.turn import Step
+from tests import scryfall_fixtures as fx
 from tests.combat_support import blockable, declare_blockers, may_block
 from tests.game_fixtures import request_of
-from tests.scenario import Scenario
+from tests.scenario import Scenario, with_cards
 
 P0, P1 = PlayerId(0), PlayerId(1)
 
@@ -103,3 +106,22 @@ def test_702_9b_flying_and_reach_on_the_blocker_dont_stop_flying_attackers_choos
     state = scenario.build()
     assert blockable(state, spider) == (drake, other, giant)
     assert blockable(state, bears) == (giant,)
+
+
+def test_702_9c_two_instances_of_flying_are_one() -> None:
+    """A creature with flying twice (702.9c: redundant) is blocked by Giant Spider as by any
+    flyer; Grizzly Bears' refusal cites 702.9b once."""
+    record = fx.keyword_creature(
+        "Test Twice Flying", "{2}{U}", 3.0, "Drake", ("2", "2"), "U", "Flying\nFlying"
+    )
+    definition = CardDefinition("Test Twice Flying", abilities=(Flying(), Flying()))
+    scenario = with_cards(2, [record], [definition])
+    (drake,) = scenario.battlefield(P0, ["Test Twice Flying"])
+    spider, bears = scenario.battlefield(P1, ["Giant Spider", "Grizzly Bears"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, drake)
+    state = scenario.build()
+    assert may_block(state) == (spider,)
+    refused = verdict(state, bears, drake)
+    assert refused.rules.count("702.9b") == 1
+    assert len(legality.prohibitions(state, legality.BlockAction(P1, bears, drake))) == 1

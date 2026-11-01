@@ -13,7 +13,7 @@ Task: implement step M3.4 of `docs/plans/m3.md` (the user's prompt in this sessi
 
 ## In progress
 - Timing tests/fuzz (slow: over 15 minutes, comparing with main in /tmp/mainwt).
-- test-reviewer.
+- test-reviewer: done (adequate with gaps); every finding handled (see the PR).
 
 ## Next
 - Handle review findings, full suite, PR.

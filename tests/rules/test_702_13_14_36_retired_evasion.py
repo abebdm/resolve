@@ -22,15 +22,20 @@ Raging Goblin (red).
 
 from __future__ import annotations
 
+from typing import Any
+
+from resolve.cards.keywords import Fear, Intimidate
+from resolve.cards.registry import CardDefinition
 from resolve.decisions.kinds import DecisionKind
 from resolve.rules import legality
 from resolve.state.combat import CombatState
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.turn import Step
+from tests import scryfall_fixtures as fx
 from tests.combat_support import blockable, may_block
 from tests.game_fixtures import request_of
-from tests.scenario import Scenario
+from tests.scenario import Scenario, with_cards
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 
@@ -133,3 +138,86 @@ def test_702_14c_judged_per_defending_player_in_multiplayer() -> None:
     assert (request.kind, request.player) == (DecisionKind.DECLARE_BLOCKERS, P2)
     assert may_block(state) == (bears_2,)
     assert blockable(state, bears_2) == (raiders_2,)
+
+
+# Fixtures that tell intimidate from fear: a green creature with intimidate, a red one with fear.
+GREEN_INTIMIDATOR = fx.keyword_creature(
+    "Test Green Intimidator", "{1}{G}", 2.0, "Elf", ("2", "2"), "G", "Intimidate"
+)
+RED_FEARMONGER = fx.keyword_creature(
+    "Test Red Fearmonger", "{1}{R}", 2.0, "Goblin", ("2", "2"), "R", "Fear"
+)
+# A nonbasic land with the land type Swamp (205.3i).
+SWAMP_DUAL: dict[str, Any] = {
+    **fx.NONBASIC_FOREST,
+    "oracle_id": "oid-test-bayou",
+    "name": "Test Bayou",
+    "type_line": "Land — Swamp Forest",
+    "color_identity": ["B", "G"],
+}
+
+
+def fixture_scenario(players: int = 2) -> Scenario:
+    return with_cards(
+        players,
+        [GREEN_INTIMIDATOR, RED_FEARMONGER, SWAMP_DUAL],
+        [
+            CardDefinition("Test Green Intimidator", abilities=(Intimidate(),)),
+            CardDefinition("Test Red Fearmonger", abilities=(Fear(),)),
+            CardDefinition("Test Bayou"),
+        ],
+    )
+
+
+def test_702_13b_intimidate_is_judged_by_the_attackers_own_colors() -> None:
+    """A green creature with intimidate attacks: Grizzly Bears (green, sharing its color) and
+    Darksteel Myr (artifact) may block it; Test Spawn (black) can't, citing 702.13b."""
+    scenario = fixture_scenario()
+    (elf,) = scenario.battlefield(P0, ["Test Green Intimidator"])
+    bears, myr, spawn = scenario.battlefield(P1, ["Grizzly Bears", "Darksteel Myr", "Test Spawn"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, elf)
+    state = scenario.build()
+    assert may_block(state) == (bears, myr)
+    refused = verdict(state, spawn, elf)
+    assert not refused.allowed and "702.13b" in refused.rules
+
+
+def test_702_36b_fear_on_a_nonblack_creature() -> None:
+    """A red creature with fear attacks: Test Spawn (black) and Darksteel Myr (artifact) may block
+    it; Raging Goblin can't, though it shares red: fear asks for black, not a shared color."""
+    scenario = fixture_scenario()
+    (goblin_attacker,) = scenario.battlefield(P0, ["Test Red Fearmonger"])
+    spawn, myr, goblin = scenario.battlefield(P1, ["Test Spawn", "Darksteel Myr", "Raging Goblin"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, goblin_attacker)
+    state = scenario.build()
+    assert may_block(state) == (spawn, myr)
+    refused = verdict(state, goblin, goblin_attacker)
+    assert not refused.allowed and "702.36b" in refused.rules
+
+
+def test_702_14c_a_nonbasic_land_with_the_type_counts() -> None:
+    """P1 controls Test Bayou (Land — Swamp Forest, nonbasic): it has the land type Swamp, so
+    Bog Raiders can't be blocked."""
+    scenario = fixture_scenario()
+    (raiders,) = scenario.battlefield(P0, ["Bog Raiders"])
+    bears, _bayou = scenario.battlefield(P1, ["Grizzly Bears", "Test Bayou"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, raiders)
+    state = scenario.build()
+    refused = verdict(state, bears, raiders)
+    assert not refused.allowed and "702.14c" in refused.rules
+
+
+def test_702_14c_another_players_swamp_doesnt_count() -> None:
+    """Three players: Bog Raiders attacks P1, who controls no Swamp; P2, not the player it
+    attacks, controls one (802.2a). P1's Grizzly Bears may block it."""
+    scenario = Scenario(3)
+    (raiders,) = scenario.battlefield(P0, ["Bog Raiders"])
+    (bears,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    scenario.battlefield(P2, ["Swamp"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, raiders)
+    state = scenario.build()
+    assert blockable(state, bears) == (raiders,)

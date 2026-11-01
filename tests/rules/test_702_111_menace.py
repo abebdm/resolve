@@ -19,19 +19,24 @@ from __future__ import annotations
 
 import pytest
 
+from resolve.agents.random_agent import RandomAgent
+from resolve.cards.keywords import Menace
+from resolve.cards.registry import CardDefinition
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import NoneOrAtLeast, ObjectOption
-from resolve.engine.api import submit
+from resolve.engine.api import submit, view_for
 from resolve.errors import InvalidAnswer
 from resolve.events.combat import BlockersDeclared
+from resolve.rules import defaults
 from resolve.state.combat import CombatState
 from resolve.state.game import GameState
-from resolve.state.ids import PlayerId
+from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.turn import Step
+from tests import scryfall_fixtures as fx
 from tests.casting_support import records
 from tests.combat_support import block_answer, block_space, blockable, declare_blockers, may_block
 from tests.game_fixtures import answer, request_of
-from tests.scenario import Scenario
+from tests.scenario import Scenario, with_cards
 
 P0, P1, P2 = PlayerId(0), PlayerId(1), PlayerId(2)
 
@@ -167,3 +172,68 @@ def test_702_111b_each_menace_attacker_is_its_own_constraint() -> None:
     combat = combat_of(state)
     assert combat.attackers[whelp_1].blocked is False
     assert combat.blockers_of(whelp_2) == (bears, lions)
+
+
+TWICE_MENACING = fx.keyword_creature(
+    "Test Twice Menacing", "{1}{R}", 2.0, "Wolf", ("2", "1"), "R", "Menace\nMenace"
+)
+
+
+def test_702_111c_two_instances_of_menace_still_need_two_blockers() -> None:
+    """Multiple instances are redundant (702.111c): a creature with menace twice has one
+    constraint of minimum 2 (not 4, and not two constraints); one blocker is refused, two are
+    accepted."""
+    definition = CardDefinition("Test Twice Menacing", abilities=(Menace(), Menace()))
+    scenario = with_cards(2, [TWICE_MENACING], [definition])
+    (wolf,) = scenario.battlefield(P0, ["Test Twice Menacing"])
+    bears, lions = scenario.battlefield(P1, ["Grizzly Bears", "Savannah Lions"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, wolf)
+    state = scenario.build()
+    assert block_space(state).constraints == (NoneOrAtLeast(ObjectOption(wolf), 2),)
+    with pytest.raises(InvalidAnswer):
+        submit(state, answer(state, block_answer(state, {lions: (wolf,)})))
+    declare_blockers(state, {bears: (wolf,), lions: (wolf,)})
+    assert combat_of(state).blockers_of(wolf) == (bears, lions)
+
+
+def test_702_111b_a_creature_that_may_block_nothing_doesnt_count(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Seam of ``defaults.blocks_allowed``: with Grizzly Bears allowed to block no creature (0),
+    P1's Bears and Savannah Lions are one possible blocker of the Whelp, which can't be blocked
+    by one (702.111b): no legal declaration blocks anything, so P1 isn't asked (design.md §6)."""
+    scenario = Scenario(2)
+    (whelp,) = scenario.battlefield(P0, ["Deranged Whelp"])
+    bears, _lions = scenario.battlefield(P1, ["Grizzly Bears", "Savannah Lions"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, whelp)
+    original = defaults.blocks_allowed
+
+    def blocks_allowed(state: GameState, obj: ObjectId) -> int | None:
+        return 0 if obj == bears else original(state, obj)
+
+    monkeypatch.setattr(defaults, "blocks_allowed", blocks_allowed)
+    state = scenario.build()
+    assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
+    assert combat_of(state).attackers[whelp].blocked is False
+
+
+def test_702_111b_the_random_agent_declares_only_legal_blocks() -> None:
+    """Deranged Whelp and Grizzly Bears attack P1, who controls three creatures: over 60 seeds,
+    every declaration ``RandomAgent`` makes is accepted by the engine (``submit``), never one
+    blocker on the Whelp, and some block the Whelp with two or more."""
+    blocked = 0
+    for seed in range(60):
+        scenario = Scenario(2)
+        whelp, bears = scenario.battlefield(P0, ["Deranged Whelp", "Grizzly Bears"])
+        scenario.battlefield(P1, ["Grizzly Bears", "Savannah Lions", "Hill Giant"])
+        scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+        scenario.attacking(P1, whelp, bears)
+        state = scenario.build()
+        request = request_of(state)
+        submit(state, RandomAgent(seed).decide(view_for(state, request.player), request))
+        on_whelp = combat_of(state).blockers_of(whelp)
+        assert len(on_whelp) != 1
+        blocked += len(on_whelp) >= 2
+    assert blocked > 0
