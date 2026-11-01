@@ -466,10 +466,11 @@ NONCREATURES = [
 ]  # fmt: skip
 # Repentant Blacksmith is left out (``FUZZ_EXCLUSIONS``: 702.16e until M6).
 CREATURES = [
-    "Alaborn Grenadier", "Ashcoat Bear", "Avacyn's Pilgrim", "Darksteel Myr", "Gladecover Scout",
-    "Grizzly Bears", "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper", "Kinjalli's Caller",
-    "Llanowar Elves", "Nacatl Savage", "Palace Guard", "Raging Goblin", "Savannah Lions",
-    "Wall of Stone",
+    "Alaborn Grenadier", "Ashcoat Bear", "Avacyn's Pilgrim", "Bog Raiders", "Darksteel Myr",
+    "Deranged Whelp", "Giant Spider", "Gladecover Scout", "Grizzly Bears", "Highborn Ghoul",
+    "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper", "Kinjalli's Caller", "Llanowar Elves",
+    "Nacatl Savage", "Palace Guard", "Phantom Warrior", "Raging Goblin", "Savannah Lions",
+    "Severed Legion", "Wall of Stone", "Wind Drake",
 ]  # fmt: skip
 
 
@@ -491,13 +492,14 @@ def test_the_recipes_hold_the_excerpt_minus_the_exclusions() -> None:
         "Temple of the False God",
     )  # fmt: skip
     assert fuzz_tool.recipe_cards("creatures") == (
-        "Alaborn Grenadier", "Arcane Signet", "Ashcoat Bear", "Avacyn's Pilgrim", "Cancel",
-        "Chandra's Ignition", "Command Tower", "Cryptic Command", "Darksteel Myr",
-        "Darksteel Relic", "Decimate", "Emerald Medallion", "Fiery Confluence",
-        "Gladecover Scout", "Grizzly Bears", "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper",
-        "Kinjalli's Caller", "Llanowar Elves", "Nacatl Savage", "Palace Guard", "Raging Goblin",
-        "Rishkar's Expertise", "Savannah Lions", "Selesnya Signet", "Sol Ring",
-        "Swords to Plowshares", "Temple of the False God", "Wall of Stone",
+        "Alaborn Grenadier", "Arcane Signet", "Ashcoat Bear", "Avacyn's Pilgrim", "Bog Raiders",
+        "Cancel", "Chandra's Ignition", "Command Tower", "Cryptic Command", "Darksteel Myr",
+        "Darksteel Relic", "Decimate", "Deranged Whelp", "Emerald Medallion", "Fiery Confluence",
+        "Giant Spider", "Gladecover Scout", "Grizzly Bears", "Highborn Ghoul", "Hill Giant",
+        "Humble Budoka", "Ixalli's Lorekeeper", "Kinjalli's Caller", "Llanowar Elves",
+        "Nacatl Savage", "Palace Guard", "Phantom Warrior", "Raging Goblin",
+        "Rishkar's Expertise", "Savannah Lions", "Selesnya Signet", "Severed Legion", "Sol Ring",
+        "Swords to Plowshares", "Temple of the False God", "Wall of Stone", "Wind Drake",
     )  # fmt: skip
     assert list(fuzz_tool.FUZZ_EXCLUSIONS) == ["Repentant Blacksmith"]
     for recipe in fuzz_tool.RECIPES:
