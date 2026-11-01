@@ -254,15 +254,17 @@ The approved plan is `docs/plans/m3.md` (steps M3.0 to M3.9).
 - [ ] The answer spaces `ChooseAssignment` (attack and block declarations as constraint models)
   and `DistributeEach` (combat damage assignment), with agent support (M3.1, M3.4, M3.5). M3.1
   ✓: both spaces without constraints, the random and text agents, the fuzz probes.
-- [ ] The combat rule defaults: `attack_declarer`, `block_declarer`, `combat_damage_assigner`,
+- [x] The combat rule defaults: `attack_declarer`, `block_declarer`, `combat_damage_assigner`,
   `combat_damage_amount`, `blocks_allowed` (rule 12; M3.1 to M3.3). M3.1 ✓: the functions,
   each returning the CR's default. M3.2 ✓: `attack_declarer` and `combat_damage_amount` called,
-  with seam tests; the others come with M3.3.
-- [ ] Beginning of combat, declare attackers, declare blockers, combat damage, end of combat
+  with seam tests. M3.3 ✓: `block_declarer`, `blocks_allowed` (reading Palace Guard's
+  `BlocksAnyNumber`) and `combat_damage_assigner` called, with seam tests.
+- [x] Beginning of combat, declare attackers, declare blockers, combat damage, end of combat
   (506–511), and removing the 508.1 gap (M3.2, M3.3). M3.2 ✓: the combat state's beginning and
   end (506.2, 511.3), declaring attackers (508.1a-b, f, k), 508.8, leaving combat (506.4),
-  unblocked combat damage (510.1a-b, 510.2), 800.4e, the 903.10a gap; the 508.1 gap is gone,
-  blocks are the gap 509.1 until M3.3.
+  unblocked combat damage (510.1a-b, 510.2), 800.4e, the 903.10a gap; the 508.1 gap is gone.
+  M3.3 ✓: declaring blockers (509.1a, g-h), damage to and by blockers, divided among two or more
+  recipients (510.1c-e); the 509.1 and 510.1c gaps are gone.
 - [ ] Attack and block requirements and restrictions (508.1c-d, 509.1b-c), with attack and block
   costs (508.1g-j, 509.1d-f): the primitives of "can't attack or block unless" (Topiary Stomper),
   "can't be blocked" (Rogue's Passage) and power-based blocking restrictions (Champion of
@@ -282,24 +284,27 @@ The approved plan is `docs/plans/m3.md` (steps M3.0 to M3.9).
   "tap an untapped creature you control" ignore summoning sickness and never call it (M3.1;
   docs/decisions.md, 2026-10-21 "Deferred from M2.4"). M3.1 ✓: the rename and both purposes;
   M3.2 ✓: declaring attackers reads `ATTACK`.
-- [ ] Protection's blocking part (702.16f, j, k) (M3.4).
-- [ ] Multiplayer attacks: choosing which player each creature attacks, blocks and damage
+- [ ] Protection's blocking part (702.16f, j, k) (M3.3, M3.4; 702.16f and j moved from M3.4
+  into M3.3 by the user, 2026-10-31, so that M3.3's blocks obey them). M3.3 ✓: 702.16f and
+  702.16j as prohibitions of `BlockAction`; 702.16k (protection from a player) in M3.4.
+- [x] Multiplayer attacks: choosing which player each creature attacks, blocks and damage
   assignment in APNAP order (802), leaving room for attacking planeswalkers and battles (306,
-  310) (M3.2, M3.3). M3.2 ✓: each attacker chooses a defending player (802.3).
+  310) (M3.2, M3.3). M3.2 ✓: each attacker chooses a defending player (802.3). M3.3 ✓: blocks
+  declared in APNAP order (802.4, 802.4a-b), damage assigned in APNAP order (802.5).
 - [ ] Extra turns, phases and steps (500.7–500.10), on M2.1's `TurnState.segments` (with numbered
   phases) and `next_turn` (Time Walk, Relentless Assault; M3.8).
 - [ ] Ending turns and phases (724): the design must allow it; implemented in M9 (exotic).
 - [ ] Cards: 14 keyword example cards, 7 combat-rules cards, the torture tests Time Walk and
   Relentless Assault, and Zetalpa, Primal Dawn (`docs/plans/m3.md` §7); the torture tests'
   rules for Lure and Basilisk Collar (the cards themselves in M5). M3.2 ✓: Raging Goblin,
-  Alaborn Grenadier, Wall of Stone.
+  Alaborn Grenadier, Wall of Stone. M3.3 ✓: Palace Guard.
 - [ ] Restore the thorough fuzz run's expectations that the 508.1 gap blocks
   (`docs/verification.md`, "Not yet reachable"): with attacks, games end by life total and by
   decking, damage is dealt, and Chandra's Ignition is cast (a game with a creature no longer
   stops at its controller's first combat). Remove 508.1 from `ALLOWED_GAPS` and move those
   expectations back into the checklist; Decimate too, once Ghostly Prison (an enchantment) is
   in the fuzz decks (M3.2, M3.5, M3.9). M3.2 ✓: 508.1 left `ALLOWED_GAPS` (509.1 stands in until
-  M3.3).
+  M3.3). M3.3 ✓: 509.1 left `ALLOWED_GAPS`, which is only 903.8.
 
 **From M2:** protection's blocking part (702.16f) and combat damage reach the 702.16e gap in
 `DamageDealt.apply`; `TapAll` taps without attacking; haste plugs into
@@ -731,6 +736,19 @@ completes a step (CLAUDE.md, "Documentation requirements").
   combat damage on its `Damage:` line, `ALLOWED_GAPS` 509.1 and 903.8; `tests/combat_support.py`;
   `Passer` declares no attackers; the scenario builder's `at(...)` creates the combat state in
   the combat phase.
+- **Done (M3.3, declaring blockers and dividing damage):** `legality.BlockAction` (509.1a's
+  permission, 802.4a; protection's blocking part, 702.16f and 702.16j, moved from M3.4 by the
+  user); `resolve.rules.combat.block_declaration` (one defending player's `ChooseAssignment`,
+  maxima `defaults.blocks_allowed`), `declared_blocks` and `damage_recipients` (510.1b-d);
+  `DeclareBlockers` (509.1, for `defaults.block_declarer`, each defending player in APNAP order,
+  802.4) and `CombatDamage` (510.1c-e, 802.5: each player divides their creatures' damage among
+  two or more recipients in one `ASSIGN_COMBAT_DAMAGE` `DistributeEach`, for
+  `defaults.combat_damage_assigner`) in `resolve.engine.combat`; `BlockersDeclared.
+  defending_player`; `BlocksAnyNumber` (`resolve.cards.primitives.combat`) read by
+  `defaults.blocks_allowed`; Palace Guard (`resolve.cards.definitions.combat`); the fuzz
+  harness's `Combat:` line counts blockers and blocked attackers, `ALLOWED_GAPS` is only 903.8;
+  `tests/combat_support.py`'s blocking and damage helpers; `Passer` declares no blockers;
+  fixtures Test Regrower (4/3) and Test Spawn (2/3), 510.1c's example creatures.
 
 ---
 
@@ -833,8 +851,8 @@ earlier milestones must leave room for every row in this map.
 | 506 | Combat Phase | M3 (506.2, 506.3, 506.4 on leaving the battlefield: M3.2 ✓) | E | `CombatBegan`, `remove_from_combat` (M3.2 ✓); 506.8 (spells timed by combat) as a predicate, `combat_point`, tested with a fixture; its first real cards in M9 |
 | 507 | Beginning of Combat Step | M3 ✓ | E | 507.1: no choice (802, the attack multiple players option); the combat state is created as the phase begins (M3.2 ✓) |
 | 508 | Declare Attackers Step | M3 (508.1a-b, f, k and 508.8: M3.2 ✓) | E | `DeclareAttackers`, `attack_declaration`, `AttackersDeclared`; 508.1c-d, g-j in M3.5, 508.4 in M3.7, 508.1m triggers in M4 |
-| 509 | Declare Blockers Step | M3 | E | until M3.3, `NotImplementedRule("509.1")` when a block is possible; otherwise every attacker is unblocked (509.1h, M3.2 ✓) |
-| 510 | Combat Damage Step | M3 (510.1a-b, 510.1c with no blockers left, 510.2: M3.2 ✓) | E | `CombatDamage`, `DamageDealt.combat`; damage to and by blockers (510.1c-e) is the M3.3 gap `510.1c`; 510.4 in M3.6 |
+| 509 | Declare Blockers Step | M3 (509.1a, 509.1g-h, 509.2: M3.3 ✓) | E | `DeclareBlockers`, `block_declaration`, `legality.BlockAction`, `BlockersDeclared` (one per defending player, 802.4); 509.1b-c (restrictions and requirements) in M3.4 and M3.5, 509.1d-f (costs) in M3.5, 509.3 triggers in M4 |
+| 510 | Combat Damage Step | M3 (510.1a-b, 510.2: M3.2 ✓; 510.1c-e: M3.3 ✓) | E | `CombatDamage`, `damage_recipients`, `DamageDealt.combat`; `ASSIGN_COMBAT_DAMAGE` (`DistributeEach`, one per player in APNAP order); trample (702.19) and 510.4 in M3.6 |
 | 511 | End of Combat Step | M3 ✓ (511.2's triggers M4, "until end of combat" effects M5) | E | `CombatEnded` (511.3, M3.2 ✓) |
 | 512 | Ending Phase | M1 ✓ | E |  |
 | 513 | End Step | M1 ✓ | E |  |
@@ -890,7 +908,7 @@ earlier milestones must leave room for every row in this map.
 | 733 | Handling Illegal Actions | M2 ✓ (M2.3 ✓; reversing a mana ability activation and the kept-abilities dependency check of 733.1: M2.4 ✓; 733.2 for a cast during resolution, asked again: M2.10 ✓); keeping the results of sacrifice and discard (733.1) M4 | E | checkpoint and restore (`resolve.state.checkpoint`), `resolve.engine.reversal` |
 | 800 | General | M1 ✓ (800.4a, h, j, k), M3 ✓ (800.4e: M3.2 ✓); the rest M7 | E |  |
 | 801 | Limited Range of Influence Option | out of scope | — | Commander doesn't use it (903.2) |
-| 802 | Attack Multiple Players Option | M3 (802.2, 802.3: M3.2 ✓), M7 | E | Commander's multiplayer default |
+| 802 | Attack Multiple Players Option | M3 (802.2, 802.3: M3.2 ✓; 802.4, 802.5: M3.3 ✓), M7 | E | Commander's multiplayer default |
 | 803 | Attack Left and Attack Right Options | out of scope | — | a multiplayer option Commander doesn't use |
 | 804 | Deploy Creatures Option | out of scope | — | a team option |
 | 805 | Shared Team Turns Option | out of scope | — | a team option |
@@ -925,7 +943,7 @@ earlier milestones must leave room for every row in this map.
 | 702.13 | Intimidate | M3 | E | retired evergreen |
 | 702.14 | Landwalk | M3 | E | retired evergreen |
 | 702.15 | Lifelink | M3 | E | D; noncombat damage too |
-| 702.16 | Protection | M2 ✓ (targeting: M2.8 ✓); M3 (blocking); M4 (enchant, equip); M6 (damage: `NotImplementedRule("702.16e")` until then) | E | D; a player as the quality (702.16k) with its first card |
+| 702.16 | Protection | M2 ✓ (targeting: M2.8 ✓); M3 (blocking: 702.16f, j M3.3 ✓; 702.16k M3.4); M4 (enchant, equip); M6 (damage: `NotImplementedRule("702.16e")` until then) | E | D; a player as the quality (702.16k) with its first card |
 | 702.17 | Reach | M3 | E | D |
 | 702.18 | Shroud | M2 ✓ (M2.8 ✓) | E | D |
 | 702.19 | Trample | M3 | E | D |

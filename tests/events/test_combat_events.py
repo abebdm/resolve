@@ -138,3 +138,36 @@ def test_506_4_outside_combat_nothing_happens() -> None:
     state = scenario.build()
     remove_from_combat(state, bears)
     assert state.turn is not None and state.turn.combat is None
+
+
+def test_802_4_blockers_declared_by_one_defending_player_fixes_only_their_attackers() -> None:
+    """Three players; the Bears attack P1 and the Giant and the Lions P2. P1's declaration
+    (``defending_player=P1``) fixes only the attackers attacking P1 (802.4a: only P1 can block
+    them): the Bears become blocked, the Giant and the Lions stay undecided until P2's. A
+    declaration naming an attacker of another player is refused (802.4a)."""
+    scenario = Scenario(3)
+    bears, giant, lions = scenario.battlefield(
+        P0, ["Grizzly Bears", "Hill Giant", "Savannah Lions"]
+    )
+    (wall1,) = scenario.battlefield(P1, ["Test Wall"])
+    (wall2,) = scenario.battlefield(P2, ["Test Wall"])
+    scenario.at(Step.DECLARE_ATTACKERS)
+    state = scenario.build()
+    combat = combat_of(state)
+    AttackersDeclared(
+        attacks=((bears, AttackPlayer(P1)), (giant, AttackPlayer(P2)), (lions, AttackPlayer(P2))),
+        rules=("508.1k",),
+    ).apply(state)
+    with pytest.raises(EngineError, match="isn't attacking"):
+        BlockersDeclared(blocks=((wall1, (giant,)),), defending_player=P1, rules=("509.1g",)).apply(
+            state
+        )
+    BlockersDeclared(blocks=((wall1, (bears,)),), defending_player=P1, rules=("509.1g",)).apply(
+        state
+    )
+    assert [combat.attackers[a].blocked for a in (bears, giant, lions)] == [True, None, None]
+    BlockersDeclared(blocks=((wall2, (lions,)),), defending_player=P2, rules=("509.1g",)).apply(
+        state
+    )
+    assert [combat.attackers[a].blocked for a in (bears, giant, lions)] == [True, False, True]
+    assert list(combat.blockers) == [wall1, wall2]

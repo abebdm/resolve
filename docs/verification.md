@@ -56,9 +56,9 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
      cards under "Not yet reachable"; a rarely cast card (Cryptic Command, with three blue
      symbols, or a creature that only one recipe holds) may be missing in one run and is then
      worth a note, not a failure;
-   - `Gaps:` lists only `509.1` and `903.8` (`508.1` until M3.2; `509.1`, declaring blockers,
-     until M3.3);
-   - `Combat:` shows combats, and attackers declared above zero (M3.2);
+   - `Gaps:` lists only `903.8` (`508.1` until M3.2; `509.1`, declaring blockers, until M3.3);
+   - `Combat:` shows combats, and attackers declared above zero (M3.2), and blockers declared
+     and attackers blocked above zero (M3.3);
    - `Turns per game:` reaches a maximum of several tens of turns, and `Played:` shows
      hundreds of lands and mana abilities, and some reversed mana ability activations
      (Selesnya Signet activated with nothing to pay its {1});
@@ -95,13 +95,13 @@ run can't meet yet; each says why and when it becomes reachable (docs/decisions.
 2026-10-28, "M2.11"):
 
 - **Endings by decking and by life total** (`decked`, `life total` may be 0), and much damage:
-  most games stop at the 509.1 gap (declaring blockers, until M3.3; 508.1 until M3.2) as soon
-  as a creature attacks a player who controls an untapped creature, long before a library runs
-  out or a life total reaches 0. **M3.3** implements blocking and removes 509.1 from the
-  allowed gaps; M3.9 restores these expectations.
+  until M3.3 most games stopped at the 509.1 gap (declaring blockers; 508.1 until M3.2) as
+  soon as a creature attacked a player who controlled an untapped creature. **Reachable since
+  M3.3**, which removed 509.1 from the allowed gaps (only 903.8 is left); M3.9 checks them on the
+  thorough run and moves them back into the checklist.
 - **Chandra's Ignition cast:** it needs a creature its caster controls as its target and five
-  mana in a main phase, and a game with creatures on both sides stops at the first attack
-  (509.1). Reachable in **M3.3**, with the endings above.
+  mana in a main phase; until M3.3 a game with creatures on both sides stopped at the first
+  attack (509.1). **Reachable since M3.3**, with the endings above; M3.9 checks it.
 - **Decimate cast:** it needs a target artifact, creature, enchantment and land, and no card in
   the fuzz decks is an enchantment. Reachable when the first enchantment card is implemented
   and joins the fuzz excerpt (the card and rules tests cover Decimate meanwhile).

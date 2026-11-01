@@ -187,7 +187,15 @@ drive decisions with a script.
    `declare_attackers(state, {creature: player})` (empty: no attackers), `may_attack(state)`
    and `attack_targets(state, creature)` (what the declaration offers), `attack_answer` (the
    `Assignment`, to submit by hand) and `pass_to(state, phase, step)` (pass priority until
-   there). `Passer` declares no attackers.
+   there). `at(Step.DECLARE_BLOCKERS, begin=True)` with `attacking(...)` stops at the first
+   defending player's declaration (`DECLARE_BLOCKERS`, in APNAP order, not asked of a player
+   none of whose creatures may block): `declare_blockers(state, {blocker: (attacker, ...)})`,
+   `may_block(state)`, `blockable(state, blocker)`, `block_space` and `block_answer`. At the
+   combat damage step a player dividing damage among two or more recipients is asked
+   (`ASSIGN_COMBAT_DAMAGE`, in APNAP order): `assign_damage(state, {source: {ObjectOption(r):
+   amount}})` (unnamed recipients get 0), `damage_sources`, `damage_recipients`,
+   `damage_space` and `damage_answer`. `Passer` declares no attackers and no blockers, and
+   can't assign damage.
 
 ### Write an engine test with test-only tasks
 
@@ -233,8 +241,8 @@ override either.
    10 games are one game of each. The decks come from two recipes (`recipe_deck`): the same
    number of each basic land (`tools/excerpts/basic_lands.json`) plus half as many (at least
    one) of each card of `tools/excerpts/cards.json`: its noncreature cards (`spells`: long
-   games) or all of them but `FUZZ_EXCLUSIONS` (`creatures`: these end at the 509.1 gap once a
-   creature attacks a player who could block it, until M3.3). Each `--copies` number gives both recipes, cycled
+   games) or all of them but `FUZZ_EXCLUSIONS` (`creatures`: their creatures attack, block and
+   deal combat damage). Each `--copies` number gives both recipes, cycled
    among the seats; every other Commander game (odd seeds) gives each seat one of the excerpt's
    creatures as its commander (casting one is the 903.8 gap). No snapshot is needed. Games play
    turns (lands, mana, casting, resolving, cleanup) until players concede, draw from an empty
@@ -264,7 +272,8 @@ override either.
    answers) cost time that grows with the game; the bookkeeping invariants run before every
    decision and every game is replayed at the end whatever `--check-every` says. Each full check
    walks only the log entries added since the last one (`CheckedLog`).
-6. When a milestone changes which gaps games can reach (after M2.3: 508.1 and 903.8; after M3.2: 509.1 and 903.8), update
+6. When a milestone changes which gaps games can reach (after M2.3: 508.1 and 903.8; after
+   M3.2: 509.1 and 903.8; after M3.3: only 903.8), update
    `ALLOWED_GAPS` in `tools/fuzz.py`, the fuzz tests' expectations and the roadmap together.
    Random agents stop at the first offered gap they pick; the fuzz tests' `PatientAgent`
    (`tests/engine_support.py`) mostly passes, so its games reach later turns. A new registered

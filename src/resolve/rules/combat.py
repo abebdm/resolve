@@ -6,8 +6,15 @@
   (508.1a-b, 802.3): its items are the creatures that may attack something, each item's choices
   what it may attack, all checked by ``legality.allowed(AttackAction)``.
 
-Declaring blockers, dividing damage and the declaration-wide restrictions and requirements
-arrive in M3.3 to M3.5. Leaving combat is ``resolve.state.combat.remove_from_combat``.
+- ``block_declaration``: one defending player's declaration of blockers compiled into a
+  ``ChooseAssignment`` (509.1a, 802.4a-b): its items are their creatures that may block
+  something, each item's choices the attackers it may block (``legality.allowed(BlockAction)``),
+  its maximum ``defaults.blocks_allowed``.
+- ``damage_recipients``: what each attacking and blocking creature may assign its combat damage
+  to (510.1b-d).
+
+The declaration-wide restrictions and requirements arrive in M3.4 and M3.5. Leaving combat is
+``resolve.state.combat.remove_from_combat``.
 """
 
 from __future__ import annotations
@@ -107,3 +114,103 @@ def declared_attacks(
             raise EngineError(f"{item!r} isn't a creature")
         attacks.extend((item.object, option_target(choices[index])) for index in chosen)
     return tuple(attacks)
+
+
+def block_declaration(state: GameState, player: PlayerId) -> ChooseAssignment | None:
+    """The declaration of the defending player ``player``'s blockers as a ``ChooseAssignment``
+    (509.1a; design.md §17.18).
+
+    Its items are the creatures ``player`` controls, in battlefield order, that may block at
+    least one attacker (``legality.allowed(BlockAction)``: 509.1a, 802.4a, 702.16f, 702.16j);
+    each item's choices are the attackers it may block, in declaration order; its maximum is
+    ``defaults.blocks_allowed`` (1, 509.1a; ``None``, any number: Palace Guard), at most its
+    number of choices. Other players' attackers and blockers are ignored (802.4b). ``None``
+    when no creature may block: the declaration has one possible answer, no blockers, so it
+    isn't asked (design.md §6). A creature allowed to block none (a maximum of 0) isn't an item.
+    """
+    from resolve.rules import defaults, legality
+
+    turn = state.turn
+    if turn is None or turn.combat is None:
+        raise EngineError("blockers are declared only during a combat (509.1)")
+    attackers = tuple(turn.combat.attackers)
+    items: list[Option] = []
+    choices: list[tuple[Option, ...]] = []
+    maxima: list[int] = []
+    for obj in state.battlefield:
+        allowed = tuple(
+            ObjectOption(attacker)
+            for attacker in attackers
+            if legality.allowed(state, legality.BlockAction(player, obj, attacker)).allowed
+        )
+        if not allowed:
+            continue
+        limit = defaults.blocks_allowed(state, obj)
+        maximum = len(allowed) if limit is None else min(max(limit, 0), len(allowed))
+        if maximum == 0:
+            continue
+        items.append(ObjectOption(obj))
+        choices.append(allowed)
+        maxima.append(maximum)
+    if not items:
+        return None
+    return ChooseAssignment(tuple(items), tuple(choices), tuple(maxima))
+
+
+def declared_blocks(
+    space: ChooseAssignment, picks: tuple[tuple[int, ...], ...]
+) -> tuple[tuple[ObjectId, tuple[ObjectId, ...]], ...]:
+    """The blocks a validated answer to ``block_declaration``'s space declares: each chosen
+    blocker and the attackers it blocks, in item order and, for each, in the attackers' order
+    (509.1a, 509.1g). Creatures that block nothing aren't listed."""
+    blocks: list[tuple[ObjectId, tuple[ObjectId, ...]]] = []
+    for item, choices, chosen in zip(space.items, space.choices, picks, strict=True):
+        if not chosen:
+            continue
+        if not isinstance(item, ObjectOption):
+            raise EngineError(f"{item!r} isn't a creature")
+        blocked: list[ObjectId] = []
+        for index in chosen:
+            choice = choices[index]
+            if not isinstance(choice, ObjectOption):
+                raise EngineError(f"{choice!r} isn't an attacking creature")
+            blocked.append(choice.object)
+        blocks.append((item.object, tuple(blocked)))
+    return tuple(blocks)
+
+
+def damage_recipients(state: GameState) -> tuple[tuple[ObjectId, tuple[Option, ...]], ...]:
+    """What each creature in combat may assign its combat damage to (510.1b-d): each attacking
+    creature, in declaration order, then each blocking creature, in declaration order, with its
+    possible recipients (an empty tuple: it assigns no combat damage).
+
+    - An unblocked attacker: the player it attacks (510.1b); nothing if it attacks nothing
+      (506.4c) or a player who has left the game (800.4e).
+    - A blocked attacker: the creatures blocking it now, in the order they were declared
+      (510.1c); nothing if none is left. Trample (702.19b-d, M3.6) adds what it attacks.
+    - A blocker: the attackers it blocks now, in the order chosen (510.1d); nothing if none is
+      left.
+
+    How much each assigns (510.1a) is ``defaults.combat_damage_amount``; the caller drops those
+    that assign 0 or less.
+    """
+    turn = state.turn
+    if turn is None or turn.combat is None:
+        raise EngineError("combat damage is assigned only during a combat (510.1)")
+    combat = turn.combat
+    recipients: list[tuple[ObjectId, tuple[Option, ...]]] = []
+    for attacker, record in combat.attackers.items():
+        if record.blocked is None:
+            raise EngineError(f"attacker {attacker} is neither blocked nor unblocked (509.1h)")
+        if record.blocked:
+            options: tuple[Option, ...] = tuple(
+                ObjectOption(blocker) for blocker in combat.blockers_of(attacker)
+            )
+        elif record.target is None or state.player(record.target.player).left_game:
+            options = ()
+        else:
+            options = (target_option(record.target),)
+        recipients.append((attacker, options))
+    for blocker, block in combat.blockers.items():
+        recipients.append((blocker, tuple(ObjectOption(a) for a in block.blocking)))
+    return tuple(recipients)

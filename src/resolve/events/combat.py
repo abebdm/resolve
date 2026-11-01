@@ -7,9 +7,8 @@ ending, attackers being declared, and blockers being declared.
 - ``AttackersDeclared`` (508.1k): the chosen creatures become attacking creatures, each
   attacking what was announced for it (508.1b, 802.3).
 - ``BlockersDeclared`` (509.1g-h): the chosen creatures become blocking creatures, and each
-  attacker becomes blocked or unblocked, which it stays for the rest of combat (509.1h).
-  M3.2 declares no blocks yet (509.1 is a gap whenever a block is possible), so its event has
-  only unblocked attackers; M3.3 declares blocks with it.
+  attacker becomes blocked or unblocked, which it stays for the rest of combat (509.1h); one
+  per defending player's declaration (802.4).
 - ``CombatEnded`` (511.3): as the end of combat step ends, everything is removed from combat.
 
 All are public: the combat state is (``PlayerView.combat``).
@@ -75,10 +74,20 @@ class AttackersDeclared(Event):
 @dataclass(frozen=True, kw_only=True)
 class BlockersDeclared(Event):
     """Blockers are declared (509.1g-h): each blocker of ``blocks`` blocks its attackers, in
-    the order given; each attacker it names becomes blocked, and every other attacking creature
-    whose status is undecided becomes unblocked. Blocked status then stays fixed (509.1h)."""
+    the order given, and each attacker it names becomes blocked. Blocked status then stays fixed
+    (509.1h).
+
+    ``defending_player`` is the player whose declaration this is (802.4: each defending player
+    declares in APNAP order, and each declaration is applied as it is made): its blocks must be
+    of creatures attacking that player (802.4a), and the undecided attackers attacking that
+    player that no block names become unblocked. Without it (``None``) every undecided attacker
+    that no block names becomes unblocked: the event that ends the declarations, for attackers
+    no one could block (attacking a player who has left, 800.4a, or nothing, 506.4c), or the
+    whole declaration when no block was possible.
+    """
 
     blocks: tuple[tuple[ObjectId, tuple[ObjectId, ...]], ...] = ()
+    defending_player: PlayerId | None = None
 
     def apply(self, state: GameState) -> None:
         combat = _combat(state)
@@ -87,14 +96,30 @@ class BlockersDeclared(Event):
             if blocker in combat.blockers:
                 raise EngineError(f"object {blocker} is already blocking")
             for attacker in attackers:
-                if attacker not in combat.attackers:
+                record = combat.attackers.get(attacker)
+                if record is None:
                     raise EngineError(f"object {attacker} isn't attacking, so it can't be blocked")
+                if self.defending_player is not None and not _attacks(
+                    record, self.defending_player
+                ):
+                    raise EngineError(
+                        f"object {attacker} isn't attacking player {self.defending_player}, "
+                        "so they can't block it (802.4a)"
+                    )
                 blocked[attacker] = None
         for blocker, attackers in self.blocks:
             combat.blockers[blocker] = BlockRecord(blocker, attackers)
         for attacker, record in combat.attackers.items():
-            if record.blocked is None:
+            if record.blocked is not None:
+                continue
+            if self.defending_player is None or _attacks(record, self.defending_player):
                 combat.attackers[attacker] = replace(record, blocked=attacker in blocked)
+
+
+def _attacks(record: AttackRecord, player: PlayerId) -> bool:
+    """Whether the attacker of ``record`` attacks ``player`` (a planeswalker they control or a
+    battle they protect, M4)."""
+    return record.target is not None and record.target.player == player
 
 
 @dataclass(frozen=True, kw_only=True)

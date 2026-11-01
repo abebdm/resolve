@@ -48,6 +48,7 @@ from resolve.engine.deck import Deck
 from resolve.engine.view import AbilityView, PlayerView
 from resolve.errors import InvalidAnswer
 from resolve.events.base import AnswerRecord, LogEntry
+from resolve.events.combat import BlockersDeclared
 from resolve.events.game import Conceded, PlayerLost
 from resolve.rules import defaults
 from resolve.state.config import GameConfig
@@ -97,9 +98,9 @@ def decks_for(players: int, commander: bool, seed: int) -> list[Deck]:
     Most decks hold 8 to 11 cards, so games get past the opening hands into turns and priority
     (a deck of 6 or fewer would make every player draw from an empty library during 103.5 and
     lose at the first state-based-action check, 704.5b). Every deck holds two elves, so random
-    agents soon cast one, and the game stops at the 509.1 gap once an elf attacks a player
-    who could block it (or at 903.8, casting a commander); long games are the patient and
-    land-only tests' job. Seat 1's deck is empty in one game of four.
+    agents soon cast one, and elves attack and block; a Commander game stops at the 903.8 gap
+    once a commander is cast; long games are the patient and land-only tests' job. Seat 1's
+    deck is empty in one game of four.
     """
     commanders = [DAYBREAKER] if commander else []
     return [
@@ -372,9 +373,9 @@ def fuzz(
 def test_a_disallowed_gap_is_a_failure() -> None:
     with pytest.raises(FuzzFailure, match=r"gap that isn't allowed: 601\.2: a test gap"):
         fuzz(GapOnAnswer("601.2"), allowed_gaps=())
-    config = GameConfig.standard()
-    with pytest.raises(FuzzFailure, match=r"isn't allowed: 509\.1"):
-        fuzz_game(config, [deck(10, 2), deck(10, 2)], 2, allowed_gaps=())
+    config = GameConfig.commander_game()
+    with pytest.raises(FuzzFailure, match=r"isn't allowed: 903\.8"):
+        fuzz_game(config, decks_for(2, True, 2), 2, allowed_gaps=())
 
 
 def test_an_allowed_gap_ends_the_game() -> None:
@@ -1178,3 +1179,24 @@ def test_a_checked_log_entry_that_changes_is_reported(change: str) -> None:
         expected = f"state.event_log[{len(state.event_log)}] was replaced or removed"
     problems = state_problems(state, checked)
     assert any(p.startswith(expected) for p in problems)
+
+
+def test_from_m3_3_the_only_allowed_gap_is_the_commander_tax() -> None:
+    """M3.3 declares blockers, so 509.1 is no longer a gap a fuzz game may end at; only casting
+    a commander from the command zone (903.8, the commander tax, M7) is (the M3 plan, section 8)."""
+    assert fuzz_tool.ALLOWED_GAPS == ("903.8",)
+
+
+def test_random_agents_declare_blockers_and_assign_combat_damage_with_every_check() -> None:
+    """M3.3, on fixed decks (8 Forests and 6 Llanowar Elves each, so the outcome doesn't move
+    with the excerpt): random agents' game with seed 2 declares blockers (509.1), including two
+    creatures blocking one attacker, and answers an ``ASSIGN_COMBAT_DAMAGE`` (510.1c), with the
+    harness's every check (invariants, views, deepcopy and pickle, invalid answers probed,
+    replay) after each answer. The game ends normally."""
+    result = fuzz_game(GameConfig.standard(), [deck(8, 6), deck(8, 6)], 2)
+    assert result.gap is None and result.state.result is not None
+    records = [entry.record for entry in result.state.event_log]
+    blocks = [b for r in records if isinstance(r, BlockersDeclared) for b in r.blocks]
+    assert blocks, "blockers were declared"
+    kinds = {r.kind for r in records if isinstance(r, AnswerRecord)}
+    assert {DecisionKind.DECLARE_BLOCKERS, DecisionKind.ASSIGN_COMBAT_DAMAGE} <= kinds

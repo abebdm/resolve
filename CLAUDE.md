@@ -50,9 +50,10 @@ completed step built, and where, is in `docs/roadmap.md`, "What's built".
   `resolve.rules.defaults` (how to add or change one: `docs/howto.md`).
 - **Current milestone: M3 (Combat), in progress:** the plan is approved (`docs/plans/m3.md`,
   2026-10-30). M3.0 (its documentation), M3.1 (the answer spaces, `summoning_sick` and haste,
-  the combat state and the combat rule defaults) and M3.2 (declaring attackers, unblocked combat
-  damage, vigilance and defender; blocks are the gap 509.1) are done.
-- **Next:** M3.3 (declaring blockers, and dividing damage).
+  the combat state and the combat rule defaults), M3.2 (declaring attackers, unblocked combat
+  damage, vigilance and defender) and M3.3 (declaring blockers in APNAP order, protection's
+  blocking part, dividing combat damage, Palace Guard) are done.
+- **Next:** M3.4 (evasion and blocking restrictions).
 
 Do not start a milestone unless the user asks.
 

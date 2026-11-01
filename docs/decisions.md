@@ -19,6 +19,58 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-10-31: M3.3: blocks per defending player, damage assignment per player, protection's blocking part moved forward
+- **Decision:**
+  - **Protection's blocking part (the user's, 2026-10-31):** 702.16f and 702.16j move from M3.4
+    into M3.3, as prohibitions of `legality.BlockAction` read from the attacker's computed
+    characteristics. Without them M3.3's blocks would have accepted blocks the CR forbids
+    (Darksteel Myr blocking Nacatl Savage, both in the fuzz decks) for one step. No other
+    fuzz-deck creature has a blocking restriction (checked: only Nacatl Savage and Repentant
+    Blacksmith, both protection); evasion and the other restrictions still arrive with their
+    cards in M3.4 and M3.5. 702.16k waits for protection from a player's first card.
+  - **One `BlockersDeclared` per defending player.** Each declaration (802.4) is applied as it
+    is made, as `BlockersDeclared(blocks, defending_player=p)`, which fixes the blocked status
+    (509.1h) of the attackers attacking `p` only; a final `BlockersDeclared()` without a player
+    makes any attacker still undecided unblocked (one attacking a player who wasn't asked or has
+    left). So the state and the log show each declaration once made, the invariant "an attacker
+    with blockers is blocked" holds between declarations, and a concession while a later player
+    declares (104.3a) leaves the earlier blocks as they are (`DeclareBlockers.next` names the
+    player being asked). A defending player none of whose creatures may block isn't asked.
+  - **The block declaration** (`block_declaration`) has one item per creature that may block
+    something, its choices the attackers it may block (in declaration order), its maximum
+    `blocks_allowed` clamped to its number of choices (`None`, Palace Guard: all of them); a
+    creature whose maximum would be 0 isn't an item. `blocks_allowed` reads `BlocksAnyNumber`
+    from computed characteristics, so M5's granted "can block any number" needs no change.
+  - **Damage assignment.** `damage_recipients` lists each attacker, then each blocker (both in
+    declaration order), with what it may assign damage to. A creature with no recipient or no
+    damage assigns none; one with one recipient assigns all of it without a question (design.md
+    §6); the rest are grouped by `combat_damage_assigner`, and each player in APNAP order
+    (510.1, 802.5) answers one `ASSIGN_COMBAT_DAMAGE` `DistributeEach` (minimum 0 per
+    recipient). All damage is dealt once everyone has assigned, attackers' events first.
+    `CombatDamage.answered` keeps each announced answer. Run again after a concession (104.3a),
+    it keeps every announced assignment: leaving the game undoes no announcement (800.4a), and
+    510.1e's return to before the assignment is only for an illegal one. Damage assigned to
+    what has left combat since isn't dealt (the source's current recipients filter it, as 800.4e
+    does for a player who left); the players who haven't assigned yet are asked about the board
+    as it is now. (The first version asked a player again whenever their space had changed; the
+    test review pointed out that this let them change an announced assignment.) The answers
+    stay in the task until 510.2: an announced assignment isn't in the views (no event records
+    it), a limitation a UI may need lifted later.
+  - The pinned fuzz-summary games can't be relied on to block (approval note 2), so a
+    deterministic test (`test_game_stats_count_blockers_and_a_game_ended_by_combat_damage`)
+    checks the `Combat:` line's blockers and blocked attackers and an ending by combat damage.
+    The quick run declared no attacker on its ten seeds, as in M3.2.
+- **Why:** each declaration and each player's assignment is a separate answer in the CR (802.4,
+  510.1, 802.5); applying blocks per player keeps the state true at every pause, which is what
+  re-asking after a concession needs.
+- **Rules:** 509.1a, 509.1g-h, 509.2, 510.1a-e, 510.2, 702.3b, 702.16f, 702.16j, 702.16m,
+  733, 800.4a, 802.4, 802.4a-b, 802.5, 104.3a, 120.8.
+- **Where:** `resolve.rules.legality` (`BlockAction`), `resolve.rules.combat`
+  (`block_declaration`, `declared_blocks`, `damage_recipients`), `resolve.engine.combat`
+  (`DeclareBlockers`, `CombatDamage`), `resolve.events.combat` (`BlockersDeclared`),
+  `resolve.rules.defaults.blocks_allowed`, `resolve.cards.primitives.combat`,
+  `resolve.cards.definitions.combat`, `tools/fuzz.py`, `tests/combat_support.py`.
+
 ### 2026-10-31: M3.2: declaring attackers, the combat state's events, and the 509.1 stand-in
 - **Decision:**
   - The combat state begins with an event, `CombatBegan(defending_players)` (506.2, 802.2),

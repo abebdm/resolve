@@ -390,6 +390,14 @@ def test_509_1a_a_creature_blocks_one_attacker() -> None:
     assert [defaults.blocks_allowed(state, c) for c in creatures] == [1, 1, 1]
 
 
+def test_509_1a_palace_guard_blocks_any_number() -> None:
+    """Palace Guard's "can block any number of creatures" is read by the function: ``None``, no
+    limit (M3.3)."""
+    scenario = Scenario(2)
+    (guard,) = scenario.battlefield(P1, ["Palace Guard"])
+    assert defaults.blocks_allowed(scenario.build(), guard) is None
+
+
 def test_702_11c_no_player_has_abilities_by_default() -> None:
     state = Scenario(2).build()
     assert defaults.player_abilities(state, P0) == ()

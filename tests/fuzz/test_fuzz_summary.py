@@ -5,8 +5,8 @@ into ``tools/excerpts/basic_lands.json``) plus the cards of ``tools/excerpts/car
 noncreature cards (``spells``) or all of them (``creatures``). Its games play turns: lands are
 played (305.1) and tapped for mana (605.3a), spells are cast (601.2), resolve (608) or are
 reversed (733.1), until a player draws from an empty library (704.5b), concedes (104.3a), or the
-game reaches an allowed gap (509.1, 903.8). Creatures attack (508.1) and deal combat damage
-(510.2).
+game reaches an allowed gap (903.8). Creatures attack (508.1), block (509.1) and deal combat
+damage (510.2).
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from resolve.engine.api import submit, view_for
 from resolve.engine.concede import concede
 from resolve.engine.deck import Deck
 from resolve.events.base import LogEntry
-from resolve.events.combat import AttackersDeclared, CombatBegan
+from resolve.events.combat import AttackersDeclared, BlockersDeclared, CombatBegan
 from resolve.events.damage import DamageDealt
 from resolve.events.game import PlayerLost
 from resolve.events.mana import ManaAdded
@@ -59,7 +59,7 @@ from tests.casting_support import (
     records,
     reverse,
 )
-from tests.combat_support import declare_attackers, pass_to
+from tests.combat_support import declare_attackers, declare_blockers, pass_to
 from tests.engine_support import EndGame, running
 from tests.game_fixtures import answer, deck, pass_until, request_of, started_game
 from tests.scenario import Scenario, run_script
@@ -191,7 +191,7 @@ def test_the_summary_lines() -> None:
         "other (704.5c) x1.",
         "Played: 5 lands, 9 mana abilities activated, 0 reversed.",
         "Spells: 0 cast, 0 resolved, 0 didn't resolve, 0 countered, 0 reversed.",
-        "Combat: 0 combats, 0 attackers declared.",
+        "Combat: 0 combats, 0 attackers declared, 0 blockers declared, 0 attackers blocked.",
         "Damage: 0 dealt, 0 of it combat damage.",
         "Reversed casts: auto-pay seats 0 of 0 attempts, 0 of 0 payable; random seats 0 of 0, "
         "0 of 0 payable.",
@@ -209,10 +209,12 @@ def test_the_summary_counts_spells_casts_per_card_and_gaps() -> None:
         GameStats(5, 0, 1, RULES_GAP, 0, 0, (), 0, 1, "509.1"),
     ]
     games[1] = replace(games[1], did_not_resolve=2, damage=7, countered=1, combat_damage=4)
-    games[2] = replace(games[2], combats=2, attackers=3, combat_damage=2, damage=2)
+    games[2] = replace(
+        games[2], combats=2, attackers=3, blockers=2, blocked=1, combat_damage=2, damage=2
+    )
     assert summary_lines(games)[5:] == [
         "Spells: 4 cast, 3 resolved, 2 didn't resolve, 1 countered, 5 reversed.",
-        "Combat: 2 combats, 3 attackers declared.",
+        "Combat: 2 combats, 3 attackers declared, 2 blockers declared, 1 attackers blocked.",
         "Damage: 9 dealt, 6 of it combat damage.",
         "Reversed casts: auto-pay seats 0 of 0 attempts, 0 of 0 payable; random seats 5 of 9, "
         "0 of 4 payable.",
@@ -330,8 +332,41 @@ def test_game_stats_count_combats_attackers_and_combat_damage() -> None:
     stats = GameStats.of(FuzzResult(9, 0, "509.1: declaring blockers", state))
     assert (stats.combats, stats.attackers, stats.damage, stats.combat_damage) == (1, 2, 7, 5)
     lines = summary_lines([stats])
-    assert "Combat: 1 combats, 2 attackers declared." in lines
+    assert (
+        "Combat: 1 combats, 2 attackers declared, 0 blockers declared, 0 attackers blocked."
+        in lines
+    )
     assert "Damage: 7 dealt, 5 of it combat damage." in lines
+
+
+def test_game_stats_count_blockers_and_a_game_ended_by_combat_damage() -> None:
+    """M3.3, deterministically (approval note 2 of the M3 plan: the pinned games can't be relied
+    on to show a block). P1, at 3 life, is attacked by Grizzly Bears and Hill Giant and blocks
+    the Bears with Savannah Lions (509.1): the Giant's 3 combat damage ends the game by life
+    total (704.5a), and the Bears and the Lions deal each other 2. The statistics count one
+    combat, two attackers, one blocker, one attacker blocked and 7 combat damage; the game ended
+    by life total; the summary says so."""
+    scenario = Scenario(2)
+    bears, giant = scenario.battlefield(PlayerId(0), ["Grizzly Bears", "Hill Giant"])
+    (lions,) = scenario.battlefield(PlayerId(1), ["Savannah Lions"])
+    scenario.life(PlayerId(1), 3)
+    scenario.at(TurnStep.BEGINNING_OF_COMBAT, begin=True)  # so that CombatBegan is logged
+    state = scenario.build()
+    run_script(state, pass_(PlayerId(0)), pass_(PlayerId(1)))
+    declare_attackers(state, {bears: PlayerId(1), giant: PlayerId(1)})
+    pass_to(state, Phase.COMBAT, TurnStep.DECLARE_BLOCKERS)
+    declare_blockers(state, {lions: (bears,)})
+    pass_to(state, Phase.POSTCOMBAT_MAIN)
+    assert state.result is not None
+    stats = GameStats.of(FuzzResult(9, 0, None, state))
+    assert (stats.combats, stats.attackers, stats.blockers, stats.blocked) == (1, 2, 1, 1)
+    assert (stats.combat_damage, stats.ending) == (7, LIFE_TOTAL)
+    lines = summary_lines([stats])
+    assert (
+        "Combat: 1 combats, 2 attackers declared, 1 blockers declared, 1 attackers blocked."
+        in lines
+    )
+    assert "Damage: 7 dealt, 7 of it combat damage." in lines
 
 
 def test_game_stats_count_payable_reversals_by_seat() -> None:
@@ -433,7 +468,8 @@ NONCREATURES = [
 CREATURES = [
     "Alaborn Grenadier", "Ashcoat Bear", "Avacyn's Pilgrim", "Darksteel Myr", "Gladecover Scout",
     "Grizzly Bears", "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper", "Kinjalli's Caller",
-    "Llanowar Elves", "Nacatl Savage", "Raging Goblin", "Savannah Lions", "Wall of Stone",
+    "Llanowar Elves", "Nacatl Savage", "Palace Guard", "Raging Goblin", "Savannah Lions",
+    "Wall of Stone",
 ]  # fmt: skip
 
 
@@ -459,7 +495,7 @@ def test_the_recipes_hold_the_excerpt_minus_the_exclusions() -> None:
         "Chandra's Ignition", "Command Tower", "Cryptic Command", "Darksteel Myr",
         "Darksteel Relic", "Decimate", "Emerald Medallion", "Fiery Confluence",
         "Gladecover Scout", "Grizzly Bears", "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper",
-        "Kinjalli's Caller", "Llanowar Elves", "Nacatl Savage", "Raging Goblin",
+        "Kinjalli's Caller", "Llanowar Elves", "Nacatl Savage", "Palace Guard", "Raging Goblin",
         "Rishkar's Expertise", "Savannah Lions", "Selesnya Signet", "Sol Ring",
         "Swords to Plowshares", "Temple of the False God", "Wall of Stone",
     )  # fmt: skip
@@ -515,6 +551,7 @@ def check_summary(recorder: Recorder, text: str, formats: str) -> Totals:
     turns: list[int] = []
     lands = mana = cast = resolved = reversed_ = abilities_reversed = 0
     did_not_resolve = damage = countered = combat_damage = combats = attackers = 0
+    blockers = blocked = 0
     casts: Counter[str] = Counter()
     gaps: Counter[str] = Counter()
     endings: Counter[str] = Counter()
@@ -552,6 +589,14 @@ def check_summary(recorder: Recorder, text: str, formats: str) -> Totals:
             record.total for record in records if isinstance(record, DamageDealt) and record.combat
         )
         combats += sum(1 for record in records if isinstance(record, CombatBegan))
+        blockers += sum(
+            len(record.blocks) for record in records if isinstance(record, BlockersDeclared)
+        )
+        blocked += sum(
+            len({a for _, attackers_of in record.blocks for a in attackers_of})
+            for record in records
+            if isinstance(record, BlockersDeclared)
+        )
         attackers += sum(
             len(record.attacks) for record in records if isinstance(record, AttackersDeclared)
         )
@@ -611,10 +656,11 @@ def check_summary(recorder: Recorder, text: str, formats: str) -> Totals:
         r"(\d+) reversed\.",
         text,
     ) == (cast, resolved, did_not_resolve, countered, reversed_)
-    assert numbers(r"Combat: (\d+) combats, (\d+) attackers declared\.", text) == (
-        combats,
-        attackers,
-    )
+    assert numbers(
+        r"Combat: (\d+) combats, (\d+) attackers declared, (\d+) blockers declared, "
+        r"(\d+) attackers blocked\.",
+        text,
+    ) == (combats, attackers, blockers, blocked)
     assert numbers(r"Damage: (\d+) dealt, (\d+) of it combat damage\.", text) == (
         damage,
         combat_damage,

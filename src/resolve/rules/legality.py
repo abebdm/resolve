@@ -12,12 +12,11 @@ Every legality question is an ``Action`` value. ``allowed(state, action)`` works
 
 Playing a land, casting a spell, targeting (``TargetAction``, through
 ``resolve.rules.targeting.target_problem``), destroying (``DestroyAction``), countering
-(``CounterAction``) and attacking (``AttackAction``, 508.1a) exist so far; blocking joins them
-in M3.3, and activating
-abilities in M4 (until then a mana ability's own conditions decide: 602.5 in
-``ActivatedManaAbility.can_activate``). A function that asks the question calls
-``legality.allowed`` through the module, so a test or an effect that replaces ``permissions`` or
-``prohibitions`` is obeyed everywhere.
+(``CounterAction``), attacking (``AttackAction``, 508.1a) and blocking (``BlockAction``, 509.1a)
+exist so far; activating abilities joins them in M4 (until then a mana ability's own
+conditions decide: 602.5 in ``ActivatedManaAbility.can_activate``). A function that asks the
+question calls ``legality.allowed`` through the module, so a test or an effect that replaces
+``permissions`` or ``prohibitions`` is obeyed everywhere.
 
 The keyword prohibitions read abilities only through computed characteristics (a permanent's)
 or ``defaults.player_abilities`` (a player's), so abilities that effects grant (M5) need no
@@ -28,7 +27,8 @@ change here:
   them (113.6: a permanent's abilities function on the battlefield);
 - destroying: indestructible (702.12b);
 - countering: "can't be countered" (113.6g);
-- attacking: defender (702.3b).
+- attacking: defender (702.3b);
+- blocking: protection's blocking part, read from the attacker (702.16f, 702.16j).
 """
 
 from __future__ import annotations
@@ -142,6 +142,15 @@ class AttackAction(Action):
 
 
 @dataclass(frozen=True)
+class BlockAction(Action):
+    """``player``, a defending player (506.2), declares ``blocker`` as a blocker of ``attacker``
+    (509.1a, 802.4a), during a combat (``TurnState.combat``)."""
+
+    blocker: ObjectId
+    attacker: ObjectId
+
+
+@dataclass(frozen=True)
 class Permission(Immutable):
     """A rule or effect that allows an action: the CR ``rule`` and what it lets the player do."""
 
@@ -181,6 +190,8 @@ def permissions(state: GameState, action: Action) -> tuple[Permission, ...]:
         return _counter_permissions(state, action)
     if isinstance(action, AttackAction):
         return _attack_permissions(state, action)
+    if isinstance(action, BlockAction):
+        return _block_permissions(state, action)
     raise EngineError(f"no rule of legality covers {action!r}")
 
 
@@ -199,6 +210,8 @@ def prohibitions(state: GameState, action: Action) -> tuple[Prohibition, ...]:
         return _counter_prohibitions(state, action)
     if isinstance(action, AttackAction):
         return _attack_prohibitions(state, action)
+    if isinstance(action, BlockAction):
+        return _block_prohibitions(state, action)
     raise EngineError(f"no rule of legality covers {action!r}")
 
 
@@ -230,6 +243,8 @@ def _basis(action: Action) -> tuple[str, ...]:
         return ("701.6a",)
     if isinstance(action, AttackAction):
         return ("508.1a", "506.2")
+    if isinstance(action, BlockAction):
+        return ("509.1a", "802.4a")
     return ("101.2",)
 
 
@@ -430,3 +445,56 @@ def _attack_prohibitions(state: GameState, action: AttackAction) -> tuple[Prohib
     if has_keyword(characteristics(state, action.creature), Defender):
         return (Prohibition("702.3b", "it has defender"),)
     return ()
+
+
+def _block_permissions(state: GameState, action: BlockAction) -> tuple[Permission, ...]:
+    # 509.1a: during a combat, a defending player still in the game (506.2, 800.4a) may declare
+    # an untapped creature they control that isn't a battle as a blocker of a creature attacking
+    # them (802.4a; a planeswalker they control or a battle they protect, M4). These are the
+    # permission's conditions, not prohibitions: "can block as though it were untapped" (M5)
+    # adds a permission. Defender doesn't stop a creature blocking (702.3b).
+    turn = state.turn
+    combat = None if turn is None else turn.combat
+    if turn is None or combat is None or action.player not in combat.defending_players:
+        return ()
+    if state.player(action.player).left_game:
+        return ()
+    obj = state.objects.get(action.blocker)
+    if obj is None or obj.zone.kind is not ZoneKind.BATTLEFIELD:
+        return ()
+    if obj.controller != action.player or obj.tapped:
+        return ()
+    types = characteristics(state, action.blocker).card_types
+    if CardType.CREATURE not in types or CardType.BATTLE in types:
+        return ()
+    record = combat.attackers.get(action.attacker)
+    if record is None:
+        return ()
+    match record.target:
+        case AttackPlayer(player=player) if player == action.player:
+            pass
+        case _:
+            return ()  # 802.4a: it attacks another player, or nothing (506.4c)
+    return (Permission("509.1a", "block, with an untapped creature, a creature attacking them"),)
+
+
+def _block_prohibitions(state: GameState, action: BlockAction) -> tuple[Prohibition, ...]:
+    # Protection's blocking part, read from the attacker (the user moved it from M3.4 into M3.3,
+    # 2026-10-31, so that no block 702.16f forbids is accepted): 702.16f, an attacking creature
+    # with protection can't be blocked by creatures that have the stated quality; 702.16j, one
+    # with protection from everything can't be blocked by creatures. Protection on the blocker
+    # doesn't stop it blocking. 702.16k (from a player) has no quality yet (M2.8). Evasion and
+    # "can't block" arrive with their cards (M3.4, M3.5).
+    attacker = characteristics(state, action.attacker)
+    blocker = characteristics(state, action.blocker)
+    forbidden: list[Prohibition] = []
+    for ability in attacker.abilities:
+        match ability:
+            case Protection(quality=Everything()):
+                forbidden.append(Prohibition("702.16j", "it has protection from everything"))
+            case Protection(quality=quality) if quality.matches(blocker):
+                forbidden.append(Prohibition("702.16f", f"it has {ability.text.lower()}"))
+            case _:
+                pass
+    # 702.16m: redundant instances forbid it once.
+    return tuple(dict.fromkeys(forbidden))

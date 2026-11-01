@@ -476,9 +476,14 @@ def combat_damage_amount(state: GameState, creature: ObjectId) -> int:
 
 
 def blocks_allowed(state: GameState, creature: ObjectId) -> int | None:
-    """How many attackers ``creature`` may block (509.1a): one. ``None`` means any number
-    (Palace Guard, its own static ability in M3.3); "can block an additional creature" (M5)
-    raises it."""
+    """How many attackers ``creature`` may block (509.1a): one. ``None`` means any number: a
+    creature with "This creature can block any number of creatures." (``BlocksAnyNumber``,
+    Palace Guard), read from its computed characteristics. "Can block an additional creature"
+    (M5) raises it."""
+    from resolve.cards.primitives.combat import BlocksAnyNumber
+
+    if any(isinstance(a, BlocksAnyNumber) for a in characteristics(state, creature).abilities):
+        return None
     return 1
 
 
