@@ -30,7 +30,7 @@ import pytest
 
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import Assignment
-from resolve.engine.api import submit
+from resolve.engine.api import submit, view_for
 from resolve.engine.concede import concede
 from resolve.errors import InvalidAnswer
 from resolve.events.combat import BlockersDeclared
@@ -401,3 +401,108 @@ def test_509_1_a_full_combat_from_attacks_to_damage() -> None:
     assert state.player(P1).life == 17
     assert all(obj not in state.battlefield for obj in (bears, lions))
     assert giant in state.battlefield
+
+
+# --- From the test review: APNAP with another active player, concessions, 302.6, views ---------
+
+
+def test_802_4_apnap_order_starts_after_the_active_player() -> None:
+    """Four players with P2 active (101.4: APNAP order is P2, P3, P0, P1). P2 attacks P3, P0 and
+    P1, each of whom controls a Palace Guard: they declare in the order P3, P0, P1 (802.4), not
+    in seat order."""
+    scenario = Scenario(4)
+    attackers = scenario.battlefield(P2, ["Grizzly Bears", "Hill Giant", "Savannah Lions"])
+    for player in (P0, P1, P3):
+        scenario.battlefield(player, ["Palace Guard"])
+    scenario.at(Step.DECLARE_BLOCKERS, active=P2, begin=True)
+    scenario.attacking(P0, attackers[0])
+    scenario.attacking(P1, attackers[1])
+    scenario.attacking(P3, attackers[2])
+    state = scenario.build()
+    order: list[PlayerId] = []
+    while request_of(state).kind is DecisionKind.DECLARE_BLOCKERS:
+        order.append(request_of(state).player)
+        declare_blockers(state, {})
+    assert order == [P3, P0, P1]
+
+
+def test_800_4a_the_player_declaring_concedes() -> None:
+    """Three players; P0 attacks P1 (the Giant) and P2 (the Bears). P1 concedes while asked to
+    declare (104.3a): P1 leaves (800.4a) and P2 is asked next. The Giant, attacking a player who
+    left, ends up unblocked (509.1h) and deals no damage (800.4e)."""
+    scenario = Scenario(3)
+    giant, bears = scenario.battlefield(P0, ["Hill Giant", "Grizzly Bears"])
+    scenario.battlefield(P1, ["Test Wall"])
+    (wall2,) = scenario.battlefield(P2, ["Test Wall"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, giant)
+    scenario.attacking(P2, bears)
+    state = scenario.build()
+    assert request_of(state).player == P1
+    concede(state, P1)
+    request = request_of(state)
+    assert (request.kind, request.player) == (DecisionKind.DECLARE_BLOCKERS, P2)
+    declare_blockers(state, {wall2: (bears,)})
+    combat = combat_of(state)
+    assert (combat.attackers[giant].blocked, combat.attackers[bears].blocked) == (False, True)
+    pass_to(state, Phase.POSTCOMBAT_MAIN)
+    assert state.player(P0).life == 20 and state.player(P2).life == 20
+    assert invariant_violations(state) == []
+
+
+def test_800_4j_the_active_player_concedes_during_the_declaration() -> None:
+    """Three players; P0 attacks P1 and concedes while P1 is asked to declare. P0's creatures
+    leave the game (800.4a), so no creature is attacking: P1 isn't asked again (nothing to
+    block), the turn continues without an active player (800.4j), and the state stays
+    consistent."""
+    scenario = Scenario(3)
+    (giant,) = scenario.battlefield(P0, ["Hill Giant"])
+    scenario.battlefield(P1, ["Test Wall"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, giant)
+    state = scenario.build()
+    concede(state, P0)
+    assert combat_of(state).attackers == {} and combat_of(state).blockers == {}
+    assert request_of(state).kind is not DecisionKind.DECLARE_BLOCKERS
+    assert invariant_violations(state) == []
+
+
+def test_302_6_a_creature_that_just_arrived_can_block() -> None:
+    """Summoning sickness limits attacking and {T} abilities (302.6), not blocking: P1's Grizzly
+    Bears, under P1's control only since this turn, may block."""
+    scenario = Scenario(2)
+    (giant,) = scenario.battlefield(P0, ["Hill Giant"])
+    (bears,) = scenario.battlefield(P1, ["Grizzly Bears"], entered_turn=3)
+    scenario.at(Step.DECLARE_BLOCKERS, number=3, begin=True)
+    scenario.attacking(P1, giant)
+    state = scenario.build()
+    assert may_block(state) == (bears,)
+
+
+def test_702_16j_a_creature_with_protection_from_everything_can_block() -> None:
+    """Protection from everything stops the creature being blocked, not blocking (702.16j):
+    Test Untouchable may block Hill Giant."""
+    scenario = Scenario(2)
+    (giant,) = scenario.battlefield(P0, ["Hill Giant"])
+    (untouchable,) = scenario.battlefield(P1, ["Test Untouchable"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, giant)
+    state = scenario.build()
+    assert blockable(state, untouchable) == (giant,)
+
+
+def test_509_1g_every_player_sees_the_blocks() -> None:
+    """The combat state is public (design.md §17.18): after P1's declaration, every player's
+    view shows the Bears blocking the Giant, and the Giant blocked."""
+    scenario = Scenario(3)
+    (giant,) = scenario.battlefield(P0, ["Hill Giant"])
+    (bears,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, giant)
+    state = scenario.build()
+    declare_blockers(state, {bears: (giant,)})
+    for player in (P0, P1, P2):
+        view = view_for(state, player).combat
+        assert view is not None
+        assert view.blockers == (BlockRecord(bears, (giant,)),)
+        assert [record.blocked for record in view.attackers] == [True]

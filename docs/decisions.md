@@ -47,11 +47,15 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
     §6); the rest are grouped by `combat_damage_assigner`, and each player in APNAP order
     (510.1, 802.5) answers one `ASSIGN_COMBAT_DAMAGE` `DistributeEach` (minimum 0 per
     recipient). All damage is dealt once everyone has assigned, attackers' events first.
-    `CombatDamage.answered` keeps each answer with the space it answered; run again after a
-    concession it keeps an answer only if the player's space is unchanged, else asks again (the
-    733 reversal 510.1e names, for a changed board). The answers stay in the task until 510.2:
-    an announced assignment isn't in the views (no event records it), a limitation a UI may
-    need lifted later.
+    `CombatDamage.answered` keeps each announced answer. Run again after a concession (104.3a),
+    it keeps every announced assignment: leaving the game undoes no announcement (800.4a), and
+    510.1e's return to before the assignment is only for an illegal one. Damage assigned to
+    what has left combat since isn't dealt (the source's current recipients filter it, as 800.4e
+    does for a player who left); the players who haven't assigned yet are asked about the board
+    as it is now. (The first version asked a player again whenever their space had changed; the
+    test review pointed out that this let them change an announced assignment.) The answers
+    stay in the task until 510.2: an announced assignment isn't in the views (no event records
+    it), a limitation a UI may need lifted later.
   - The pinned fuzz-summary games can't be relied on to block (approval note 2), so a
     deterministic test (`test_game_stats_count_blockers_and_a_game_ended_by_combat_damage`)
     checks the `Combat:` line's blockers and blocked attackers and an ending by combat damage.

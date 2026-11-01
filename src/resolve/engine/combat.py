@@ -202,17 +202,27 @@ class CombatDamage(Task):
     a commander would deal to a player must be tallied (903.10a, M7): a gap until then, raised
     before anyone is asked or anything is dealt.
 
-    ``answered`` keeps each player's assignment with the space it answered. Run again after a
-    concession (104.3a), the task keeps an answer only if that player's space is unchanged,
-    and asks again otherwise.
+    ``answered`` keeps each player's announced assignment with the space it answered. Run again
+    after a concession (104.3a), the task keeps every announced assignment (leaving the game
+    undoes no announcement, 800.4a; 510.1e's return applies only to an illegal assignment): what
+    has left combat since isn't dealt the damage assigned to it, and the players who haven't
+    assigned yet are asked about the board as it is now.
     """
 
     answered: tuple[tuple[PlayerId, DistributeEach, AmountsEach], ...] = ()
 
     def run(self, state: GameState) -> TaskResult:
-        fixed: list[tuple[ObjectId, tuple[tuple[Option, int], ...]]] = []
+        current = dict(damage_recipients(state))
+        announced = self._announced()
+        assignments: list[tuple[ObjectId, tuple[tuple[Option, int], ...]]] = []
         divided: dict[PlayerId, list[tuple[ObjectId, Distribute]]] = {}
-        for creature, recipients in damage_recipients(state):
+        for creature, recipients in current.items():
+            if creature in announced:
+                # 510.1: its assignment was announced and stands; what has left combat since
+                # (a player who conceded took their creatures, 800.4a) isn't dealt damage.
+                still = [(r, amount) for r, amount in announced[creature] if r in recipients]
+                assignments.append((creature, tuple(still)))
+                continue
             if not recipients:
                 continue  # 510.1b-d: it assigns no combat damage
             amount = defaults.combat_damage_amount(state, creature)
@@ -225,47 +235,47 @@ class CombatDamage(Task):
                     "903.10a: tallying the combat damage a commander deals to a player (M7)"
                 )
             if len(recipients) == 1:
-                fixed.append((creature, ((recipients[0], amount),)))
+                assignments.append((creature, ((recipients[0], amount),)))
                 continue
             assigner = defaults.combat_damage_assigner(state, creature)
+            if any(player == assigner for player, _, _ in self.answered):
+                raise EngineError(
+                    f"player {assigner} has assigned combat damage, but not {creature}'s (510.1)"
+                )
             divided.setdefault(assigner, []).append(
                 (creature, Distribute(recipients, amount, minimum_each=0))
             )
-        kept: list[tuple[PlayerId, DistributeEach, AmountsEach]] = []
         for player in apnap_order(state):
             parts = divided.get(player)
             if not parts:
                 continue
-            space = DistributeEach(
-                tuple(ObjectOption(creature) for creature, _ in parts),
-                tuple(part for _, part in parts),
+            return NeedDecision(
+                player=player,
+                kind=DecisionKind.ASSIGN_COMBAT_DAMAGE,
+                space=DistributeEach(
+                    tuple(ObjectOption(creature) for creature, _ in parts),
+                    tuple(part for _, part in parts),
+                ),
+                prompt="Assign combat damage: divide each creature's damage among the "
+                "creatures it is blocking or blocked by.",
+                rules=("510.1", "510.1c", "510.1d", "510.1e", "802.5"),
             )
-            previous = next((a for p, sp, a in self.answered if p == player and sp == space), None)
-            if previous is None:
-                self.answered = tuple(kept)
-                return NeedDecision(
-                    player=player,
-                    kind=DecisionKind.ASSIGN_COMBAT_DAMAGE,
-                    space=space,
-                    prompt="Assign combat damage: divide each creature's damage among the "
-                    "creatures it is blocking or blocked by.",
-                    rules=("510.1", "510.1c", "510.1d", "510.1e", "802.5"),
-                )
-            kept.append((player, space, previous))
-        assignments = list(fixed)
-        for _, space, answer in kept:
+        events = _damage_events(state, assignments)
+        if not events:
+            return Done()
+        return Push((ApplyEvents(events),))
+
+    def _announced(self) -> dict[ObjectId, tuple[tuple[Option, int], ...]]:
+        """The assignments already announced (510.1), by source: each recipient and amount."""
+        announced: dict[ObjectId, tuple[tuple[Option, int], ...]] = {}
+        for _, space, answer in self.answered:
             for source, part, amounts in zip(
                 space.sources, space.parts, answer.amounts, strict=True
             ):
                 if not isinstance(source, ObjectOption):
                     raise EngineError(f"{source!r} isn't a creature dealing combat damage")
-                assignments.append(
-                    (source.object, tuple(zip(part.recipients, amounts.amounts, strict=True)))
-                )
-        events = _damage_events(state, assignments)
-        if not events:
-            return Done()
-        return Push((ApplyEvents(events),))
+                announced[source.object] = tuple(zip(part.recipients, amounts.amounts, strict=True))
+        return announced
 
     def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
         if not isinstance(request.space, DistributeEach) or not isinstance(answer, AmountsEach):

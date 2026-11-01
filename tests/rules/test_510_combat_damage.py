@@ -25,8 +25,6 @@ From the pinned CR:
 
 from __future__ import annotations
 
-from dataclasses import replace
-
 import pytest
 
 from resolve.decisions.kinds import DecisionKind
@@ -38,6 +36,7 @@ from resolve.events import pipeline
 from resolve.events.base import Event
 from resolve.events.damage import DamageDealt
 from resolve.events.game import PlayerLost
+from resolve.state.combat import remove_from_combat
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState
 from resolve.state.ids import PlayerId
@@ -398,6 +397,7 @@ def test_510_2_attacker_and_blocker_deal_damage_at_once_and_both_die(
         (attacker, ((blocker, 2),)),
         (blocker, ((attacker, 2),)),
     ]
+    assert all(isinstance(e, DamageDealt) and e.combat for e in batch)  # a blocker's too
     assert attacker not in state.battlefield and blocker not in state.battlefield
     assert life(state, P0, P1) == [20, 20]
 
@@ -411,10 +411,7 @@ def test_510_1d_a_blocker_whose_attacker_left_deals_no_damage() -> None:
     scenario.at(Step.COMBAT_DAMAGE, begin=True)
     scenario.attacking(P1, giant)
     scenario.blocking(bears, giant)
-    turn = scenario._state.turn  # pyright: ignore[reportPrivateUsage]
-    assert turn is not None and turn.combat is not None
-    del turn.combat.attackers[giant]
-    turn.combat.blockers[bears] = replace(turn.combat.blockers[bears], blocking=())
+    remove_from_combat(scenario._state, giant)  # pyright: ignore[reportPrivateUsage]
     state = scenario.build()
     assert records(state, DamageDealt) == []
     assert state.objects[giant].damage == 0
@@ -460,11 +457,11 @@ def test_802_5_damage_assignments_in_apnap_order() -> None:
     assert life(state, P1, P2, P3) == [20, 20, 20]
 
 
-def test_800_4a_a_player_leaving_during_the_assignment_asks_again() -> None:
+def test_800_4a_a_player_leaving_during_the_assignment_keeps_announced_ones() -> None:
     """Three players; P0 attacks P1 and P2. P0 has assigned the Giant's damage between P2's two
-    Walls; P1, asked for their Palace Guard, concedes instead. P1's Guard leaves, P0's earlier
-    assignment is unchanged (its creatures and recipients are the same) and kept, and the damage
-    is dealt: the Giant's to the Walls, the Bears' and Lions' to nothing (blocked, no blocker)."""
+    Walls; P1, asked for their Palace Guard, concedes instead. P1's Guard leaves (800.4a); P0
+    isn't asked again (P0's assignment was announced, 510.1), and the damage is dealt: the
+    Giant's to the Walls, the Bears' and Lions' to nothing (blocked, no blocker, 510.1c)."""
     scenario = Scenario(3)
     giant, bears, lions = scenario.battlefield(
         P0, ["Hill Giant", "Grizzly Bears", "Savannah Lions"]
@@ -484,3 +481,203 @@ def test_800_4a_a_player_leaving_during_the_assignment_asks_again() -> None:
     damage = {e.source: e.to_objects for e in records(state, DamageDealt)}
     assert damage == {giant: ((wall, 1), (wall2, 2))}
     assert life(state, P0, P2) == [20, 20]
+
+
+# --- From the test review: recipients that leave, 0 power, whole assignments, gaps -------------
+
+
+def test_800_4a_an_announced_assignment_stands_when_another_player_leaves() -> None:
+    """Four players; P0 attacks P2 with Hill Giant A, Grizzly Bears and Savannah Lions and P3
+    with Hill Giant B. P2's two Walls block Giant A and P2's Palace Guard the Bears and the
+    Lions; P3's two Walls block Giant B. P0 assigns both Giants' damage in one decision (A: 1
+    and 2; B: all 3 to P3's first Wall), then P2, asked for the Guard, concedes. P0's
+    assignment was announced (510.1) and leaving the game undoes no announcement (800.4a;
+    510.1e's return is only for an illegal assignment): P0 isn't asked again, Giant A's damage
+    to P2's departed Walls isn't dealt, and Giant B deals 3 to P3's first Wall as announced."""
+    scenario = Scenario(4)
+    giant_a, bears, lions, giant_b = scenario.battlefield(
+        P0, ["Hill Giant", "Grizzly Bears", "Savannah Lions", "Hill Giant"]
+    )
+    wall_a1, wall_a2, guard = scenario.battlefield(P2, ["Test Wall", "Test Wall", "Palace Guard"])
+    wall_b1, wall_b2 = scenario.battlefield(P3, ["Test Wall", "Test Wall"])
+    scenario.at(Step.COMBAT_DAMAGE, begin=True)
+    scenario.attacking(P2, giant_a, bears, lions)
+    scenario.attacking(P3, giant_b)
+    scenario.blocking(wall_a1, giant_a)
+    scenario.blocking(wall_a2, giant_a)
+    scenario.blocking(guard, bears, lions)
+    scenario.blocking(wall_b1, giant_b)
+    scenario.blocking(wall_b2, giant_b)
+    state = scenario.build()
+    assert damage_sources(state) == (giant_a, giant_b)
+    assign_damage(
+        state,
+        {
+            giant_a: {ObjectOption(wall_a1): 1, ObjectOption(wall_a2): 2},
+            giant_b: {ObjectOption(wall_b1): 3},
+        },
+    )
+    assert request_of(state).player == P2
+    concede(state, P2)
+    assert request_of(state).kind is not DecisionKind.ASSIGN_COMBAT_DAMAGE
+    damage = {e.source: e.to_objects for e in records(state, DamageDealt)}
+    assert damage == {giant_b: ((wall_b1, 3),)}
+    assert state.objects[wall_b1].damage == 3 and state.objects[wall_b2].damage == 0
+
+
+def test_510_1c_two_blockers_down_to_one_takes_all_without_a_question() -> None:
+    """Hill Giant was blocked by Test Wall and Grizzly Bears; the Bears have left combat. With
+    exactly one creature blocking it now, the Giant assigns all 3 to the Wall and nobody is
+    asked (510.1c: the blockers it has now)."""
+    scenario = Scenario(2)
+    (giant,) = scenario.battlefield(P0, ["Hill Giant"])
+    wall, bears = scenario.battlefield(P1, ["Test Wall", "Grizzly Bears"])
+    scenario.at(Step.COMBAT_DAMAGE, begin=True)
+    scenario.attacking(P1, giant)
+    scenario.blocking(wall, giant)
+    scenario.blocking(bears, giant)
+    remove_from_combat(scenario._state, bears)  # pyright: ignore[reportPrivateUsage]
+    state = scenario.build()
+    assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
+    damage = {e.source: e.to_objects for e in records(state, DamageDealt)}
+    assert damage == {giant: ((wall, 3),)}
+
+
+def test_510_1d_palace_guard_blocking_two_down_to_one_deals_all_to_it() -> None:
+    """Palace Guard blocked Grizzly Bears and Savannah Lions; the Lions have left combat. The
+    Guard blocks only the Bears now and deals its 1 to them without a question (510.1d)."""
+    scenario = Scenario(2)
+    bears, lions = scenario.battlefield(P0, ["Grizzly Bears", "Savannah Lions"])
+    (guard,) = scenario.battlefield(P1, ["Palace Guard"])
+    scenario.at(Step.COMBAT_DAMAGE, begin=True)
+    scenario.attacking(P1, bears, lions)
+    scenario.blocking(guard, bears, lions)
+    remove_from_combat(scenario._state, lions)  # pyright: ignore[reportPrivateUsage]
+    state = scenario.build()
+    assert request_of(state).kind is DecisionKind.PRIORITY_ACTION
+    damage = {e.source: e.to_objects for e in records(state, DamageDealt)}
+    assert damage == {bears: ((guard, 2),), guard: ((bears, 1),)}
+
+
+def test_510_1a_zero_power_with_two_recipients_isnt_asked() -> None:
+    """A creature with 0 power assigns no combat damage (510.1a), however many recipients:
+    Darksteel Myr (0/1) blocked by two creatures and Test Wall (0/4) blocking two attackers
+    aren't asked about, and deal nothing."""
+    scenario = Scenario(2)
+    myr, bears, lions = scenario.battlefield(
+        P0, ["Darksteel Myr", "Grizzly Bears", "Savannah Lions"]
+    )
+    wall, giant, spawn = scenario.battlefield(P1, ["Test Wall", "Hill Giant", "Test Spawn"])
+    scenario.at(Step.COMBAT_DAMAGE, begin=True)
+    scenario.attacking(P1, myr, bears, lions)
+    scenario.blocking(giant, myr)
+    scenario.blocking(spawn, myr)
+    scenario.blocking(wall, bears, lions)
+    state = scenario.build()
+    assert request_of(state).kind is not DecisionKind.ASSIGN_COMBAT_DAMAGE
+    sources = {e.source for e in records(state, DamageDealt)}
+    assert myr not in sources and wall not in sources
+
+
+def test_510_1e_one_decision_checks_the_whole_assignment() -> None:
+    """P0's Hill Giant and Test Regrower are each blocked by two creatures: P0 assigns both in
+    one decision with two parts (510.1e: the total assignment is checked). A legal first part
+    with an illegal second part is refused as a whole, nothing is dealt, and the same request
+    stays pending; a legal answer for both is accepted."""
+    scenario = Scenario(2)
+    giant, regrower = scenario.battlefield(P0, ["Hill Giant", "Test Regrower"])
+    w1, w2, w3, w4 = scenario.battlefield(P1, ["Test Wall", "Test Wall", "Test Wall", "Test Wall"])
+    scenario.at(Step.COMBAT_DAMAGE, begin=True)
+    scenario.attacking(P1, giant, regrower)
+    scenario.blocking(w1, giant)
+    scenario.blocking(w2, giant)
+    scenario.blocking(w3, regrower)
+    scenario.blocking(w4, regrower)
+    state = scenario.build()
+    request = request_of(state)
+    assert damage_sources(state) == (giant, regrower)
+    assert [part.total for part in damage_space(state).parts] == [3, 4]
+    with pytest.raises(InvalidAnswer):
+        submit(state, answer(state, AmountsEach((Amounts((3, 0)), Amounts((2, 1))))))
+    assert request_of(state) == request and records(state, DamageDealt) == []
+    submit(state, answer(state, AmountsEach((Amounts((3, 0)), Amounts((2, 2))))))
+    damage = {e.source: e.to_objects for e in records(state, DamageDealt)}
+    assert damage == {giant: ((w1, 3),), regrower: ((w3, 2), (w4, 2))}
+
+
+def test_903_10a_a_blocked_commander_deals_combat_damage_to_creatures() -> None:
+    """903.10a tallies only combat damage a commander deals to a player: P0's commander,
+    Grizzly Bears, blocked by Test Wall, deals its 2 to the Wall without the gap; P1's commander
+    Savannah Lions blocking Hill Giant deals its 2 to the Giant."""
+    scenario = Scenario(2, config=GameConfig.commander_game())
+    commander = scenario.commander(P0, "Grizzly Bears", zone=BATTLEFIELD)
+    blocker = scenario.commander(P1, "Savannah Lions", zone=BATTLEFIELD)
+    (giant,) = scenario.battlefield(P0, ["Hill Giant"])
+    (wall,) = scenario.battlefield(P1, ["Test Wall"])
+    scenario.at(Step.COMBAT_DAMAGE, begin=True)
+    scenario.attacking(P1, commander, giant)
+    scenario.blocking(wall, commander)
+    scenario.blocking(blocker, giant)
+    state = scenario.build()
+    damage = {e.source: e.to_objects for e in records(state, DamageDealt)}
+    assert damage[commander] == ((wall, 2),) and damage[blocker] == ((giant, 2),)
+
+
+def test_702_16e_protection_from_the_attackers_damage_is_a_gap_until_m6() -> None:
+    """Raging Goblin (red) is blocked by Repentant Blacksmith (protection from red): the
+    Goblin's combat damage to it would be prevented (702.16e), which is M6's prevention stage,
+    so it is a gap, raised before any damage is dealt."""
+    scenario = Scenario(2)
+    (goblin,) = scenario.battlefield(P0, ["Raging Goblin"])
+    (smith,) = scenario.battlefield(P1, ["Repentant Blacksmith"])
+    scenario.at(Step.COMBAT_DAMAGE, begin=True)
+    scenario.attacking(P1, goblin)
+    scenario.blocking(smith, goblin)
+    with pytest.raises(NotImplementedRule) as gap:
+        scenario.build()
+    assert gap.value.rule == "702.16e"
+    assert all(scenario._state.objects[o].damage == 0 for o in (goblin, smith))  # pyright: ignore[reportPrivateUsage]
+
+
+def test_506_4b_a_tapped_blocker_still_deals_and_is_dealt_damage() -> None:
+    """Tapping a blocker doesn't remove it from combat (506.4b): P1's Grizzly Bears, tapped
+    after blocking Savannah Lions, still deal their 2 and are dealt 2; both die."""
+    scenario = Scenario(2)
+    (lions,) = scenario.battlefield(P0, ["Savannah Lions"])
+    (bears,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    scenario.tap(bears)
+    scenario.at(Step.COMBAT_DAMAGE, begin=True)
+    scenario.attacking(P1, lions)
+    scenario.blocking(bears, lions)
+    state = scenario.build()
+    damage = {e.source: e.to_objects for e in records(state, DamageDealt)}
+    assert damage == {lions: ((bears, 2),), bears: ((lions, 2),)}
+    assert lions not in state.battlefield and bears not in state.battlefield
+
+
+def test_802_5_apnap_order_starts_with_the_active_player() -> None:
+    """Four players with P2 active (APNAP order P2, P3, P0, P1, 101.4). P2's Hill Giant is
+    blocked by two of P3's creatures, and P3's, P0's and P1's Palace Guards each block two of
+    P2's attackers: the assignments are asked in the order P2, P3, P0, P1 (510.1, 802.5)."""
+    scenario = Scenario(4)
+    giant, *others = scenario.battlefield(P2, ["Hill Giant"] + ["Grizzly Bears"] * 6)
+    guards = {p: scenario.battlefield(p, ["Palace Guard"])[0] for p in (P3, P0, P1)}
+    walls = scenario.battlefield(P3, ["Test Wall", "Test Wall"])
+    scenario.at(Step.COMBAT_DAMAGE, active=P2, begin=True)
+    scenario.attacking(P3, giant, others[0], others[1])
+    scenario.attacking(P0, others[2], others[3])
+    scenario.attacking(P1, others[4], others[5])
+    for wall in walls:
+        scenario.blocking(wall, giant)
+    scenario.blocking(guards[P3], others[0], others[1])
+    scenario.blocking(guards[P0], others[2], others[3])
+    scenario.blocking(guards[P1], others[4], others[5])
+    state = scenario.build()
+    order: list[PlayerId] = []
+    while request_of(state).kind is DecisionKind.ASSIGN_COMBAT_DAMAGE:
+        order.append(request_of(state).player)
+        (source,) = damage_sources(state)
+        first = damage_recipients(state, source)[0]
+        amount = 3 if source == giant else 1
+        assign_damage(state, {source: {first: amount}})
+    assert order == [P2, P3, P0, P1]

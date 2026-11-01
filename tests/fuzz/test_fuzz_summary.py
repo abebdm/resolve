@@ -350,8 +350,9 @@ def test_game_stats_count_blockers_and_a_game_ended_by_combat_damage() -> None:
     bears, giant = scenario.battlefield(PlayerId(0), ["Grizzly Bears", "Hill Giant"])
     (lions,) = scenario.battlefield(PlayerId(1), ["Savannah Lions"])
     scenario.life(PlayerId(1), 3)
-    scenario.at(TurnStep.DECLARE_ATTACKERS, begin=True)
+    scenario.at(TurnStep.BEGINNING_OF_COMBAT, begin=True)  # so that CombatBegan is logged
     state = scenario.build()
+    run_script(state, pass_(PlayerId(0)), pass_(PlayerId(1)))
     declare_attackers(state, {bears: PlayerId(1), giant: PlayerId(1)})
     pass_to(state, Phase.COMBAT, TurnStep.DECLARE_BLOCKERS)
     declare_blockers(state, {lions: (bears,)})

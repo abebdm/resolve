@@ -48,6 +48,7 @@ from resolve.engine.deck import Deck
 from resolve.engine.view import AbilityView, PlayerView
 from resolve.errors import InvalidAnswer
 from resolve.events.base import AnswerRecord, LogEntry
+from resolve.events.combat import BlockersDeclared
 from resolve.events.game import Conceded, PlayerLost
 from resolve.rules import defaults
 from resolve.state.config import GameConfig
@@ -1184,3 +1185,18 @@ def test_from_m3_3_the_only_allowed_gap_is_the_commander_tax() -> None:
     """M3.3 declares blockers, so 509.1 is no longer a gap a fuzz game may end at; only casting
     a commander from the command zone (903.8, the commander tax, M7) is (the M3 plan, section 8)."""
     assert fuzz_tool.ALLOWED_GAPS == ("903.8",)
+
+
+def test_random_agents_declare_blockers_and_assign_combat_damage_with_every_check() -> None:
+    """M3.3, on fixed decks (8 Forests and 6 Llanowar Elves each, so the outcome doesn't move
+    with the excerpt): random agents' game with seed 2 declares blockers (509.1), including two
+    creatures blocking one attacker, and answers an ``ASSIGN_COMBAT_DAMAGE`` (510.1c), with the
+    harness's every check (invariants, views, deepcopy and pickle, invalid answers probed,
+    replay) after each answer. The game ends normally."""
+    result = fuzz_game(GameConfig.standard(), [deck(8, 6), deck(8, 6)], 2)
+    assert result.gap is None and result.state.result is not None
+    records = [entry.record for entry in result.state.event_log]
+    blocks = [b for r in records if isinstance(r, BlockersDeclared) for b in r.blocks]
+    assert blocks, "blockers were declared"
+    kinds = {r.kind for r in records if isinstance(r, AnswerRecord)}
+    assert {DecisionKind.DECLARE_BLOCKERS, DecisionKind.ASSIGN_COMBAT_DAMAGE} <= kinds
