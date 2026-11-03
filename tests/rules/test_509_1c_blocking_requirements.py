@@ -46,7 +46,7 @@ from resolve.state.combat import CombatState
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.turn import Step
-from tests.casting_support import activate, pay, records, reverse
+from tests.casting_support import activate, records, reverse
 from tests.combat_support import block_space, declare_blockers, may_block
 from tests.game_fixtures import request_of
 from tests.scenario import Scenario, run_script
@@ -269,7 +269,9 @@ def test_802_4b_silent_arbiter_counts_one_defending_players_blockers() -> None:
     """802.4b (the interpretation in the module docstring): P1 blocks with one creature, then P2
     may still block with one of theirs; two of P2's are refused."""
     scenario = Scenario(3)
-    bears, lions, _ = scenario.battlefield(P0, ["Grizzly Bears", "Savannah Lions", "Silent Arbiter"])
+    bears, lions, _ = scenario.battlefield(
+        P0, ["Grizzly Bears", "Savannah Lions", "Silent Arbiter"]
+    )
     (one,) = scenario.battlefield(P1, ["Grizzly Bears"])
     two, three = scenario.battlefield(P2, ["Grizzly Bears", "Hill Giant"])
     scenario.at(Step.DECLARE_BLOCKERS, begin=True)
@@ -307,7 +309,7 @@ def test_block_tax_is_paid_once_per_blocking_creature() -> None:
     (payment,) = view_for(state, P1).payments
     assert payment.cost.text == "{2}"
     assert combat_of(state).blockers == {}
-    run_script(state, *(activate(land) for land in lands), pay())
+    run_script(state, *(activate(land) for land in lands))  # then nothing is left to ask
     assert set(combat_of(state).blockers) == {guard, giant}
     declared = [r for r in records(state, BlockersDeclared) if r.blocks]
     assert declared[0].cost is not None and declared[0].cost.text == "{2}"
@@ -322,7 +324,7 @@ def test_an_unpaid_block_cost_reverses_the_declaration() -> None:
     (509.1, 733.1): P1 reverses the Forest, nothing blocks, and P1 declares again."""
     state, bears, (guard, giant), (forest,) = _toll_board(1)
     declare_blockers(state, {guard: (bears,), giant: (bears,)})
-    run_script(state, activate(forest), pay(), reverse(ManaActivationOption(0, forest, 0)))
+    run_script(state, activate(forest), reverse(ManaActivationOption(0, forest, 0)))
     assert request_of(state).kind is DecisionKind.DECLARE_BLOCKERS
     assert request_of(state).player == P1
     assert combat_of(state).blockers == {}
@@ -331,5 +333,5 @@ def test_an_unpaid_block_cost_reverses_the_declaration() -> None:
     assert reversed_.player == P1 and reversed_.declaration
     declare_blockers(state, {guard: (bears,)})
     assert request_of(state).kind is DecisionKind.ACTIVATE_MANA_ABILITIES
-    run_script(state, activate(forest), pay())
+    run_script(state, activate(forest))
     assert blocked_by(state) == {guard: (bears,)}

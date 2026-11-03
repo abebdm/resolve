@@ -25,7 +25,7 @@ from resolve.state.combat import CombatState
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.turn import Phase, Step
-from tests.casting_support import activate, pay
+from tests.casting_support import activate
 from tests.combat_support import declare_attackers, declare_blockers, may_attack, pass_to
 from tests.game_fixtures import request_of
 from tests.scenario import Scenario, run_script
@@ -61,7 +61,7 @@ def board(*, tollkeeper: bool = False) -> tuple[GameState, dict[str, ObjectId]]:
 
 def attack_paying(state: GameState, c: dict[str, ObjectId]) -> None:
     declare_attackers(state, {c["unicorn"]: P1})
-    run_script(state, activate(c["plains0"]), activate(c["plains1"]), pay())
+    run_script(state, activate(c["plains0"]), activate(c["plains1"]))
     pass_to(state, Phase.COMBAT, Step.DECLARE_BLOCKERS)
     assert request_of(state).kind is DecisionKind.DECLARE_BLOCKERS
 
@@ -103,5 +103,5 @@ def test_paid_an_unpaid_block_cost_isnt_required() -> None:
     state, c = board(tollkeeper=True)
     attack_paying(state, c)
     declare_blockers(state, {c["bears"]: (c["unicorn"],)})
-    run_script(state, activate(c["forest"]), pay())
+    run_script(state, activate(c["forest"]))
     assert set(combat_of(state).blockers) == {c["bears"]}

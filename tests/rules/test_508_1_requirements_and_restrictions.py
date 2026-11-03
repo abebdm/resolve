@@ -37,10 +37,17 @@ you control (M4).
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import pytest
 
 from resolve.decisions.kinds import DecisionKind
-from resolve.decisions.spaces import ManaActivationOption, NotAlone, ObjectOption
+from resolve.decisions.spaces import (
+    ActivateAbilityOption,
+    ManaActivationOption,
+    NotAlone,
+    ObjectOption,
+)
 from resolve.engine.api import submit, view_for
 from resolve.errors import InvalidAnswer
 from resolve.events.combat import AttackersDeclared
@@ -51,7 +58,7 @@ from resolve.state.combat import AttackPlayer, CombatState
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
 from resolve.state.turn import Step
-from tests.casting_support import activate, options, pay, records, reverse
+from tests.casting_support import activate, options, records, reverse
 from tests.combat_support import attack_answer, attack_space, declare_attackers, may_attack
 from tests.game_fixtures import answer, request_of
 from tests.scenario import Scenario, run_script
@@ -75,21 +82,17 @@ def refused(state: GameState, attacks: dict[ObjectId, PlayerId]) -> bool:
     return False
 
 
-def accepts(make: object, attacks: dict[ObjectId, PlayerId]) -> bool:
+def accepts(make: Callable[[], GameState], attacks: dict[ObjectId, PlayerId]) -> bool:
     """Whether a fresh state from ``make()`` accepts ``attacks``."""
-    assert callable(make)
-    state: GameState = make()
-    return not refused(state, attacks)
-
-
+    return not refused(make(), attacks)
 
 
 # --- 508.1d: "attacks each combat if able" (Juggernaut) ----------------------------------------
 
 
-def _juggernaut_board(**kw: int) -> tuple[GameState, ObjectId, ObjectId]:
+def _juggernaut_board() -> tuple[GameState, ObjectId, ObjectId]:
     scenario = Scenario(2)
-    juggernaut, bears = scenario.battlefield(P0, ["Juggernaut", "Grizzly Bears"], **kw)
+    juggernaut, bears = scenario.battlefield(P0, ["Juggernaut", "Grizzly Bears"])
     scenario.at(Step.DECLARE_ATTACKERS, begin=True)
     return scenario.build(), juggernaut, bears
 
@@ -302,7 +305,10 @@ def test_topiary_style_restriction() -> None:
 
 
 def _prison_board(
-    players: int = 2, plains: int = 2, prisons: int = 1, creatures: tuple[str, ...] = ("Grizzly Bears",)
+    players: int = 2,
+    plains: int = 2,
+    prisons: int = 1,
+    creatures: tuple[str, ...] = ("Grizzly Bears",),
 ) -> tuple[GameState, list[ObjectId], list[ObjectId]]:
     scenario = Scenario(players)
     attackers = scenario.battlefield(P0, list(creatures))
@@ -331,7 +337,9 @@ def test_ghostly_prison_costs_2_per_creature_attacking_its_controller() -> None:
     cost {4} ({2} for each) is locked in (508.1h) and P0 pays it with four Plains, activating
     their mana abilities (508.1i-j). Then they attack (508.1k), and the declaration's event
     records the cost."""
-    state, (bears, lions), plains = _prison_board(plains=4, creatures=("Grizzly Bears", "Savannah Lions"))
+    state, (bears, lions), plains = _prison_board(
+        plains=4, creatures=("Grizzly Bears", "Savannah Lions")
+    )
     declare_attackers(state, {bears: P1, lions: P1})
     request = request_of(state)
     assert request.kind is DecisionKind.ACTIVATE_MANA_ABILITIES and request.player == P0
@@ -339,7 +347,8 @@ def test_ghostly_prison_costs_2_per_creature_attacking_its_controller() -> None:
     assert payment.cost.text == "{4}"
     assert state.objects[bears].tapped and state.objects[lions].tapped  # 508.1f came first
     assert combat_of(state).attackers == {}
-    run_script(state, *(activate(p) for p in plains), pay())
+    # With every mana ability activated nothing is left to ask: the cost is paid.
+    run_script(state, *(activate(p) for p in plains))
     assert set(combat_of(state).attackers) == {bears, lions}
     (declared,) = records(state, AttackersDeclared)
     assert declared.cost is not None and declared.cost.text == "{4}"
@@ -392,7 +401,7 @@ def test_an_unpaid_cost_reverses_the_declaration_and_asks_again() -> None:
     again."""
     state, (bears,), (plains,) = _prison_board(plains=1)
     declare_attackers(state, {bears: P1})
-    run_script(state, activate(plains), pay())
+    run_script(state, activate(plains))  # no ability left to activate: it tries to pay
     request = request_of(state)
     assert request.kind is DecisionKind.REVERSE_MANA_ABILITIES and request.player == P0
     run_script(state, reverse(ManaActivationOption(0, plains, 0)))
@@ -412,7 +421,7 @@ def test_a_kept_mana_ability_stays_after_the_reversal() -> None:
     tapped and its {W} stays in P0's pool; the Bears untap."""
     state, (bears,), (plains,) = _prison_board(plains=1)
     declare_attackers(state, {bears: P1})
-    run_script(state, activate(plains), pay(), reverse())
+    run_script(state, activate(plains), reverse())
     assert request_of(state).kind is DecisionKind.DECLARE_ATTACKERS
     assert state.objects[plains].tapped and len(state.player(P0).mana_pool) == 1
     assert not state.objects[bears].tapped
@@ -428,10 +437,9 @@ def test_508_1f_attackers_tap_before_costs() -> None:
     scenario.at(Step.DECLARE_ATTACKERS, begin=True)
     state = scenario.build()
     declare_attackers(state, {elves: P1})
-    offered = [o for o in options(state) if o != pay().options[0]]
-    sources = {getattr(o, "source", None) for o in offered}
-    assert sources == {forest}
-    run_script(state, activate(forest), pay(), reverse(ManaActivationOption(0, forest, 0)))
+    offered = {o.object for o in options(state) if isinstance(o, ActivateAbilityOption)}
+    assert offered == {forest}
+    run_script(state, activate(forest), reverse(ManaActivationOption(0, forest, 0)))
     assert request_of(state).kind is DecisionKind.DECLARE_ATTACKERS
     assert not state.objects[elves].tapped
 

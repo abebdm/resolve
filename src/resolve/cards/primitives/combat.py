@@ -38,7 +38,6 @@ So far:
 from __future__ import annotations
 
 from dataclasses import dataclass
-
 from typing import TYPE_CHECKING
 
 from resolve.cards.keywords.qualities import Quality

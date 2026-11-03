@@ -461,16 +461,18 @@ def numbers(pattern: str, text: str) -> tuple[float, ...]:
 # The excerpt's cards, by hand: the noncreature ones, and the creatures.
 NONCREATURES = [
     "Arcane Signet", "Cancel", "Chandra's Ignition", "Command Tower", "Cryptic Command",
-    "Darksteel Relic", "Decimate", "Emerald Medallion", "Fiery Confluence", "Rishkar's Expertise",
-    "Selesnya Signet", "Sol Ring", "Swords to Plowshares", "Temple of the False God",
+    "Darksteel Relic", "Decimate", "Emerald Medallion", "Fiery Confluence", "Ghostly Prison",
+    "Rishkar's Expertise", "Selesnya Signet", "Sol Ring", "Swords to Plowshares",
+    "Temple of the False God",
 ]  # fmt: skip
-# Repentant Blacksmith is left out (``FUZZ_EXCLUSIONS``: 702.16e until M6).
+# Repentant Blacksmith and Nacatl Savage are left out (``FUZZ_EXCLUSIONS``: 702.16e until M6).
 CREATURES = [
     "Alaborn Grenadier", "Ashcoat Bear", "Avacyn's Pilgrim", "Bog Raiders", "Darksteel Myr",
     "Deranged Whelp", "Giant Spider", "Gladecover Scout", "Grizzly Bears", "Highborn Ghoul",
-    "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper", "Kinjalli's Caller", "Llanowar Elves",
-    "Nacatl Savage", "Palace Guard", "Phantom Warrior", "Raging Goblin", "Savannah Lions",
-    "Severed Legion", "Wall of Stone", "Wind Drake",
+    "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper", "Juggernaut", "Kinjalli's Caller",
+    "Llanowar Elves", "Mogg Flunkies", "Palace Guard", "Phantom Warrior", "Prized Unicorn",
+    "Raging Goblin", "Savannah Lions", "Severed Legion", "Silent Arbiter", "Wall of Stone",
+    "Wind Drake",
 ]  # fmt: skip
 
 
@@ -487,7 +489,7 @@ def expected_deck(recipe: str, copies: int) -> Counter[str]:
 def test_the_recipes_hold_the_excerpt_minus_the_exclusions() -> None:
     assert fuzz_tool.recipe_cards("spells") == (
         "Arcane Signet", "Cancel", "Chandra's Ignition", "Command Tower", "Cryptic Command",
-        "Darksteel Relic", "Decimate", "Emerald Medallion", "Fiery Confluence",
+        "Darksteel Relic", "Decimate", "Emerald Medallion", "Fiery Confluence", "Ghostly Prison",
         "Rishkar's Expertise", "Selesnya Signet", "Sol Ring", "Swords to Plowshares",
         "Temple of the False God",
     )  # fmt: skip
@@ -495,13 +497,14 @@ def test_the_recipes_hold_the_excerpt_minus_the_exclusions() -> None:
         "Alaborn Grenadier", "Arcane Signet", "Ashcoat Bear", "Avacyn's Pilgrim", "Bog Raiders",
         "Cancel", "Chandra's Ignition", "Command Tower", "Cryptic Command", "Darksteel Myr",
         "Darksteel Relic", "Decimate", "Deranged Whelp", "Emerald Medallion", "Fiery Confluence",
-        "Giant Spider", "Gladecover Scout", "Grizzly Bears", "Highborn Ghoul", "Hill Giant",
-        "Humble Budoka", "Ixalli's Lorekeeper", "Kinjalli's Caller", "Llanowar Elves",
-        "Nacatl Savage", "Palace Guard", "Phantom Warrior", "Raging Goblin",
-        "Rishkar's Expertise", "Savannah Lions", "Selesnya Signet", "Severed Legion", "Sol Ring",
-        "Swords to Plowshares", "Temple of the False God", "Wall of Stone", "Wind Drake",
+        "Ghostly Prison", "Giant Spider", "Gladecover Scout", "Grizzly Bears", "Highborn Ghoul",
+        "Hill Giant", "Humble Budoka", "Ixalli's Lorekeeper", "Juggernaut", "Kinjalli's Caller",
+        "Llanowar Elves", "Mogg Flunkies", "Palace Guard", "Phantom Warrior", "Prized Unicorn",
+        "Raging Goblin", "Rishkar's Expertise", "Savannah Lions", "Selesnya Signet",
+        "Severed Legion", "Silent Arbiter", "Sol Ring", "Swords to Plowshares",
+        "Temple of the False God", "Wall of Stone", "Wind Drake",
     )  # fmt: skip
-    assert list(fuzz_tool.FUZZ_EXCLUSIONS) == ["Repentant Blacksmith"]
+    assert list(fuzz_tool.FUZZ_EXCLUSIONS) == ["Repentant Blacksmith", "Nacatl Savage"]
     for recipe in fuzz_tool.RECIPES:
         for copies in (8, 2):
             deck = fuzz_tool.recipe_deck(recipe, copies)

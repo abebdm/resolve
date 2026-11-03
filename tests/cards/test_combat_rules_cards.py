@@ -100,7 +100,10 @@ def test_the_primitives_texts() -> None:
         "Creatures can't block unless their controller pays {1} for each creature they control "
         "that's blocking."
     )
-    assert AtMostCreatures(2, blocking=True).text == "No more than two creatures can block each combat."
+    assert (
+        AtMostCreatures(2, blocking=True).text
+        == "No more than two creatures can block each combat."
+    )
     assert CantBeBlockedBy(SubtypeQuality(SubtypeWord("Elf"))).text == (
         "This creature can't be blocked by Elves."
     )

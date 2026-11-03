@@ -129,9 +129,7 @@ def test_508_1d_example_at_most_one_and_a_creature_that_attacks_if_able() -> Non
     """508.1d's example: A attacks if able, B has no abilities, at most one creature attacks.
     The only legal attack is A alone: B alone obeys no requirement where 1 can be obeyed, both
     break AtMost, neither obeys none."""
-    space = ChooseAssignment(
-        (A, B), ((P1,), (P1,)), (1, 1), (AtMost(1),), (Requirement(A, (P1,)),)
-    )
+    space = ChooseAssignment((A, B), ((P1,), (P1,)), (1, 1), (AtMost(1),), (Requirement(A, (P1,)),))
     assert most_obeyable(space) == 1
     assert legal(space, (0,), ())
     assert not legal(space, (), (0,))
@@ -262,13 +260,12 @@ def test_a_paid_declaration_must_still_obey_the_cost_free_maximum() -> None:
 
 
 def _random_space(rng: Rng) -> ChooseAssignment:
-    """A random declaration of 2 to 5 items over 4 choices (at most 2 picks each), with random menace, NotAlone and
-    AtMost constraints, requirements and costly picks."""
+    """A random declaration of 2 to 5 items over 4 choices (at most 2 picks each), with random
+    menace, NotAlone and AtMost constraints, requirements and costly picks."""
     choices = (X, Y, Z, ObjectOption(ObjectId(4)))
     items = tuple(ObjectOption(ObjectId(20 + i)) for i in range(2 + rng.randbelow(4)))
     own = tuple(
-        tuple(c for c in choices if rng.randbelow(3)) or (choices[rng.randbelow(4)],)
-        for _ in items
+        tuple(c for c in choices if rng.randbelow(3)) or (choices[rng.randbelow(4)],) for _ in items
     )
     maxima = tuple(1 + rng.randbelow(min(2, len(o))) for o in own)
     constraints: list[NoneOrAtLeast | NotAlone | AtMost] = [
@@ -286,7 +283,9 @@ def _random_space(rng: Rng) -> ChooseAssignment:
         CostlyPick(item, c) for item, o in zip(items, own, strict=True) for c in o
         if not rng.randbelow(4)
     ]  # fmt: skip
-    return ChooseAssignment(items, own, maxima, tuple(constraints), tuple(requirements), tuple(costly))
+    return ChooseAssignment(
+        items, own, maxima, tuple(constraints), tuple(requirements), tuple(costly)
+    )
 
 
 def _brute_force_most(space: ChooseAssignment) -> int:
@@ -297,7 +296,7 @@ def _brute_force_most(space: ChooseAssignment) -> int:
     from resolve.decisions.assignment import broken_constraints
 
     costly = {(p.item, p.choice) for p in space.costly}
-    per_item = []
+    per_item: list[list[tuple[int, ...]]] = []
     for item, own, maximum in zip(space.items, space.choices, space.maxima, strict=True):
         free = [i for i, c in enumerate(own) if (item, c) not in costly]
         per_item.append(

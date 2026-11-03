@@ -310,7 +310,10 @@ class _Model:
         candidates = [self.candidates(item) for item in group]
         if rng is not None:
             candidates = [_shuffled(rng, c) for c in candidates]
-        bounds = [max(self.obeyed(item, c) for c in cs) for item, cs in zip(group, candidates)]
+        bounds = [
+            max(self.obeyed(item, c) for c in cs)
+            for item, cs in zip(group, candidates, strict=True)
+        ]
         suffix = [0] * (len(group) + 1)
         for position in range(len(group) - 1, -1, -1):
             suffix[position] = suffix[position + 1] + bounds[position]

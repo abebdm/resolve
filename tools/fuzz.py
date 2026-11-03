@@ -84,6 +84,7 @@ from resolve.cards.registry import default_registry
 from resolve.data.cards import CardDatabase, CardDataError, load_card_database, load_card_excerpt
 from resolve.data.decklist import DeckEntry, Decklist, DecklistError, load_decklist
 from resolve.data.types import CardType
+from resolve.decisions.assignment import most_obeyable
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer, DecisionRequest
 from resolve.decisions.spaces import (
@@ -92,6 +93,7 @@ from resolve.decisions.spaces import (
     AmountsEach,
     AnswerValue,
     Assignment,
+    AtMost,
     ChooseAssignment,
     ChooseCounts,
     ChooseNumber,
@@ -100,6 +102,8 @@ from resolve.decisions.spaces import (
     ChooseSubset,
     Distribute,
     DistributeEach,
+    NoneOrAtLeast,
+    NotAlone,
     Number,
     Order,
     Pick,
@@ -494,7 +498,7 @@ def invalid_answers(
                 answer(Amounts((maxima[0] + 1,) + (0,) * (len(options) - 1))),
                 answer(Amounts((-1,) + (0,) * (len(options) - 1))),
             ]
-        case ChooseAssignment(choices=choices, maxima=maxima, constraints=constraints):
+        case ChooseAssignment(choices=choices, maxima=maxima, constraints=constraints) as space:
             empty = ((),) * (len(choices) - 1)
             wrong += [
                 answer(Assignment(())),
@@ -510,13 +514,31 @@ def invalid_answers(
                 if len(options) >= 2 and maximum >= 2:
                     wrong.append(answer(Assignment((*before, (1, 0), *after))))
             for constraint in constraints:
-                # 509.1b: one item alone picking a NoneOrAtLeast choice (menace, one blocker).
-                for index, options in enumerate(choices):
-                    if constraint.choice in options:
+                match constraint:
+                    case NoneOrAtLeast(choice=choice):
+                        # 509.1b: one item alone picking the choice (menace, one blocker).
+                        for index, options in enumerate(choices):
+                            if choice in options:
+                                before = ((),) * index
+                                after = ((),) * (len(choices) - index - 1)
+                                alone = (options.index(choice),)
+                                wrong.append(answer(Assignment((*before, alone, *after))))
+                                break
+                    case NotAlone(item=item):
+                        # 508.1c, 509.1b: the item picking alone (Mogg Flunkies).
+                        index = space.items.index(item)
                         before, after = ((),) * index, ((),) * (len(choices) - index - 1)
-                        alone = (options.index(constraint.choice),)
-                        wrong.append(answer(Assignment((*before, alone, *after))))
-                        break
+                        wrong.append(answer(Assignment((*before, (0,), *after))))
+                    case AtMost(count=count) if count < len(choices):
+                        # 508.1c, 509.1b: one item too many picking (Silent Arbiter).
+                        picking = ((0,),) * (count + 1)
+                        rest = ((),) * (len(choices) - count - 1)
+                        wrong.append(answer(Assignment((*picking, *rest))))
+                    case AtMost():
+                        pass
+            if space.requirements and most_obeyable(space) > 0:
+                # 508.1d, 509.1c: obeying no requirement when some can be obeyed for free.
+                wrong.append(answer(Assignment(((),) * len(choices))))
         case DistributeEach(parts=parts):
             fitting = tuple(Amounts((p.total,) + (0,) * (len(p.recipients) - 1)) for p in parts)
             first, rest = parts[0], fitting[1:]
@@ -1023,6 +1045,7 @@ RECIPES = (SPELLS, CREATURES)
 # Cards kept out of the fuzz decks, with the reason.
 FUZZ_EXCLUSIONS: dict[str, str] = {
     "Repentant Blacksmith": "702.16e (M6): damage from red sources to it would be prevented",
+    "Nacatl Savage": "702.16e (M6): damage from artifacts (Juggernaut) to it would be prevented",
 }
 
 
