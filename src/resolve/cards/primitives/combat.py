@@ -38,16 +38,13 @@ So far:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 
 from resolve.cards.keywords.qualities import Quality
 from resolve.cards.primitives.base import Ability
 from resolve.cards.primitives.conditions import NUMBER_WORDS, ControlsAtLeast
 from resolve.cards.primitives.refs import ThisObject
+from resolve.data.mana_cost import ManaCost
 from resolve.values import Immutable
-
-if TYPE_CHECKING:
-    from resolve.data.mana_cost import ManaCost
 
 _THIS_OBJECT = ThisObject()
 
