@@ -489,6 +489,9 @@ def test_a_defending_player_conceding_while_the_attack_cost_is_paid() -> None:
     (payment,) = view_for(state, P0).payments
     assert payment.cost.text == "{2}"
     run_script(state, *(activate(p) for p in plains))
+    # 508.1k: both creatures are still P0's, so both attack; the Bears attack a player who has
+    # left, and deal them no damage (800.4e).
+    assert combat_of(state).attackers[bears].target == AttackPlayer(P1)
     assert lions in combat_of(state).attackers
     (declared,) = records(state, AttackersDeclared)
     assert declared.cost is not None and declared.cost.text == "{2}"
@@ -502,3 +505,66 @@ def test_the_attacking_player_conceding_while_paying_ends_the_declaration() -> N
     concede(state, P0)
     assert records(state, AttackersDeclared) == []
     assert state.player(P0).left_game
+
+
+# --- From the test review -------------------------------------------------------------------------
+
+
+def test_paying_for_one_creature_doesnt_excuse_a_free_requirement() -> None:
+    """508.1d (the M3 plan's Q2 reading): three players, Ghostly Prison controlled by P1; P0 has
+    Juggernaut and Grizzly Bears. Juggernaut can attack P2 for free, so the cost-free maximum is
+    1: the Bears alone attacking P1 (paying) obey 0 and are refused. Juggernaut attacking P1,
+    paying, obeys 1 and is accepted: the {2} is asked."""
+    state, (juggernaut, bears), _ = _prison_board(
+        players=3, creatures=("Juggernaut", "Grizzly Bears")
+    )
+    assert refused(state, {bears: P1})
+    declare_attackers(state, {juggernaut: P1})
+    assert request_of(state).kind is DecisionKind.ACTIVATE_MANA_ABILITIES
+    (payment,) = view_for(state, P0).payments
+    assert payment.cost.text == "{2}"
+
+
+def test_taxes_of_two_defending_players_add_up() -> None:
+    """508.1h: three players, P1 and P2 each control a Ghostly Prison; Grizzly Bears attacking P1
+    and Savannah Lions attacking P2 cost {2} each, {4} in all."""
+    scenario = Scenario(3)
+    bears, lions = scenario.battlefield(P0, ["Grizzly Bears", "Savannah Lions"])
+    scenario.battlefield(P0, ["Plains"] * 4)
+    scenario.battlefield(P1, ["Ghostly Prison"])
+    scenario.battlefield(P2, ["Ghostly Prison"])
+    scenario.at(Step.DECLARE_ATTACKERS, begin=True)
+    state = scenario.build()
+    declare_attackers(state, {bears: P1, lions: P2})
+    (payment,) = view_for(state, P0).payments
+    assert payment.cost.text == "{4}"
+
+
+def test_stomper_counts_only_its_controllers_lands() -> None:
+    """508.1c: "you control" is Test Stomper's controller: P0 controls six Forests and P1 seven,
+    so the Stomper still can't attack."""
+    scenario = Scenario(2)
+    (stomper,) = scenario.battlefield(P0, ["Test Stomper", *["Forest"] * 6])[:1]
+    scenario.battlefield(P1, ["Forest"] * 7)
+    scenario.battlefield(P0, ["Grizzly Bears"])
+    scenario.at(Step.DECLARE_ATTACKERS, begin=True)
+    state = scenario.build()
+    assert stomper not in may_attack(state)
+
+
+def test_silent_arbiter_keeps_mogg_flunkies_home() -> None:
+    """508.1c: with at most one attacker, Mogg Flunkies would always attack alone, so it can't
+    attack: Flunkies with Grizzly Bears breaks the limit, Flunkies alone breaks its own
+    restriction; the Bears alone are accepted."""
+
+    def make() -> GameState:
+        scenario = Scenario(2)
+        scenario.battlefield(P0, ["Mogg Flunkies", "Grizzly Bears"])
+        scenario.battlefield(P1, ["Silent Arbiter"])
+        scenario.at(Step.DECLARE_ATTACKERS, begin=True)
+        return scenario.build()
+
+    flunkies, bears = may_attack(make())
+    assert not accepts(make, {flunkies: P1, bears: P1})
+    assert not accepts(make, {flunkies: P1})
+    assert accepts(make, {bears: P1})

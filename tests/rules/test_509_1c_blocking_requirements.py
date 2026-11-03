@@ -360,3 +360,137 @@ def test_a_defending_player_conceding_while_paying_for_blocks() -> None:
     assert request.kind is DecisionKind.DECLARE_BLOCKERS and request.player == P2
     assert combat_of(state).blockers == {}
     assert [r for r in records(state, BlockersDeclared) if r.blocks] == []
+
+
+# --- From the test review: requirements together with restrictions and costs --------------------
+
+
+def test_silent_arbiter_and_prized_unicorn_exactly_one_blocks_the_unicorn() -> None:
+    """509.1b-c: Prized Unicorn and Hill Giant attack P1 (Grizzly Bears, Savannah Lions) with
+    Silent Arbiter on the battlefield. At most one creature blocks, and the most requirements
+    obeyable is 1, so exactly one blocks the Unicorn: no block, both blocking, or one blocking
+    the Giant are refused."""
+    scenario = Scenario(2)
+    unicorn, giant, _ = scenario.battlefield(P0, ["Prized Unicorn", "Hill Giant", "Silent Arbiter"])
+    bears, lions = scenario.battlefield(P1, ["Grizzly Bears", "Savannah Lions"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, unicorn, giant)
+    state = scenario.build()
+    assert refused(state, {})
+    assert refused(state, {bears: (unicorn,), lions: (unicorn,)})
+    assert refused(state, {bears: (giant,)})
+    declare_blockers(state, {lions: (unicorn,)})
+    assert blocked_by(state) == {lions: (unicorn,)}
+
+
+def test_mogg_flunkies_alone_against_a_unicorn_doesnt_block() -> None:
+    """Mogg Flunkies' ruling and 506.5: Prized Unicorn attacks P1, who controls only Mogg
+    Flunkies. Blocking alone breaks its restriction, so the requirement can't be obeyed: no
+    block is legal, and the Flunkies blocking is refused."""
+    scenario = Scenario(2)
+    (unicorn,) = scenario.battlefield(P0, ["Prized Unicorn"])
+    (flunkies,) = scenario.battlefield(P1, ["Mogg Flunkies"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, unicorn)
+    state = scenario.build()
+    assert refused(state, {flunkies: (unicorn,)})
+    declare_blockers(state, {})
+    assert combat_of(state).blockers == {}
+
+
+def test_mogg_flunkies_and_another_creature_must_both_block_a_unicorn() -> None:
+    """Mogg Flunkies' ruling: with another creature able to block, both must block (the
+    Unicorn's requirement on each): the Bears alone, or neither, are refused."""
+    scenario = Scenario(2)
+    (unicorn,) = scenario.battlefield(P0, ["Prized Unicorn"])
+    flunkies, bears = scenario.battlefield(P1, ["Mogg Flunkies", "Grizzly Bears"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, unicorn)
+    state = scenario.build()
+    assert refused(state, {bears: (unicorn,)})
+    assert refused(state, {})
+    declare_blockers(state, {flunkies: (unicorn,), bears: (unicorn,)})
+    assert blocked_by(state) == {flunkies: (unicorn,), bears: (unicorn,)}
+
+
+def test_two_mogg_flunkies_may_block_together() -> None:
+    """Mogg Flunkies' ruling: two of them may block together (each other's company), even
+    different attackers; one alone is refused."""
+    scenario = Scenario(2)
+    bears, lions = scenario.battlefield(P0, ["Grizzly Bears", "Savannah Lions"])
+    first, second = scenario.battlefield(P1, ["Mogg Flunkies", "Mogg Flunkies"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, bears, lions)
+    state = scenario.build()
+    assert refused(state, {first: (bears,)})
+    declare_blockers(state, {first: (bears,), second: (lions,)})
+    assert blocked_by(state) == {first: (bears,), second: (lions,)}
+
+
+def test_palace_guard_must_block_each_of_two_unicorns() -> None:
+    """509.1c: each Prized Unicorn is a requirement of its own on Palace Guard, which can block
+    any number: it must block both; blocking one obeys 1 of 2 and is refused."""
+    scenario = Scenario(2)
+    first, second = scenario.battlefield(P0, ["Prized Unicorn", "Prized Unicorn"])
+    (guard,) = scenario.battlefield(P1, ["Palace Guard"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, first, second)
+    state = scenario.build()
+    assert refused(state, {guard: (first,)})
+    declare_blockers(state, {guard: (first, second)})
+    assert blocked_by(state) == {guard: (first, second)}
+
+
+def test_sentry_facing_a_unicorn_blocks_the_unicorn() -> None:
+    """509.1c: Test Sentry has its own requirement (block anything) and the Unicorn's (block
+    it). Blocking the Unicorn obeys both, blocking Hill Giant only one: refused."""
+    scenario = Scenario(2)
+    unicorn, giant = scenario.battlefield(P0, ["Prized Unicorn", "Hill Giant"])
+    (sentry,) = scenario.battlefield(P1, ["Test Sentry"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, unicorn, giant)
+    state = scenario.build()
+    assert refused(state, {sentry: (giant,)})
+    declare_blockers(state, {sentry: (unicorn,)})
+
+
+def test_a_unicorn_with_menace_and_one_able_blocker_needs_no_block() -> None:
+    """702.111b with 509.1c: an attacker with menace (Deranged Whelp) can't be blocked by one
+    creature, so a lone blocker's requirement to block it can't be obeyed; with Test Sentry as
+    the only creature, not blocking is legal (the Whelp isn't even offered)."""
+    scenario = Scenario(2)
+    (whelp,) = scenario.battlefield(P0, ["Deranged Whelp"])
+    scenario.battlefield(P1, ["Test Sentry"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, whelp)
+    state = scenario.build()
+    assert request_of(state).kind is not DecisionKind.DECLARE_BLOCKERS
+    assert combat_of(state).attackers[whelp].blocked is False
+
+
+def test_a_blocker_can_tap_for_mana_to_pay_its_own_block_cost() -> None:
+    """509.1: blocking doesn't tap the blocker (unlike 508.1f), so P1's Llanowar Elves, blocking
+    under Test Tollkeeper, may tap for {G} to pay the {1} (509.1e-f), and blocks."""
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears", "Test Tollkeeper"])[:1]
+    (elves,) = scenario.battlefield(P1, ["Llanowar Elves"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True, number=3)  # P1 had turn 2: no sickness
+    scenario.attacking(P1, bears)
+    state = scenario.build()
+    declare_blockers(state, {elves: (bears,)})
+    run_script(state, activate(elves))
+    assert blocked_by(state) == {elves: (bears,)}
+    assert state.objects[elves].tapped
+
+
+def test_two_tollkeepers_cost_2_per_blocker() -> None:
+    """Two Test Tollkeepers: each adds {1} per blocking creature (509.1d), {2} for one."""
+    scenario = Scenario(2)
+    (bears,) = scenario.battlefield(P0, ["Grizzly Bears", "Test Tollkeeper", "Test Tollkeeper"])[:1]
+    (blocker,) = scenario.battlefield(P1, ["Grizzly Bears", "Forest", "Forest"])[:1]
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, bears)
+    state = scenario.build()
+    declare_blockers(state, {blocker: (bears,)})
+    (payment,) = view_for(state, P1).payments
+    assert payment.cost.text == "{2}"

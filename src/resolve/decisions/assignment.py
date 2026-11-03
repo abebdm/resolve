@@ -156,11 +156,11 @@ def _repair(
     """Repair the constraints ``picks`` breaks, in place, adding only ``allowed`` choices.
 
     First each ``NoneOrAtLeast`` choice picked by too few items (the constraints on one choice
-    taken together: the largest minimum) is filled up with randomly chosen other items that offer
-    it (allowed) and have room, or cleared from the items that picked it, with equal probability when both
-    are possible. Then, while a constraint is broken, it is repaired by removing picks only
-    (clearing the choice, a ``NotAlone`` item, or random picking items beyond an ``AtMost``):
-    picks only decrease and picking nothing breaks nothing, so this ends.
+    taken together: the largest minimum) is filled up with randomly chosen other items that
+    offer it (allowed) and have room, or cleared from the items that picked it, with equal
+    probability when both are possible. Then, while a constraint is broken, it is repaired by
+    removing picks only (clearing the choice, a ``NotAlone`` item, or random picking items beyond
+    an ``AtMost``): picks only decrease and picking nothing breaks nothing, so this ends.
     """
     minimums: dict[Option, int] = {}
     for constraint in space.constraints:
