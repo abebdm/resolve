@@ -58,7 +58,16 @@ from resolve.decisions.spaces import (
 from resolve.effects.characteristics import characteristics
 from resolve.errors import EngineError, InvalidAnswer, NotImplementedRule
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.mana import ForAbility, ForSpell, Mana, ManaType, PaymentPurpose, describe_mana
+from resolve.state.mana import (
+    ForAbility,
+    ForAttack,
+    ForBlock,
+    ForSpell,
+    Mana,
+    ManaType,
+    PaymentPurpose,
+    describe_mana,
+)
 from resolve.tasks import NeedDecision, Push
 from resolve.values import Immutable
 
@@ -225,11 +234,14 @@ class PayCosts:
     activations: list[ActivateManaAbility] = field(default_factory=list["ActivateManaAbility"])
 
     @property
-    def source(self) -> ObjectId:
-        """The spell, or the source of the ability, being paid for (the decisions' source)."""
+    def source(self) -> ObjectId | None:
+        """The spell, or the source of the ability, being paid for (the decisions' source);
+        ``None`` for a cost to attack or block (508.1h, 509.1d), which has no source."""
         match self.purpose:
             case ForSpell(spell=obj) | ForAbility(source=obj):
                 return obj
+            case ForAttack() | ForBlock():
+                return None
 
     def step(self, state: GameState) -> PaymentStep:
         """Ask, activate or finish; safe to call again after it asked (design.md §5)."""

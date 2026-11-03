@@ -40,7 +40,15 @@ from resolve.cards.keywords import (
     protection_from_each_color,
 )
 from resolve.cards.primitives.abilities import ActivatedManaAbility
-from resolve.cards.primitives.combat import PowerBlockRestriction
+from resolve.cards.primitives.combat import (
+    AttacksEachCombat,
+    BlocksEachCombat,
+    BlockTax,
+    CantAttackOrBlockUnless,
+    CreaturesYouControl,
+    PowerBlockRestriction,
+)
+from resolve.cards.primitives.conditions import ControlsAtLeast
 from resolve.cards.primitives.cost_modifiers import CostModifier, ModifierStep, SpellCostModifier
 from resolve.cards.primitives.costs import TapSelfCost
 from resolve.cards.primitives.effects import AddMana, DealDamage, Destroy, DrawCards
@@ -52,7 +60,7 @@ from resolve.cards.primitives.values import Fixed, X
 from resolve.cards.primitives.words import ColorWord
 from resolve.cards.registry import CardDefinition, CardRegistry
 from resolve.data.cards import CardDatabase, parse_card, parse_oracle_cards
-from resolve.data.mana_cost import ManaCost
+from resolve.data.mana_cost import ManaCost, parse_mana_cost
 from resolve.data.types import CardType, Color
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.request import DecisionAnswer, DecisionRequest
@@ -145,6 +153,16 @@ TEST_TWICE_HASTY_ELVES = CardDefinition(
 # M3.4: Champion of Lambholt's restriction alone, and flying with menace (509.1b).
 TEST_LAMBHOLT_WARDEN = CardDefinition("Test Lambholt Warden", abilities=(PowerBlockRestriction(),))
 TEST_FLYING_BRUTE = CardDefinition("Test Flying Brute", abilities=(Flying(), Menace()))
+# M3.5: Topiary Stomper's restriction; "attacks each combat if able" for every creature its
+# controller controls; 509.1c's example creature that blocks if able; a cost to block (509.1d).
+TEST_STOMPER = CardDefinition(
+    "Test Stomper", abilities=(CantAttackOrBlockUnless(ControlsAtLeast(7, CardType.LAND)),)
+)
+TEST_WARMONGER = CardDefinition(
+    "Test Warmonger", abilities=(AttacksEachCombat(CreaturesYouControl()),)
+)
+TEST_SENTRY = CardDefinition("Test Sentry", abilities=(BlocksEachCombat(),))
+TEST_TOLLKEEPER = CardDefinition("Test Tollkeeper", abilities=(BlockTax(parse_mana_cost("{1}")),))
 # This spell can't be countered. Test Stubborn Spell deals 1 damage to any target.
 TEST_STUBBORN_SPELL = CardDefinition(
     "Test Stubborn Spell",
@@ -219,7 +237,8 @@ def scenario_registry() -> CardRegistry:
     Test Ember ({1}{C}), Test Wall (0/4), Test Regrower (4/3) and Test Spawn (2/3), Test Totem
     (an enchantment), Test Artifact Land Creature, the keyword example cards, the combat-rules
     cards (Palace Guard, Phantom Warrior), Cryptic Command, M2.8's keyword fixtures, Test
-    Lambholt Warden and Test Flying Brute (and an
+    Lambholt Warden and Test Flying Brute, M3.5's Test Stomper, Test Warmonger, Test Sentry and
+    Test Tollkeeper (and an
     adventurer, Test Adventurer // Test Quest), the cost reducers, Test Thorn (a cost increase),
     Test Growth ({X}{G}), Rishkar's Expertise, Test Two-Tone ({1}{W/U}{W/U}, no text), Test
     Insight (no mana cost) and Test Quake // Test Pebble (a split card of mana value 8 whose
@@ -276,6 +295,10 @@ def scenario_registry() -> CardRegistry:
             TEST_TWICE_HASTY_ELVES,
             TEST_LAMBHOLT_WARDEN,
             TEST_FLYING_BRUTE,
+            TEST_STOMPER,
+            TEST_WARMONGER,
+            TEST_SENTRY,
+            TEST_TOLLKEEPER,
             TEST_STUBBORN_SPELL,
             TEST_GOLD_SHOCK,
             TEST_ADVENTURER,
@@ -312,6 +335,9 @@ def scenario_database() -> CardDatabase:
     extra += [fx.WIND_DRAKE, fx.GIANT_SPIDER, fx.DERANGED_WHELP, fx.HIGHBORN_GHOUL]
     extra += [fx.SEVERED_LEGION, fx.BOG_RAIDERS, fx.PHANTOM_WARRIOR]
     extra += [fx.TEST_LAMBHOLT_WARDEN, fx.TEST_FLYING_BRUTE]
+    extra += [fx.JUGGERNAUT, fx.SILENT_ARBITER, fx.PRIZED_UNICORN, fx.MOGG_FLUNKIES]
+    extra += [fx.GHOSTLY_PRISON, fx.TEST_STOMPER, fx.TEST_WARMONGER, fx.TEST_SENTRY]
+    extra += [fx.TEST_TOLLKEEPER]
     extra += [fx.TEST_ADVENTURER, fx.EMERALD_MEDALLION, fx.KINJALLIS_CALLER, fx.TEST_THORN]
     extra += [fx.TEST_GROWTH, fx.RISHKARS_EXPERTISE, fx.TEST_TWO_TONE, fx.TEST_INSIGHT]
     extra += [fx.BIG_SPLIT_CARD]

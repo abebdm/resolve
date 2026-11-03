@@ -6,18 +6,18 @@
       "oracle_cards": {
         "type": "oracle_cards",
         "file": "oracle-cards.jsonl.gz",
-        "updated_at": "2026-10-31T21:02:00.540+00:00",
-        "size": 25301405,
-        "sha256": "5f0918898329cb56bbaa499f94e5c6bc3e3d9e2b8a32c6efaff49e006ea97a27",
-        "source": "https://data.scryfall.io/oracle-cards/oracle-cards-20261031210200.jsonl.gz"
+        "updated_at": "2026-11-02T22:02:03.325+00:00",
+        "size": 25307048,
+        "sha256": "8861f83504b63a0ef1fb3dde8a22f469700305025f4c8e30381ea5c3e64867d5",
+        "source": "https://data.scryfall.io/oracle-cards/oracle-cards-20261102220203.jsonl.gz"
       },
       "rulings": {
         "type": "rulings",
         "file": "rulings.jsonl.gz",
-        "updated_at": "2026-10-31T21:00:33.045+00:00",
+        "updated_at": "2026-11-02T22:00:35.225+00:00",
         "size": 5422271,
-        "sha256": "faaed931d4566a211b4d829cb5bac81a50f34b1a9bc9143d2503159d70b0e41f",
-        "source": "https://data.scryfall.io/rulings/rulings-20261031210033.jsonl.gz"
+        "sha256": "110923c21fad612ac8dd70e86e75bb9c4f6b6d0eaec56d9c3579848d4854ad60",
+        "source": "https://data.scryfall.io/rulings/rulings-20261102220035.jsonl.gz"
       }
     }
   },
@@ -722,6 +722,91 @@
       "keywords": [],
       "power": "2",
       "toughness": "2"
+    },
+    {
+      "object": "card",
+      "oracle_id": "4ac9116f-36bc-4d71-b696-d6ee064e1d58",
+      "name": "Juggernaut",
+      "layout": "normal",
+      "mana_cost": "{4}",
+      "cmc": 4.0,
+      "type_line": "Artifact Creature — Juggernaut",
+      "oracle_text": "This creature attacks each combat if able.\nThis creature can't be blocked by Walls.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "power": "5",
+      "toughness": "3"
+    },
+    {
+      "object": "card",
+      "oracle_id": "766787ef-654a-4544-b5d7-d2f96949edf1",
+      "name": "Prized Unicorn",
+      "layout": "normal",
+      "mana_cost": "{3}{G}",
+      "cmc": 4.0,
+      "type_line": "Creature — Unicorn",
+      "oracle_text": "All creatures able to block this creature do so.",
+      "colors": [
+        "G"
+      ],
+      "color_identity": [
+        "G"
+      ],
+      "keywords": [],
+      "power": "2",
+      "toughness": "2"
+    },
+    {
+      "object": "card",
+      "oracle_id": "e828b189-0e8f-43b8-b909-4c23e742e028",
+      "name": "Ghostly Prison",
+      "layout": "normal",
+      "mana_cost": "{2}{W}",
+      "cmc": 3.0,
+      "type_line": "Enchantment",
+      "oracle_text": "Creatures can't attack you unless their controller pays {2} for each creature they control that's attacking you.",
+      "colors": [
+        "W"
+      ],
+      "color_identity": [
+        "W"
+      ],
+      "keywords": []
+    },
+    {
+      "object": "card",
+      "oracle_id": "b92fc9c1-7264-4894-90b8-a193039489c5",
+      "name": "Mogg Flunkies",
+      "layout": "normal",
+      "mana_cost": "{1}{R}",
+      "cmc": 2.0,
+      "type_line": "Creature — Goblin",
+      "oracle_text": "This creature can't attack or block alone.",
+      "colors": [
+        "R"
+      ],
+      "color_identity": [
+        "R"
+      ],
+      "keywords": [],
+      "power": "3",
+      "toughness": "3"
+    },
+    {
+      "object": "card",
+      "oracle_id": "1cdf30de-d88c-421a-80df-4917bbd2f09e",
+      "name": "Silent Arbiter",
+      "layout": "normal",
+      "mana_cost": "{4}",
+      "cmc": 4.0,
+      "type_line": "Artifact Creature — Construct",
+      "oracle_text": "No more than one creature can attack each combat.\nNo more than one creature can block each combat.",
+      "colors": [],
+      "color_identity": [],
+      "keywords": [],
+      "power": "1",
+      "toughness": "5"
     }
   ],
   "rulings": [
@@ -822,6 +907,27 @@
       "source": "wotc",
       "published_at": "2009-02-01",
       "comment": "“Protection from artifacts” means the following: -- Nacatl Savage can't be blocked by artifact creatures. -- Nacatl Savage can't be equipped. It also can't be enchanted by Auras that have somehow become artifacts in addition to enchantments. -- Nacatl Savage can't be targeted by abilities from artifact sources. -- All damage that would be dealt to Nacatl Savage by artifact sources is prevented."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "4ac9116f-36bc-4d71-b696-d6ee064e1d58",
+      "source": "wotc",
+      "published_at": "2022-12-08",
+      "comment": "If Juggernaut can't attack for any reason (such as being tapped or having come under your control that turn), then it doesn't attack. If there's a cost associated with having it attack, you're not forced to pay that cost, so it doesn't have to attack in that case either."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "766787ef-654a-4544-b5d7-d2f96949edf1",
+      "source": "wotc",
+      "published_at": "2019-07-12",
+      "comment": "If a creature the defending player controls can’t block Prized Unicorn for any reason (such as being tapped), then it doesn’t block Prized Unicorn. If there’s a cost associated with having a creature block Prized Unicorn, the defending player isn’t forced to pay that cost, so it doesn’t have to block."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "766787ef-654a-4544-b5d7-d2f96949edf1",
+      "source": "wotc",
+      "published_at": "2019-07-12",
+      "comment": "If more than one Prized Unicorn is attacking, creatures that could block must block one Prized Unicorn, but they don’t all have to block the same Prized Unicorn."
     },
     {
       "object": "ruling",
@@ -930,6 +1036,41 @@
     },
     {
       "object": "ruling",
+      "oracle_id": "b92fc9c1-7264-4894-90b8-a193039489c5",
+      "source": "wotc",
+      "published_at": "2018-03-16",
+      "comment": "Although Mogg Flunkies can't attack alone, other attacking creatures don't have to attack the same player, planeswalker, or battle. For example, Mogg Flunkies could attack an opponent and another creature could attack a planeswalker that opponent controls. Similarly, other blocking creatures don't have to block the same creature that Mogg Flunkies blocks."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "b92fc9c1-7264-4894-90b8-a193039489c5",
+      "source": "wotc",
+      "published_at": "2018-03-16",
+      "comment": "If an effect says that Mogg Flunkies attacks or blocks if able and you control another creature able to attack or block, you must attack or block with Mogg Flunkies and that creature."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "b92fc9c1-7264-4894-90b8-a193039489c5",
+      "source": "wotc",
+      "published_at": "2018-03-16",
+      "comment": "Once Mogg Flunkies has attacked or blocked, it will remain in combat even if you no longer control another attacking or blocking creature."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "b92fc9c1-7264-4894-90b8-a193039489c5",
+      "source": "wotc",
+      "published_at": "2018-03-16",
+      "comment": "In a Two-Headed Giant game, Mogg Flunkies can attack or block with a creature controlled by your teammate, even if no other creatures you control are attacking or blocking."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "b92fc9c1-7264-4894-90b8-a193039489c5",
+      "source": "wotc",
+      "published_at": "2018-03-16",
+      "comment": "If you control more than one Mogg Flunkies, they can attack or block together, even if no other creatures attack or block."
+    },
+    {
+      "object": "ruling",
       "oracle_id": "bba6075b-8bbb-4496-80a9-bfa7f003d1e8",
       "source": "wotc",
       "published_at": "2017-09-29",
@@ -983,6 +1124,20 @@
       "source": "wotc",
       "published_at": "2008-04-01",
       "comment": "This card now uses the Reach keyword ability to enable the blocking of flying creatures. This works because a creature with flying can only be blocked by creatures with flying or reach."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "e828b189-0e8f-43b8-b909-4c23e742e028",
+      "source": "wotc",
+      "published_at": "2007-02-01",
+      "comment": "In the Two-Headed Giant format, you still only have to pay once per creature."
+    },
+    {
+      "object": "ruling",
+      "oracle_id": "e828b189-0e8f-43b8-b909-4c23e742e028",
+      "source": "wotc",
+      "published_at": "2014-02-01",
+      "comment": "Unless some effect explicitly says otherwise, a creature that can't attack you can still attack a planeswalker you control."
     },
     {
       "object": "ruling",

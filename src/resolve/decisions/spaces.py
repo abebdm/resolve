@@ -166,9 +166,75 @@ class NoneOrAtLeast(Immutable):
         return f"{self.choice!r} is picked by none or by at least {self.minimum}"
 
 
-Constraint = NoneOrAtLeast
-"""The closed vocabulary of declaration-wide constraints (design.md §17.18); ``NotAlone`` and
-``AtMost`` join it in M3.5."""
+@dataclass(frozen=True)
+class NotAlone(Immutable):
+    """A constraint of a ``ChooseAssignment`` (design.md §17.18): if ``item`` picks anything,
+    another item picks something too. "This creature can't attack or block alone." (Mogg
+    Flunkies; 506.5, 508.1c, 509.1b): two such items satisfy each other (508.1c's example), and
+    the other item needn't pick the same choice (Mogg Flunkies' ruling)."""
+
+    item: Option
+
+    @property
+    def text(self) -> str:
+        """The constraint in words, with the item as a value (a UI names it)."""
+        return f"{self.item!r} picks nothing or isn't the only item that picks"
+
+
+@dataclass(frozen=True)
+class AtMost(Immutable):
+    """A constraint of a ``ChooseAssignment`` (design.md §17.18): at most ``count`` items pick
+    anything. "No more than one creature can attack (block) each combat." (Silent Arbiter;
+    508.1c, 509.1b)."""
+
+    count: int
+
+    def __post_init__(self) -> None:
+        if self.count < 0:
+            raise ValueError(f"AtMost needs a count of at least 0, got {self.count}")
+
+    @property
+    def text(self) -> str:
+        """The constraint in words."""
+        return f"at most {self.count} items pick anything"
+
+
+Constraint = NoneOrAtLeast | NotAlone | AtMost
+"""The closed vocabulary of declaration-wide constraints (design.md §17.18)."""
+
+
+@dataclass(frozen=True)
+class Requirement(Immutable):
+    """A requirement of a ``ChooseAssignment`` (508.1d, 509.1c; design.md §17.18): ``item`` obeys
+    it by picking any of ``choices``. "This creature attacks each combat if able." is obeyed by
+    any target; "All creatures able to block this creature do so." (Prized Unicorn) by each
+    blocker blocking it. Each instance is its own requirement, counted once (508.1d: "the number
+    of requirements"). ``reason`` says where it comes from, for a UI."""
+
+    item: Option
+    choices: tuple[Option, ...]
+    reason: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.choices:
+            raise ValueError("a Requirement needs at least one choice that obeys it")
+
+    @property
+    def text(self) -> str:
+        """The requirement in words, with the item and choices as values (a UI names them)."""
+        reason = f" ({self.reason})" if self.reason else ""
+        return f"{self.item!r} picks one of {self.choices!r}{reason}"
+
+
+@dataclass(frozen=True)
+class CostlyPick(Immutable):
+    """A pick of a ``ChooseAssignment`` that needs a cost paid (508.1h, 509.1d; design.md
+    §17.18): ``item`` picking ``choice``. Ghostly Prison's "can't attack you unless their
+    controller pays"; a player is never required to pay it to obey a requirement (508.1d,
+    509.1c)."""
+
+    item: Option
+    choice: Option
 
 
 # --- Answer values -----------------------------------------------------------------------------
@@ -427,16 +493,20 @@ class ChooseAssignment(AnswerSpace):
     509.1a). The answer, ``Assignment``, gives each item strictly increasing choice indices, so
     one declaration has exactly one answer (§6).
 
-    ``constraints`` are the declaration-wide restrictions (509.1b; §17.18's closed vocabulary,
-    ``Constraint``): an answer must satisfy every one, checked by the solver
-    (``resolve.decisions.assignment``) without the state. Requirements and the picks that need a
-    cost (508.1c-d, 509.1c) join it in M3.5.
+    ``constraints`` are the declaration-wide restrictions (508.1c, 509.1b; §17.18's closed
+    vocabulary, ``Constraint``): an answer must satisfy every one. ``requirements`` (508.1d,
+    509.1c): the answer must obey at least as many as the most that any answer satisfying the
+    constraints obeys *without the costly picks* (``costly``, 508.1h, 509.1d: a player isn't
+    required to pay a cost to obey a requirement; docs/decisions.md, the M3 plan's Q2). The solver
+    (``resolve.decisions.assignment``) checks both without the state.
     """
 
     items: tuple[Option, ...]
     choices: tuple[tuple[Option, ...], ...]
     maxima: tuple[int, ...]
     constraints: tuple[Constraint, ...] = ()
+    requirements: tuple[Requirement, ...] = ()
+    costly: tuple[CostlyPick, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.items:
@@ -457,6 +527,20 @@ class ChooseAssignment(AnswerSpace):
                     f"ChooseAssignment needs each maximum from 0 to its item's number of "
                     f"choices, got {maximum} for {len(choices)}"
                 )
+        offered = dict(zip(self.items, self.choices, strict=True))
+        if len(offered) != len(self.items):
+            raise ValueError("ChooseAssignment's items must be distinct")
+        for constraint in self.constraints:
+            if isinstance(constraint, NotAlone) and constraint.item not in offered:
+                raise ValueError(f"NotAlone names {constraint.item!r}, which isn't an item")
+        for requirement in self.requirements:
+            own = offered.get(requirement.item)
+            if own is None or any(choice not in own for choice in requirement.choices):
+                raise ValueError(f"{requirement!r} names an item or choice the space lacks")
+        for pick in self.costly:
+            own = offered.get(pick.item)
+            if own is None or pick.choice not in own:
+                raise ValueError(f"{pick!r} names an item or choice the space lacks")
 
     def validate(self, answer: AnswerValue) -> None:
         picks = _expect(answer, Assignment).picks
@@ -480,15 +564,32 @@ class ChooseAssignment(AnswerSpace):
                 )
             if len(indices) > maximum:
                 raise InvalidAnswer(f"item {number} may pick at most {maximum}")
-        from resolve.decisions.assignment import broken_constraints
+        from resolve.decisions.assignment import (
+            broken_constraints,
+            most_obeyable,
+            obeyable_bound,
+            requirements_obeyed,
+        )
 
         checked = tuple(_int_tuple(item, "picks") for item in items)
         broken = broken_constraints(self, checked)
         if broken:
-            # 509.1b: a declaration that disobeys a restriction is illegal.
+            # 508.1c, 509.1b: a declaration that disobeys a restriction is illegal.
             raise InvalidAnswer(
                 "the declaration breaks a restriction: "
                 + "; ".join(constraint.text for constraint in broken)
+            )
+        if not self.requirements:
+            return
+        obeyed = requirements_obeyed(self, checked)
+        # 508.1d, 509.1c: obeying as many as each item could alone needs no search.
+        if obeyed >= obeyable_bound(self):
+            return
+        most = most_obeyable(self)
+        if obeyed < most:
+            raise InvalidAnswer(
+                f"the declaration obeys {obeyed} requirements, but {most} can be obeyed without "
+                "disobeying a restriction or paying a cost (508.1d, 509.1c)"
             )
 
     def chosen(self, answer: Assignment) -> tuple[tuple[Option, ...], ...]:

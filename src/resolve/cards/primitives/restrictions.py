@@ -10,7 +10,14 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from resolve.cards.primitives.words import SubtypeWord
-from resolve.state.mana import ForAbility, ForSpell, ManaRestriction, PaymentPurpose
+from resolve.state.mana import (
+    ForAbility,
+    ForAttack,
+    ForBlock,
+    ForSpell,
+    ManaRestriction,
+    PaymentPurpose,
+)
 
 if TYPE_CHECKING:
     from resolve.state.game import GameState
@@ -34,6 +41,8 @@ class SpendOnlyOnSubtype(ManaRestriction):
         match purpose:
             case ForSpell(spell=obj) | ForAbility(source=obj):
                 return self.subtype.name in characteristics(state, obj).subtypes
+            case ForAttack() | ForBlock():
+                return False  # 106.6: a cost to attack or block is neither (508.1h, 509.1d)
 
     @property
     def text(self) -> str:

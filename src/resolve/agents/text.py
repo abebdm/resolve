@@ -63,7 +63,7 @@ from resolve.engine.view import CombatView, ObjectView, PaymentView, PlayerView
 from resolve.events.base import AnswerRecord, LogEntry
 from resolve.state.combat import AttackPlayer
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.mana import ForAbility, ForSpell, describe_mana
+from resolve.state.mana import ForAbility, ForAttack, ForBlock, ForSpell, describe_mana
 from resolve.state.spell import Target, TargetObject, TargetPlayer, describe_variant
 from resolve.state.zones import ZoneKind
 
@@ -147,6 +147,10 @@ def _payment(view: PlayerView, payment: PaymentView) -> str:
             paid_for = _named(view, spell)
         case ForAbility(source=source, ability=ability):
             paid_for = f"ability {ability} of {_named(view, source)}"
+        case ForAttack(creatures=creatures):
+            paid_for = "attacking with " + ", ".join(_named(view, c) for c in creatures)
+        case ForBlock(creatures=creatures):
+            paid_for = "blocking with " + ", ".join(_named(view, c) for c in creatures)
     return f"{payment.cost.text} for {paid_for} (player {payment.payer})"
 
 

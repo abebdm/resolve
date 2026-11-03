@@ -54,6 +54,28 @@ def broken_constraints(
     return tuple(broken)
 
 
+def requirements_obeyed(space: ChooseAssignment, picks: tuple[tuple[int, ...], ...]) -> int:
+    """How many of the space's requirements ``picks`` obeys (508.1d, 509.1c)."""
+    from resolve.errors import NotImplementedRule
+
+    raise NotImplementedRule("508.1d: requirements (M3.5 stub)")
+
+
+def obeyable_bound(space: ChooseAssignment) -> int:
+    """An upper bound of ``most_obeyable``: the most each item could obey alone, added up."""
+    from resolve.errors import NotImplementedRule
+
+    raise NotImplementedRule("508.1d: requirements (M3.5 stub)")
+
+
+def most_obeyable(space: ChooseAssignment) -> int:
+    """The most requirements any answer satisfying the constraints obeys without costly picks
+    (508.1d, 509.1c)."""
+    from resolve.errors import NotImplementedRule
+
+    raise NotImplementedRule("508.1d: requirements (M3.5 stub)")
+
+
 def random_legal(space: ChooseAssignment, rng: Rng) -> Assignment:
     """A random answer to ``space`` that satisfies all its constraints (see the module).
 
