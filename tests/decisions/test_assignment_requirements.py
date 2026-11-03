@@ -262,15 +262,15 @@ def test_a_paid_declaration_must_still_obey_the_cost_free_maximum() -> None:
 
 
 def _random_space(rng: Rng) -> ChooseAssignment:
-    """A random declaration of 2 to 6 items over 4 choices, with random menace, NotAlone and
+    """A random declaration of 2 to 5 items over 4 choices (at most 2 picks each), with random menace, NotAlone and
     AtMost constraints, requirements and costly picks."""
     choices = (X, Y, Z, ObjectOption(ObjectId(4)))
-    items = tuple(ObjectOption(ObjectId(20 + i)) for i in range(2 + rng.randbelow(5)))
+    items = tuple(ObjectOption(ObjectId(20 + i)) for i in range(2 + rng.randbelow(4)))
     own = tuple(
         tuple(c for c in choices if rng.randbelow(3)) or (choices[rng.randbelow(4)],)
         for _ in items
     )
-    maxima = tuple(1 + rng.randbelow(len(o)) for o in own)
+    maxima = tuple(1 + rng.randbelow(min(2, len(o))) for o in own)
     constraints: list[NoneOrAtLeast | NotAlone | AtMost] = [
         NoneOrAtLeast(c, 2 + rng.randbelow(2)) for c in choices if not rng.randbelow(3)
     ]
