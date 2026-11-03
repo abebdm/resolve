@@ -58,7 +58,9 @@ Run these in PowerShell from the repository root, on an up-to-date checkout of `
      worth a note, not a failure;
    - `Gaps:` lists only `903.8` (`508.1` until M3.2; `509.1`, declaring blockers, until M3.3);
    - `Combat:` shows combats, and attackers declared above zero (M3.2), and blockers declared
-     and attackers blocked above zero (M3.3);
+     and attackers blocked above zero (M3.3); its costs paid and declarations reversed (M3.5)
+     may be 0 (Ghostly Prison must be on the battlefield as an opponent attacks its controller),
+     and are checked by `tests/fuzz/test_fuzz_summary.py` meanwhile;
    - `Turns per game:` reaches a maximum of several tens of turns, and `Played:` shows
      hundreds of lands and mana abilities, and some reversed mana ability activations
      (Selesnya Signet activated with nothing to pay its {1});
@@ -102,9 +104,9 @@ run can't meet yet; each says why and when it becomes reachable (docs/decisions.
 - **Chandra's Ignition cast:** it needs a creature its caster controls as its target and five
   mana in a main phase; until M3.3 a game with creatures on both sides stopped at the first
   attack (509.1). **Reachable since M3.3**, with the endings above; M3.9 checks it.
-- **Decimate cast:** it needs a target artifact, creature, enchantment and land, and no card in
-  the fuzz decks is an enchantment. Reachable when the first enchantment card is implemented
-  and joins the fuzz excerpt (the card and rules tests cover Decimate meanwhile).
+- **Decimate cast:** it needs a target artifact, creature, enchantment and land, and until M3.5
+  no card in the fuzz decks was an enchantment. **Reachable since M3.5**: Ghostly Prison is in
+  both recipes; M3.9 checks it on the thorough run.
 
 ## Optional, with the card data snapshot
 

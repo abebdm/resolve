@@ -70,12 +70,14 @@ class ActionReversed(Event):
     before it, but for the mana abilities the player kept, whose results stand (``kept``: their
     sources, in activation order). ``card`` is the card a reversed cast returned to its zone (with
     its old ID), which every player saw on the stack: they know it now (400.2). ``source`` is the
-    source of a reversed mana ability activation (602.2b). Public."""
+    source of a reversed mana ability activation (602.2b). ``declaration`` marks a reversed
+    declaration of attackers or blockers whose cost couldn't be paid (508.1, 509.1). Public."""
 
     player: PlayerId
     card: ObjectId | None = None
     kept: tuple[ObjectId, ...] = ()
     source: ObjectId | None = None
+    declaration: bool = False
 
     def apply(self, state: GameState) -> None:
         if self.card is None:

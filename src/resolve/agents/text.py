@@ -35,6 +35,7 @@ from resolve.decisions.spaces import (
     AnswerSpace,
     AnswerValue,
     Assignment,
+    AtMost,
     CastSpellOption,
     ChooseAssignment,
     ChooseCounts,
@@ -49,6 +50,8 @@ from resolve.decisions.spaces import (
     ManaOption,
     ModesOption,
     NamedOption,
+    NoneOrAtLeast,
+    NotAlone,
     Number,
     ObjectOption,
     Option,
@@ -63,7 +66,7 @@ from resolve.engine.view import CombatView, ObjectView, PaymentView, PlayerView
 from resolve.events.base import AnswerRecord, LogEntry
 from resolve.state.combat import AttackPlayer
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.mana import ForAbility, ForSpell, describe_mana
+from resolve.state.mana import ForAbility, ForAttack, ForBlock, ForSpell, describe_mana
 from resolve.state.spell import Target, TargetObject, TargetPlayer, describe_variant
 from resolve.state.zones import ZoneKind
 
@@ -147,6 +150,10 @@ def _payment(view: PlayerView, payment: PaymentView) -> str:
             paid_for = _named(view, spell)
         case ForAbility(source=source, ability=ability):
             paid_for = f"ability {ability} of {_named(view, source)}"
+        case ForAttack(creatures=creatures):
+            paid_for = "attacking with " + ", ".join(_named(view, c) for c in creatures)
+        case ForBlock(creatures=creatures):
+            paid_for = "blocking with " + ", ".join(_named(view, c) for c in creatures)
     return f"{payment.cost.text} for {paid_for} (player {payment.payer})"
 
 
@@ -337,10 +344,37 @@ def render_request(request: DecisionRequest, view: PlayerView) -> str:
                 )
             )
         for constraint in space.constraints:
-            # 509.1b: menace's restriction (702.111b), on the whole declaration.
+            # 508.1c, 509.1b: the restrictions on the whole declaration.
+            match constraint:
+                case NoneOrAtLeast(choice=choice, minimum=minimum):
+                    lines.append(
+                        f"  Constraint: {describe_option(choice, view)} is picked by none or "
+                        f"by at least {minimum}."
+                    )
+                case NotAlone(item=item):
+                    lines.append(
+                        f"  Constraint: {describe_option(item, view)} picks nothing, or another "
+                        "item picks too."
+                    )
+                case AtMost(count=count):
+                    lines.append(f"  Constraint: at most {count} items pick anything.")
+        for requirement in space.requirements:
+            # 508.1d, 509.1c: obey as many as possible without paying a cost.
             lines.append(
-                f"  Constraint: {describe_option(constraint.choice, view)} is picked by none or "
-                f"by at least {constraint.minimum}."
+                f"  Requirement: {describe_option(requirement.item, view)} picks one of "
+                f"{', '.join(describe_option(c, view) for c in requirement.choices)}"
+                + (f" ({requirement.reason})." if requirement.reason else ".")
+            )
+        if space.requirements:
+            lines.append(
+                "  Obey as many requirements as you can without breaking a constraint or paying "
+                "a cost."
+            )
+        for pick in space.costly:
+            # 508.1h, 509.1d: a cost is paid after the declaration.
+            lines.append(
+                f"  Costs: {describe_option(pick.item, view)} picking "
+                f"{describe_option(pick.choice, view)}."
             )
     elif isinstance(space, DistributeEach):
         for index, (source, part) in enumerate(zip(space.sources, space.parts, strict=True)):

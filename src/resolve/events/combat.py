@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
+from resolve.data.mana_cost import ManaCost
 from resolve.errors import EngineError
 from resolve.events.base import Event
 from resolve.state.combat import AttackRecord, AttackTarget, BlockRecord, CombatState
@@ -55,9 +56,11 @@ class CombatBegan(Event):
 class AttackersDeclared(Event):
     """The creatures of ``attacks`` become attacking creatures, each attacking its target, in
     this order (508.1k): declared, not put onto the battlefield attacking (508.4), and not yet
-    blocked or unblocked (509.1h decides that)."""
+    blocked or unblocked (509.1h decides that). ``cost`` is the total cost to attack paid for
+    them (508.1h-j; ``None``: none was needed)."""
 
     attacks: tuple[tuple[ObjectId, AttackTarget], ...]
+    cost: ManaCost | None = None
 
     def apply(self, state: GameState) -> None:
         combat = _combat(state)
@@ -83,11 +86,13 @@ class BlockersDeclared(Event):
     player that no block names become unblocked. Without it (``None``) every undecided attacker
     that no block names becomes unblocked: the event that ends the declarations, for attackers
     no one could block (attacking a player who has left, 800.4a, or nothing, 506.4c), or the
-    whole declaration when no block was possible.
+    whole declaration when no block was possible. ``cost`` is the total cost to block the player
+    paid (509.1d-f; ``None``: none was needed).
     """
 
     blocks: tuple[tuple[ObjectId, tuple[ObjectId, ...]], ...] = ()
     defending_player: PlayerId | None = None
+    cost: ManaCost | None = None
 
     def apply(self, state: GameState) -> None:
         combat = _combat(state)

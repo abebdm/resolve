@@ -21,39 +21,52 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING
 
 from resolve.cards.keywords import Vigilance, has_keyword
+from resolve.data.mana_cost import ManaCost
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import (
     AmountsEach,
     AnswerValue,
     Assignment,
     ChooseAssignment,
+    ChooseSubset,
     Distribute,
     DistributeEach,
     ObjectOption,
     Option,
+    PickMany,
     PlayerOption,
 )
 from resolve.effects.characteristics import characteristics
+from resolve.engine import reversal
+from resolve.engine.payment import Paid, PayCosts, PaymentStep, Unpayable
+from resolve.engine.reversal import activations_made
 from resolve.errors import EngineError, NotImplementedRule
 from resolve.events.base import Event
 from resolve.events.combat import AttackersDeclared, BlockersDeclared
 from resolve.events.damage import DamageDealt
+from resolve.events.mana import ManaSpent
 from resolve.events.permanents import PermanentTapped
 from resolve.events.pipeline import ApplyEvents
+from resolve.events.spells import ActionReversed
 from resolve.rules import defaults
 from resolve.rules.combat import (
+    attack_cost,
     attack_declaration,
+    block_cost,
     block_declaration,
     damage_recipients,
     declared_attacks,
     declared_blocks,
 )
-from resolve.state.combat import CombatState
+from resolve.state.checkpoint import Checkpoint, take_checkpoint
+from resolve.state.combat import AttackTarget, CombatState
 from resolve.state.game import apnap_order
 from resolve.state.ids import ObjectId, PlayerId
+from resolve.state.mana import ForAttack, ForBlock
 from resolve.state.zones import ZoneKind
 from resolve.tasks import Done, NeedDecision, Push, Task, TaskResult
 
@@ -69,49 +82,214 @@ def _combat(state: GameState) -> CombatState:
     return turn.combat
 
 
+class DeclarationStage(Enum):
+    """Where a declaration of attackers or blockers is (508.1, 509.1, 733.1)."""
+
+    DECLARE = "declare"
+    PAY = "pay"
+    REVERSE = "reverse"
+
+
+@dataclass(slots=True)
+class DeclarationCost:
+    """The cost of a declaration being paid (508.1g-j, 509.1d-f), shared by ``DeclareAttackers``
+    and ``DeclareBlockers``: the game before the declaration (``checkpoint``, 733.1), the
+    locked-in total (``total``, 508.1h, 509.1d) and its payment (``payment``, 508.1i-j,
+    509.1e-f). ``PayCosts`` asks for the mana abilities and the payment; one that can't be paid
+    reverses the declaration (508.1, 509.1: "the game returns to the moment before the
+    declaration"), the payer choosing which mana abilities to reverse too (733.1)."""
+
+    payer: PlayerId
+    checkpoint: Checkpoint
+    total: ManaCost
+    payment: PayCosts
+
+    def reverse(self, state: GameState, kept: tuple[int, ...]) -> ActionReversed:
+        """Return to the checkpoint, keeping the mana abilities at ``kept`` (733.1)."""
+        made = activations_made(self.payment)
+        reversal.reverse_to(state, self.checkpoint, made, kept)
+        return ActionReversed(
+            player=self.payer,
+            kept=tuple(made[number].source for number in kept),
+            declaration=True,
+            rules=("508.1", "509.1", "733.1"),
+        )
+
+    def ask_reverse(self, prompt: str) -> NeedDecision | None:
+        """733.1: which mana abilities activated while paying to reverse; ``None`` if none."""
+        made = activations_made(self.payment)
+        if not made:
+            return None
+        return NeedDecision(
+            player=self.payer,
+            kind=DecisionKind.REVERSE_MANA_ABILITIES,
+            space=ChooseSubset(reversal.options(made), 0, len(made)),
+            prompt=prompt,
+            rules=("733.1",),
+        )
+
+    def check_answer(self, state: GameState, stage: DeclarationStage, answer: AnswerValue) -> None:
+        if stage is DeclarationStage.PAY:
+            self.payment.check_answer(state, answer)
+        elif stage is DeclarationStage.REVERSE and isinstance(answer, PickMany):
+            made = activations_made(self.payment)
+            reversal.check_kept(state, self.checkpoint, self.payer, made, _kept(len(made), answer))
+
+
+def _kept(count: int, answer: PickMany) -> tuple[int, ...]:
+    """The positions of the activations to keep: those not chosen for reversal."""
+    chosen = set(answer.indices)
+    return tuple(number for number in range(count) if number not in chosen)
+
+
 @dataclass(slots=True)
 class DeclareAttackers(Task):
     """508.1: the attacking creatures are declared, by ``defaults.attack_declarer`` (the active
     player).
 
-    1. 508.1a-b: a ``DECLARE_ATTACKERS`` decision, the ``ChooseAssignment`` compiled by
-       ``resolve.rules.combat.attack_declaration``; not asked when no creature may attack. The
-       space validates the answer, so an illegal declaration is refused before anything
-       changes (508.1, 733).
-    2. 508.1c-d (restrictions and requirements on the whole declaration), 508.1e (banding) and
-       508.1g-j (costs to attack) have nothing to apply yet: their cards arrive in M3.5 and M9.
+    1. 508.1a-d: a ``DECLARE_ATTACKERS`` decision, the ``ChooseAssignment`` compiled by
+       ``resolve.rules.combat.attack_declaration`` (the restrictions on one creature are left
+       out of it; those on the whole declaration, its requirements and its costly picks are in
+       it); not asked when no creature may attack. The space validates the answer, so an
+       illegal declaration is refused before anything changes (508.1, 733).
+    2. 508.1e (banding) has nothing to apply yet (M9).
     3. 508.1f: the chosen creatures without vigilance tap (702.20b), at the same time; tapping
-       isn't a cost.
-    4. 508.1k: ``AttackersDeclared`` makes them attacking creatures. 508.1m's triggers are M4's.
+       isn't a cost. A checkpoint is taken first (733.1).
+    4. 508.1g-j: if the declaration needs a cost (``rules.combat.attack_cost``: Ghostly Prison),
+       the total is locked in and paid (``PayCosts``, ``ForAttack``; mana abilities may be
+       activated, 508.1i). If it can't be paid, the declaration is reversed (``DeclarationCost``)
+       and asked again. 508.1g's optional costs have no card yet.
+    5. 508.1k: ``AttackersDeclared`` (with the cost paid) makes them attacking creatures.
+       508.1m's triggers are M4's.
     """
 
+    stage: DeclarationStage = DeclarationStage.DECLARE
+    attacks: tuple[tuple[ObjectId, AttackTarget], ...] = ()
+    cost: DeclarationCost | None = None
+
     def run(self, state: GameState) -> TaskResult:
-        space = attack_declaration(state)
-        if space is None:
-            return Done()  # 508.1a: no creature can attack, so none does
-        return NeedDecision(
-            player=defaults.attack_declarer(state),
-            kind=DecisionKind.DECLARE_ATTACKERS,
-            space=space,
-            prompt="Declare attackers: choose what each creature attacks, if anything.",
-            rules=("508.1", "508.1a", "508.1b"),
+        turn = state.turn
+        if turn is None or state.player(turn.active_player).left_game:
+            return Done()  # 800.4a: the attacking player left; their creatures went with them
+        match self.stage:
+            case DeclarationStage.DECLARE:
+                space = attack_declaration(state)
+                if space is None:
+                    return Done()  # 508.1a: no creature can attack, so none does
+                return NeedDecision(
+                    player=defaults.attack_declarer(state),
+                    kind=DecisionKind.DECLARE_ATTACKERS,
+                    space=space,
+                    prompt="Declare attackers: choose what each creature attacks, if anything.",
+                    rules=("508.1", "508.1a", "508.1b", "508.1c", "508.1d"),
+                )
+            case DeclarationStage.PAY:
+                return self._paying(state, self._cost().payment.step(state))
+            case DeclarationStage.REVERSE:
+                return self._ask_reverse(state)
+
+    def _cost(self) -> DeclarationCost:
+        if self.cost is None:
+            raise EngineError("DeclareAttackers is paying without a cost")
+        return self.cost
+
+    def payment_under_way(self) -> PayCosts | None:
+        """508.1i-j: the total cost to attack, while it is being paid."""
+        if self.stage is DeclarationStage.PAY and self.cost is not None:
+            return self.cost.payment
+        return None
+
+    def _declared(self, state: GameState, total: ManaCost | None) -> TaskResult:
+        # 508.1k: each chosen creature still controlled by the active player attacks.
+        turn = state.turn
+        assert turn is not None
+        attacks = tuple(
+            (obj, target)
+            for obj, target in self.attacks
+            if obj in state.objects
+            and state.objects[obj].zone.kind is ZoneKind.BATTLEFIELD
+            and state.objects[obj].controller == turn.active_player
         )
+        self.stage, self.attacks, self.cost = DeclarationStage.DECLARE, (), None
+        if not attacks:
+            return Done()
+        declared = AttackersDeclared(attacks=attacks, cost=total, rules=("508.1k", "508.1b"))
+        return Push((ApplyEvents((declared,)),))
+
+    def _paying(self, state: GameState, step: PaymentStep) -> TaskResult:
+        cost = self._cost()
+        match step:
+            case NeedDecision():
+                return step
+            case Push(tasks=tasks):
+                return Push((*tasks, self))
+            case Paid(mana=mana):
+                total = cost.total
+                result = self._declared(state, total)
+                if not mana:
+                    return result
+                spent = ManaSpent(player=cost.payer, mana=mana, rules=("508.1j", "118.3a"))
+                tail = result.tasks if isinstance(result, Push) else ()
+                return Push((ApplyEvents((spent,)), *tail))
+            case Unpayable():
+                self.stage = DeclarationStage.REVERSE
+                return self.run(state)
+
+    def _ask_reverse(self, state: GameState) -> TaskResult:
+        asked = self._cost().ask_reverse(
+            "The attack can't be paid for. Choose the mana abilities to reverse."
+        )
+        return asked if asked is not None else self._reverse(state, ())
+
+    def _reverse(self, state: GameState, kept: tuple[int, ...]) -> TaskResult:
+        reversed_ = self._cost().reverse(state, kept)
+        self.stage, self.attacks, self.cost = DeclarationStage.DECLARE, (), None
+        return Push((ApplyEvents((reversed_,)), self))  # 508.1: declare again
+
+    def check_answer(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> None:
+        if self.cost is not None:
+            self.cost.check_answer(state, self.stage, answer)
 
     def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
+        match self.stage:
+            case DeclarationStage.PAY:
+                return self._paying(state, self._cost().payment.resume(state, request, answer))
+            case DeclarationStage.REVERSE:
+                if not isinstance(answer, PickMany):
+                    raise EngineError(f"DeclareAttackers can't resume with {answer!r}")
+                made = activations_made(self._cost().payment)
+                return self._reverse(state, _kept(len(made), answer))
+            case DeclarationStage.DECLARE:
+                pass
         if not isinstance(request.space, ChooseAssignment) or not isinstance(answer, Assignment):
             raise EngineError(f"DeclareAttackers can't resume with {answer!r}")
         attacks = declared_attacks(request.space, answer.picks)
         if not attacks:
             return Done()  # 508.8 reads that none attacked
+        turn = state.turn
+        assert turn is not None
+        total = attack_cost(state, attacks)
+        self.attacks = attacks
+        if total is not None:
+            # 733.1: the game before the declaration's first change (508.1f), to return to.
+            self.cost = DeclarationCost(
+                turn.active_player,
+                take_checkpoint(state),
+                total,
+                PayCosts(turn.active_player, total, ForAttack(tuple(obj for obj, _ in attacks))),
+            )
+            self.stage = DeclarationStage.PAY
         taps = tuple(
             PermanentTapped(obj=obj, rules=("508.1f", "701.26a"))
             for obj, _ in attacks
             if not has_keyword(characteristics(state, obj), Vigilance)  # 702.20b
         )
-        declared = AttackersDeclared(attacks=attacks, rules=("508.1k", "508.1b"))
-        tasks: list[Task] = [ApplyEvents(taps)] if taps else []
-        tasks.append(ApplyEvents((declared,)))
-        return Push(tuple(tasks))
+        if total is None:
+            declared = self._declared(state, None)
+            tail = declared.tasks if isinstance(declared, Push) else ()
+            return Push((ApplyEvents(taps), *tail)) if taps else declared
+        # 508.1f, then 508.1g-j: the creatures tap before the total cost is paid.
+        return Push((ApplyEvents(taps), self)) if taps else self.run(state)
 
 
 @dataclass(slots=True)
@@ -121,13 +299,15 @@ class DeclareBlockers(Task):
     For each defending player still in the game (in ``CombatState.defending_players``' order,
     which is APNAP order, 506.2), from ``next`` on:
 
-    1. 509.1a: a ``DECLARE_BLOCKERS`` decision for ``defaults.block_declarer``, the
-       ``ChooseAssignment`` compiled by ``resolve.rules.combat.block_declaration``; not asked
+    1. 509.1a-c: a ``DECLARE_BLOCKERS`` decision for ``defaults.block_declarer``, the
+       ``ChooseAssignment`` compiled by ``resolve.rules.combat.block_declaration`` (with the
+       restrictions on the whole declaration, its requirements and its costly picks); not asked
        when none of their creatures may block (one possible declaration, none). The space
        validates the answer, so an illegal declaration is refused before anything changes
        (509.1, 733).
-    2. 509.1b-c (restrictions and requirements on the whole declaration) and 509.1d-f (costs to
-       block) have nothing to apply yet: their cards arrive in M3.4 and M3.5.
+    2. 509.1d-f: if the blocks need a cost (``rules.combat.block_cost``: Test Tollkeeper), the
+       total is locked in and paid by that player (``PayCosts``, ``ForBlock``); one that can't
+       be paid reverses the declaration (``DeclarationCost``), and the player declares again.
     3. 509.1g-h: ``BlockersDeclared(defending_player=...)`` makes their blockers and fixes the
        blocked status of the creatures attacking them, before the next player declares (802.4:
        "the first defending player declares all their blocks, then the second").
@@ -141,10 +321,25 @@ class DeclareBlockers(Task):
     """
 
     next: int = 0
+    stage: DeclarationStage = DeclarationStage.DECLARE
+    blocks: tuple[tuple[ObjectId, tuple[ObjectId, ...]], ...] = ()
+    cost: DeclarationCost | None = None
 
     def run(self, state: GameState) -> TaskResult:
         combat = _combat(state)
         players = combat.defending_players
+        if self.stage is not DeclarationStage.DECLARE:
+            if state.player(players[self.next]).left_game:
+                # 800.4a: the paying player left; their declaration goes with them.
+                self.stage, self.blocks, self.cost = DeclarationStage.DECLARE, (), None
+                self.next += 1
+            elif self.stage is DeclarationStage.PAY:
+                return self._paying(state, self._cost().payment.step(state))
+            else:
+                asked = self._cost().ask_reverse(
+                    "The blocks can't be paid for. Choose the mana abilities to reverse."
+                )
+                return asked if asked is not None else self._reverse(state, ())
         while self.next < len(players):
             player = players[self.next]
             if not state.player(player).left_game:
@@ -158,7 +353,7 @@ class DeclareBlockers(Task):
                             f"Declare player {player}'s blockers: choose which attackers each "
                             "creature blocks, if any."
                         ),
-                        rules=("509.1", "509.1a", "802.4"),
+                        rules=("509.1", "509.1a", "509.1b", "509.1c", "802.4"),
                     )
             self.next += 1
         if not any(record.blocked is None for record in combat.attackers.values()):
@@ -166,17 +361,87 @@ class DeclareBlockers(Task):
         declared = BlockersDeclared(rules=("509.1h", "509.1g"))
         return Push((ApplyEvents((declared,)),))
 
+    def _cost(self) -> DeclarationCost:
+        if self.cost is None:
+            raise EngineError("DeclareBlockers is paying without a cost")
+        return self.cost
+
+    def payment_under_way(self) -> PayCosts | None:
+        """509.1e-f: the total cost to block, while it is being paid."""
+        if self.stage is DeclarationStage.PAY and self.cost is not None:
+            return self.cost.payment
+        return None
+
+    def _declared(self, state: GameState, total: ManaCost | None) -> list[Task]:
+        player = _combat(state).defending_players[self.next]
+        # 509.1g: each chosen creature still controlled by the defending player blocks.
+        blocks = tuple(
+            (blocker, attackers)
+            for blocker, attackers in self.blocks
+            if blocker in state.objects
+            and state.objects[blocker].zone.kind is ZoneKind.BATTLEFIELD
+            and state.objects[blocker].controller == player
+        )
+        declared = BlockersDeclared(
+            blocks=blocks,
+            defending_player=player,
+            cost=total,
+            rules=("509.1g", "509.1h", "802.4"),
+        )
+        self.stage, self.blocks, self.cost = DeclarationStage.DECLARE, (), None
+        self.next += 1
+        return [ApplyEvents((declared,)), self]
+
+    def _paying(self, state: GameState, step: PaymentStep) -> TaskResult:
+        cost = self._cost()
+        match step:
+            case NeedDecision():
+                return step
+            case Push(tasks=tasks):
+                return Push((*tasks, self))
+            case Paid(mana=mana):
+                tasks = self._declared(state, cost.total)
+                if mana:
+                    spent = ManaSpent(player=cost.payer, mana=mana, rules=("509.1f", "118.3a"))
+                    tasks.insert(0, ApplyEvents((spent,)))
+                return Push(tuple(tasks))
+            case Unpayable():
+                self.stage = DeclarationStage.REVERSE
+                return self.run(state)
+
+    def _reverse(self, state: GameState, kept: tuple[int, ...]) -> TaskResult:
+        reversed_ = self._cost().reverse(state, kept)
+        self.stage, self.blocks, self.cost = DeclarationStage.DECLARE, (), None
+        return Push((ApplyEvents((reversed_,)), self))  # 509.1: the same player declares again
+
+    def check_answer(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> None:
+        if self.cost is not None:
+            self.cost.check_answer(state, self.stage, answer)
+
     def resume(self, state: GameState, request: DecisionRequest, answer: AnswerValue) -> TaskResult:
+        match self.stage:
+            case DeclarationStage.PAY:
+                return self._paying(state, self._cost().payment.resume(state, request, answer))
+            case DeclarationStage.REVERSE:
+                if not isinstance(answer, PickMany):
+                    raise EngineError(f"DeclareBlockers can't resume with {answer!r}")
+                made = activations_made(self._cost().payment)
+                return self._reverse(state, _kept(len(made), answer))
+            case DeclarationStage.DECLARE:
+                pass
         if not isinstance(request.space, ChooseAssignment) or not isinstance(answer, Assignment):
             raise EngineError(f"DeclareBlockers can't resume with {answer!r}")
         player = _combat(state).defending_players[self.next]
-        declared = BlockersDeclared(
-            blocks=declared_blocks(request.space, answer.picks),
-            defending_player=player,
-            rules=("509.1g", "509.1h", "802.4"),
+        self.blocks = declared_blocks(request.space, answer.picks)
+        total = block_cost(state, self.blocks)
+        if total is None:
+            return Push(tuple(self._declared(state, None)))
+        blockers = tuple(blocker for blocker, _ in self.blocks)
+        self.cost = DeclarationCost(
+            player, take_checkpoint(state), total, PayCosts(player, total, ForBlock(blockers))
         )
-        self.next += 1
-        return Push((ApplyEvents((declared,)), self))
+        self.stage = DeclarationStage.PAY
+        return self.run(state)
 
 
 @dataclass(slots=True)

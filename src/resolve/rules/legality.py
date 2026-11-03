@@ -27,12 +27,15 @@ change here:
   them (113.6: a permanent's abilities function on the battlefield);
 - destroying: indestructible (702.12b);
 - countering: "can't be countered" (113.6g);
-- attacking: defender (702.3b);
+- attacking: defender (702.3b) and "can't attack unless [condition]" (508.1c);
 - blocking, read from the attacker: protection (702.16f, 702.16j, 702.16k), flying and reach
   (702.9b, 702.17b), intimidate (702.13b), fear (702.36b), landwalk (702.14c, against the
-  player it attacks, 802.2a) and "can't be blocked" (509.1b); and, from the permanents on the
-  battlefield, Champion of Lambholt's power comparison (509.1b). Menace (702.111b) concerns the
-  whole declaration: it is a constraint of the declaration's space (``rules.combat``).
+  player it attacks, 802.2a), "can't be blocked" and "can't be blocked by [quality]" (509.1b);
+  "can't block unless [condition]", read from the blocker (509.1b); and, from the permanents on the
+  battlefield, Champion of Lambholt's power comparison (509.1b). Menace (702.111b), "can't attack
+  or block alone", "no more than one creature can attack (block)", the requirements and the
+  costs to attack or block concern the whole declaration: they are in the declaration's space
+  (``rules.combat``).
 """
 
 from __future__ import annotations
@@ -55,7 +58,12 @@ from resolve.cards.keywords import (
 )
 from resolve.cards.keywords.qualities import Everything, PlayerQuality, Quality
 from resolve.cards.primitives.base import Ability
-from resolve.cards.primitives.combat import CantBeBlocked, PowerBlockRestriction
+from resolve.cards.primitives.combat import (
+    CantAttackOrBlockUnless,
+    CantBeBlocked,
+    CantBeBlockedBy,
+    PowerBlockRestriction,
+)
 from resolve.cards.primitives.statics import CantBeCountered
 from resolve.cards.primitives.targets import TargetSpec
 from resolve.data.types import CardType, Color
@@ -470,12 +478,31 @@ def _attack_permissions(state: GameState, action: AttackAction) -> tuple[Permiss
 
 
 def _attack_prohibitions(state: GameState, action: AttackAction) -> tuple[Prohibition, ...]:
-    # 702.3b: a creature with defender can't attack (redundant instances forbid it once). The
-    # other restrictions on one creature arrive with their cards: "can't attack (unless ...)"
-    # and Ghostly Prison's cost (M3.5).
-    if has_keyword(characteristics(state, action.creature), Defender):
-        return (Prohibition("702.3b", "it has defender"),)
-    return ()
+    # 702.3b: a creature with defender can't attack (redundant instances forbid it once).
+    # 508.1c: "can't attack unless [condition]" (Topiary Stomper's), judged now for the creature's
+    # controller. A restriction that a cost lifts (Ghostly Prison) isn't a prohibition: it makes
+    # the pick costly (``rules.combat.attack_declaration``, 508.1d, 508.1h).
+    chars = characteristics(state, action.creature)
+    forbidden: list[Prohibition] = []
+    if has_keyword(chars, Defender):
+        forbidden.append(Prohibition("702.3b", "it has defender"))
+    forbidden.extend(_unless_restrictions(state, action.creature, chars, "508.1c"))
+    return tuple(dict.fromkeys(forbidden))
+
+
+def _unless_restrictions(
+    state: GameState, creature: ObjectId, chars: Characteristics, rule: str
+) -> tuple[Prohibition, ...]:
+    """ "This creature can't attack or block unless [condition]." (``CantAttackOrBlockUnless``),
+    for each instance whose condition isn't met for the creature's controller now."""
+    controller = state.object(creature).controller
+    forbidden: list[Prohibition] = []
+    for ability in chars.abilities:
+        if isinstance(ability, CantAttackOrBlockUnless) and (
+            controller is None or not ability.condition.met(state, creature, controller)
+        ):
+            forbidden.append(Prohibition(rule, f"it can't unless {ability.condition.clause}"))
+    return tuple(forbidden)
 
 
 def _block_permissions(state: GameState, action: BlockAction) -> tuple[Permission, ...]:
@@ -551,9 +578,14 @@ def _block_prohibitions(state: GameState, action: BlockAction) -> tuple[Prohibit
                 forbidden.append(Prohibition("702.14c", f"it has {ability.text.lower()}"))
             case CantBeBlocked():
                 forbidden.append(Prohibition("509.1b", "it can't be blocked"))
+            case CantBeBlockedBy(quality=quality) if quality.matches_source(
+                blocker, blocker_object.controller, blocker_object.owner
+            ):
+                forbidden.append(Prohibition("509.1b", f"it can't be blocked by {quality.text}"))
             case _:
                 pass
     forbidden.extend(_power_restrictions(state, action, blocker))
+    forbidden.extend(_unless_restrictions(state, action.blocker, blocker, "509.1b"))
     # 702.9c, 702.13c, 702.14e, 702.16m, 702.36c: redundant instances forbid it once.
     return tuple(dict.fromkeys(forbidden))
 

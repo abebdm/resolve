@@ -19,6 +19,52 @@ that says so and mark the old one **Superseded by YYYY-MM-DD**.
 
 ---
 
+### 2026-11-03: M3.5: requirements maximized by a reduced search, 802.4b for "alone" and "no more than one", costs reversed and asked again
+- **Decision:**
+  - **The solver's search.** `most_obeyable` is a branch-and-bound search over groups of items
+    that share a constraint (a `NoneOrAtLeast` choice links its items; any `NotAlone` or
+    `AtMost` links all). Each item's candidate picks are reduced without losing an optimum: every
+    combination of its constrained (menace) choices within its maximum, its remaining room spent
+    on the unconstrained choices that obey the most of its requirements (choices obeying the same
+    requirements are interchangeable), plus picking nothing and one "filler" pick (both matter
+    only to `NotAlone` and `AtMost`). `validate` first compares with `obeyable_bound` (each
+    item's best alone, added up) and searches only when the answer falls short of it. A test
+    checks the search against brute force on 300 random spaces; the plan's benchmark (30 against
+    30, menace, three Unicorns) runs in about 20 ms.
+  - **`random_legal`** draws up to eight requirement-aware random answers (each item first
+    obeys its requirements in a random order, then adds random picks, costly ones included),
+    repairs each with `_repair`, and returns the first legal one; otherwise a randomized search
+    (the same search, candidates shuffled) returns a cost-free answer obeying the most. So
+    random agents still attack and block freely, sometimes pay, and never retry blindly.
+  - **802.4b for blocks.** "Can't block alone" (Mogg Flunkies) and "No more than one creature can
+    block each combat" (Silent Arbiter) are judged within one defending player's declaration,
+    ignoring other players' blockers, as 802.4b says for every defending player's blocks. So in
+    multiplayer each defending player may block with one creature under Silent Arbiter, and a
+    Flunkies needs a blocker of its own controller. Attacks are one declaration, so they count
+    every attacker, whichever player it attacks (Mogg Flunkies' ruling).
+  - **Costs.** A costly pick is marked in the space, not forbidden; the total is computed after
+    508.1f's taps (attackers) or from the blocks, once per attacking (blocking) creature per
+    instance, and locked in (508.1h, 509.1d). `DeclareAttackers` takes its checkpoint before
+    the taps, so a reversal untaps them; `DeclareBlockers` takes it before the payment. A cost
+    that can't be paid reverses the declaration (733.1, the player choosing which mana
+    abilities to reverse, as for a cast) and the same player declares again; the event is
+    `ActionReversed(declaration=True)`. A player who leaves while paying for blocks takes their
+    declaration with them; the attacking player leaving ends `DeclareAttackers`.
+  - **Silent Arbiter** is two `AtMostCreatures(1, blocking=...)` abilities (the plan's
+    `AtMostCreaturesAttackAndBlock`), one per line of its Oracle text, so its text test reads
+    like every other card's.
+  - **The torture test's "flyer-only restriction"** has no M3 card ("can block only creatures
+    with flying" would be a new primitive outside M3.5's list); Test Stomper's "can't block
+    unless you control seven or more lands", a restriction on the blocker, stands in for it.
+- **Why:** 508.1d and 509.1c define legality by a maximum over all declarations, so the space
+  must compute it; the reduction keeps realistic declarations (one block each, a few menace
+  attackers) small. 802.4b is explicit, and the alternative (counting earlier players' blockers)
+  would make a later player's legal blocks depend on blocks they couldn't influence.
+- **Rules:** 506.5, 508.1c-d, 508.1f-k, 509.1b-g, 733.1, 802.4b; Juggernaut's, Prized Unicorn's,
+  Mogg Flunkies' rulings.
+- **Where:** `resolve.decisions.assignment`, `resolve.decisions.spaces`, `resolve.rules.combat`,
+  `resolve.rules.legality`, `resolve.engine.combat`, `resolve.cards.primitives.combat`.
+
 ### 2026-11-01: M3.4: menace as a constraint, unblockable attackers left out, a player as a quality
 - **Decision:**
   - **Menace is a constraint of the block declaration, every other evasion a prohibition.**

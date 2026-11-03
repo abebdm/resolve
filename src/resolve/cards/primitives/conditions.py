@@ -16,7 +16,7 @@ from resolve.values import Immutable
 if TYPE_CHECKING:
     from resolve.state.game import GameState
 
-_NUMBER_WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
+NUMBER_WORDS = ("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine")
 
 
 @dataclass(frozen=True)
@@ -48,8 +48,14 @@ class ControlsAtLeast(Immutable):
         return controlled >= self.count
 
     @property
+    def clause(self) -> str:
+        """The condition as a clause: ``"you control seven or more lands"`` (Topiary Stomper's
+        "unless ...")."""
+        number = NUMBER_WORDS[self.count] if self.count < len(NUMBER_WORDS) else str(self.count)
+        return f"you control {number} or more {self.card_type.value.lower()}s"
+
+    @property
     def text(self) -> str:
         """The restriction as printed, such as ``"Activate only if you control five or more
         lands."``."""
-        number = _NUMBER_WORDS[self.count] if self.count < len(_NUMBER_WORDS) else str(self.count)
-        return f"Activate only if you control {number} or more {self.card_type.value.lower()}s."
+        return f"Activate only if {self.clause}."

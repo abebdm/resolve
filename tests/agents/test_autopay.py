@@ -55,8 +55,8 @@ from resolve.rules import defaults
 from resolve.state.config import GameConfig
 from resolve.state.game import GameState
 from resolve.state.ids import ObjectId, PlayerId
-from resolve.state.mana import Mana, ManaType
-from resolve.state.turn import Phase
+from resolve.state.mana import ForAttack, ForBlock, Mana, ManaType
+from resolve.state.turn import Phase, Step
 from resolve.state.zones import ZoneKind
 from tests.casting_support import (
     activate,
@@ -66,6 +66,7 @@ from tests.casting_support import (
     choose_x,
     records,
 )
+from tests.combat_support import declare_attackers, declare_blockers
 from tests.game_fixtures import request_of
 from tests.scenario import Scenario, run_script
 from tools.fuzz import recipe_deck
@@ -679,3 +680,42 @@ def test_601_2f_the_auto_payer_pays_the_reduced_total() -> None:
     (cast_event,) = records(state, SpellCast)
     assert cast_event.total_cost.text == "{G}"
     assert tapped(state, [forest, plains]) == [True, False]
+
+
+# --- 508.1h-j, 509.1d-f: costs to attack and block (M3.5) ----------------------------------------
+
+
+def test_autopay_pays_an_attack_cost() -> None:
+    """Grizzly Bears attacks P1, who controls Ghostly Prison: the auto-payer pays the {2} (508.1i-j)
+    with P0's Plains and Forest, and the Bears attack (nothing is reversed)."""
+    scenario = Scenario(2)
+    bears, plains, forest = scenario.battlefield(P0, ["Grizzly Bears", "Plains", "Forest"])
+    scenario.battlefield(P1, ["Ghostly Prison"])
+    scenario.at(Step.DECLARE_ATTACKERS, begin=True)
+    state = scenario.build()
+    declare_attackers(state, {bears: P1})
+    (payment,) = view_for(state, P0).payments
+    assert isinstance(payment.purpose, ForAttack) and payment.purpose.creatures == (bears,)
+    answered = autopay(state)
+    assert answered
+    assert tapped(state, [plains, forest]) == [True, True]
+    assert state.turn is not None and state.turn.combat is not None
+    assert bears in state.turn.combat.attackers
+    assert records(state, ActionReversed) == []
+
+
+def test_autopay_pays_a_block_cost() -> None:
+    """Test Tollkeeper (P0's): P1 blocks with Grizzly Bears, and the auto-payer pays the {1} with
+    P1's Forest (509.1e-f)."""
+    scenario = Scenario(2)
+    (attacker,) = scenario.battlefield(P0, ["Hill Giant", "Test Tollkeeper"])[:1]
+    bears, forest = scenario.battlefield(P1, ["Grizzly Bears", "Forest"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, attacker)
+    state = scenario.build()
+    declare_blockers(state, {bears: (attacker,)})
+    assert isinstance(view_for(state, P1).payments[0].purpose, ForBlock)
+    autopay(state)
+    assert tapped(state, [forest]) == [True]
+    assert state.turn is not None and state.turn.combat is not None
+    assert bears in state.turn.combat.blockers

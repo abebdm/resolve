@@ -81,7 +81,23 @@ class ForAbility(Immutable):
     ability: int
 
 
-PaymentPurpose = ForSpell | ForAbility
+@dataclass(frozen=True)
+class ForAttack(Immutable):
+    """A payment of the total cost to attack with ``creatures`` (508.1h-j), the declared
+    attackers in declaration order."""
+
+    creatures: tuple[ObjectId, ...]
+
+
+@dataclass(frozen=True)
+class ForBlock(Immutable):
+    """A payment of the total cost to block with ``creatures`` (509.1d-f), the declared blockers
+    of one defending player in declaration order."""
+
+    creatures: tuple[ObjectId, ...]
+
+
+PaymentPurpose = ForSpell | ForAbility | ForAttack | ForBlock
 """What a payment pays for: a mana restriction (106.6) reads it."""
 
 

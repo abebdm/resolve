@@ -251,10 +251,13 @@ The approved plan is `docs/plans/m3.md` (steps M3.0 to M3.9).
 
 - [x] The plan, and its documentation changes: design.md §17.18, the coverage-map and
   torture-test corrections (M3.0).
-- [ ] The answer spaces `ChooseAssignment` (attack and block declarations as constraint models)
+- [x] The answer spaces `ChooseAssignment` (attack and block declarations as constraint models)
   and `DistributeEach` (combat damage assignment), with agent support (M3.1, M3.4, M3.5). M3.1
   ✓: both spaces without constraints, the random and text agents, the fuzz probes. M3.4 ✓:
   `NoneOrAtLeast` and the solver (`resolve.decisions.assignment`: validation, `random_legal`).
+  M3.5 ✓: `NotAlone`, `AtMost`, requirements and costly picks; `most_obeyable` and the
+  randomized `random_legal`; the benchmark. (`DistributeEach`'s `LethalBeforeExcess` is M3.6's,
+  with trample.)
 - [x] The combat rule defaults: `attack_declarer`, `block_declarer`, `combat_damage_assigner`,
   `combat_damage_amount`, `blocks_allowed` (rule 12; M3.1 to M3.3). M3.1 ✓: the functions,
   each returning the CR's default. M3.2 ✓: `attack_declarer` and `combat_damage_amount` called,
@@ -266,12 +269,14 @@ The approved plan is `docs/plans/m3.md` (steps M3.0 to M3.9).
   unblocked combat damage (510.1a-b, 510.2), 800.4e, the 903.10a gap; the 508.1 gap is gone.
   M3.3 ✓: declaring blockers (509.1a, g-h), damage to and by blockers, divided among two or more
   recipients (510.1c-e); the 509.1 and 510.1c gaps are gone.
-- [ ] Attack and block requirements and restrictions (508.1c-d, 509.1b-c), with attack and block
+- [x] Attack and block requirements and restrictions (508.1c-d, 509.1b-c), with attack and block
   costs (508.1g-j, 509.1d-f): the primitives of "can't attack or block unless" (Topiary Stomper),
   "can't be blocked" (Rogue's Passage) and power-based blocking restrictions (Champion of
   Lambholt), tested with fixtures; the cards themselves need M4 or M5 (M3.4, M3.5). M3.4 ✓:
   509.1b's restrictions (`CantBeBlocked`, Phantom Warrior; `PowerBlockRestriction`, Test
-  Lambholt Warden; evasion, cumulative).
+  Lambholt Warden; evasion, cumulative). M3.5 ✓: requirements (508.1d, 509.1c), "can't attack
+  or block unless" (Test Stomper), "alone" and "no more than one", costs to attack and block
+  (508.1g-j, 509.1d-f) with reversal (733.1) and the auto-payer.
 - [ ] Creatures put onto the battlefield tapped and attacking (508.4), tested with a fixture;
   Ghalta and Mavren, which needs triggers and tokens, in M4 (M3.7).
 - [ ] First strike and double strike damage steps; trample; deathtouch; lifelink; flying and reach;
@@ -303,14 +308,17 @@ The approved plan is `docs/plans/m3.md` (steps M3.0 to M3.9).
   Relentless Assault, and Zetalpa, Primal Dawn (`docs/plans/m3.md` §7); the torture tests'
   rules for Lure and Basilisk Collar (the cards themselves in M5). M3.2 ✓: Raging Goblin,
   Alaborn Grenadier, Wall of Stone. M3.3 ✓: Palace Guard. M3.4 ✓: Wind Drake, Giant Spider,
-  Deranged Whelp, Highborn Ghoul, Severed Legion, Bog Raiders, Phantom Warrior.
+  Deranged Whelp, Highborn Ghoul, Severed Legion, Bog Raiders, Phantom Warrior. M3.5 ✓:
+  Juggernaut, Prized Unicorn, Ghostly Prison, Mogg Flunkies, Silent Arbiter; the Lure torture
+  test's rules (Prized Unicorn, Test Warmonger, Ghostly Prison).
 - [ ] Restore the thorough fuzz run's expectations that the 508.1 gap blocks
   (`docs/verification.md`, "Not yet reachable"): with attacks, games end by life total and by
   decking, damage is dealt, and Chandra's Ignition is cast (a game with a creature no longer
   stops at its controller's first combat). Remove 508.1 from `ALLOWED_GAPS` and move those
   expectations back into the checklist; Decimate too, once Ghostly Prison (an enchantment) is
   in the fuzz decks (M3.2, M3.5, M3.9). M3.2 ✓: 508.1 left `ALLOWED_GAPS` (509.1 stands in until
-  M3.3). M3.3 ✓: 509.1 left `ALLOWED_GAPS`, which is only 903.8.
+  M3.3). M3.3 ✓: 509.1 left `ALLOWED_GAPS`, which is only 903.8. M3.5 ✓: Ghostly Prison is in
+  the fuzz decks, so Decimate has its four targets (M3.9 checks it on the thorough run).
 
 **From M2:** protection's blocking part (702.16f) and combat damage reach the 702.16e gap in
 `DamageDealt.apply`; `TapAll` taps without attacking; haste plugs into
@@ -769,6 +777,24 @@ completes a step (CLAUDE.md, "Documentation requirements").
   block, in `rules.combat.block_declaration` (`minimum_blockers`). Cards: Wind Drake, Giant
   Spider, Deranged Whelp, Highborn Ghoul, Severed Legion, Bog Raiders (`keyword_examples`),
   Phantom Warrior (`combat`); fixtures Test Lambholt Warden and Test Flying Brute.
+- **Done (M3.5, requirements, restrictions and costs):** the constraints `NotAlone` and
+  `AtMost`, `Requirement` and `CostlyPick` (`ChooseAssignment.requirements`, `.costly`); the
+  solver's `requirements_obeyed`, `obeyable_bound`, `most_obeyable` (branch and bound over
+  independent groups) and a randomized `random_legal` (508.1d, 509.1c: the maximum over
+  cost-free declarations). `rules.combat.attack_declaration` and `block_declaration` compile
+  them; `attack_cost` and `block_cost` total the costs (508.1h, 509.1d). `engine.combat`:
+  `DeclareAttackers` and `DeclareBlockers` pay a declaration's cost with `PayCosts`
+  (`ForAttack`, `ForBlock` in `resolve.state.mana`) after a checkpoint (`DeclarationCost`), and
+  reverse an unpaid one (733.1, `ActionReversed(declaration=True)`), asking again;
+  `AttackersDeclared.cost`, `BlockersDeclared.cost`. Prohibitions: "can't attack or block
+  unless" (508.1c, 509.1b) and "can't be blocked by [quality]". Primitives (`resolve.cards.
+  primitives.combat`): `CantBeBlockedBy`, `CantAttackOrBlockUnless`, `CantAttackOrBlockAlone`,
+  `AtMostCreatures`, `AttacksEachCombat` (with `CreaturesYouControl`), `BlocksEachCombat`,
+  `MustBeBlockedByAll`, `AttackTax`, `BlockTax`. Cards: Juggernaut, Prized Unicorn, Ghostly
+  Prison, Mogg Flunkies, Silent Arbiter (`combat`); fixtures Test Stomper, Test Warmonger, Test
+  Sentry, Test Tollkeeper. The text agent shows constraints, requirements and costs; the fuzz
+  probes each, views the payments of declarations, excludes Nacatl Savage, and its `Combat:`
+  line counts costs paid and declarations reversed.
 
 ---
 
@@ -868,10 +894,10 @@ earlier milestones must leave room for every row in this map.
 | 503 | Upkeep Step | M1 ✓ | E |  |
 | 504 | Draw Step | M1 ✓ | E | `draw_step_draws`: default function in place (M2.1 ✓) |
 | 505 | Main Phase | M1 ✓; 505.3-505.5 M9 | E |  |
-| 506 | Combat Phase | M3 (506.2, 506.3, 506.4 on leaving the battlefield: M3.2 ✓) | E | `CombatBegan`, `remove_from_combat` (M3.2 ✓); 506.8 (spells timed by combat) as a predicate, `combat_point`, tested with a fixture; its first real cards in M9 |
+| 506 | Combat Phase | M3 (506.2, 506.3, 506.4 on leaving the battlefield: M3.2 ✓; 506.5 "alone" for declarations: M3.5 ✓, `NotAlone`) | E | `CombatBegan`, `remove_from_combat` (M3.2 ✓); "attacks alone" triggers (506.5-506.6) in M4; 506.8 (spells timed by combat) as a predicate, `combat_point`, tested with a fixture; its first real cards in M9 |
 | 507 | Beginning of Combat Step | M3 ✓ | E | 507.1: no choice (802, the attack multiple players option); the combat state is created as the phase begins (M3.2 ✓) |
-| 508 | Declare Attackers Step | M3 (508.1a-b, f, k and 508.8: M3.2 ✓) | E | `DeclareAttackers`, `attack_declaration`, `AttackersDeclared`; 508.1c-d, g-j in M3.5, 508.4 in M3.7, 508.1m triggers in M4 |
-| 509 | Declare Blockers Step | M3 (509.1a, 509.1g-h, 509.2: M3.3 ✓; 509.1b: M3.4 ✓) | E | `DeclareBlockers`, `block_declaration`, `legality.BlockAction`, `BlockersDeclared` (one per defending player, 802.4); 509.1b's restrictions as `BlockAction` prohibitions and the constraint `NoneOrAtLeast` (M3.4); 509.1c (requirements) and 509.1d-f (costs) in M3.5, 509.3 triggers in M4 |
+| 508 | Declare Attackers Step | M3 (508.1a-b, f, k and 508.8: M3.2 ✓; 508.1c-d, g-j: M3.5 ✓) | E | `DeclareAttackers`, `attack_declaration`, `AttackersDeclared`; restrictions, requirements and costs (`NotAlone`, `AtMost`, `Requirement`, `CostlyPick`, `attack_cost`); 508.1g's optional costs with their first card; 508.4 in M3.7, 508.1m triggers in M4 |
+| 509 | Declare Blockers Step | M3 (509.1a, 509.1g-h, 509.2: M3.3 ✓; 509.1b: M3.4 ✓; 509.1c-f: M3.5 ✓) | E | `DeclareBlockers`, `block_declaration`, `legality.BlockAction`, `BlockersDeclared` (one per defending player, 802.4); 509.1b's restrictions as `BlockAction` prohibitions and constraints (`NoneOrAtLeast`, `NotAlone`, `AtMost`); 509.1c's requirements and 509.1d-f's costs (`block_cost`, M3.5); 509.3 triggers in M4 |
 | 510 | Combat Damage Step | M3 (510.1a-b, 510.2: M3.2 ✓; 510.1c-e: M3.3 ✓) | E | `CombatDamage`, `damage_recipients`, `DamageDealt.combat`; `ASSIGN_COMBAT_DAMAGE` (`DistributeEach`, one per player in APNAP order); trample (702.19) and 510.4 in M3.6 |
 | 511 | End of Combat Step | M3 ✓ (511.2's triggers M4, "until end of combat" effects M5) | E | `CombatEnded` (511.3, M3.2 ✓) |
 | 512 | Ending Phase | M1 ✓ | E |  |
@@ -925,7 +951,7 @@ earlier milestones must leave room for every row in this map.
 | 730 | Merging with Permanents | M5 | X | mutate |
 | 731 | Day and Night | M7 | S |  |
 | 732 | Taking Shortcuts | M7 | E | how much of it is worth implementing: design.md §16 |
-| 733 | Handling Illegal Actions | M2 ✓ (M2.3 ✓; reversing a mana ability activation and the kept-abilities dependency check of 733.1: M2.4 ✓; 733.2 for a cast during resolution, asked again: M2.10 ✓); keeping the results of sacrifice and discard (733.1) M4 | E | checkpoint and restore (`resolve.state.checkpoint`), `resolve.engine.reversal` |
+| 733 | Handling Illegal Actions | M2 ✓ (M2.3 ✓; reversing a mana ability activation and the kept-abilities dependency check of 733.1: M2.4 ✓; 733.2 for a cast during resolution, asked again: M2.10 ✓; a declaration of attackers or blockers whose cost can't be paid, asked again: M3.5 ✓); keeping the results of sacrifice and discard (733.1) M4 | E | checkpoint and restore (`resolve.state.checkpoint`), `resolve.engine.reversal` |
 | 800 | General | M1 ✓ (800.4a, h, j, k), M3 ✓ (800.4e: M3.2 ✓); the rest M7 | E |  |
 | 801 | Limited Range of Influence Option | out of scope | — | Commander doesn't use it (903.2) |
 | 802 | Attack Multiple Players Option | M3 (802.2, 802.3: M3.2 ✓; 802.4, 802.5: M3.3 ✓), M7 | E | Commander's multiplayer default |

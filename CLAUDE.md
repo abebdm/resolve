@@ -52,9 +52,11 @@ completed step built, and where, is in `docs/roadmap.md`, "What's built".
   2026-10-30). M3.0 (its documentation), M3.1 (the answer spaces, `summoning_sick` and haste,
   the combat state and the combat rule defaults), M3.2 (declaring attackers, unblocked combat
   damage, vigilance and defender), M3.3 (declaring blockers in APNAP order, protection's
-  blocking part, dividing combat damage, Palace Guard) and M3.4 (evasion and blocking
-  restrictions, the `NoneOrAtLeast` constraint and the declaration solver) are done.
-- **Next:** M3.5 (requirements, restrictions and costs; the Lure torture test).
+  blocking part, dividing combat damage, Palace Guard), M3.4 (evasion and blocking
+  restrictions, the `NoneOrAtLeast` constraint and the declaration solver) and M3.5
+  (requirements, restrictions and costs to attack and block; the Lure torture test's rules) are
+  done.
+- **Next:** M3.6 (first strike, double strike, trample, deathtouch, lifelink; Basilisk Collar).
 
 Do not start a milestone unless the user asks.
 

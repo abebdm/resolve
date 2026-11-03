@@ -14,21 +14,44 @@
 - ``damage_recipients``: what each attacking and blocking creature may assign its combat damage
   to (510.1b-d).
 
-The other declaration-wide restrictions and the requirements arrive in M3.5. Leaving combat is
+Both declarations also carry the restrictions on the whole declaration (``NotAlone``: "can't
+attack or block alone", Mogg Flunkies; ``AtMost``: Silent Arbiter), the requirements (508.1d,
+509.1c: "attacks each combat if able", Juggernaut and Test Warmonger; "blocks each combat if
+able"; Prized Unicorn's "All creatures able to block this creature do so.") and the costly picks
+(508.1h, 509.1d: Ghostly Prison, Test Tollkeeper). ``attack_cost`` and ``block_cost`` total the
+costs of a declaration (508.1h, 509.1d). Leaving combat is
 ``resolve.state.combat.remove_from_combat``.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 from resolve.cards.keywords import Menace, has_keyword
+from resolve.cards.primitives.combat import (
+    AtMostCreatures,
+    AttacksEachCombat,
+    AttackTax,
+    BlocksEachCombat,
+    BlockTax,
+    CantAttackOrBlockAlone,
+    CreaturesYouControl,
+    MustBeBlockedByAll,
+)
+from resolve.cards.primitives.refs import ThisObject
+from resolve.data.mana_cost import ManaCost
 from resolve.decisions.spaces import (
+    AtMost,
     ChooseAssignment,
+    Constraint,
+    CostlyPick,
     NoneOrAtLeast,
+    NotAlone,
     ObjectOption,
     Option,
     PlayerOption,
+    Requirement,
 )
 from resolve.effects.characteristics import characteristics
 from resolve.errors import EngineError
@@ -109,7 +132,129 @@ def attack_declaration(state: GameState) -> ChooseAssignment | None:
             choices.append(allowed)
     if not items:
         return None
-    return ChooseAssignment(tuple(items), tuple(choices), (1,) * len(items))
+    creatures = [_object(item) for item in items]
+    constraints: list[Constraint] = [
+        NotAlone(item)
+        for item, creature in zip(items, creatures, strict=True)
+        if has_keyword(characteristics(state, creature), CantAttackOrBlockAlone)
+    ]
+    constraints += _at_most(state, blocking=False)
+    requirements: list[Requirement] = []
+    costly: list[CostlyPick] = []
+    for item, creature, own in zip(items, creatures, choices, strict=True):
+        for reason in _attack_requirements(state, creature):
+            requirements.append(Requirement(item, own, reason))
+        costly += [
+            CostlyPick(item, choice)
+            for choice in own
+            if _attack_taxes(state, option_target(choice))
+        ]
+    return ChooseAssignment(
+        tuple(items),
+        tuple(choices),
+        (1,) * len(items),
+        tuple(dict.fromkeys(constraints)),
+        tuple(requirements),
+        tuple(costly),
+    )
+
+
+def _object(option: Option) -> ObjectId:
+    if not isinstance(option, ObjectOption):
+        raise EngineError(f"{option!r} isn't a creature")
+    return option.object
+
+
+def _at_most(state: GameState, *, blocking: bool) -> list[Constraint]:
+    """``AtMost`` constraints from each "No more than N creatures can attack (block) each combat"
+    on the battlefield (Silent Arbiter, 508.1c, 509.1b), whoever controls it; redundant ones
+    once."""
+    counts = {
+        ability.count: None
+        for obj in state.battlefield
+        for ability in characteristics(state, obj).abilities
+        if isinstance(ability, AtMostCreatures) and ability.blocking is blocking
+    }
+    return [AtMost(count) for count in counts]
+
+
+def _attack_requirements(state: GameState, creature: ObjectId) -> list[str]:
+    """The reasons of each requirement that ``creature`` attack (508.1d), one per instance:
+    its own "This creature attacks each combat if able." (Juggernaut) and each "Creatures you
+    control attack each combat if able." of a permanent its controller controls (Test
+    Warmonger, itself included)."""
+    controller = state.object(creature).controller
+    reasons: list[str] = []
+    own = characteristics(state, creature)
+    for ability in own.abilities:
+        if isinstance(ability, AttacksEachCombat) and isinstance(ability.scope, ThisObject):
+            reasons.append(f"{own.name}: {ability.text}")
+    for obj in state.battlefield:
+        if state.object(obj).controller != controller:
+            continue
+        chars = characteristics(state, obj)
+        for ability in chars.abilities:
+            if isinstance(ability, AttacksEachCombat) and isinstance(
+                ability.scope, CreaturesYouControl
+            ):
+                reasons.append(f"{chars.name}: {ability.text}")
+    return reasons
+
+
+def _attack_taxes(state: GameState, target: AttackTarget) -> list[ManaCost]:
+    """The cost each creature attacking ``target`` adds to the total cost to attack (508.1h):
+    each "Creatures can't attack you unless their controller pays ..." (Ghostly Prison) of a
+    permanent the attacked player controls, once per instance."""
+    taxes: list[ManaCost] = []
+    for obj in state.battlefield:
+        if state.object(obj).controller != target.player:
+            continue
+        for ability in characteristics(state, obj).abilities:
+            if isinstance(ability, AttackTax):
+                taxes.append(ability.cost)
+    return taxes
+
+
+def _block_taxes(state: GameState) -> list[ManaCost]:
+    """The cost each blocking creature adds to the total cost to block (509.1d): each "Creatures
+    can't block unless their controller pays ..." on the battlefield, once per instance."""
+    return [
+        ability.cost
+        for obj in state.battlefield
+        for ability in characteristics(state, obj).abilities
+        if isinstance(ability, BlockTax)
+    ]
+
+
+def attack_cost(
+    state: GameState, attacks: tuple[tuple[ObjectId, AttackTarget], ...]
+) -> ManaCost | None:
+    """The total cost to attack with ``attacks`` (508.1h), determined as the declaration is made
+    (after 508.1f's tapping), or ``None`` if none of the attacks needs a cost: each attacking
+    creature adds the taxes of what it attacks (``AttackTax``, Ghostly Prison: {2} for each
+    creature attacking its controller, per instance)."""
+    return _total(cost for _, target in attacks for cost in _attack_taxes(state, target))
+
+
+def block_cost(
+    state: GameState, blocks: tuple[tuple[ObjectId, tuple[ObjectId, ...]], ...]
+) -> ManaCost | None:
+    """The total cost to block with ``blocks`` (509.1d), or ``None`` if none is needed: each
+    blocking creature adds each ``BlockTax`` on the battlefield once, whatever it blocks."""
+    taxes = _block_taxes(state)
+    return _total(cost for _ in blocks for cost in taxes)
+
+
+def _total(costs: Iterable[ManaCost]) -> ManaCost | None:
+    """The costs added up into one (generic amounts merged, 107.4b), or ``None`` for none."""
+    total: ManaCost | None = None
+    for cost in costs:
+        if total is None:
+            total = cost
+        else:
+            combined = ManaCost((*total.symbols, *cost.symbols))
+            total = combined.with_generic(total.generic + cost.generic)
+    return total
 
 
 def declared_attacks(
@@ -186,12 +331,51 @@ def block_declaration(state: GameState, player: PlayerId) -> ChooseAssignment | 
     if not items:
         return None
     offered = {choice for own in choices for choice in own}
-    constraints = tuple(
+    constraints: list[Constraint] = [
         NoneOrAtLeast(ObjectOption(attacker), minimum)
         for attacker, minimum in minimums.items()
         if ObjectOption(attacker) in offered
+    ]
+    # 802.4b: "alone" and "no more than N" are judged within this player's declaration.
+    constraints += [
+        NotAlone(item)
+        for item in items
+        if has_keyword(characteristics(state, _object(item)), CantAttackOrBlockAlone)
+    ]
+    constraints += _at_most(state, blocking=True)
+    lured = [
+        attacker
+        for attacker in attackers
+        if has_keyword(characteristics(state, attacker), MustBeBlockedByAll)
+    ]
+    requirements: list[Requirement] = []
+    for item, own in zip(items, choices, strict=True):
+        chars = characteristics(state, _object(item))
+        for ability in chars.abilities:
+            if isinstance(ability, BlocksEachCombat):
+                requirements.append(Requirement(item, own, f"{chars.name}: {ability.text}"))
+        for attacker in lured:
+            if ObjectOption(attacker) in own:
+                attacking = characteristics(state, attacker)
+                for ability in attacking.abilities:
+                    if isinstance(ability, MustBeBlockedByAll):
+                        reason = f"{attacking.name}: {ability.text}"
+                        requirements.append(Requirement(item, (ObjectOption(attacker),), reason))
+    taxed = bool(_block_taxes(state))
+    costly = tuple(
+        CostlyPick(item, choice)
+        for item, own in zip(items, choices, strict=True)
+        for choice in own
+        if taxed
     )
-    return ChooseAssignment(tuple(items), tuple(choices), tuple(maxima), constraints)
+    return ChooseAssignment(
+        tuple(items),
+        tuple(choices),
+        tuple(maxima),
+        tuple(dict.fromkeys(constraints)),
+        tuple(requirements),
+        costly,
+    )
 
 
 def minimum_blockers(state: GameState, attacker: ObjectId) -> int | None:

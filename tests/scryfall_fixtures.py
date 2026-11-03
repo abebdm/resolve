@@ -517,6 +517,58 @@ TEST_LAMBHOLT_WARDEN = keyword_creature(
 TEST_FLYING_BRUTE = keyword_creature(
     "Test Flying Brute", "{3}{R}", 4.0, "Dragon", ("3", "3"), "R", "Flying\nMenace"
 )
+# M3.5's combat-rules cards (Oracle text from the 2026-11-02 snapshot).
+JUGGERNAUT: dict[str, Any] = {
+    **keyword_creature(
+        "Juggernaut", "{4}", 4.0, "Juggernaut", ("5", "3"), "C",
+        "This creature attacks each combat if able.\nThis creature can't be blocked by Walls.",
+    ),
+    "type_line": "Artifact Creature \u2014 Juggernaut",
+    "colors": [],
+    "color_identity": [],
+}  # fmt: skip
+SILENT_ARBITER: dict[str, Any] = {
+    **keyword_creature(
+        "Silent Arbiter", "{4}", 4.0, "Construct", ("1", "5"), "C",
+        "No more than one creature can attack each combat.\nNo more than one creature can block "
+        "each combat.",
+    ),
+    "type_line": "Artifact Creature \u2014 Construct",
+    "colors": [],
+    "color_identity": [],
+}  # fmt: skip
+PRIZED_UNICORN = keyword_creature(
+    "Prized Unicorn", "{3}{G}", 4.0, "Unicorn", ("2", "2"), "G",
+    "All creatures able to block this creature do so.",
+)  # fmt: skip
+MOGG_FLUNKIES = keyword_creature(
+    "Mogg Flunkies", "{1}{R}", 2.0, "Goblin", ("3", "3"), "R",
+    "This creature can't attack or block alone.",
+)  # fmt: skip
+GHOSTLY_PRISON = spell(
+    "Ghostly Prison", "{2}{W}", 3.0, "Enchantment", ["W"],
+    "Creatures can't attack you unless their controller pays {2} for each creature they control "
+    "that's attacking you.",
+)  # fmt: skip
+# Invented cards for M3.5: Topiary Stomper's restriction, "attacks each combat if able" for every
+# creature, 509.1c's example "blocks if able", and a cost to block (509.1d).
+TEST_STOMPER = keyword_creature(
+    "Test Stomper", "{1}{G}{G}", 3.0, "Plant Dinosaur", ("4", "4"), "G",
+    "This creature can't attack or block unless you control seven or more lands.",
+)  # fmt: skip
+TEST_WARMONGER = keyword_creature(
+    "Test Warmonger", "{2}{R}", 3.0, "Human Warrior", ("2", "2"), "R",
+    "Creatures you control attack each combat if able.",
+)  # fmt: skip
+TEST_SENTRY = keyword_creature(
+    "Test Sentry", "{1}{W}", 2.0, "Human Soldier", ("2", "2"), "W",
+    "This creature blocks each combat if able.",
+)  # fmt: skip
+TEST_TOLLKEEPER = spell(
+    "Test Tollkeeper", "{1}{U}", 2.0, "Enchantment", ["U"],
+    "Creatures can't block unless their controller pays {1} for each creature they control "
+    "that's blocking.",
+)  # fmt: skip
 # Invented creatures with haste (702.10c) and a {T} mana ability (M3.1).
 TEST_HASTY_ELVES = keyword_creature(
     "Test Hasty Elves", "{G}", 1.0, "Elf Druid", ("1", "1"), "G", "Haste\n{T}: Add {G}."
