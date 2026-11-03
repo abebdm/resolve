@@ -409,8 +409,10 @@ class _Model:
                 continue
             picked.append(options[rng.randbelow(len(options))])
         size = len(picked) + rng.randbelow(maximum - len(picked) + 1)
-        rest = _shuffled(rng, [i for i in allowed if i not in picked])
-        picked += rest[: size - len(picked)]
+        # A partial Fisher-Yates shuffle: the first ones drawn are a uniform sample (without
+        # requirements or costs, the same draws as M3.4's, so seeded games don't change).
+        rest = [i for i in allowed if i not in picked]
+        picked += _sample(rng, rest, min(size - len(picked), len(rest)))
         return sorted(picked)
 
 
