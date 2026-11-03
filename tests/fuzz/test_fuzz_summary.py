@@ -25,7 +25,13 @@ from typing import Any
 import pytest
 
 from resolve.agents.scripted import Choose, ScriptedAgent, Step
-from resolve.decisions.spaces import ActivateAbilityOption, ChooseOne, Pick, PlayLandOption
+from resolve.decisions.spaces import (
+    ActivateAbilityOption,
+    ChooseOne,
+    ManaActivationOption,
+    Pick,
+    PlayLandOption,
+)
 from resolve.engine.api import submit, view_for
 from resolve.engine.concede import concede
 from resolve.engine.deck import Deck
@@ -191,7 +197,8 @@ def test_the_summary_lines() -> None:
         "other (704.5c) x1.",
         "Played: 5 lands, 9 mana abilities activated, 0 reversed.",
         "Spells: 0 cast, 0 resolved, 0 didn't resolve, 0 countered, 0 reversed.",
-        "Combat: 0 combats, 0 attackers declared, 0 blockers declared, 0 attackers blocked.",
+        "Combat: 0 combats, 0 attackers declared, 0 blockers declared, 0 attackers blocked, "
+        "0 costs paid, 0 declarations reversed.",
         "Damage: 0 dealt, 0 of it combat damage.",
         "Reversed casts: auto-pay seats 0 of 0 attempts, 0 of 0 payable; random seats 0 of 0, "
         "0 of 0 payable.",
@@ -214,7 +221,8 @@ def test_the_summary_counts_spells_casts_per_card_and_gaps() -> None:
     )
     assert summary_lines(games)[5:] == [
         "Spells: 4 cast, 3 resolved, 2 didn't resolve, 1 countered, 5 reversed.",
-        "Combat: 2 combats, 3 attackers declared, 2 blockers declared, 1 attackers blocked.",
+        "Combat: 2 combats, 3 attackers declared, 2 blockers declared, 1 attackers blocked, "
+        "0 costs paid, 0 declarations reversed.",
         "Damage: 9 dealt, 6 of it combat damage.",
         "Reversed casts: auto-pay seats 0 of 0 attempts, 0 of 0 payable; random seats 5 of 9, "
         "0 of 4 payable.",
@@ -333,8 +341,8 @@ def test_game_stats_count_combats_attackers_and_combat_damage() -> None:
     assert (stats.combats, stats.attackers, stats.damage, stats.combat_damage) == (1, 2, 7, 5)
     lines = summary_lines([stats])
     assert (
-        "Combat: 1 combats, 2 attackers declared, 0 blockers declared, 0 attackers blocked."
-        in lines
+        "Combat: 1 combats, 2 attackers declared, 0 blockers declared, 0 attackers blocked, "
+        "0 costs paid, 0 declarations reversed." in lines
     )
     assert "Damage: 7 dealt, 5 of it combat damage." in lines
 
@@ -363,10 +371,34 @@ def test_game_stats_count_blockers_and_a_game_ended_by_combat_damage() -> None:
     assert (stats.combat_damage, stats.ending) == (7, LIFE_TOTAL)
     lines = summary_lines([stats])
     assert (
-        "Combat: 1 combats, 2 attackers declared, 1 blockers declared, 1 attackers blocked."
-        in lines
+        "Combat: 1 combats, 2 attackers declared, 1 blockers declared, 1 attackers blocked, "
+        "0 costs paid, 0 declarations reversed." in lines
     )
     assert "Damage: 7 dealt, 7 of it combat damage." in lines
+
+
+def test_game_stats_count_costs_paid_and_declarations_reversed() -> None:
+    """M3.5, deterministically: Grizzly Bears attacks P1, who controls Ghostly Prison. P0
+    activates only the Plains and pays: {W} can't pay {2}, so the declaration is reversed (508.1,
+    733.1), the Plains with it. P0 declares again and pays with the Plains and the Forest. The
+    statistics count one cost paid and one declaration reversed (not a reversed cast or mana
+    ability); the summary says so."""
+    scenario = Scenario(2)
+    bears, plains, forest = scenario.battlefield(PlayerId(0), ["Grizzly Bears", "Plains", "Forest"])
+    scenario.battlefield(PlayerId(1), ["Ghostly Prison"])
+    scenario.at(TurnStep.DECLARE_ATTACKERS, begin=True)
+    state = scenario.build()
+    declare_attackers(state, {bears: PlayerId(1)})
+    run_script(state, activate(plains), pay(), reverse(ManaActivationOption(0, plains, 0)))
+    declare_attackers(state, {bears: PlayerId(1)})
+    run_script(state, activate(plains), activate(forest))
+    stats = GameStats.of(FuzzResult(9, 0, "903.8: a stand-in gap, so the game counts", state))
+    assert (stats.attackers, stats.costs_paid, stats.declarations_reversed) == (1, 1, 1)
+    assert (stats.reversed, stats.abilities_reversed) == (0, 0)
+    assert (
+        "Combat: 0 combats, 1 attackers declared, 0 blockers declared, 0 attackers blocked, "
+        "1 costs paid, 1 declarations reversed." in summary_lines([stats])
+    )
 
 
 def test_game_stats_count_payable_reversals_by_seat() -> None:
@@ -556,7 +588,7 @@ def check_summary(recorder: Recorder, text: str, formats: str) -> Totals:
     turns: list[int] = []
     lands = mana = cast = resolved = reversed_ = abilities_reversed = 0
     did_not_resolve = damage = countered = combat_damage = combats = attackers = 0
-    blockers = blocked = 0
+    blockers = blocked = costs_paid = declarations_reversed = 0
     casts: Counter[str] = Counter()
     gaps: Counter[str] = Counter()
     endings: Counter[str] = Counter()
@@ -594,6 +626,14 @@ def check_summary(recorder: Recorder, text: str, formats: str) -> Totals:
             record.total for record in records if isinstance(record, DamageDealt) and record.combat
         )
         combats += sum(1 for record in records if isinstance(record, CombatBegan))
+        costs_paid += sum(
+            1
+            for record in records
+            if isinstance(record, AttackersDeclared | BlockersDeclared) and record.cost is not None
+        )
+        declarations_reversed += sum(
+            1 for record in records if isinstance(record, ActionReversed) and record.declaration
+        )
         blockers += sum(
             len(record.blocks) for record in records if isinstance(record, BlockersDeclared)
         )
@@ -663,9 +703,9 @@ def check_summary(recorder: Recorder, text: str, formats: str) -> Totals:
     ) == (cast, resolved, did_not_resolve, countered, reversed_)
     assert numbers(
         r"Combat: (\d+) combats, (\d+) attackers declared, (\d+) blockers declared, "
-        r"(\d+) attackers blocked\.",
+        r"(\d+) attackers blocked, (\d+) costs paid, (\d+) declarations reversed\.",
         text,
-    ) == (combats, attackers, blockers, blocked)
+    ) == (combats, attackers, blockers, blocked, costs_paid, declarations_reversed)
     assert numbers(r"Damage: (\d+) dealt, (\d+) of it combat damage\.", text) == (
         damage,
         combat_damage,

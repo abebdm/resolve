@@ -849,6 +849,10 @@ class GameStats:
       declared as attackers (``AttackersDeclared``, 508.1k).
     - ``blockers``: creatures declared as blockers (``BlockersDeclared``, 509.1g);
       ``blocked``: attackers they blocked (509.1h).
+    - ``costs_paid``: declarations of attackers or blockers whose cost was paid (508.1h-j,
+      509.1d-f: ``AttackersDeclared.cost``, ``BlockersDeclared.cost``);
+      ``declarations_reversed``: those reversed because it couldn't be (``ActionReversed`` of a
+      declaration, 508.1, 509.1, 733.1).
     """
 
     answers: int
@@ -874,6 +878,8 @@ class GameStats:
     attackers: int = 0
     blockers: int = 0
     blocked: int = 0
+    costs_paid: int = 0
+    declarations_reversed: int = 0
 
     @staticmethod
     def of(result: FuzzResult) -> GameStats:
@@ -937,6 +943,13 @@ class GameStats:
                 for record in records
                 if isinstance(record, BlockersDeclared)
             ),
+            costs_paid=sum(
+                isinstance(record, AttackersDeclared | BlockersDeclared) and record.cost is not None
+                for record in records
+            ),
+            declarations_reversed=sum(
+                isinstance(record, ActionReversed) and record.declaration for record in records
+            ),
         )
 
 
@@ -980,7 +993,9 @@ def summary_lines(games: Sequence[GameStats]) -> list[str]:
         f"Combat: {sum(game.combats for game in games)} combats, "
         f"{sum(game.attackers for game in games)} attackers declared, "
         f"{sum(game.blockers for game in games)} blockers declared, "
-        f"{sum(game.blocked for game in games)} attackers blocked.",
+        f"{sum(game.blocked for game in games)} attackers blocked, "
+        f"{sum(game.costs_paid for game in games)} costs paid, "
+        f"{sum(game.declarations_reversed for game in games)} declarations reversed.",
         f"Damage: {sum(game.damage for game in games)} dealt, "
         f"{sum(game.combat_damage for game in games)} of it combat damage.",
         f"Reversed casts: auto-pay seats {autopay_reversed} of {autopay_reversed + autopay_cast} "
