@@ -41,7 +41,8 @@ Ignition, Decimate, Fiery Confluence, Cryptic Command, Cancel, Rishkar's Experti
 card for each keyword: Ashcoat Bear, Gladecover Scout, Humble
 Budoka, Darksteel Relic, Darksteel Myr, Repentant Blacksmith, Nacatl Savage, Raging Goblin,
 Alaborn Grenadier, Wall of Stone, Wind Drake, Giant Spider, Deranged Whelp, Highborn Ghoul,
-Severed Legion and Bog Raiders, and Palace Guard and Phantom Warrior.
+Severed Legion and Bog Raiders, and the combat cards Palace Guard, Phantom Warrior,
+Juggernaut, Prized Unicorn, Ghostly Prison, Mogg Flunkies and Silent Arbiter.
 Tools compare a new Comprehensive Rules version or card data snapshot against
 the pinned ones (`tools/rules_diff.py`, `tools/card_diff.py`), and `tools/rule.py` prints any
 rule of the pinned Comprehensive Rules by number. The rules coverage map in
@@ -63,8 +64,12 @@ win the game. Blocks obey evasion: flying (only creatures with flying or reach b
 menace (two or more blockers, or none), intimidate, fear, landwalk (judged by the lands of the
 player attacked), "can't be blocked", protection from a player, and restrictions from other
 permanents such as Champion of Lambholt's; an illegal declaration is refused and nothing
-changes. **Next:** attack and block requirements, restrictions on the whole declaration and
-attack costs (M3.5).
+changes. Declarations also obey requirements ("attacks each combat if able", "all creatures able
+to block this creature do so"), as many as can be obeyed without breaking a restriction or
+paying a cost, and restrictions on the whole declaration ("can't attack or block alone", "no
+more than one creature can attack"); costs to attack or block (Ghostly Prison) are paid after
+declaring, with mana abilities, and a declaration whose cost can't be paid is undone and made
+again. **Next:** first strike, double strike, trample, deathtouch and lifelink (M3.6).
 Details:
 "Current status" in [`CLAUDE.md`](CLAUDE.md).
 

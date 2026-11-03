@@ -523,16 +523,42 @@ about the whole declaration (design.md §17.18).
    (`_power_restrictions`). "The defending player" of an attacker is the player it attacks
    (802.2a, `_defending_player_of`). `rules.combat.block_declaration` then leaves the pair out
    of the space by itself.
-2. **The whole declaration** (menace: how many creatures block): a constraint of the space,
-   from the closed vocabulary in `resolve.decisions.spaces` (`NoneOrAtLeast`; `NotAlone`,
-   `AtMost` from M3.5). The compiler (`block_declaration`) adds it; the solver
-   (`resolve.decisions.assignment`) checks it in `broken_constraints` (so `validate` refuses a
-   breaking answer) and repairs it in `random_legal`. A new constraint kind needs all three, a
-   case in the text agent's `render_request` and in `tools/fuzz.py`'s `invalid_answers`, and its
-   own solver tests (`tests/decisions/test_assignment_solver.py`). A restriction the vocabulary
-   can't express raises `NotImplementedRule` in the compiler.
+2. **The whole declaration** (menace: how many creatures block; "can't attack alone"; "no more
+   than one creature can attack"): a constraint of the space, from the closed vocabulary in
+   `resolve.decisions.spaces` (`NoneOrAtLeast`, `NotAlone`, `AtMost`). The compiler
+   (`attack_declaration`, `block_declaration`) adds it; for blocks it is judged within one
+   defending player's declaration (802.4b). The solver (`resolve.decisions.assignment`) checks
+   it in `broken_constraints` (so `validate` refuses a breaking answer), repairs it in
+   `_repair` (for `random_legal`) and prunes with it in `_Model._search`. A new constraint kind
+   needs all of these, a case in the text agent's `render_request` and in `tools/fuzz.py`'s
+   `invalid_answers`, the solver's candidate reduction checked (`_Model.candidates`: the
+   brute-force test `test_most_obeyable_matches_a_brute_force_search` must cover it), and its
+   own solver tests (`tests/decisions/test_assignment_requirements.py`). A restriction the
+   vocabulary can't express raises `NotImplementedRule` in the compiler.
 3. Test both what it refuses and what it still allows, in multiplayer where "defending player"
    or control matters, and that a refused declaration changes nothing (733.1).
+
+### Add an attack or block requirement, or a cost to attack or block
+
+508.1d, 509.1c, 508.1g-j, 509.1d-f (design.md §17.18).
+
+1. **A requirement** ("attacks each combat if able", "must block", Lure's): a primitive in
+   `resolve.cards.primitives.combat` read from computed characteristics; the compiler adds one
+   `Requirement(item, choices, reason)` per instance on each item it applies to (`choices`: the
+   picks that obey it; any target for "attacks if able", the attacker for Prized Unicorn's).
+   Nothing else changes: `validate` compares `requirements_obeyed` with `most_obeyable`, and
+   `random_legal` obeys the most. A requirement on a creature that can't attack or block (not
+   an item, or the choice left out) simply isn't there.
+2. **A cost** (Ghostly Prison): a primitive collected from the battlefield; the compiler marks
+   each pick that needs it `CostlyPick(item, choice)` (no requirement may force it), and
+   `rules.combat.attack_cost` / `block_cost` add it to the total, which `DeclareAttackers` /
+   `DeclareBlockers` lock in and pay (`DeclarationCost`: checkpoint, `PayCosts` with `ForAttack`
+   / `ForBlock`, reversal and asking again when it can't be paid). A non-mana cost component
+   (tap, sacrifice) waits for M4's costs. Optional "as it attacks" costs (508.1g) need a new
+   decision with their first card.
+3. Test the rules' examples (508.1c-d, 509.1c), the cards' rulings, that a cost is never
+   required, multiplayer (802.4b), and payment and reversal (the auto-payer too:
+   `tests/agents/test_autopay.py`).
 
 ### Let an effect cast a spell during its resolution
 

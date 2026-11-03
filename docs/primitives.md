@@ -279,7 +279,8 @@ join them with their cards.
 least that many permanents with the card type, the source included.
 - **Rules:** 602.5, 602.2.
 - **Parameters:** `count: int` (at least 1), `card_type: CardType`.
-- **Example:** Temple of the False God: `activate_only_if=ControlsAtLeast(5, CardType.LAND)`.
+- **Example:** Temple of the False God: `activate_only_if=ControlsAtLeast(5, CardType.LAND)`; as
+  "unless [condition]" (its `clause`), Test Stomper's `CantAttackOrBlockUnless`.
 
 ## Costs
 
@@ -345,6 +346,71 @@ card's ruling).
 - **Rules:** 509.1b.
 - **Example:** Test Lambholt Warden (tests): `abilities=(PowerBlockRestriction(),)`; Champion of
   Lambholt's first ability (the card needs a trigger and counters, M4).
+
+### `CantBeBlockedBy(quality)` (`resolve.cards.primitives.combat`)
+"This creature can't be blocked by [quality].": a prohibition of `legality.allowed(BlockAction)`
+read from the attacker, for a blocker whose computed characteristics have the quality (a
+`Quality`, judged with `matches_source`), as blockers are declared.
+- **Rules:** 509.1b, 101.2.
+- **Example:** Juggernaut: `CantBeBlockedBy(SubtypeQuality(SubtypeWord("Wall")))`.
+
+### `CantAttackOrBlockUnless(condition)` (`resolve.cards.primitives.combat`)
+"This creature can't attack or block unless [condition].": prohibitions of `AttackAction` (508.1c)
+and `BlockAction` (509.1b), read from the creature, for each instance whose condition isn't met
+for its controller now. The condition is a `ControlsAtLeast` (its `clause` writes the text).
+- **Rules:** 508.1c, 509.1b.
+- **Example:** Test Stomper (tests): `CantAttackOrBlockUnless(ControlsAtLeast(7, CardType.LAND))`,
+  Topiary Stomper's restriction (the card needs a trigger, M4).
+
+### `CantAttackOrBlockAlone` (`resolve.cards.primitives.combat`)
+"This creature can't attack or block alone.": the compilers add a `NotAlone(item)` constraint for
+the creature (attacks: the whole declaration; blocks: one defending player's, 802.4b). Another
+creature picking anything is company (its ruling: not necessarily the same target).
+- **Rules:** 506.5, 508.1c, 509.1b, 802.4b.
+- **Example:** Mogg Flunkies: `abilities=(CantAttackOrBlockAlone(),)`.
+
+### `AtMostCreatures(count, blocking)` (`resolve.cards.primitives.combat`)
+"No more than [count] creature(s) can attack (block) each combat.": collected from the
+battlefield, whoever controls it, as an `AtMost(count)` constraint of the declaration of
+attackers (or of each defending player's blockers, 802.4b). The plan's
+`AtMostCreaturesAttackAndBlock`, written as one ability per line of Oracle text.
+- **Rules:** 508.1c, 509.1b, 802.4b.
+- **Example:** Silent Arbiter: `(AtMostCreatures(1, blocking=False), AtMostCreatures(1,
+  blocking=True))`.
+
+### `AttacksEachCombat(scope)`, `CreaturesYouControl` (`resolve.cards.primitives.combat`)
+"This creature attacks each combat if able." (`scope=ThisObject()`) or "Creatures you control
+attack each combat if able." (`scope=CreaturesYouControl()`, from a permanent: each creature its
+controller controls, itself included): one `Requirement` per instance on each creature in scope
+that may attack, obeyed by attacking anything. It doesn't force paying a cost (508.1d).
+- **Rules:** 508.1d.
+- **Example:** Juggernaut: `AttacksEachCombat()`; Test Warmonger (tests):
+  `AttacksEachCombat(CreaturesYouControl())`.
+
+### `BlocksEachCombat` (`resolve.cards.primitives.combat`)
+"This creature blocks each combat if able.": a `Requirement` on the creature, obeyed by blocking
+any attacker.
+- **Rules:** 509.1c.
+- **Example:** Test Sentry (tests), 509.1c's example creature.
+
+### `MustBeBlockedByAll` (`resolve.cards.primitives.combat`)
+"All creatures able to block this creature do so.": while the creature attacks, a `Requirement`
+on each creature that may block it, obeyed by blocking it (two of them: each blocker obeys one,
+its ruling). Lure's granted ability is the same (M5).
+- **Rules:** 509.1c.
+- **Example:** Prized Unicorn: `abilities=(MustBeBlockedByAll(),)`.
+
+### `AttackTax(cost)`, `BlockTax(cost)` (`resolve.cards.primitives.combat`)
+"Creatures can't attack you unless their controller pays [cost] for each creature they control
+that's attacking you." (`AttackTax`) and "Creatures can't block unless their controller pays
+[cost] for each creature they control that's blocking." (`BlockTax`): costs, not prohibitions.
+The compilers mark the picks `CostlyPick` (so no requirement forces them, 508.1d, 509.1c), and
+`rules.combat.attack_cost` / `block_cost` add the cost once per creature attacking the
+permanent's controller (any blocking creature), per instance, into the locked-in total that
+`DeclareAttackers` / `DeclareBlockers` pay (508.1h-j, 509.1d-f).
+- **Rules:** 508.1d, 508.1h-j, 509.1c-f, 733.1.
+- **Example:** Ghostly Prison: `AttackTax(parse_mana_cost("{2}"))`; Test Tollkeeper (tests):
+  `BlockTax(parse_mana_cost("{1}"))`.
 
 ### `SpellCostReduction(spells, amount=1)` (`resolve.cards.primitives.cost_modifiers`)
 "[Quality] spells you cast cost {N} less to cast.": a static ability of a permanent (113.6: it

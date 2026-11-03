@@ -112,6 +112,12 @@ from resolve.decisions.spaces import (
 from resolve.effects.characteristics import characteristics
 from resolve.engine.api import new_game, pending_decision, submit, view_for
 from resolve.engine.casting import CastSpell, CastStage
+from resolve.engine.combat import (
+    DeclarationCost,
+    DeclarationStage,
+    DeclareAttackers,
+    DeclareBlockers,
+)
 from resolve.engine.concede import concede
 from resolve.engine.deck import Deck, build_deck
 from resolve.engine.mana import ActivateManaAbility, ActivationStage
@@ -272,7 +278,8 @@ def _expected_abilities(
 def _expected_payments(state: GameState) -> list[tuple[object, ...]]:
     """The payments under way, read from the tasks paying them (bottom of the task stack first),
     not from ``Task.payment_under_way``: a cast or a mana ability activation in its paying stage
-    (601.2g-h, 602.2b)."""
+    (601.2g-h, 602.2b), or a declaration of attackers or blockers paying its cost (508.1i-j,
+    509.1e-f)."""
     found: list[tuple[object, ...]] = []
     for task in state.tasks:
         match task:
@@ -281,6 +288,11 @@ def _expected_payments(state: GameState) -> list[tuple[object, ...]]:
                 | ActivateManaAbility(stage=ActivationStage.PAY, payment=PayCosts() as payment)
             ):
                 found.append((payment.payer, payment.cost, payment.purpose))
+            case (
+                DeclareAttackers(stage=DeclarationStage.PAY, cost=DeclarationCost() as cost)
+                | DeclareBlockers(stage=DeclarationStage.PAY, cost=DeclarationCost() as cost)
+            ):
+                found.append((cost.payment.payer, cost.payment.cost, cost.payment.purpose))
             case _:
                 pass
     return found
