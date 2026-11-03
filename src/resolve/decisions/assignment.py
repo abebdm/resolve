@@ -109,19 +109,26 @@ def random_legal(space: ChooseAssignment, rng: Rng) -> Assignment:
     """A random legal answer to ``space``: every constraint satisfied and at least
     ``most_obeyable`` requirements obeyed.
 
-    It draws up to ``_RANDOM_TRIES`` answers, each item first picking, for each of its
-    requirements in a random order, a random obeying choice while it has room, then a random
-    number of random other choices up to its maximum (costly ones included, so random agents
-    sometimes pay); each broken constraint is then repaired (``_repair``). The first draw that is
-    legal is the answer. If none is, a randomized search returns an answer obeying the most
-    requirements without costly picks (``_Model.best`` with the candidates shuffled). Not
-    uniform over the legal answers.
+    It draws up to ``_RANDOM_TRIES`` answers. Each draw first decides, with equal probability,
+    whether it may pick costly choices at all (so at least half the answers need no cost: an
+    agent that can't pay isn't stuck declaring, being reversed and declaring again). Then each
+    item picks, for each of its requirements in a random order, a random allowed obeying choice
+    while it has room, then a random number of random other allowed choices up to its maximum;
+    each broken constraint is then repaired (``_repair``, with the allowed choices only). The
+    first draw that is legal is the answer. If none is, a randomized search returns an answer
+    obeying the most requirements without costly picks (``_Model.best`` with the candidates
+    shuffled). Not uniform over the legal answers.
     """
     model = _Model.of(space)
     target = most_obeyable(space)
     for _ in range(_RANDOM_TRIES):
-        picks = [model.draw(item, rng) for item in range(len(space.items))]
-        _repair(space, picks, rng)
+        costly = bool(space.costly) and bool(rng.randbelow(2))
+        allowed = [
+            tuple(range(len(choices))) if costly else model.free[item]
+            for item, choices in enumerate(space.choices)
+        ]
+        picks = [model.draw(item, allowed[item], rng) for item in range(len(space.items))]
+        _repair(space, picks, allowed, rng)
         checked = tuple(tuple(p) for p in picks)
         if not broken_constraints(space, checked) and (
             requirements_obeyed(space, checked) >= target
@@ -140,12 +147,17 @@ def _checked(space: ChooseAssignment, picks: Picks) -> Assignment:
     return answer
 
 
-def _repair(space: ChooseAssignment, picks: list[list[int]], rng: Rng) -> None:
-    """Repair the constraints ``picks`` breaks, in place.
+def _repair(
+    space: ChooseAssignment,
+    picks: list[list[int]],
+    allowed: list[tuple[int, ...]],
+    rng: Rng,
+) -> None:
+    """Repair the constraints ``picks`` breaks, in place, adding only ``allowed`` choices.
 
     First each ``NoneOrAtLeast`` choice picked by too few items (the constraints on one choice
     taken together: the largest minimum) is filled up with randomly chosen other items that offer
-    it and have room, or cleared from the items that picked it, with equal probability when both
+    it (allowed) and have room, or cleared from the items that picked it, with equal probability when both
     are possible. Then, while a constraint is broken, it is repaired by removing picks only
     (clearing the choice, a ``NotAlone`` item, or random picking items beyond an ``AtMost``):
     picks only decrease and picking nothing breaks nothing, so this ends.
@@ -162,7 +174,10 @@ def _repair(space: ChooseAssignment, picks: list[list[int]], rng: Rng) -> None:
         room = [
             item
             for item, (choices, maximum) in enumerate(zip(space.choices, space.maxima, strict=True))
-            if item not in chosen and choice in choices and len(picks[item]) < maximum
+            if item not in chosen
+            and choice in choices
+            and choices.index(choice) in allowed[item]
+            and len(picks[item]) < maximum
         ]
         missing = minimum - len(chosen)
         if len(room) >= missing and rng.randbelow(2):
@@ -383,18 +398,18 @@ class _Model:
             raise EngineError("the declaration search found no legal answer")
         return best_count, best
 
-    def draw(self, item: int, rng: Rng) -> list[int]:
-        """A random pick for ``item`` (see ``random_legal``), as sorted choice indices."""
+    def draw(self, item: int, allowed: tuple[int, ...], rng: Rng) -> list[int]:
+        """A random pick for ``item`` among the ``allowed`` choices (see ``random_legal``), as
+        sorted choice indices."""
         maximum = self.space.maxima[item]
-        choices = len(self.space.choices[item])
         picked: list[int] = []
         for requirement in _shuffled(rng, list(self.requirements[item])):
-            if len(picked) >= maximum or requirement & set(picked):
+            options = sorted(requirement & set(allowed))
+            if len(picked) >= maximum or requirement & set(picked) or not options:
                 continue
-            options = sorted(requirement)
             picked.append(options[rng.randbelow(len(options))])
         size = len(picked) + rng.randbelow(maximum - len(picked) + 1)
-        rest = _shuffled(rng, [i for i in range(choices) if i not in picked])
+        rest = _shuffled(rng, [i for i in allowed if i not in picked])
         picked += rest[: size - len(picked)]
         return sorted(picked)
 
