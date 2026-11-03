@@ -49,6 +49,7 @@ from resolve.decisions.spaces import (
     ObjectOption,
 )
 from resolve.engine.api import submit, view_for
+from resolve.engine.concede import concede
 from resolve.errors import InvalidAnswer
 from resolve.events.combat import AttackersDeclared
 from resolve.events.mana import ManaSpent
@@ -469,3 +470,35 @@ def test_an_illegal_answer_to_a_costly_declaration_is_refused_first() -> None:
     with pytest.raises(InvalidAnswer):
         submit(state, answer(state, attack_answer(state, {bears: P1}).__class__(((0, 0),))))
     assert not state.objects[bears].tapped
+
+
+# --- 800.4a: concessions while a declaration's cost is paid -------------------------------------
+
+
+def test_a_defending_player_conceding_while_the_attack_cost_is_paid() -> None:
+    """Three players; P1 controls Ghostly Prison. P0 declares Grizzly Bears attacking P1 and
+    Savannah Lions attacking P2; while P0 pays the locked-in {2} (508.1h), P1 concedes (104.3a),
+    taking Ghostly Prison with them (800.4a). The total stays locked in (508.1h: later changes are
+    ignored), P0 pays it, and the attack is declared."""
+    state, (bears, lions), plains = _prison_board(
+        players=3, creatures=("Grizzly Bears", "Savannah Lions")
+    )
+    declare_attackers(state, {bears: P1, lions: P2})
+    assert request_of(state).kind is DecisionKind.ACTIVATE_MANA_ABILITIES
+    concede(state, P1)
+    (payment,) = view_for(state, P0).payments
+    assert payment.cost.text == "{2}"
+    run_script(state, *(activate(p) for p in plains))
+    assert lions in combat_of(state).attackers
+    (declared,) = records(state, AttackersDeclared)
+    assert declared.cost is not None and declared.cost.text == "{2}"
+
+
+def test_the_attacking_player_conceding_while_paying_ends_the_declaration() -> None:
+    """Three players: P0 concedes while paying for an attack; their creatures leave the game
+    (800.4a), so nothing is declared and the game goes on without them."""
+    state, _, _ = _prison_board(players=3)
+    declare_attackers(state, {may_attack(state)[0]: P1})
+    concede(state, P0)
+    assert records(state, AttackersDeclared) == []
+    assert state.player(P0).left_game

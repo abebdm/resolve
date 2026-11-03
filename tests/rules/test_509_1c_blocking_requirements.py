@@ -38,6 +38,7 @@ from __future__ import annotations
 from resolve.decisions.kinds import DecisionKind
 from resolve.decisions.spaces import ManaActivationOption
 from resolve.engine.api import view_for
+from resolve.engine.concede import concede
 from resolve.errors import InvalidAnswer
 from resolve.events.combat import BlockersDeclared
 from resolve.events.spells import ActionReversed
@@ -335,3 +336,27 @@ def test_an_unpaid_block_cost_reverses_the_declaration() -> None:
     assert request_of(state).kind is DecisionKind.ACTIVATE_MANA_ABILITIES
     run_script(state, activate(forest))
     assert blocked_by(state) == {guard: (bears,)}
+
+
+def test_a_defending_player_conceding_while_paying_for_blocks() -> None:
+    """Three players, Test Tollkeeper (P0's): P1 declares a block and, while paying its {1},
+    concedes (104.3a). Their declaration leaves with them (800.4a): no blocker is made, and P2
+    declares next."""
+    scenario = Scenario(3)
+    bears, lions, _ = scenario.battlefield(
+        P0, ["Grizzly Bears", "Savannah Lions", "Test Tollkeeper"]
+    )
+    (one,) = scenario.battlefield(P1, ["Grizzly Bears"])
+    scenario.battlefield(P1, ["Forest"])
+    scenario.battlefield(P2, ["Hill Giant"])
+    scenario.at(Step.DECLARE_BLOCKERS, begin=True)
+    scenario.attacking(P1, bears)
+    scenario.attacking(P2, lions)
+    state = scenario.build()
+    declare_blockers(state, {one: (bears,)})
+    assert request_of(state).kind is DecisionKind.ACTIVATE_MANA_ABILITIES
+    concede(state, P1)
+    request = request_of(state)
+    assert request.kind is DecisionKind.DECLARE_BLOCKERS and request.player == P2
+    assert combat_of(state).blockers == {}
+    assert [r for r in records(state, BlockersDeclared) if r.blocks] == []
